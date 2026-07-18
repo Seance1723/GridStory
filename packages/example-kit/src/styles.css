@@ -1,0 +1,121 @@
+.gs-content-width {
+  box-sizing: border-box;
+  margin-inline: auto;
+  max-width: 72rem;
+  padding-inline: clamp(1.25rem, 4vw, 4rem);
+}
+
+.gs-hero {
+  color: white;
+  overflow: hidden;
+  padding-block: clamp(4rem, 12vw, 8rem);
+  position: relative;
+}
+
+.gs-hero::after {
+  background: radial-gradient(circle, rgb(255 255 255 / 18%), transparent 60%);
+  content: "";
+  height: 32rem;
+  pointer-events: none;
+  position: absolute;
+  right: -12rem;
+  top: -18rem;
+  width: 32rem;
+}
+
+.gs-hero--indigo {
+  background: linear-gradient(135deg, #312e81, #4f46e5 62%, #7c3aed);
+}
+.gs-hero--sunrise {
+  background: linear-gradient(135deg, #9a3412, #ea580c 60%, #f59e0b);
+}
+.gs-hero--forest {
+  background: linear-gradient(135deg, #064e3b, #047857 60%, #0d9488);
+}
+
+.gs-eyebrow {
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  margin: 0 0 1rem;
+  text-transform: uppercase;
+}
+
+.gs-hero h1 {
+  font-size: clamp(2.75rem, 7vw, 5.75rem);
+  letter-spacing: -0.055em;
+  line-height: 0.98;
+  margin: 0;
+  max-width: 12ch;
+}
+
+.gs-hero__body {
+  font-size: clamp(1.05rem, 2vw, 1.35rem);
+  line-height: 1.65;
+  margin: 1.75rem 0 0;
+  max-width: 42rem;
+}
+
+.gs-rich-text {
+  padding-block: clamp(3.5rem, 8vw, 6rem);
+}
+
+.gs-rich-text h2,
+.gs-callout h2 {
+  color: #111827;
+  font-size: clamp(1.7rem, 3vw, 2.5rem);
+  letter-spacing: -0.035em;
+  margin: 0 0 1rem;
+}
+
+.gs-rich-text p,
+.gs-callout p {
+  color: #4b5563;
+  font-size: 1.05rem;
+  line-height: 1.8;
+  margin: 0;
+  max-width: 64ch;
+  white-space: pre-line;
+}
+
+.gs-callout {
+  border: 1px solid;
+  border-radius: 1.25rem;
+  margin-block: 0 5rem;
+  padding-block: 2rem;
+}
+
+.gs-callout--info {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+.gs-callout--success {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+.gs-callout--warning {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.gs-stack {
+  display: grid;
+  padding-block: clamp(1.5rem, 4vw, 3rem);
+}
+
+.gs-stack--small {
+  gap: 0.75rem;
+}
+.gs-stack--medium {
+  gap: 1.5rem;
+}
+.gs-stack--large {
+  gap: 3rem;
+}
+.gs-stack--subtle {
+  background: #f8fafc;
+}
+.gs-stack--contrast {
+  background: #111827;
+  color: white;
+}

@@ -1,0 +1,35 @@
+{
+  "name": "@gridstory/react",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch --preserveWatchOutput",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "typecheck": "pnpm --filter @gridstory/schema build && tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@gridstory/schema": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": ">=18.3.0 <20.0.0"
+  },
+  "devDependencies": {
+    "jsdom": "29.1.1",
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
+  }
+}

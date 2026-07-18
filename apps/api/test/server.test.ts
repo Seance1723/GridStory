@@ -1,0 +1,813 @@
+import { afterEach, describe, expect, it } from 'vitest';
+import type { FastifyInstance } from 'fastify';
+import { buildServer } from '../src/server.js';
+
+const headers = {
+  'content-type': 'application/json',
+  'x-gridstory-tenant': 'test-tenant',
+  'x-gridstory-actor': 'api-test',
+};
+const validPage = {
+  title: 'API page',
+  slug: 'api-page',
+  blocks: [
+    {
+      id: 'api-hero',
+      component: 'gridstory.hero',
+      version: 1,
+      props: { eyebrow: '', heading: 'API page', body: 'Created in a test.', tone: 'indigo' },
+    },
+  ],
+};
+
+describe('GridStory API', () => {
+  let server: FastifyInstance | undefined;
+
+  afterEach(async () => {
+    if (server) await server.close();
+    server = undefined;
+  });
+
+  it('runs the draft-to-published vertical slice', async () => {
+    server = await buildServer({
+      databasePath: ':memory:',
+      seed: false,
+      redirects: [{ from: '/legacy-api-page', to: '/api-page', status: 308 }],
+    });
+    const createResponse = await server.inject({
+      method: 'POST',
+      url: '/api/v1/content',
+      headers,
+      payload: { contentType: 'page', data: validPage },
+    });
+    expect(createResponse.statusCode).toBe(201);
+    const created = createResponse.json();
+
+    const otherSiteResponse = await server.inject({
+      method: 'GET',
+      url: '/api/v1/content',
+      headers: { ...headers, 'x-gridstory-site': 'other-site' },
+    });
+    expect(otherSiteResponse.statusCode).toBe(200);
+    expect(otherSiteResponse.json()).toEqual([]);
+
+    const publishResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/content/${created.id}/publish`,
+      headers,
+      payload: { expectedRevisionId: created.draftRevisionId },
+    });
+    expect(publishResponse.statusCode).toBe(200);
+
+    const deliveryResponse = await server.inject({
+      method: 'GET',
+      url: '/api/v1/delivery/page/api-page',
+      headers,
+    });
+    expect(deliveryResponse.statusCode).toBe(200);
+    expect(deliveryResponse.headers['cache-control']).toContain('s-maxage=60');
+    expect(deliveryResponse.headers.vary).toContain('x-gridstory-tenant');
+    expect(deliveryResponse.headers.vary).toContain('x-gridstory-locale');
+    expect(deliveryResponse.json().data.title).toBe('API page');
+
+    const routeResponse = await server.inject({
+      method: 'GET',
+      url: '/api/v1/delivery/routes/api-page',
+      headers,
+    });
+    expect(routeResponse.statusCode).toBe(200);
+    expect(routeResponse.json().id).toBe(created.id);
+
+    const redirectResponse = await server.inject({
+      method: 'GET',
+      url: '/api/v1/delivery/routes/legacy-api-page',
+      headers,
+    });
+    expect(redirectResponse.statusCode).toBe(308);
+    expect(redirectResponse.headers.location).toBe('/api-page');
+  });
+
+  it('returns structured validation errors and private cache policy', async () => {
+    server = await buildServer({ databasePath: ':memory:', seed: false });
+    const response = await server.inject({
+      method: 'POST',
+      url: '/api/v1/content',
+      headers,
+      payload: { contentType: 'page', data: { title: '', slug: 'INVALID', blocks: [] } },
+    });
+
+    expect(response.statusCode).toBe(422);
+    expect(response.headers['cache-control']).toBe('private, no-store');
+    expect(response.json().error.code).toBe('validation_failed');
+    expect(response.json().error.requestId).toBeTruthy();
+
+    const emptyJson = await server.inject({
+      method: 'POST',
+      url: '/api/v1/content',
+      headers,
+    });
+    expect(emptyJson.statusCode).toBe(400);
+    expect(emptyJson.json().error).toMatchObject({ code: 'invalid_request' });
+  });
+
+  it('delivers the authorized design-system manifest with private management caching', async () => {
+    server = await buildServer({ databasePath: ':memory:', seed: false });
+    const response = await server.inject({
+      method: 'GET',
+      url: '/api/v1/design-system',
+      headers: { ...headers, 'x-gridstory-roles': 'viewer' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['cache-control']).toBe('private, no-store');
+    expect(response.json()).toMatchObject({
+      id: 'gridstory.example',
+      version: 1,
+      breakpoints: [{ id: 'mobile' }, { id: 'tablet' }, { id: 'desktop' }],
+    });
+    expect(response.json().symbols[0].allowedPropOverrides).toEqual(['heading', 'body']);
+  });
+
+  it('resolves explicit hierarchy context and denies viewer mutations', async () => {
+    server = await buildServer({ databasePath: ':memory:', seed: false });
+    const scopedHeaders = {
+      ...headers,
+      'x-gridstory-organization': 'acme',
+      'x-gridstory-workspace': 'marketing',
+      'x-gridstory-site': 'website',
+      'x-gridstory-environment': 'preview',
+      'x-gridstory-locale': 'fr',
+      'x-gridstory-roles': 'viewer',
+    };
+    const contextResponse = await server.inject({
+      method: 'GET',
+      url: '/api/v1/context',
+      headers: scopedHeaders,
+    });
+    expect(contextResponse.statusCode).toBe(200);
+    expect(contextResponse.json()).toMatchObject({
+      organizationId: 'acme',
+      tenantId: 'test-tenant',
+      workspaceId: 'marketing',
+      siteId: 'website',
+      environmentId: 'preview',
+      locale: 'fr',
+      principal: { id: 'api-test', roles: ['viewer'] },
+    });
+
+    const denied = await server.inject({
+      method: 'POST',
+      url: '/api/v1/content',
+      headers: scopedHeaders,
+      payload: { contentType: 'page', data: validPage },
+    });
+    expect(denied.statusCode).toBe(403);
+    expect(denied.json().error.code).toBe('forbidden');
+  });
+
+  it('plans, deploys, inspects, and readiness-checks the scoped schema lifecycle', async () => {
+    server = await buildServer({ databasePath: ':memory:', seed: false });
+    expect((await server.inject({ method: 'GET', url: '/ready' })).statusCode).toBe(503);
+
+    const lifecycleHeaders = {
+      'content-type': 'application/json',
+      'x-gridstory-actor': 'schema-admin',
+    };
+    const inspection = await server.inject({
+      method: 'GET',
+      url: '/api/v1/schema-lifecycle',
+      headers: lifecycleHeaders,
+    });
+    expect(inspection.statusCode).toBe(200);
+    expect(inspection.json()).toMatchObject({
+      source: { format: 'gridstory.schema-ir', irVersion: 1 },
+      visualModel: { format: 'gridstory.visual-model', modelVersion: 1 },
+      deployment: null,
+    });
+    expect(inspection.json().generatedTypes).toContain('export interface PageContent');
+
+    const denied = await server.inject({
+      method: 'POST',
+      url: '/api/v1/schema-lifecycle/plan',
+      headers: { ...lifecycleHeaders, 'x-gridstory-roles': 'viewer' },
+      payload: {},
+    });
+    expect(denied.statusCode).toBe(403);
+
+    const plan = await server.inject({
+      method: 'POST',
+      url: '/api/v1/schema-lifecycle/plan',
+      headers: lifecycleHeaders,
+      payload: { candidate: inspection.json().visualModel },
+    });
+    expect(plan.statusCode).toBe(200);
+    expect(plan.json()).toMatchObject({
+      plan: { approval: { required: false } },
+      impact: { scannedEntries: 0, affectedEntries: 0 },
+    });
+
+    const deploy = await server.inject({
+      method: 'POST',
+      url: '/api/v1/schema-lifecycle/deploy',
+      headers: lifecycleHeaders,
+      payload: {},
+    });
+    expect(deploy.statusCode).toBe(200);
+    expect(deploy.json()).toMatchObject({ actorId: 'schema-admin' });
+
+    const drift = await server.inject({
+      method: 'GET',
+      url: '/api/v1/schema-lifecycle/drift',
+      headers: lifecycleHeaders,
+    });
+    expect(drift.statusCode).toBe(200);
+    expect(drift.json().inSync).toBe(true);
+    expect((await server.inject({ method: 'GET', url: '/ready' })).statusCode).toBe(200);
+  });
+
+  it('provides bounded REST queries with signed cursors, projection, and published separation', async () => {
+    server = await buildServer({ databasePath: ':memory:', seed: false });
+    for (const [title, slug] of [
+      ['Alpha page', 'alpha-page'],
+      ['Beta page', 'beta-page'],
+      ['Unrelated', 'unrelated'],
+    ]) {
+      const created = await server.inject({
+        method: 'POST',
+        url: '/api/v1/content',
+        headers,
+        payload: { contentType: 'page', data: { ...validPage, title, slug } },
+      });
+      expect(created.statusCode).toBe(201);
+    }
+
+    const query = {
+      contentType: 'page',
+      filter: { path: 'data.title', operator: 'contains', value: 'page' },
+      sort: [{ path: 'data.title', direction: 'asc' }],
+      projection: ['data.title'],
+      first: 1,
+    };
+    const first = await server.inject({
+      method: 'POST',
+      url: '/api/v1/content/query',
+      headers,
+      payload: query,
+    });
+    expect(first.statusCode).toBe(200);
+    expect(first.json()).toMatchObject({
+      totalCount: 2,
+      nodes: [{ data: { title: 'Alpha page' } }],
+      pageInfo: { hasNextPage: true, hasPreviousPage: false },
+    });
+
+    const second = await server.inject({
+      method: 'POST',
+      url: '/api/v1/content/query',
+      headers,
+      payload: { ...query, after: first.json().pageInfo.endCursor },
+    });
+    expect(second.json()).toMatchObject({
+      nodes: [{ data: { title: 'Beta page' } }],
+      pageInfo: { hasNextPage: false, hasPreviousPage: true },
+    });
+
+    const tampered = await server.inject({
+      method: 'POST',
+      url: '/api/v1/content/query',
+      headers,
+      payload: { ...query, after: `${first.json().pageInfo.endCursor}x` },
+    });
+    expect(tampered.statusCode).toBe(400);
+    expect(tampered.json().error.code).toBe('invalid_query');
+
+    const draft = first.json().nodes[0];
+    const publish = await server.inject({
+      method: 'POST',
+      url: `/api/v1/content/${draft.id}/publish`,
+      headers,
+      payload: { expectedRevisionId: draft.draftRevisionId },
+    });
+    expect(publish.statusCode).toBe(200);
+    const delivered = await server.inject({
+      method: 'POST',
+      url: '/api/v1/delivery/query',
+      headers,
+      payload: { contentType: 'page', first: 100 },
+    });
+    expect(delivered.statusCode).toBe(200);
+    expect(delivered.headers['cache-control']).toContain('s-maxage=60');
+    expect(delivered.json().totalCount).toBe(1);
+  });
+
+  it('exposes authorized GraphQL management and published-delivery operations', async () => {
+    server = await buildServer({ databasePath: ':memory:', seed: false });
+    const create = await server.inject({
+      method: 'POST',
+      url: '/graphql',
+      headers,
+      payload: {
+        query: `mutation Create($data: JSON!) {
+          createContent(contentType: "page", data: $data) {
+            id
+            draftRevisionId
+            data
+          }
+        }`,
+        variables: { data: { ...validPage, title: 'GraphQL page', slug: 'graphql-page' } },
+      },
+    });
+    expect(create.statusCode).toBe(200);
+    expect(create.headers['cache-control']).toBe('private, no-store');
+    expect(create.json().data.createContent.data.title).toBe('GraphQL page');
+    const created = create.json().data.createContent;
+
+    const management = await server.inject({
+      method: 'POST',
+      url: '/graphql',
+      headers,
+      payload: {
+        query: `query {
+          contents(query: {
+            contentType: "page"
+            filter: { path: "data.title", operator: contains, value: "graphql" }
+            projection: ["data.title"]
+          }) {
+            totalCount
+            nodes { id data }
+          }
+        }`,
+      },
+    });
+    expect(management.json()).toMatchObject({
+      data: {
+        contents: { totalCount: 1, nodes: [{ id: created.id, data: { title: 'GraphQL page' } }] },
+      },
+    });
+
+    const publish = await server.inject({
+      method: 'POST',
+      url: '/graphql',
+      headers,
+      payload: {
+        query: `mutation Publish($id: ID!, $revision: ID!) {
+          publishContent(id: $id, expectedRevisionId: $revision) { id status }
+        }`,
+        variables: { id: created.id, revision: created.draftRevisionId },
+      },
+    });
+    expect(publish.json()).toMatchObject({
+      data: { publishContent: { id: created.id, status: 'published' } },
+    });
+
+    const delivery = await server.inject({
+      method: 'POST',
+      url: '/graphql',
+      headers: { 'x-gridstory-tenant': 'test-tenant', 'x-gridstory-roles': 'anonymous' },
+      payload: {
+        query: `query {
+          publishedContents(query: { contentType: "page" }) {
+            totalCount
+            nodes { id }
+          }
+        }`,
+      },
+    });
+    expect(delivery.json()).toMatchObject({
+      data: { publishedContents: { totalCount: 1, nodes: [{ id: created.id }] } },
+    });
+
+    const denied = await server.inject({
+      method: 'POST',
+      url: '/graphql',
+      headers: { ...headers, 'x-gridstory-roles': 'viewer' },
+      payload: {
+        query: `mutation { createContent(contentType: "page", data: {}) { id } }`,
+      },
+    });
+    expect(denied.json().errors[0].message).toContain('not authorized');
+  });
+
+  it('creates locale variants and resolves completeness, fallback, localized routes, and GraphQL delivery', async () => {
+    server = await buildServer({
+      databasePath: ':memory:',
+      seed: false,
+      locales: [
+        {
+          code: 'en',
+          siteId: 'default',
+          label: 'English',
+          default: true,
+          enabled: true,
+          required: true,
+          routePrefix: '',
+        },
+        {
+          code: 'fr',
+          siteId: 'default',
+          label: 'French',
+          default: false,
+          enabled: true,
+          required: true,
+          fallbackLocales: ['en'],
+          routePrefix: '/fr',
+        },
+        {
+          code: 'fr-CA',
+          siteId: 'default',
+          label: 'French (Canada)',
+          default: false,
+          enabled: true,
+          required: false,
+          fallbackLocales: ['fr', 'en'],
+          routePrefix: '/fr-ca',
+        },
+      ],
+    });
+    const create = await server.inject({
+      method: 'POST',
+      url: '/api/v1/content',
+      headers,
+      payload: { contentType: 'page', data: { ...validPage, title: 'Hello', slug: 'hello' } },
+    });
+    const english = create.json();
+    await server.inject({
+      method: 'POST',
+      url: `/api/v1/content/${english.id}/publish`,
+      headers,
+      payload: { expectedRevisionId: english.draftRevisionId },
+    });
+
+    const initial = await server.inject({
+      method: 'GET',
+      url: `/api/v1/content/${english.id}/translations`,
+      headers,
+    });
+    expect(initial.statusCode).toBe(200);
+    expect(initial.json()).toMatchObject({ percentage: 50, publicationComplete: false });
+    const translationGroupId = initial.json().translationGroupId;
+
+    const fallback = await server.inject({
+      method: 'GET',
+      url: `/api/v1/delivery/localized/${translationGroupId}`,
+      headers: { ...headers, 'x-gridstory-locale': 'fr' },
+    });
+    expect(fallback.statusCode).toBe(200);
+    expect(fallback.json()).toMatchObject({
+      requestedLocale: 'fr',
+      resolvedLocale: 'en',
+      usedFallback: true,
+      entry: { id: english.id },
+    });
+
+    const translated = await server.inject({
+      method: 'POST',
+      url: '/graphql',
+      headers,
+      payload: {
+        query: `mutation Translate($source: ID!, $data: JSON!) {
+          createTranslation(sourceId: $source, locale: "fr", data: $data) {
+            id
+            draftRevisionId
+            locale
+            data
+          }
+        }`,
+        variables: {
+          source: english.id,
+          data: { ...validPage, title: 'Bonjour', slug: 'bonjour' },
+        },
+      },
+    });
+    expect(translated.statusCode).toBe(200);
+    expect(translated.json().data.createTranslation).toMatchObject({
+      locale: 'fr',
+      data: { title: 'Bonjour', slug: 'bonjour' },
+    });
+    const french = translated.json().data.createTranslation;
+    const publishFrench = await server.inject({
+      method: 'POST',
+      url: `/api/v1/content/${french.id}/publish`,
+      headers: { ...headers, 'x-gridstory-locale': 'fr' },
+      payload: { expectedRevisionId: french.draftRevisionId },
+    });
+    expect(publishFrench.statusCode).toBe(200);
+
+    const route = await server.inject({
+      method: 'GET',
+      url: '/api/v1/delivery/localized-routes/fr/bonjour',
+      headers: { ...headers, 'x-gridstory-locale': 'fr' },
+    });
+    expect(route.statusCode).toBe(200);
+    expect(route.headers.vary).toContain('x-gridstory-locale');
+    expect(route.json()).toMatchObject({ resolvedLocale: 'fr', entry: { id: french.id } });
+
+    const graphqlFallback = await server.inject({
+      method: 'POST',
+      url: '/graphql',
+      headers: { 'x-gridstory-tenant': 'test-tenant', 'x-gridstory-roles': 'anonymous' },
+      payload: {
+        query: `query Localized($group: ID!) {
+          localizedContent(translationGroupId: $group, locale: "fr-CA")
+        }`,
+        variables: { group: translationGroupId },
+      },
+    });
+    expect(graphqlFallback.json()).toMatchObject({
+      data: {
+        localizedContent: {
+          requestedLocale: 'fr-CA',
+          resolvedLocale: 'fr',
+          usedFallback: true,
+        },
+      },
+    });
+
+    const complete = await server.inject({
+      method: 'GET',
+      url: `/api/v1/content/${english.id}/translations`,
+      headers,
+    });
+    expect(complete.json()).toMatchObject({ percentage: 100, publicationComplete: true });
+  });
+
+  it('operates transactional outbox, cache tags, signed webhooks, durable logs, and replay', async () => {
+    const deliveries: Array<{ body: string; headers: Record<string, string> }> = [];
+    const invalidations: string[][] = [];
+    server = await buildServer({
+      databasePath: ':memory:',
+      seed: false,
+      webhookSigningSecret: 'api-test-webhook-secret-with-at-least-32-characters',
+      webhookTransport: async ({ body, headers: deliveryHeaders }) => {
+        deliveries.push({ body, headers: deliveryHeaders });
+        return { status: 202 };
+      },
+      cacheInvalidator: async (tags) => {
+        invalidations.push(tags);
+      },
+    });
+    const denied = await server.inject({
+      method: 'GET',
+      url: '/api/v1/operations/jobs',
+      headers: { ...headers, 'x-gridstory-roles': 'viewer' },
+    });
+    expect(denied.statusCode).toBe(403);
+
+    const invalidWebhook = await server.inject({
+      method: 'POST',
+      url: '/api/v1/operations/webhooks',
+      headers,
+      payload: {
+        url: 'http://127.0.0.1/internal',
+        eventTypes: ['content.created'],
+      },
+    });
+    expect(invalidWebhook.statusCode).toBe(400);
+
+    const webhook = await server.inject({
+      method: 'POST',
+      url: '/api/v1/operations/webhooks',
+      headers,
+      payload: {
+        url: 'https://hooks.example.test/gridstory',
+        eventTypes: ['content.created'],
+      },
+    });
+    expect(webhook.statusCode).toBe(201);
+
+    const create = await server.inject({
+      method: 'POST',
+      url: '/api/v1/content',
+      headers,
+      payload: {
+        contentType: 'page',
+        data: { ...validPage, title: 'Operational page', slug: 'operational-page' },
+      },
+    });
+    const created = create.json();
+    await server.inject({
+      method: 'POST',
+      url: `/api/v1/content/${created.id}/publish`,
+      headers,
+      payload: { expectedRevisionId: created.draftRevisionId },
+    });
+    const outbox = await server.inject({
+      method: 'GET',
+      url: '/api/v1/operations/outbox',
+      headers,
+    });
+    expect(outbox.json()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'content.created', state: 'pending' }),
+        expect.objectContaining({ type: 'content.published', state: 'pending' }),
+      ]),
+    );
+
+    const drained = await server.inject({
+      method: 'POST',
+      url: '/api/v1/operations/drain',
+      headers,
+      payload: { limit: 25 },
+    });
+    expect(drained.statusCode).toBe(200);
+    expect(drained.json()).toMatchObject({
+      completedOutbox: 2,
+      enqueuedJobs: 3,
+      completedJobs: 3,
+    });
+    expect(invalidations).toHaveLength(2);
+    expect(deliveries).toHaveLength(1);
+    expect(deliveries[0]?.headers['x-gridstory-signature']).toMatch(/^v1=[a-f0-9]{64}$/);
+
+    const jobs = await server.inject({
+      method: 'GET',
+      url: '/api/v1/operations/jobs',
+      headers,
+    });
+    const webhookJob = jobs.json().find((job: { type: string }) => job.type === 'webhook.deliver');
+    expect(webhookJob).toMatchObject({ state: 'succeeded', result: { httpStatus: 202 } });
+    const replay = await server.inject({
+      method: 'POST',
+      url: `/api/v1/operations/jobs/${webhookJob.id}/replay`,
+      headers,
+      payload: {},
+    });
+    expect(replay.statusCode).toBe(200);
+    expect(replay.json()).toMatchObject({ state: 'pending', attempts: 0 });
+    await server.inject({
+      method: 'POST',
+      url: '/api/v1/operations/drain',
+      headers,
+      payload: { limit: 25 },
+    });
+    expect(deliveries).toHaveLength(2);
+
+    const delivery = await server.inject({
+      method: 'GET',
+      url: '/api/v1/delivery/page/operational-page',
+      headers,
+    });
+    expect(delivery.headers['cache-tag']).toContain(`gridstory:entry:${created.id}`);
+    expect(delivery.headers['cache-tag']).toContain(`gridstory:type:page`);
+
+    const removed = await server.inject({
+      method: 'DELETE',
+      url: `/api/v1/operations/webhooks/${webhook.json().id}`,
+      headers: {
+        'x-gridstory-tenant': headers['x-gridstory-tenant'],
+        'x-gridstory-actor': headers['x-gridstory-actor'],
+      },
+    });
+    expect(removed.statusCode).toBe(204);
+  });
+
+  it('exports and atomically imports authorized checksummed logical archives', async () => {
+    server = await buildServer({ databasePath: ':memory:', seed: false });
+    const denied = await server.inject({
+      method: 'GET',
+      url: '/api/v1/portability/export',
+      headers: { ...headers, 'x-gridstory-roles': 'viewer' },
+    });
+    expect(denied.statusCode).toBe(403);
+
+    const create = await server.inject({
+      method: 'POST',
+      url: '/api/v1/content',
+      headers,
+      payload: { contentType: 'page', data: validPage },
+    });
+    const created = create.json();
+    await server.inject({
+      method: 'POST',
+      url: `/api/v1/content/${created.id}/publish`,
+      headers,
+      payload: { expectedRevisionId: created.draftRevisionId },
+    });
+    const exported = await server.inject({
+      method: 'GET',
+      url: '/api/v1/portability/export',
+      headers,
+    });
+    expect(exported.statusCode).toBe(200);
+    const archive = exported.json();
+    expect(archive).toMatchObject({
+      manifest: { format: 'gridstory.logical-content', version: 1, entryCount: 1 },
+    });
+    const streamed = await server.inject({
+      method: 'GET',
+      url: '/api/v1/portability/export?format=ndjson',
+      headers,
+    });
+    expect(streamed.headers['content-type']).toContain('application/x-ndjson');
+    expect(streamed.body.trim().split('\n')).toHaveLength(2);
+
+    await server.close();
+    server = await buildServer({ databasePath: ':memory:', seed: false });
+    const lineDryRun = await server.inject({
+      method: 'POST',
+      url: '/api/v1/portability/import',
+      headers: { ...headers, 'content-type': 'application/x-ndjson' },
+      payload: streamed.body,
+    });
+    expect(lineDryRun.statusCode).toBe(200);
+    expect(lineDryRun.json()).toMatchObject({ imported: 1, dryRun: true });
+    const dryRun = await server.inject({
+      method: 'POST',
+      url: '/api/v1/portability/import',
+      headers,
+      payload: archive,
+    });
+    expect(dryRun.statusCode).toBe(200);
+    expect(dryRun.json()).toMatchObject({ imported: 1, dryRun: true });
+    const imported = await server.inject({
+      method: 'POST',
+      url: '/api/v1/portability/import?dryRun=false',
+      headers,
+      payload: archive,
+    });
+    expect(imported.statusCode).toBe(200);
+    expect(imported.json()).toMatchObject({ imported: 1, dryRun: false });
+    const restored = await server.inject({
+      method: 'GET',
+      url: `/api/v1/content/${created.id}?perspective=published`,
+      headers,
+    });
+    expect(restored.json()).toMatchObject({ id: created.id, data: validPage });
+
+    const corrupted = structuredClone(archive);
+    corrupted.entries[0].record.revisions[0].data.title = 'Tampered';
+    const rejected = await server.inject({
+      method: 'POST',
+      url: '/api/v1/portability/import?dryRun=false&conflictPolicy=replace',
+      headers,
+      payload: corrupted,
+    });
+    expect(rejected.statusCode).toBe(400);
+    expect(rejected.json().error.code).toBe('invalid_archive');
+  });
+
+  it('verifies and exports audit chains with a scoped administrator operations view', async () => {
+    server = await buildServer({ databasePath: ':memory:', seed: false });
+    const denied = await server.inject({
+      method: 'GET',
+      url: '/api/v1/audit/verify',
+      headers: { ...headers, 'x-gridstory-roles': 'viewer' },
+    });
+    expect(denied.statusCode).toBe(403);
+
+    const create = await server.inject({
+      method: 'POST',
+      url: '/api/v1/content',
+      headers,
+      payload: { contentType: 'page', data: validPage },
+    });
+    const created = create.json();
+    await server.inject({
+      method: 'POST',
+      url: `/api/v1/content/${created.id}/publish`,
+      headers,
+      payload: { expectedRevisionId: created.draftRevisionId },
+    });
+
+    const verification = await server.inject({
+      method: 'GET',
+      url: '/api/v1/audit/verify',
+      headers,
+    });
+    expect(verification.statusCode).toBe(200);
+    expect(verification.json()).toMatchObject({ valid: true, eventCount: 2, entryCount: 1 });
+    const auditExport = await server.inject({
+      method: 'GET',
+      url: '/api/v1/audit/export',
+      headers,
+    });
+    expect(auditExport.json()).toMatchObject({
+      manifest: { kind: 'gridstory.audit.manifest', eventCount: 2, valid: true },
+    });
+    expect(auditExport.json().events[1]).toMatchObject({
+      action: 'content.published',
+      previousHash: auditExport.json().events[0].eventHash,
+    });
+    const streamed = await server.inject({
+      method: 'GET',
+      url: '/api/v1/audit/export?format=ndjson',
+      headers,
+    });
+    expect(streamed.headers['content-type']).toContain('application/x-ndjson');
+    expect(streamed.body.trim().split('\n')).toHaveLength(3);
+
+    const summary = await server.inject({
+      method: 'GET',
+      url: '/api/v1/operations/summary',
+      headers,
+    });
+    expect(summary.json()).toMatchObject({
+      content: { total: 1, published: 1 },
+      outbox: { total: 2, pending: 2, truncated: false },
+      jobs: { total: 0, truncated: false },
+      webhooks: { total: 0, active: 0 },
+      audit: { valid: true, eventCount: 2 },
+    });
+    expect(summary.json().recentAudit[0]).toMatchObject({ action: 'content.published' });
+  });
+});

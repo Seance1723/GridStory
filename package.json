@@ -1,0 +1,45 @@
+{
+  "name": "gridstory",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A framework-neutral, React-first content management system.",
+  "license": "Apache-2.0",
+  "packageManager": "pnpm@10.17.1",
+  "engines": {
+    "node": ">=22.12.0",
+    "pnpm": ">=10.0.0"
+  },
+  "scripts": {
+    "setup": "pnpm install --frozen-lockfile && pnpm build",
+    "build": "pnpm -r --if-present run build",
+    "build:packages": "pnpm --filter @gridstory/schema --filter @gridstory/core --filter @gridstory/client --filter @gridstory/react --filter @gridstory/example-kit run build",
+    "dev": "pnpm build:packages && pnpm -r --parallel run dev",
+    "dev:worker": "pnpm --filter @gridstory/api dev:worker",
+    "worker": "pnpm --filter @gridstory/api worker",
+    "test": "pnpm build:packages && pnpm -r --if-present run test",
+    "test:run": "pnpm build:packages && pnpm -r --if-present run test:run",
+    "test:postgres": "node scripts/test-postgres.mjs",
+    "schema:generate": "pnpm build:packages && node scripts/generate-schema-types.mjs --write && pnpm --filter @gridstory/example-kit build",
+    "schema:check": "node scripts/generate-schema-types.mjs --check",
+    "typecheck": "pnpm build:packages && pnpm schema:check && pnpm -r --workspace-concurrency=1 --if-present run typecheck",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "lint": "biome lint . && node scripts/check-boundaries.mjs && node scripts/check-ledgers.mjs",
+    "check:ledgers": "node scripts/check-ledgers.mjs",
+    "build:e2e": "pnpm --filter @gridstory/studio --filter @gridstory/example-vite run build:e2e",
+    "test:e2e": "pnpm build && pnpm build:e2e && playwright test",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test:run && pnpm build",
+    "check:all": "pnpm check && pnpm test:e2e"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.4",
+    "@playwright/test": "1.61.1",
+    "@types/node": "22.20.1",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.3",
+    "typescript": "7.0.2",
+    "vite": "8.1.5",
+    "vitest": "4.1.10"
+  }
+}

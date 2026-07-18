@@ -1,0 +1,32 @@
+{
+  "name": "@gridstory/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch --preserveWatchOutput",
+    "test": "vitest",
+    "test:run": "pnpm --filter @gridstory/schema build && vitest run",
+    "test:postgres": "vitest run test/postgres-conformance.test.ts",
+    "typecheck": "pnpm --filter @gridstory/schema build && tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@gridstory/schema": "workspace:*",
+    "pg": "8.22.0"
+  },
+  "devDependencies": {
+    "@types/pg": "8.20.0"
+  }
+}
