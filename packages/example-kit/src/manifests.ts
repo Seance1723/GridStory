@@ -73,6 +73,23 @@ export const componentManifests = [
     description: 'A prominent page introduction.',
     category: 'Marketing',
     strictProps: true,
+    status: 'active',
+    migrations: [],
+    visualRegression: {
+      scenarios: [
+        {
+          id: 'default',
+          name: 'Default desktop hero',
+          props: {
+            eyebrow: 'React-first content',
+            heading: 'Your application stays yours.',
+            body: 'A stable code-owned scenario for visual regression tooling.',
+            tone: 'indigo',
+          },
+          viewport: { width: 1440, height: 900 },
+        },
+      ],
+    },
     slots: [],
     props: [
       {
@@ -117,6 +134,9 @@ export const componentManifests = [
     description: 'A readable text section for the initial vertical slice.',
     category: 'Content',
     strictProps: true,
+    status: 'active',
+    migrations: [],
+    visualRegression: { scenarios: [] },
     slots: [],
     props: [
       {
@@ -144,6 +164,9 @@ export const componentManifests = [
     description: 'A compact highlighted message.',
     category: 'Content',
     strictProps: true,
+    status: 'active',
+    migrations: [],
+    visualRegression: { scenarios: [] },
     slots: [],
     props: [
       {
@@ -180,6 +203,9 @@ export const componentManifests = [
     description: 'A layout container for safely nesting content components.',
     category: 'Layout',
     strictProps: true,
+    status: 'active',
+    migrations: [],
+    visualRegression: { scenarios: [] },
     slots: [
       {
         id: 'gridstory.stack.content',

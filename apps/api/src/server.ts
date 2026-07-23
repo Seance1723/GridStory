@@ -5,6 +5,7 @@ import cors from '@fastify/cors';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import {
   ContentService,
+  ComponentLifecycleService,
   CollaborationService,
   AuditService,
   ContentQueryService,
@@ -216,6 +217,7 @@ export async function buildServer({
     schemas: [pageSchema],
     componentManifests,
   });
+  const componentLifecycle = new ComponentLifecycleService({ contentService: service });
   const collaboration = new CollaborationService();
   const routing = new ContentRoutingService({ contentService: service, redirects });
   const contentQueries = new ContentQueryService({ repository, cursorSecret });
@@ -347,7 +349,50 @@ export async function buildServer({
   server.get('/api/v1/components', async (request) => {
     const context = requestContext(request, 'draft');
     authorize(policy, context, GridStoryActions.componentRead, { kind: 'component' });
-    return service.getComponentManifests();
+    return componentLifecycle.catalog();
+  });
+  server.get('/api/v1/components/:id/usage', async (request) => {
+    const params = request.params as { id: string };
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.componentRead, {
+      kind: 'component',
+      id: params.id,
+    });
+    return componentLifecycle.usage(contentScope(context), params.id);
+  });
+  server.get('/api/v1/components/:id/migration', async (request) => {
+    const params = request.params as { id: string };
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.componentRead, {
+      kind: 'component',
+      id: params.id,
+    });
+    return componentLifecycle.planMigration(contentScope(context), params.id);
+  });
+  server.get('/api/v1/components/:id/visual-regression', async (request) => {
+    const params = request.params as { id: string };
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.componentRead, {
+      kind: 'component',
+      id: params.id,
+    });
+    return componentLifecycle.visualRegression(contentScope(context), params.id);
+  });
+  server.post('/api/v1/content/:id/components/:componentId/migrate', async (request) => {
+    const params = request.params as { id: string; componentId: string };
+    const body = bodyOf(request);
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.contentDraftUpdate, {
+      kind: 'content',
+      id: params.id,
+    });
+    return componentLifecycle.migrateEntry({
+      scope: contentScope(context),
+      entryId: params.id,
+      componentId: params.componentId,
+      expectedRevisionId: requiredString(body.expectedRevisionId, 'expectedRevisionId'),
+      actor: { id: context.principal.id },
+    });
   });
   server.get('/api/v1/design-system', async (request) => {
     const context = requestContext(request, 'draft');

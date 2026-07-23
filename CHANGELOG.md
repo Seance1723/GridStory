@@ -8,6 +8,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Consolidated the Studio component-governance styles and added intentional two-/one-column breakpoints so narrow viewports do not inherit the desktop grid (BUG-0093).
+- Isolated canonical Edge verification from narrower temporary walkthrough servers so the preview application always receives its required origin policy (BUG-0092).
+- Used a direct scoped Biome invocation after the root format wrapper ignored appended path arguments, preventing broad incidental formatting during component-lifecycle work (BUG-0091).
 - Returned stable `invalid_due_date` errors, admitted browser `PATCH` preflight, excluded trailing punctuation from actor mentions, honored default asset-kind inputs, corrected Studio collaboration semantics, target coherence, and lifecycle dependencies, restored lint-clean tests and ledgers, kept localization completeness fixtures aligned, made generated imports formatter-stable, and bounded browser and Windows formatter lifecycle verification (`BUG-0078` through `BUG-0090`).
 - Added scope-checked management revocation for origin-bound preview grants so Studio can close sessions without impersonating the preview application (`BUG-0066`).
 - Kept the explicit browser preview entry free of the Zod-backed schema barrel, restoring small production module graphs while retaining compile-time protocol drift detection (`BUG-0067`).
@@ -32,6 +35,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Added component lifecycle governance with deprecation metadata, deterministic declarative prop migrations, scope- and perspective-aware usage impact, draft-only revision-safe migration APIs/client methods, code-owned visual regression scenarios, preview renderer hooks, and a Studio Components panel.
 - Added versioned semantic rich-text documents, typed asset references, rich-text/asset field definitions and validation, generated authoring types, and a version 4 example page schema with story, social-image, and related-page fields.
 - Added an explicitly tenant-scoped collaboration service and private API/client surface for entry/field/node comment threads, actor mentions, assignees, due dates, replies, resolution, and expiring presence heartbeats with viewer/author permissions.
 - Added Studio semantic block controls, rich-text marks, demonstration asset and searchable reference pickers, selected-component inline preview editing, active-editor presence, and threaded comment authoring through the typed client.

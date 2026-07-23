@@ -4,6 +4,7 @@ import type {
   CommentThread,
   PresenceParticipant,
   ComponentManifest,
+  ResolvedComponentManifest,
   ContentEntry,
   ContentConnection,
   ContentFilter,
@@ -59,6 +60,50 @@ export interface SchemaMigrationAssessmentResponse {
       issues: ValidationIssue[];
     }>;
   };
+}
+export interface ComponentUsageLocation {
+  entryId: string;
+  contentType: string;
+  perspective: ContentPerspective;
+  revisionId: string;
+  field: string;
+  nodeId: string;
+  path: string;
+  version: number;
+}
+
+export interface ComponentUsageReport {
+  componentId: string;
+  currentVersion: number;
+  totalInstances: number;
+  entries: number;
+  byPerspective: Record<ContentPerspective, number>;
+  byVersion: Record<string, number>;
+  locations: ComponentUsageLocation[];
+}
+
+export interface ComponentMigrationPlanResponse {
+  id: string;
+  component: ResolvedComponentManifest;
+  usage: ComponentUsageReport;
+  outdatedInstances: number;
+  unmigratableVersions: number[];
+  ready: boolean;
+}
+
+export interface ComponentVisualRegressionPlan {
+  id: string;
+  componentId: string;
+  version: number;
+  scenarios: ResolvedComponentManifest['visualRegression']['scenarios'];
+  usageHooks: ComponentUsageLocation[];
+  selector: string;
+}
+
+export interface ComponentMigrationResult {
+  entry: ContentEntry;
+  migratedInstances: number;
+  fromVersions: number[];
 }
 
 export type ContentEventType = 'content.created' | 'content.draft.updated' | 'content.published';
@@ -400,8 +445,48 @@ export class GridStoryClient {
     return this.#request('/api/v1/context', { ...(signal ? { signal } : {}) });
   }
 
-  getComponentManifests(signal?: AbortSignal): Promise<ComponentManifest[]> {
+  getComponentManifests(signal?: AbortSignal): Promise<ResolvedComponentManifest[]> {
     return this.#request('/api/v1/components', { ...(signal ? { signal } : {}) });
+  }
+  getComponentUsage(componentId: string, signal?: AbortSignal): Promise<ComponentUsageReport> {
+    return this.#request(`/api/v1/components/${encodeURIComponent(componentId)}/usage`, {
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  getComponentMigration(
+    componentId: string,
+    signal?: AbortSignal,
+  ): Promise<ComponentMigrationPlanResponse> {
+    return this.#request(`/api/v1/components/${encodeURIComponent(componentId)}/migration`, {
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  getComponentVisualRegression(
+    componentId: string,
+    signal?: AbortSignal,
+  ): Promise<ComponentVisualRegressionPlan> {
+    return this.#request(
+      `/api/v1/components/${encodeURIComponent(componentId)}/visual-regression`,
+      { ...(signal ? { signal } : {}) },
+    );
+  }
+
+  migrateEntryComponent(
+    entryId: string,
+    componentId: string,
+    expectedRevisionId: string,
+    signal?: AbortSignal,
+  ): Promise<ComponentMigrationResult> {
+    return this.#request(
+      `/api/v1/content/${encodeURIComponent(entryId)}/components/${encodeURIComponent(componentId)}/migrate`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ expectedRevisionId }),
+        ...(signal ? { signal } : {}),
+      },
+    );
   }
 
   getDesignSystem(signal?: AbortSignal): Promise<DesignSystemManifest> {
@@ -846,6 +931,7 @@ export type {
   PreviewSessionGrant,
   ContentRevision,
   ComponentManifest,
+  ResolvedComponentManifest,
   ContentSchemaDefinition,
   SchemaDriftReport,
   SchemaIrDocument,

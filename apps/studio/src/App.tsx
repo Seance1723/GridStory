@@ -4,6 +4,8 @@ import {
   createGridStoryClient,
   type CollaborationSnapshot,
   type ComponentManifest,
+  type ComponentMigrationPlanResponse,
+  type ComponentVisualRegressionPlan,
   type ContentEntry,
   type ContentRevision,
   type GridStoryClient,
@@ -61,6 +63,11 @@ type ExternalPreviewState = {
   ready: boolean;
 };
 type EditableContent = Record<string, unknown>;
+type ComponentGovernanceState = {
+  componentId: string;
+  migration: ComponentMigrationPlanResponse;
+  visual: ComponentVisualRegressionPlan;
+};
 
 function asEditableContent(entry: ContentEntry): EditableContent {
   return entry.data;
@@ -409,6 +416,9 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   const lastPreviewSlugRef = useRef<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
   const [operationsDashboard, setOperationsDashboard] = useState<OperationsDashboardRecord | null>(
+    null,
+  );
+  const [componentGovernance, setComponentGovernance] = useState<ComponentGovernanceState | null>(
     null,
   );
   const [compositionHistory, setCompositionHistory] = useState(() => createCompositionHistory([]));
@@ -878,6 +888,57 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
       setNotice({ tone: 'error', message: messageFrom(error) });
     }
   };
+  const inspectComponent = async (componentId?: string) => {
+    if (!componentId) {
+      setComponentGovernance(null);
+      return;
+    }
+    try {
+      const [migration, visual] = await Promise.all([
+        client.getComponentMigration(componentId),
+        client.getComponentVisualRegression(componentId),
+      ]);
+      setComponentGovernance({ componentId, migration, visual });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
+
+  const toggleComponentGovernance = async () => {
+    if (componentGovernance) {
+      setComponentGovernance(null);
+      return;
+    }
+    await inspectComponent(manifests[0]?.id);
+  };
+
+  const migrateComponentEntry = async (
+    entryId: string,
+    componentId: string,
+    revisionId: string,
+  ) => {
+    if (dirty && selected?.id === entryId) {
+      setNotice({
+        tone: 'error',
+        message: 'Save or discard local edits before migrating this entry.',
+      });
+      return;
+    }
+    setBusy(true);
+    try {
+      const result = await client.migrateEntryComponent(entryId, componentId, revisionId);
+      await inspectComponent(componentId);
+      await refreshList(result.entry.id);
+      setNotice({
+        tone: 'success',
+        message: `Migrated ${result.migratedInstances} component instance${result.migratedInstances === 1 ? '' : 's'} to the current version.`,
+      });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const previewContent = previewPerspective === 'draft' ? draft : published;
   const previewBlocks = previewPerspective === 'draft' ? draftBlocks : publishedBlocks;
@@ -1037,6 +1098,14 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
             aria-expanded={operationsDashboard !== null}
           >
             Operations
+          </button>{' '}
+          <button
+            type="button"
+            className="button button--secondary"
+            onClick={() => void toggleComponentGovernance()}
+            aria-expanded={componentGovernance !== null}
+          >
+            Components
           </button>
           <button
             type="button"
@@ -1088,6 +1157,82 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
         </section>
       ) : null}
 
+      {componentGovernance ? (
+        <section className="governance-panel" aria-label="Component governance">
+          <div className="governance-panel__heading">
+            <span className="kicker">Component governance</span>
+            <label>
+              <span>Inspect component</span>
+              <select
+                value={componentGovernance.componentId}
+                onChange={(event) => void inspectComponent(event.target.value)}
+              >
+                {manifests.map((manifest) => (
+                  <option key={manifest.id} value={manifest.id}>
+                    {manifest.name} · v{manifest.version}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div>
+            <strong>
+              {componentGovernance.migration.component.name} ·{' '}
+              {componentGovernance.migration.component.status}
+            </strong>
+            {componentGovernance.migration.component.deprecation ? (
+              <p>
+                {componentGovernance.migration.component.deprecation.reason}
+                {componentGovernance.migration.component.deprecation.replacementId
+                  ? ` Replace with ${componentGovernance.migration.component.deprecation.replacementId}.`
+                  : ''}
+              </p>
+            ) : null}
+            <p>
+              {componentGovernance.migration.usage.totalInstances} scoped usages across{' '}
+              {componentGovernance.migration.usage.entries} entries ·{' '}
+              {componentGovernance.migration.outdatedInstances} outdated
+            </p>
+          </div>
+          <div>
+            <strong>Visual regression hooks</strong>
+            <p>
+              {componentGovernance.visual.scenarios.length} code-owned scenarios ·{' '}
+              {componentGovernance.visual.usageHooks.length} content hooks
+            </p>
+            <code>{componentGovernance.visual.selector}</code>
+          </div>
+          <div className="governance-panel__migrations">
+            {[
+              ...new Map(
+                componentGovernance.migration.usage.locations
+                  .filter(
+                    (location) =>
+                      location.perspective === 'draft' &&
+                      location.version !== componentGovernance.migration.component.version,
+                  )
+                  .map((location) => [location.entryId, location]),
+              ).values(),
+            ].map((location) => (
+              <button
+                type="button"
+                className="button button--secondary"
+                key={location.entryId}
+                disabled={!componentGovernance.migration.ready || busy}
+                onClick={() =>
+                  void migrateComponentEntry(
+                    location.entryId,
+                    componentGovernance.componentId,
+                    location.revisionId,
+                  )
+                }
+              >
+                Migrate {location.entryId} from v{location.version}
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : null}
       <div className="studio-workspace" aria-busy={busy}>
         <aside className="content-sidebar" aria-label="Content entries">
           <div className="sidebar-heading">

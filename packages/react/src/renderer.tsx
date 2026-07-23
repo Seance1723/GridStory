@@ -66,6 +66,8 @@ function renderNode(
       key: node.id,
       'data-gridstory-node': node.id,
       'data-gridstory-component': resolved.component,
+      'data-gridstory-version': resolved.version,
+      'data-gridstory-visual-hook': `${resolved.component}@${resolved.version}`,
       style: { display: 'contents' },
     },
     rendered,

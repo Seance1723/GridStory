@@ -137,6 +137,34 @@ function createTestClient(
     if (url.pathname === '/api/v1/schemas') return json([testSchema]);
     if (url.pathname === '/api/v1/components') return json(componentManifests);
     if (url.pathname === '/api/v1/design-system') return json(exampleDesignSystem);
+    if (url.pathname === '/api/v1/components/gridstory.hero/migration') {
+      return json({
+        id: 'component_migration_test',
+        component: componentManifests[0],
+        usage: {
+          componentId: 'gridstory.hero',
+          currentVersion: 1,
+          totalInstances: 4,
+          entries: 2,
+          byPerspective: { draft: 4, published: 0 },
+          byVersion: { '1': 4 },
+          locations: [],
+        },
+        outdatedInstances: 0,
+        unmigratableVersions: [],
+        ready: true,
+      });
+    }
+    if (url.pathname === '/api/v1/components/gridstory.hero/visual-regression') {
+      return json({
+        id: 'visual_regression_test',
+        componentId: 'gridstory.hero',
+        version: 1,
+        scenarios: componentManifests[0]?.visualRegression.scenarios ?? [],
+        usageHooks: [],
+        selector: '[data-gridstory-component="gridstory.hero"][data-gridstory-version="1"]',
+      });
+    }
     if (url.pathname.startsWith('/api/v1/preview/sessions')) {
       if (init?.method === 'DELETE') return new Response(null, { status: 204 });
       return json(
@@ -449,5 +477,17 @@ describe('GridStory Studio', () => {
     const thread = screen.getByText('Assigned to reviewer').closest('.comment-thread');
     expect(thread?.textContent).toContain('story');
     expect(thread?.textContent).not.toContain('one-hero-a');
+  });
+
+  it('shows scoped component usage and visual regression hooks in governance', async () => {
+    const user = userEvent.setup();
+    render(<App client={createTestClient()} />);
+
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Components' }));
+    const governance = await screen.findByRole('region', { name: 'Component governance' });
+    expect(governance.textContent).toContain('4 scoped usages across 2 entries');
+    expect(governance.textContent).toContain('1 code-owned scenarios');
+    expect(governance.textContent).toContain('data-gridstory-version');
   });
 });

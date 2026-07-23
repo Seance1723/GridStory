@@ -38,6 +38,9 @@ const manifest: ComponentManifest = {
   description: '',
   category: 'Marketing',
   strictProps: true,
+  status: 'active',
+  migrations: [],
+  visualRegression: { scenarios: [] },
   slots: [],
   props: [
     {

@@ -24,5 +24,7 @@ describe('GridStoryRenderer', () => {
 
     expect(published).not.toContain('data-gridstory-node');
     expect(preview).toContain('data-gridstory-node="hero-1"');
+    expect(preview).toContain('data-gridstory-version="1"');
+    expect(preview).toContain('data-gridstory-visual-hook="hero@1"');
   });
 });

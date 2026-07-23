@@ -63,18 +63,116 @@ export const slotDefinitionSchema = z.object({
 
 export type SlotDefinition = z.infer<typeof slotDefinitionSchema>;
 
-export const componentManifestSchema = z.object({
-  id: z.string().min(1),
-  version: z.number().int().positive(),
-  name: z.string().min(1),
-  description: z.string().default(''),
-  category: z.string().min(1).default('General'),
-  props: z.array(propDefinitionSchema).default([]),
-  slots: z.array(slotDefinitionSchema).default([]),
-  strictProps: z.boolean().default(true),
+export const componentMigrationOperationSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('rename-prop'), from: z.string().min(1), to: z.string().min(1) }),
+  z.object({ kind: z.literal('set-default'), name: z.string().min(1), value: z.unknown() }),
+  z.object({ kind: z.literal('remove-prop'), name: z.string().min(1) }),
+]);
+
+export type ComponentMigrationOperation = z.infer<typeof componentMigrationOperationSchema>;
+
+export const componentMigrationSchema = z.object({
+  fromVersion: z.number().int().positive(),
+  toVersion: z.number().int().positive(),
+  operations: z.array(componentMigrationOperationSchema).min(1),
 });
 
+export type ComponentMigration = z.infer<typeof componentMigrationSchema>;
+
+export const componentDeprecationSchema = z.object({
+  reason: z.string().min(1),
+  replacementId: z.string().min(1).optional(),
+  sunsetAt: z.string().datetime({ offset: true }).optional(),
+});
+
+export type ComponentDeprecation = z.infer<typeof componentDeprecationSchema>;
+
+export const visualRegressionScenarioSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  props: z.record(z.string(), z.unknown()).default({}),
+  viewport: z
+    .object({
+      width: z.number().int().min(240).max(3840),
+      height: z.number().int().min(240).max(2160),
+    })
+    .optional(),
+});
+
+export type VisualRegressionScenario = z.infer<typeof visualRegressionScenarioSchema>;
+
+export const componentManifestSchema = z
+  .object({
+    id: z.string().min(1),
+    version: z.number().int().positive(),
+    name: z.string().min(1),
+    description: z.string().default(''),
+    category: z.string().min(1).default('General'),
+    props: z.array(propDefinitionSchema).default([]),
+    slots: z.array(slotDefinitionSchema).default([]),
+    strictProps: z.boolean().default(true),
+    status: z.enum(['active', 'deprecated']).default('active'),
+    deprecation: componentDeprecationSchema.optional(),
+    migrations: z.array(componentMigrationSchema).default([]),
+    visualRegression: z
+      .object({ scenarios: z.array(visualRegressionScenarioSchema).default([]) })
+      .default({ scenarios: [] }),
+  })
+  .superRefine((manifest, context) => {
+    if (manifest.status === 'deprecated' && !manifest.deprecation) {
+      context.addIssue({
+        code: 'custom',
+        path: ['deprecation'],
+        message: 'Deprecated components must explain their deprecation.',
+      });
+    }
+    if (manifest.status === 'active' && manifest.deprecation) {
+      context.addIssue({
+        code: 'custom',
+        path: ['deprecation'],
+        message: 'Active components cannot include deprecation metadata.',
+      });
+    }
+    if (manifest.deprecation?.replacementId === manifest.id) {
+      context.addIssue({
+        code: 'custom',
+        path: ['deprecation', 'replacementId'],
+        message: 'A deprecated component cannot replace itself.',
+      });
+    }
+    const migrationSources = new Set<number>();
+    for (const [index, migration] of manifest.migrations.entries()) {
+      if (migration.toVersion <= migration.fromVersion || migration.toVersion > manifest.version) {
+        context.addIssue({
+          code: 'custom',
+          path: ['migrations', index, 'toVersion'],
+          message: 'Migration targets must advance toward the current component version.',
+        });
+      }
+      if (migrationSources.has(migration.fromVersion)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['migrations', index, 'fromVersion'],
+          message: `Component version ${migration.fromVersion} has more than one migration.`,
+        });
+      }
+      migrationSources.add(migration.fromVersion);
+    }
+    const scenarioIds = new Set<string>();
+    for (const [index, scenario] of manifest.visualRegression.scenarios.entries()) {
+      if (scenarioIds.has(scenario.id)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['visualRegression', 'scenarios', index, 'id'],
+          message: `Visual regression scenario ${scenario.id} is duplicated.`,
+        });
+      }
+      scenarioIds.add(scenario.id);
+    }
+  });
+
 export type ComponentManifest = z.infer<typeof componentManifestSchema>;
+export type ResolvedComponentManifest = z.output<typeof componentManifestSchema>;
 
 export const componentPresentationSchema = z
   .object({

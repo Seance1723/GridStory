@@ -359,4 +359,34 @@ describe('GridStoryClient browser compatibility', () => {
     });
     expect(new Headers(requests[4]?.init?.headers).get('x-gridstory-actor')).toBe('author');
   });
+
+  it('routes component lifecycle inspection and migration through typed management calls', async () => {
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    const client = createGridStoryClient({
+      baseUrl: 'http://gridstory.test',
+      tenantId: 'default',
+      fetch: async (input, init) => {
+        requests.push({ url: String(input), ...(init ? { init } : {}) });
+        return new Response(JSON.stringify({}), {
+          headers: { 'content-type': 'application/json' },
+        });
+      },
+    });
+
+    await client.getComponentUsage('acme.hero');
+    await client.getComponentMigration('acme.hero');
+    await client.getComponentVisualRegression('acme.hero');
+    await client.migrateEntryComponent('entry/1', 'acme.hero', 'revision-1');
+
+    expect(requests.map((request) => request.url)).toEqual([
+      'http://gridstory.test/api/v1/components/acme.hero/usage',
+      'http://gridstory.test/api/v1/components/acme.hero/migration',
+      'http://gridstory.test/api/v1/components/acme.hero/visual-regression',
+      'http://gridstory.test/api/v1/content/entry%2F1/components/acme.hero/migrate',
+    ]);
+    expect(requests[3]?.init?.method).toBe('POST');
+    expect(JSON.parse(String(requests[3]?.init?.body))).toEqual({
+      expectedRevisionId: 'revision-1',
+    });
+  });
 });

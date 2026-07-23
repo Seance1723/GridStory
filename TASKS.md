@@ -178,7 +178,11 @@
   - Added a version 4 example page contract and authoring/collaboration guide, including the explicit process-local collaboration-adapter and demonstration asset-library boundaries ahead of M4 durability and asset infrastructure.
   - Focused and full verification found and resolved `BUG-0078` through `BUG-0090`; schema/core/API/client/Studio regressions cover canonical validation, scope isolation, permissions, CORS, stable due dates, mentions, assignments, resolution, presence expiry, field controls, inline edits, and localization compatibility.
   - Verification: `pnpm check` passes with 100 tests across 32 files plus two intentionally skipped tests, all lint/format/ledger/boundary/schema/type/build gates are clean, Studio/example bundles are 254.55/209.45 KB across 29/24 modules, and the bounded Edge walkthrough passes in 16.5 seconds.
-- [ ] **M3-005** Add component versioning, migrations, deprecation, usage impact, and visual regression hooks.
+- [x] **M3-005** Add component versioning, migrations, deprecation, usage impact, and visual regression hooks.
+  - Added canonical active/deprecated component lifecycle contracts, replacement/sunset guidance, deterministic serializable visual scenarios, and non-executable rename/default/remove migration chains with ambiguity and version validation.
+  - Added fully scoped draft/published usage impact, stable migration and visual plan identities, revision-safe draft-only migration, private REST/client surfaces, preview version selectors, and a Studio Components governance panel.
+  - Preserved application-owned React execution, schema-declared scan boundaries, optimistic immutable revisions, published-content isolation, and existing private/public cache policies; documented application screenshot-runner integration.
+  - Verification: `pnpm check` passes with 107 tests across 35 files plus two intentional skips; focused lifecycle/API/client/React/Studio tests pass; production builds are 258.37/210.13 KB across 29/24 modules; desktop and 700×900 in-app Studio walkthroughs showed no console errors or horizontal overflow and the canonical Edge flow passed in 13.3 seconds.
 - [ ] **M3-006** Add SEO, accessibility, link integrity, content-quality checks, and configurable publish gates.
 
 ## Milestone 4 — Assets, workflow, releases, and search
