@@ -6,7 +6,12 @@ import {
   type ComponentManifest,
   type ContentSchemaDefinition,
 } from '@gridstory/schema';
-import { ConflictError, ContentValidationError, NotFoundError } from './errors.js';
+import {
+  ConflictError,
+  ContentValidationError,
+  NotFoundError,
+  PublishQualityGateError,
+} from './errors.js';
 import type {
   Actor,
   ContentEntry,
@@ -20,11 +25,13 @@ export class ContentService {
   readonly #repository: ContentServiceOptions['repository'];
   readonly #schemas: ReadonlyMap<string, ContentSchemaDefinition>;
   readonly #componentManifests: ComponentManifest[];
+  readonly #qualityGate?: ContentServiceOptions['qualityGate'];
 
-  constructor({ repository, schemas, componentManifests }: ContentServiceOptions) {
+  constructor({ repository, schemas, componentManifests, qualityGate }: ContentServiceOptions) {
     this.#repository = repository;
     this.#schemas = new Map(schemas.map((schema) => [schema.id, schema]));
     this.#componentManifests = componentManifests;
+    this.#qualityGate = qualityGate;
   }
 
   getSchemas(): ContentSchemaDefinition[] {
@@ -184,9 +191,19 @@ export class ContentService {
     id: string;
     expectedRevisionId: string;
     actor: Actor;
+    channel?: string;
   }): Promise<ContentEntry> {
     const current = await this.get({ scope: input.scope, id: input.id, perspective: 'draft' });
     this.#validate(current.contentType, current.data);
+    if (this.#qualityGate) {
+      const report = await this.#qualityGate.assess({
+        scope: input.scope,
+        entry: current,
+        channel: input.channel ?? 'web',
+        roles: input.actor.roles ?? [],
+      });
+      if (!report.passed) throw new PublishQualityGateError(report);
+    }
     await this.#validatePublishedRoute(input.scope, current);
     return await this.#repository.publish(input);
   }

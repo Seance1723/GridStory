@@ -14,6 +14,7 @@ import type {
   LocaleConfiguration,
   LocalizedContentResolution,
   ContentPerspective,
+  ContentQualityReport,
   ContentRevision,
   ContentSchemaDefinition,
   DesignSystemManifest,
@@ -816,10 +817,41 @@ export class GridStoryClient {
     });
   }
 
-  publish(id: string, expectedRevisionId: string, signal?: AbortSignal): Promise<ContentEntry> {
+  getContentQuality(
+    id: string,
+    options: { channel?: string; signal?: AbortSignal } = {},
+  ): Promise<ContentQualityReport> {
+    const search = new URLSearchParams();
+    if (options.channel) search.set('channel', options.channel);
+    const suffix = search.size > 0 ? `?${search}` : '';
+    return this.#request(`/api/v1/content/${encodeURIComponent(id)}/quality${suffix}`, {
+      ...(options.signal ? { signal: options.signal } : {}),
+    });
+  }
+
+  assessContentQuality(
+    id: string,
+    data: Record<string, unknown>,
+    options: { channel?: string; signal?: AbortSignal } = {},
+  ): Promise<ContentQualityReport> {
+    const search = new URLSearchParams();
+    if (options.channel) search.set('channel', options.channel);
+    const suffix = search.size > 0 ? `?${search}` : '';
+    return this.#request(`/api/v1/content/${encodeURIComponent(id)}/quality${suffix}`, {
+      method: 'POST',
+      body: JSON.stringify({ data }),
+      ...(options.signal ? { signal: options.signal } : {}),
+    });
+  }
+  publish(
+    id: string,
+    expectedRevisionId: string,
+    signal?: AbortSignal,
+    channel = 'web',
+  ): Promise<ContentEntry> {
     return this.#request(`/api/v1/content/${encodeURIComponent(id)}/publish`, {
       method: 'POST',
-      body: JSON.stringify({ expectedRevisionId }),
+      body: JSON.stringify({ expectedRevisionId, channel }),
       ...(signal ? { signal } : {}),
     });
   }
@@ -926,6 +958,7 @@ export type {
   LocaleConfiguration,
   LocalizedContentResolution,
   ContentPerspective,
+  ContentQualityReport,
   PreviewMessage,
   PreviewMode,
   PreviewSessionGrant,

@@ -4,6 +4,7 @@ export * from './collaboration-service.js';
 export * from './component-lifecycle-service.js';
 export * from './content-service.js';
 export * from './content-query.js';
+export * from './content-quality-service.js';
 export * from './errors.js';
 export * from './identity.js';
 export * from './localization-service.js';

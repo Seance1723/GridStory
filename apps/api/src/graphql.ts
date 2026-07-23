@@ -383,7 +383,7 @@ export async function registerGridStoryGraphql(
             scope: contentScope(context),
             id: args.id,
             expectedRevisionId: args.expectedRevisionId,
-            actor: { id: context.principal.id },
+            actor: { id: context.principal.id, roles: context.principal.roles },
           });
         },
         planSchema: async (

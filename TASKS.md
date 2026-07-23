@@ -183,7 +183,11 @@
   - Added fully scoped draft/published usage impact, stable migration and visual plan identities, revision-safe draft-only migration, private REST/client surfaces, preview version selectors, and a Studio Components governance panel.
   - Preserved application-owned React execution, schema-declared scan boundaries, optimistic immutable revisions, published-content isolation, and existing private/public cache policies; documented application screenshot-runner integration.
   - Verification: `pnpm check` passes with 107 tests across 35 files plus two intentional skips; focused lifecycle/API/client/React/Studio tests pass; production builds are 258.37/210.13 KB across 29/24 modules; desktop and 700×900 in-app Studio walkthroughs showed no console errors or horizontal overflow and the canonical Edge flow passed in 13.3 seconds.
-- [ ] **M3-006** Add SEO, accessibility, link integrity, content-quality checks, and configurable publish gates.
+- [x] **M3-006** Add SEO, accessibility, link integrity, content-quality checks, and configurable publish gates.
+  - Added canonical serializable policies, deterministic SEO/accessibility/link/editorial findings, stable paths and IDs, explainable deductions/scores, channel/locale/content-type selection, severity thresholds, and authorized role bypasses.
+  - Added a scope-bound framework-neutral quality service with published-reference isolation, injected external-link adapters, candidate assessment, private REST/client routes, and revision-safe pre-publication enforcement before repository mutation.
+  - Added a responsive Studio Quality panel with candidate rechecks, score/severity summaries, responsible field/block paths, remediation guidance, stale-report invalidation, and authoritative blocked-publish details; documented application-rendered audit boundaries.
+  - Verification found and resolved `BUG-0094` through `BUG-0108`; `pnpm check` passes with 114 tests across 34 files plus two intentional skips, all lint/format/ledger/boundary/schema/type/build gates are clean, production bundles are 260.75/210.64 KB across 29/24 modules, desktop and 700x900 in-app checks show no console errors or horizontal overflow, and the canonical Edge flow passes in 11.5 seconds.
 
 ## Milestone 4 — Assets, workflow, releases, and search
 

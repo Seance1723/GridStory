@@ -7,6 +7,7 @@ import {
   type ComponentMigrationPlanResponse,
   type ComponentVisualRegressionPlan,
   type ContentEntry,
+  type ContentQualityReport,
   type ContentRevision,
   type GridStoryClient,
   type OperationsDashboardRecord,
@@ -405,6 +406,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(true);
   const [notice, setNotice] = useState<Notice>(null);
+  const [qualityReport, setQualityReport] = useState<ContentQualityReport | null>(null);
   const [fatalError, setFatalError] = useState<string | null>(null);
   const [previewPerspective, setPreviewPerspective] = useState<PreviewPerspective>('draft');
   const [previewBreakpoint, setPreviewBreakpoint] = useState('desktop');
@@ -450,6 +452,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
         setDraft(asEditableContent(entry));
         setPublished(publishedEntry ? asEditableContent(publishedEntry) : null);
         setRevisions(history);
+        setQualityReport(null);
         setCompositionHistory(createCompositionHistory(compositionFrom(entry, componentFieldName)));
         setDirty(false);
         setPreviewPerspective('draft');
@@ -599,6 +602,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   const changeDraft = (updater: (current: EditableContent) => EditableContent) => {
     setDraft((current) => (current ? updater(current) : current));
     setDirty(true);
+    setQualityReport(null);
     setNotice(null);
   };
 
@@ -852,6 +856,26 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
     }
   };
 
+  const runQuality = async () => {
+    if (!selected || !draft) return;
+    setBusy(true);
+    try {
+      setQualityReport(await client.assessContentQuality(selected.id, draft));
+      setNotice({ tone: 'info', message: 'Quality report refreshed for the current draft.' });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const toggleQuality = async () => {
+    if (qualityReport) {
+      setQualityReport(null);
+      return;
+    }
+    await runQuality();
+  };
   const publish = async () => {
     if (!selected || !draft) return;
     let publishable = selected;
@@ -871,6 +895,14 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
         message: 'Published revision is now available to React applications.',
       });
     } catch (error) {
+      if (
+        error instanceof GridStoryApiError &&
+        typeof error.details === 'object' &&
+        error.details !== null &&
+        'report' in error.details
+      ) {
+        setQualityReport((error.details as { report: ContentQualityReport }).report);
+      }
       setNotice({ tone: 'error', message: messageFrom(error) });
     } finally {
       setBusy(false);
@@ -1106,6 +1138,15 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
             aria-expanded={componentGovernance !== null}
           >
             Components
+          </button>{' '}
+          <button
+            type="button"
+            className="button button--secondary"
+            onClick={() => void toggleQuality()}
+            aria-expanded={qualityReport !== null}
+            disabled={!selected || busy}
+          >
+            Quality
           </button>
           <button
             type="button"
@@ -1125,7 +1166,6 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
           </button>
         </div>
       </header>
-
       {operationsDashboard ? (
         <section className="operations-panel" aria-label="Administrator operations">
           <div>
@@ -1156,7 +1196,6 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
           </dl>
         </section>
       ) : null}
-
       {componentGovernance ? (
         <section className="governance-panel" aria-label="Component governance">
           <div className="governance-panel__heading">
@@ -1233,6 +1272,52 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
           </div>
         </section>
       ) : null}
+      {qualityReport ? (
+        <section className="quality-panel" aria-label="Content quality report">
+          <div className="quality-panel__score">
+            <span className="kicker">Publish quality</span>
+            <strong>{qualityReport.score}</strong>
+            <span>{qualityReport.passed ? 'Ready to publish' : 'Gate blocked'}</span>
+          </div>
+          <div className="quality-panel__summary">
+            <p>
+              {qualityReport.summary.error} errors · {qualityReport.summary.warning} warnings ·{' '}
+              {qualityReport.summary.info} notes
+            </p>
+            <p>
+              Policy {qualityReport.policyId ?? 'none'} · {qualityReport.channel}
+              {qualityReport.bypassed ? ' · role bypass applied' : ''}
+            </p>
+            <button
+              type="button"
+              className="button button--secondary"
+              onClick={() => void runQuality()}
+              disabled={busy}
+            >
+              Re-run checks
+            </button>
+          </div>
+          {qualityReport.findings.length > 0 ? (
+            <ol className="quality-findings">
+              {qualityReport.findings.map((finding) => (
+                <li
+                  key={finding.id}
+                  className={`quality-finding quality-finding--${finding.severity}`}
+                >
+                  <span>
+                    {finding.category} · {finding.severity}
+                  </span>
+                  <strong>{finding.message}</strong>
+                  <code>{finding.path.length > 0 ? finding.path.join('.') : 'document'}</code>
+                  <p>{finding.remediation}</p>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="quality-panel__empty">No findings for this policy and channel.</p>
+          )}
+        </section>
+      ) : null}{' '}
       <div className="studio-workspace" aria-busy={busy}>
         <aside className="content-sidebar" aria-label="Content entries">
           <div className="sidebar-heading">

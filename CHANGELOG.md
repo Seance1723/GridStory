@@ -8,6 +8,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Aligned the temporary browser bundle API URL and CORS origin for deterministic local walkthroughs (BUG-0108).
+- Normalized new report punctuation for Windows-safe source encoding and restored a split changelog bullet (BUG-0106, BUG-0107).
+- Kept the quality-gate error test import type-only under the repository lint contract (BUG-0105).
+- Normalized temporary semantic test nodes to Graphify's supported code type (BUG-0104).
+- Used PowerShell 5.1-compatible UTF-8 output for temporary semantic graph assembly (BUG-0103).
+- Preserved publish authorization while testing explicitly configured quality-gate role bypass (BUG-0102).
+- Used the approved Vitest worker path and aligned the score regression with the configured threshold (BUG-0100, BUG-0101).
+- Removed literal newline escape tokens from the client type surface after a Windows edit-path regression (BUG-0099).
+- Modeled the optional external-link checker explicitly under exact optional property semantics (BUG-0098).
+- Made nested quality-policy defaults explicit so strict schema types and runtime resolution stay aligned (BUG-0097).
+- Used the exact workspace formatter binary when the scoped package-manager wrapper could not resolve Biome (BUG-0095).
+- Used Graphify's deterministic sequential AST path when the managed Windows sandbox denied multiprocessing pipe creation (BUG-0094).
 - Consolidated the Studio component-governance styles and added intentional two-/one-column breakpoints so narrow viewports do not inherit the desktop grid (BUG-0093).
 - Isolated canonical Edge verification from narrower temporary walkthrough servers so the preview application always receives its required origin policy (BUG-0092).
 - Used a direct scoped Biome invocation after the root format wrapper ignored appended path arguments, preventing broad incidental formatting during component-lifecycle work (BUG-0091).
@@ -35,6 +47,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Added serializable content-quality policies and explainable SEO, accessibility, scoped link-integrity, and editorial findings with stable paths, severities, deductions, and scores.
+- Added framework-neutral candidate assessment, injected external-link adapters, private REST/client endpoints, revision-safe pre-publication gates, and explicit authorized role bypasses.
+- Added a responsive Studio Quality panel with candidate rechecks, severity summaries, field/block paths, remediation guidance, and authoritative blocked-publish reports.
+- Added focused schema, core, API, client, and Studio regressions plus a content-quality integration guide covering cache, tenant, adapter, and application-rendered audit boundaries.
 - Added component lifecycle governance with deprecation metadata, deterministic declarative prop migrations, scope- and perspective-aware usage impact, draft-only revision-safe migration APIs/client methods, code-owned visual regression scenarios, preview renderer hooks, and a Studio Components panel.
 - Added versioned semantic rich-text documents, typed asset references, rich-text/asset field definitions and validation, generated authoring types, and a version 4 example page schema with story, social-image, and related-page fields.
 - Added an explicitly tenant-scoped collaboration service and private API/client surface for entry/field/node comment threads, actor mentions, assignees, due dates, replies, resolution, and expiring presence heartbeats with viewer/author permissions.
@@ -153,6 +169,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- Completed M3-006 with explainable content-quality reports, scoped link checks, configurable publication gates, private management surfaces, Studio remediation workflows, documentation, and full browser/build verification.
 - Completed the governed design-system milestone with versioned tokens/variants/breakpoints/symbols/templates, deterministic React resolution, authorized delivery, Studio authoring controls, lean browser bundles, documentation, and full browser/build verification.
 - Completed the visual-composition milestone with verified recursive authoring, constrained nesting, accessible pointer/keyboard controls, bounded history, application-owned nested rendering, documentation, and browser delivery coverage.
 - Completed M2-010 and Milestone 2 with sequence-stable tamper-evident audit chains, verified exports, scoped administrator APIs/SDK/Studio views, legacy migration, live cross-adapter conformance, and full browser/build verification.

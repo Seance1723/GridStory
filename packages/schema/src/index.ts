@@ -8,6 +8,7 @@ export * from './design-system.js';
 export * from './lifecycle.js';
 export * from './localization.js';
 export * from './preview.js';
+export * from './quality.js';
 export * from './query.js';
 export * from './references.js';
 export * from './routing.js';

@@ -97,6 +97,84 @@ describe('GridStory API', () => {
     expect(redirectResponse.headers.location).toBe('/api-page');
   });
 
+  it('assesses saved and candidate drafts privately and enforces configurable publish gates', async () => {
+    server = await buildServer({
+      databasePath: ':memory:',
+      seed: false,
+      qualityPolicies: [
+        {
+          id: 'strict-page-web',
+          contentType: 'page',
+          bypassRoles: ['quality-admin'],
+          content: { minWords: 100 },
+          gate: { blockedSeverities: ['warning', 'error'], minimumScore: 90 },
+        },
+      ],
+    });
+    const created = (
+      await server.inject({
+        method: 'POST',
+        url: '/api/v1/content',
+        headers,
+        payload: { contentType: 'page', data: validPage },
+      })
+    ).json();
+
+    const saved = await server.inject({
+      method: 'GET',
+      url: `/api/v1/content/${created.id}/quality?channel=web`,
+      headers,
+    });
+    expect(saved.statusCode).toBe(200);
+    expect(saved.headers['cache-control']).toBe('private, no-store');
+    expect(saved.json()).toMatchObject({
+      entryId: created.id,
+      policyId: 'strict-page-web',
+      passed: false,
+      summary: { error: 0 },
+    });
+    expect(saved.json().findings).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: 'content_too_short' })]),
+    );
+
+    const candidate = await server.inject({
+      method: 'POST',
+      url: `/api/v1/content/${created.id}/quality`,
+      headers,
+      payload: { data: { ...validPage, title: 'A much better candidate title' } },
+    });
+    expect(candidate.statusCode).toBe(200);
+    expect(candidate.json()).toMatchObject({
+      entryId: created.id,
+      revisionId: created.draftRevisionId,
+    });
+
+    const blocked = await server.inject({
+      method: 'POST',
+      url: `/api/v1/content/${created.id}/publish`,
+      headers,
+      payload: { expectedRevisionId: created.draftRevisionId },
+    });
+    expect(blocked.statusCode).toBe(422);
+    expect(blocked.json().error).toMatchObject({
+      code: 'publish_quality_gate_failed',
+      details: { report: { passed: false, policyId: 'strict-page-web' } },
+    });
+    const absent = await server.inject({
+      method: 'GET',
+      url: `/api/v1/content/${created.id}?perspective=published`,
+      headers,
+    });
+    expect(absent.statusCode).toBe(404);
+
+    const bypassed = await server.inject({
+      method: 'POST',
+      url: `/api/v1/content/${created.id}/publish`,
+      headers: { ...headers, 'x-gridstory-roles': 'admin,quality-admin' },
+      payload: { expectedRevisionId: created.draftRevisionId },
+    });
+    expect(bypassed.statusCode).toBe(200);
+  });
   it('returns structured validation errors and private cache policy', async () => {
     server = await buildServer({ databasePath: ':memory:', seed: false });
     const response = await server.inject({

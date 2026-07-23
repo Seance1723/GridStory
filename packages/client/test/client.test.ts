@@ -128,6 +128,35 @@ describe('GridStoryClient browser compatibility', () => {
     expect(JSON.parse(String(requests[0]?.init?.body))).toEqual(query);
   });
 
+  it('requests saved and candidate quality reports through private management routes', async () => {
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    const client = createGridStoryClient({
+      baseUrl: 'http://gridstory.test',
+      tenantId: 'default',
+      fetch: async (input, init) => {
+        requests.push({ url: String(input), ...(init ? { init } : {}) });
+        return new Response(JSON.stringify({ passed: true, findings: [] }), {
+          headers: { 'content-type': 'application/json' },
+        });
+      },
+    });
+
+    await client.getContentQuality('entry/1', { channel: 'email' });
+    await client.assessContentQuality('entry/1', { title: 'Candidate' }, { channel: 'web' });
+    await client.publish('entry/1', 'revision-1', undefined, 'email');
+
+    expect(requests.map((request) => request.url)).toEqual([
+      'http://gridstory.test/api/v1/content/entry%2F1/quality?channel=email',
+      'http://gridstory.test/api/v1/content/entry%2F1/quality?channel=web',
+      'http://gridstory.test/api/v1/content/entry%2F1/publish',
+    ]);
+    expect(requests.map((request) => request.init?.method)).toEqual([undefined, 'POST', 'POST']);
+    expect(JSON.parse(String(requests[1]?.init?.body))).toEqual({ data: { title: 'Candidate' } });
+    expect(JSON.parse(String(requests[2]?.init?.body))).toEqual({
+      expectedRevisionId: 'revision-1',
+      channel: 'email',
+    });
+  });
   it('sends locale management and published fallback requests with explicit locale scope', async () => {
     const requests: Array<{ url: string; init?: RequestInit }> = [];
     const client = createGridStoryClient({

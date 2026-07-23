@@ -253,6 +253,38 @@ function createTestClient(
       const thread = threads.find((candidate) => candidate.id === commentActionMatch[2]);
       return thread ? json(thread) : json({ error: { message: 'Not found.' } }, 404);
     }
+    const qualityMatch = url.pathname.match(/^\/api\/v1\/content\/([^/]+)\/quality$/);
+    if (qualityMatch) {
+      return json({
+        organizationId: 'local',
+        tenantId: 'default',
+        workspaceId: 'default',
+        siteId: 'default',
+        environmentId: 'development',
+        locale: 'en',
+        entryId: qualityMatch[1],
+        revisionId: `${qualityMatch[1]}-revision-1`,
+        contentType: 'page',
+        channel: 'web',
+        policyId: 'page-web-quality-v1',
+        score: 84,
+        passed: false,
+        bypassed: false,
+        summary: { info: 0, warning: 1, error: 1 },
+        findings: [
+          {
+            id: 'finding-alt',
+            category: 'accessibility',
+            code: 'image_alt_missing',
+            severity: 'error',
+            path: ['socialImage', 'alt'],
+            message: 'Image alternative text is missing.',
+            remediation: 'Describe the image purpose.',
+            deduction: 15,
+          },
+        ],
+      });
+    }
     const revisionMatch = url.pathname.match(/^\/api\/v1\/content\/([^/]+)\/revisions$/);
     if (revisionMatch) return json([]);
     const contentMatch = url.pathname.match(/^\/api\/v1\/content\/([^/]+)$/);
@@ -307,6 +339,20 @@ describe('GridStory Studio', () => {
     expect((screen.getByLabelText('Headline') as HTMLInputElement).value).toBe('Edited first page');
   });
 
+  it('runs candidate quality checks and links findings to responsible fields', async () => {
+    const user = userEvent.setup();
+    render(<App client={createTestClient()} />);
+
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Quality' }));
+
+    const panel = await screen.findByRole('region', { name: 'Content quality report' });
+    expect(panel.textContent).toContain('84');
+    expect(panel.textContent).toContain('Gate blocked');
+    expect(panel.textContent).toContain('Image alternative text is missing.');
+    expect(panel.textContent).toContain('socialImage.alt');
+    expect(screen.getByRole('button', { name: 'Re-run checks' })).toBeTruthy();
+  });
   it('shows the scoped administrator integrity and operations summary on demand', async () => {
     const user = userEvent.setup();
     render(<App client={createTestClient()} />);

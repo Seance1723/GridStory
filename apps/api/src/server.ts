@@ -5,6 +5,7 @@ import cors from '@fastify/cors';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import {
   ContentService,
+  ContentQualityService,
   ComponentLifecycleService,
   CollaborationService,
   AuditService,
@@ -28,6 +29,7 @@ import {
   SqliteContentRepository,
   type ContentPerspective,
   type ContentRepository,
+  type ExternalLinkChecker,
   type CacheInvalidator,
   type WebhookTransport,
   type ContentEventType,
@@ -40,6 +42,7 @@ import {
   schemaIrToVisualModel,
   visualModelDocumentSchema,
   visualModelToSchemaIr,
+  type ContentQualityPolicy,
   type RedirectDefinition,
   type LocaleConfiguration,
   type SchemaIrDocument,
@@ -67,6 +70,8 @@ export interface BuildServerOptions {
   allowedWebhookHosts?: string[];
   previewSigningSecret?: string;
   allowedPreviewOrigins?: string[];
+  qualityPolicies?: ContentQualityPolicy[];
+  externalLinkChecker?: ExternalLinkChecker;
 }
 
 interface RequestBody {
@@ -95,6 +100,7 @@ interface RequestBody {
   field?: unknown;
   nodeId?: unknown;
   target?: unknown;
+  channel?: unknown;
 }
 
 function perspective(value: unknown): ContentPerspective {
@@ -205,6 +211,24 @@ export async function buildServer({
   allowedWebhookHosts,
   previewSigningSecret = 'gridstory-local-preview-signing-secret-change-me',
   allowedPreviewOrigins = ['http://localhost:5174', 'http://127.0.0.1:5174'],
+  qualityPolicies = [
+    {
+      id: 'page-web-quality-v1',
+      contentType: 'page',
+      channels: ['web'],
+      seo: { titleMinLength: 15, titleMaxLength: 60, requireCanonicalRoute: true },
+      accessibility: {
+        requireImageAlt: true,
+        rejectGenericLinkText: true,
+        enforceHeadingOrder: true,
+        requireTableHeader: true,
+      },
+      links: { requirePublishedReferences: true, checkExternal: false },
+      content: { minWords: 20, prohibitedPhrases: [] },
+      gate: { blockedSeverities: ['error'], minimumScore: 50 },
+    },
+  ],
+  externalLinkChecker,
 }: BuildServerOptions): Promise<FastifyInstance> {
   if (!databaseUrl && databasePath !== ':memory:') {
     mkdirSync(dirname(resolve(databasePath)), { recursive: true });
@@ -212,10 +236,17 @@ export async function buildServer({
   const repository: ContentRepository = databaseUrl
     ? new PostgresContentRepository({ connectionString: databaseUrl })
     : new SqliteContentRepository({ filename: databasePath });
+  const quality = new ContentQualityService({
+    repository,
+    schemas: [pageSchema],
+    policies: qualityPolicies,
+    ...(externalLinkChecker ? { externalLinkChecker } : {}),
+  });
   const service = new ContentService({
     repository,
     schemas: [pageSchema],
     componentManifests,
+    qualityGate: quality,
   });
   const componentLifecycle = new ComponentLifecycleService({ contentService: service });
   const collaboration = new CollaborationService();
@@ -758,6 +789,44 @@ export async function buildServer({
     });
   });
 
+  server.get('/api/v1/content/:id/quality', async (request) => {
+    const params = request.params as { id: string };
+    const query = request.query as { channel?: string };
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.contentRead, { kind: 'content', id: params.id });
+    const entry = await service.get({ scope: contentScope(context), id: params.id });
+    return quality.assess({
+      scope: contentScope(context),
+      entry,
+      channel: query.channel ?? 'web',
+      roles: context.principal.roles,
+    });
+  });
+
+  server.post('/api/v1/content/:id/quality', async (request) => {
+    const params = request.params as { id: string };
+    const query = request.query as { channel?: string };
+    const body = bodyOf(request);
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.contentDraftUpdate, {
+      kind: 'content',
+      id: params.id,
+    });
+    const entry = await service.get({ scope: contentScope(context), id: params.id });
+    if (typeof body.data !== 'object' || body.data === null || Array.isArray(body.data)) {
+      throw new GridStoryError(
+        'Quality assessment data must be an object.',
+        'invalid_request',
+        400,
+      );
+    }
+    return quality.assess({
+      scope: contentScope(context),
+      entry: { ...entry, data: body.data as Record<string, unknown> },
+      channel: query.channel ?? 'web',
+      roles: context.principal.roles,
+    });
+  });
   server.put('/api/v1/content/:id/draft', async (request) => {
     const params = request.params as { id: string };
     const body = bodyOf(request);
@@ -787,7 +856,8 @@ export async function buildServer({
       scope: contentScope(context),
       id: params.id,
       expectedRevisionId: requiredString(body.expectedRevisionId, 'expectedRevisionId'),
-      actor: { id: context.principal.id },
+      actor: { id: context.principal.id, roles: context.principal.roles },
+      ...(body.channel !== undefined ? { channel: requiredString(body.channel, 'channel') } : {}),
     });
   });
 

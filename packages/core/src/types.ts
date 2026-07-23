@@ -2,6 +2,7 @@ import type {
   ComponentManifest,
   ContentEntry,
   ContentPerspective,
+  ContentQualityReport,
   ContentRevision,
   ContentScope,
   ContentSchemaDefinition,
@@ -11,6 +12,16 @@ import type {
 export interface Actor {
   id: string;
   displayName?: string;
+  roles?: string[];
+}
+
+export interface ContentPublishGate {
+  assess(input: {
+    scope: ContentScope;
+    entry: ContentEntry;
+    channel?: string;
+    roles?: string[];
+  }): Awaitable<ContentQualityReport>;
 }
 
 export interface AuditEvent extends ContentScope {
@@ -259,11 +270,13 @@ export interface ContentServiceOptions {
   repository: ContentRepository;
   schemas: ContentSchemaDefinition[];
   componentManifests: ComponentManifest[];
+  qualityGate?: ContentPublishGate;
 }
 
 export type {
   ContentEntry,
   ContentPerspective,
+  ContentQualityReport,
   ContentRevision,
   ContentScope,
   ContentStatus,
