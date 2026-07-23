@@ -36,6 +36,13 @@ export const previewSessionGrantSchema = z.object({
   expiresAt: z.string().datetime(),
 });
 
+export const previewBootstrapMessageSchema = z.object({
+  type: z.literal('gridstory.preview.bootstrap'),
+  protocolVersion: z.literal(PREVIEW_PROTOCOL_VERSION),
+  sessionId: z.string().min(1),
+  token: z.string().startsWith('gsp_'),
+});
+
 const messageBase = z.object({
   protocolVersion: z.literal(PREVIEW_PROTOCOL_VERSION),
   sessionId: z.string().min(1),
@@ -83,4 +90,5 @@ export const previewMessageSchema = z.discriminatedUnion('type', [
 export type PreviewMode = z.infer<typeof previewModeSchema>;
 export type PreviewSessionClaims = z.infer<typeof previewSessionClaimsSchema>;
 export type PreviewSessionGrant = z.infer<typeof previewSessionGrantSchema>;
+export type PreviewBootstrapMessage = z.infer<typeof previewBootstrapMessageSchema>;
 export type PreviewMessage = z.infer<typeof previewMessageSchema>;

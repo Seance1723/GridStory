@@ -110,6 +110,94 @@ describe('GridStory API', () => {
     expect(emptyJson.json().error).toMatchObject({ code: 'invalid_request' });
   });
 
+  it('issues scoped preview grants, serves drafts privately, accepts messages, and supports management revocation', async () => {
+    server = await buildServer({
+      databasePath: ':memory:',
+      seed: false,
+      previewSigningSecret: 'preview-test-secret-with-at-least-32-characters',
+      allowedPreviewOrigins: ['http://localhost:5174'],
+    });
+    const create = await server.inject({
+      method: 'POST',
+      url: '/api/v1/content',
+      headers,
+      payload: { contentType: 'page', data: validPage },
+    });
+    const created = create.json();
+    const session = await server.inject({
+      method: 'POST',
+      url: '/api/v1/preview/sessions',
+      headers,
+      payload: {
+        previewUrl: 'http://localhost:5174/',
+        route: '/api-page',
+        mode: 'iframe',
+        entryId: created.id,
+      },
+    });
+    expect(session.statusCode).toBe(201);
+    expect(session.headers['cache-control']).toBe('private, no-store');
+    const grant = session.json();
+    expect(grant.previewUrl).not.toContain(grant.token);
+
+    const previewPreflight = await server.inject({
+      method: 'OPTIONS',
+      url: `/api/v1/preview/sessions/${grant.sessionId}/messages`,
+      headers: {
+        origin: 'http://localhost:5174',
+        'access-control-request-method': 'POST',
+        'access-control-request-headers': 'authorization,content-type',
+      },
+    });
+    expect(previewPreflight.statusCode).toBe(204);
+    expect(previewPreflight.headers['access-control-allow-origin']).toBe('http://localhost:5174');
+    expect(previewPreflight.headers['access-control-allow-headers']).toContain('authorization');
+
+    const previewHeaders = {
+      authorization: `Bearer ${grant.token}`,
+      origin: 'http://localhost:5174',
+    };
+    const draft = await server.inject({
+      method: 'GET',
+      url: `/api/v1/preview/content/${created.id}`,
+      headers: previewHeaders,
+    });
+    expect(draft.statusCode).toBe(200);
+    expect(draft.headers['cache-control']).toBe('private, no-store');
+    expect(draft.json()).toMatchObject({ id: created.id, data: validPage });
+
+    const accepted = await server.inject({
+      method: 'POST',
+      url: `/api/v1/preview/sessions/${grant.sessionId}/messages`,
+      headers: { ...previewHeaders, 'content-type': 'application/json' },
+      payload: {
+        type: 'gridstory.preview.handshake',
+        protocolVersion: 1,
+        sessionId: grant.sessionId,
+        sequence: 0,
+        nonce: 'nonce-0000000000',
+        payload: { origin: 'http://localhost:5173' },
+      },
+    });
+    expect(accepted.json()).toEqual({ accepted: true, sequence: 0 });
+
+    const revoked = await server.inject({
+      method: 'DELETE',
+      url: `/api/v1/preview/sessions/${grant.sessionId}`,
+      headers: {
+        'x-gridstory-tenant': headers['x-gridstory-tenant'],
+        'x-gridstory-actor': headers['x-gridstory-actor'],
+      },
+    });
+    expect(revoked.statusCode).toBe(204);
+    const expired = await server.inject({
+      method: 'GET',
+      url: `/api/v1/preview/content/${created.id}`,
+      headers: previewHeaders,
+    });
+    expect(expired.statusCode).toBe(401);
+    expect(expired.json().error.code).toBe('preview_expired');
+  });
   it('delivers the authorized design-system manifest with private management caching', async () => {
     server = await buildServer({ databasePath: ':memory:', seed: false });
     const response = await server.inject({

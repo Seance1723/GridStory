@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   GridStoryApiError,
   createGridStoryClient,
@@ -7,7 +7,12 @@ import {
   type ContentRevision,
   type GridStoryClient,
   type OperationsDashboardRecord,
+  type PreviewSessionGrant,
 } from '@gridstory/client';
+import {
+  createGridStoryPreviewController,
+  type GridStoryPreviewController,
+} from '@gridstory/client/preview';
 import { componentManifests } from '@gridstory/example-kit/manifests';
 import { exampleDesignSystem } from '@gridstory/example-kit/design-system';
 import { exampleComponentRegistry } from '@gridstory/example-kit/react';
@@ -46,6 +51,13 @@ const defaultClient = createGridStoryClient({
 
 type Notice = { tone: 'success' | 'error' | 'info'; message: string } | null;
 type PreviewPerspective = 'draft' | 'published';
+type ExternalPreviewState = {
+  grant: PreviewSessionGrant;
+  mode: 'iframe' | 'standalone';
+  entryId: string;
+  route: string;
+  ready: boolean;
+};
 type EditableContent = Record<string, unknown>;
 
 function asEditableContent(entry: ContentEntry): EditableContent {
@@ -361,6 +373,12 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   const [fatalError, setFatalError] = useState<string | null>(null);
   const [previewPerspective, setPreviewPerspective] = useState<PreviewPerspective>('draft');
   const [previewBreakpoint, setPreviewBreakpoint] = useState('desktop');
+  const [externalPreview, setExternalPreview] = useState<ExternalPreviewState | null>(null);
+  const previewControllerRef = useRef<GridStoryPreviewController | null>(null);
+  const previewGrantRef = useRef<PreviewSessionGrant | null>(null);
+  const previewPopupRef = useRef<Window | null>(null);
+  const previewFrameRef = useRef<HTMLIFrameElement | null>(null);
+  const lastPreviewSlugRef = useRef<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
   const [operationsDashboard, setOperationsDashboard] = useState<OperationsDashboardRecord | null>(
     null,
@@ -743,6 +761,136 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   const previewBlocks = previewPerspective === 'draft' ? draftBlocks : publishedBlocks;
   const slugField = activeSchema?.fields.find((field) => field.type === 'slug');
   const previewSlug = String(previewContent?.[slugField?.name ?? 'slug'] ?? 'preview');
+
+  const closeExternalPreview = useCallback(async () => {
+    previewControllerRef.current?.dispose();
+    previewControllerRef.current = null;
+    const grant = previewGrantRef.current;
+    previewGrantRef.current = null;
+    lastPreviewSlugRef.current = null;
+    const popup = previewPopupRef.current;
+    previewPopupRef.current = null;
+    if (popup && !popup.closed) popup.close();
+    setExternalPreview(null);
+    if (grant) {
+      try {
+        await client.revokePreviewSession(grant.sessionId);
+      } catch (error) {
+        setNotice({ tone: 'error', message: messageFrom(error) });
+      }
+    }
+  }, [client]);
+
+  const connectPreviewTarget = useCallback((targetWindow: Window, grant: PreviewSessionGrant) => {
+    previewControllerRef.current?.dispose();
+    const controller = createGridStoryPreviewController({
+      grant,
+      targetWindow,
+      onReady: () => {
+        setExternalPreview((current) =>
+          current?.grant.sessionId === grant.sessionId ? { ...current, ready: true } : current,
+        );
+      },
+      onNavigate: (message) => {
+        setExternalPreview((current) =>
+          current?.grant.sessionId === grant.sessionId
+            ? { ...current, route: message.payload.route }
+            : current,
+        );
+      },
+      onSelect: (message) => {
+        const nodeId = message.payload.nodeId;
+        if (!nodeId) return;
+        setCompositionHistory((current) =>
+          findNode(current.present, nodeId) ? { ...current, selectedId: nodeId } : current,
+        );
+      },
+      onError: (message) => setNotice({ tone: 'error', message: message.payload.message }),
+    });
+    previewControllerRef.current = controller;
+    controller.start();
+  }, []);
+
+  const startExternalPreview = async (mode: 'iframe' | 'standalone') => {
+    if (!selected || !draft) return;
+    setPreviewPerspective('draft');
+    const popup =
+      mode === 'standalone'
+        ? window.open('about:blank', 'gridstory-standalone-preview', 'popup,width=1280,height=900')
+        : null;
+    if (mode === 'standalone' && !popup) {
+      setNotice({ tone: 'error', message: 'The standalone preview popup was blocked.' });
+      return;
+    }
+    await closeExternalPreview();
+    const route = previewSlug.startsWith('/') ? previewSlug : `/${previewSlug}`;
+    try {
+      const grant = await client.createPreviewSession({
+        previewUrl: import.meta.env.VITE_GRIDSTORY_PREVIEW_URL ?? 'http://localhost:5174/',
+        route,
+        mode,
+        entryId: selected.id,
+      });
+      previewGrantRef.current = grant;
+      setExternalPreview({ grant, mode, entryId: selected.id, route, ready: false });
+      if (popup) {
+        previewPopupRef.current = popup;
+        popup.location.replace(grant.previewUrl);
+        connectPreviewTarget(popup, grant);
+      }
+    } catch (error) {
+      popup?.close();
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
+
+  useEffect(() => {
+    if (
+      externalPreview?.mode !== 'iframe' ||
+      previewControllerRef.current ||
+      !previewFrameRef.current?.contentWindow
+    ) {
+      return;
+    }
+    connectPreviewTarget(previewFrameRef.current.contentWindow, externalPreview.grant);
+  }, [connectPreviewTarget, externalPreview]);
+
+  useEffect(() => {
+    const controller = previewControllerRef.current;
+    const sessionId = externalPreview?.grant.sessionId;
+    if (!controller || !sessionId || !selected || !draft) return;
+    if (lastPreviewSlugRef.current !== previewSlug) {
+      const route = previewSlug.startsWith('/') ? previewSlug : `/${previewSlug}`;
+      lastPreviewSlugRef.current = previewSlug;
+      controller.navigate(route);
+      setExternalPreview((current) =>
+        current?.grant.sessionId === sessionId ? { ...current, route } : current,
+      );
+    }
+    controller.patch({
+      entryId: selected.id,
+      contentType: selected.contentType,
+      data: draft,
+      revisionId: selected.draftRevisionId,
+    });
+  }, [draft, externalPreview?.grant.sessionId, previewSlug, selected]);
+
+  useEffect(() => {
+    if (externalPreview && externalPreview.entryId !== selected?.id) {
+      void closeExternalPreview();
+    }
+  }, [closeExternalPreview, externalPreview, selected?.id]);
+
+  useEffect(
+    () => () => {
+      previewControllerRef.current?.dispose();
+      const grant = previewGrantRef.current;
+      if (grant) void client.revokePreviewSession(grant.sessionId).catch(() => undefined);
+      const popup = previewPopupRef.current;
+      if (popup && !popup.closed) popup.close();
+    },
+    [client],
+  );
 
   return (
     <div className="studio-shell">
@@ -1452,7 +1600,11 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
           <div className="preview-toolbar">
             <div>
               <span className="kicker">Live React preview</span>
-              <strong>{previewBreakpoint} · 100%</strong>
+              <strong>
+                {externalPreview
+                  ? `${externalPreview.mode} · ${externalPreview.ready ? 'connected' : 'connecting'}`
+                  : `${previewBreakpoint} · 100%`}
+              </strong>
             </div>
             <div className="preview-controls">
               <fieldset className="segmented" aria-label="Preview breakpoint">
@@ -1484,6 +1636,29 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   Published
                 </button>
               </fieldset>
+              <fieldset className="segmented" aria-label="Application preview">
+                <button
+                  type="button"
+                  className={externalPreview?.mode === 'iframe' ? 'active' : ''}
+                  onClick={() => void startExternalPreview('iframe')}
+                  disabled={!selected}
+                >
+                  App iframe
+                </button>
+                <button
+                  type="button"
+                  className={externalPreview?.mode === 'standalone' ? 'active' : ''}
+                  onClick={() => void startExternalPreview('standalone')}
+                  disabled={!selected}
+                >
+                  Standalone
+                </button>
+                {externalPreview ? (
+                  <button type="button" onClick={() => void closeExternalPreview()}>
+                    Close app preview
+                  </button>
+                ) : null}
+              </fieldset>
             </div>
           </div>
           <div className="preview-canvas">
@@ -1491,10 +1666,20 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               <span />
               <span />
               <span />
-              <div>/{previewSlug}</div>
+              <div>{externalPreview?.route ?? `/${previewSlug}`}</div>
             </div>
-            <div className="preview-page">
-              {previewContent ? (
+            <div
+              className={`preview-page${externalPreview?.mode === 'iframe' ? ' preview-page--external' : ''}`}
+            >
+              {externalPreview?.mode === 'iframe' ? (
+                <iframe
+                  ref={previewFrameRef}
+                  src={externalPreview.grant.previewUrl}
+                  title="Application draft preview"
+                  sandbox="allow-scripts allow-same-origin"
+                  referrerPolicy="no-referrer"
+                />
+              ) : previewContent ? (
                 <GridStoryRenderer
                   nodes={previewBlocks}
                   registry={exampleComponentRegistry}

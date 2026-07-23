@@ -7,6 +7,8 @@ const server = await buildServer({
   ...(config.databaseUrl ? { databaseUrl: config.databaseUrl } : {}),
   allowedOrigins: config.allowedOrigins,
   cursorSecret: config.cursorSecret,
+  previewSigningSecret: config.previewSigningSecret,
+  allowedPreviewOrigins: config.allowedPreviewOrigins,
   locales: config.locales,
   webhookSigningSecret: config.webhookSigningSecret,
   ...(config.allowedWebhookHosts ? { allowedWebhookHosts: config.allowedWebhookHosts } : {}),

@@ -7,6 +7,8 @@ export interface ApiConfig {
   databaseUrl?: string;
   allowedOrigins: string[];
   cursorSecret: string;
+  previewSigningSecret: string;
+  allowedPreviewOrigins: string[];
   locales: LocaleConfiguration[];
   webhookSigningSecret: string;
   allowedWebhookHosts?: string[];
@@ -62,6 +64,15 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiCon
   if (allowedOrigins.length === 0) {
     throw new Error('GRIDSTORY_ALLOWED_ORIGINS must contain at least one origin.');
   }
+  const allowedPreviewOrigins = (
+    environment.GRIDSTORY_PREVIEW_ALLOWED_ORIGINS ?? 'http://localhost:5174'
+  )
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  if (allowedPreviewOrigins.length === 0) {
+    throw new Error('GRIDSTORY_PREVIEW_ALLOWED_ORIGINS must contain at least one origin.');
+  }
   const databaseUrl = environment.GRIDSTORY_DATABASE_URL?.trim();
   return {
     host: environment.GRIDSTORY_HOST ?? '127.0.0.1',
@@ -70,6 +81,10 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiCon
     ...(databaseUrl ? { databaseUrl } : {}),
     allowedOrigins,
     cursorSecret: environment.GRIDSTORY_CURSOR_SECRET ?? 'gridstory-local-cursor-secret-change-me',
+    previewSigningSecret:
+      environment.GRIDSTORY_PREVIEW_SIGNING_SECRET ??
+      'gridstory-local-preview-signing-secret-change-me',
+    allowedPreviewOrigins,
     locales: parseLocales(environment.GRIDSTORY_LOCALES_JSON),
     webhookSigningSecret:
       environment.GRIDSTORY_WEBHOOK_SIGNING_SECRET ??

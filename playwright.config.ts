@@ -26,6 +26,8 @@ export default defineConfig({
         GRIDSTORY_PORT: '44000',
         GRIDSTORY_DATABASE_PATH: ':memory:',
         GRIDSTORY_ALLOWED_ORIGINS: 'http://127.0.0.1:44173,http://127.0.0.1:44174',
+        GRIDSTORY_PREVIEW_ALLOWED_ORIGINS: 'http://127.0.0.1:44174',
+        GRIDSTORY_PREVIEW_SIGNING_SECRET: 'gridstory-e2e-preview-signing-secret-change-me',
       },
     },
     {

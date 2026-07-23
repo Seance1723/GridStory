@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   PREVIEW_PROTOCOL_VERSION,
+  previewBootstrapMessageSchema,
   previewMessageSchema,
   previewSessionClaimsSchema,
 } from '../src/index.js';
@@ -33,8 +34,15 @@ describe('preview protocol contracts', () => {
       type: 'gridstory.preview.patch',
       payload: { entryId: 'page-1', contentType: 'page', data: { title: 'Unsaved' } },
     });
+    const bootstrap = previewBootstrapMessageSchema.parse({
+      type: 'gridstory.preview.bootstrap',
+      protocolVersion: PREVIEW_PROTOCOL_VERSION,
+      sessionId: claims.sessionId,
+      token: 'gsp_secret',
+    });
 
     expect(claims.scope.siteId).toBe('website');
+    expect(bootstrap.token).toBe('gsp_secret');
     expect(patch.type).toBe('gridstory.preview.patch');
     expect(previewMessageSchema.safeParse({ ...patch, sequence: -1 }).success).toBe(false);
   });

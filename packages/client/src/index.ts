@@ -12,6 +12,9 @@ import type {
   ContentRevision,
   ContentSchemaDefinition,
   DesignSystemManifest,
+  PreviewMessage,
+  PreviewMode,
+  PreviewSessionGrant,
   RequestContext,
   SchemaDriftReport,
   SchemaIrDocument,
@@ -230,6 +233,15 @@ export interface GridStoryClientOptions {
   fetch?: typeof globalThis.fetch;
 }
 
+export interface CreatePreviewSessionInput {
+  previewUrl: string;
+  route: string;
+  mode: PreviewMode;
+  entryId?: string;
+  ttlSeconds?: number;
+  signal?: AbortSignal;
+}
+
 export interface GridStoryErrorEnvelope {
   error?: {
     code?: string;
@@ -322,6 +334,38 @@ export class GridStoryClient {
     return (await response.json()) as T;
   }
 
+  async #previewRequest<T>(path: string, token: string, init: RequestInit = {}): Promise<T> {
+    const response = await this.#fetch(`${this.#baseUrl}${path}`, {
+      ...init,
+      headers: {
+        accept: 'application/json',
+        ...(init.body ? { 'content-type': 'application/json' } : {}),
+        authorization: `Bearer ${token}`,
+        ...init.headers,
+      },
+    });
+    if (!response.ok) {
+      let envelope: GridStoryErrorEnvelope = {};
+      try {
+        envelope = (await response.json()) as GridStoryErrorEnvelope;
+      } catch {
+        // Preview responses retain the same stable error shape through proxies.
+      }
+      throw new GridStoryApiError(
+        envelope.error?.message ??
+          `GridStory preview request failed with status ${response.status}.`,
+        {
+          status: response.status,
+          ...(envelope.error?.code ? { code: envelope.error.code } : {}),
+          ...(envelope.error?.details !== undefined ? { details: envelope.error.details } : {}),
+          ...(envelope.error?.requestId ? { requestId: envelope.error.requestId } : {}),
+        },
+      );
+    }
+    if (response.status === 204) return undefined as T;
+    return (await response.json()) as T;
+  }
+
   getSchemas(signal?: AbortSignal): Promise<ContentSchemaDefinition[]> {
     return this.#request('/api/v1/schemas', { ...(signal ? { signal } : {}) });
   }
@@ -336,6 +380,54 @@ export class GridStoryClient {
 
   getDesignSystem(signal?: AbortSignal): Promise<DesignSystemManifest> {
     return this.#request('/api/v1/design-system', { ...(signal ? { signal } : {}) });
+  }
+
+  createPreviewSession(input: CreatePreviewSessionInput): Promise<PreviewSessionGrant> {
+    return this.#request('/api/v1/preview/sessions', {
+      method: 'POST',
+      body: JSON.stringify({
+        previewUrl: input.previewUrl,
+        route: input.route,
+        mode: input.mode,
+        ...(input.entryId ? { entryId: input.entryId } : {}),
+        ...(input.ttlSeconds !== undefined ? { ttlSeconds: input.ttlSeconds } : {}),
+      }),
+      ...(input.signal ? { signal: input.signal } : {}),
+    });
+  }
+
+  getPreviewContent(id: string, token: string, signal?: AbortSignal): Promise<ContentEntry> {
+    return this.#previewRequest(`/api/v1/preview/content/${encodeURIComponent(id)}`, token, {
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  acceptPreviewMessage(
+    sessionId: string,
+    token: string,
+    message: PreviewMessage,
+    signal?: AbortSignal,
+  ): Promise<{ accepted: true; sequence: number }> {
+    return this.#previewRequest(
+      `/api/v1/preview/sessions/${encodeURIComponent(sessionId)}/messages`,
+      token,
+      {
+        method: 'POST',
+        body: JSON.stringify(message),
+        ...(signal ? { signal } : {}),
+      },
+    );
+  }
+
+  revokePreviewSession(sessionId: string, token?: string, signal?: AbortSignal): Promise<void> {
+    const path = `/api/v1/preview/sessions/${encodeURIComponent(sessionId)}`;
+    if (token) {
+      return this.#previewRequest(path, token, {
+        method: 'DELETE',
+        ...(signal ? { signal } : {}),
+      });
+    }
+    return this.#request(path, { method: 'DELETE', ...(signal ? { signal } : {}) });
   }
 
   getSchemaLifecycle(signal?: AbortSignal): Promise<SchemaLifecycleInspection> {
@@ -642,6 +734,9 @@ export type {
   LocaleConfiguration,
   LocalizedContentResolution,
   ContentPerspective,
+  PreviewMessage,
+  PreviewMode,
+  PreviewSessionGrant,
   ContentRevision,
   ComponentManifest,
   ContentSchemaDefinition,

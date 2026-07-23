@@ -1,6 +1,6 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createGridStoryClient, type ContentEntry } from '@gridstory/client';
@@ -83,11 +83,25 @@ function json(body: unknown, status = 200): Response {
 }
 
 function createTestClient() {
-  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
     if (url.pathname === '/api/v1/schemas') return json([schema]);
     if (url.pathname === '/api/v1/components') return json(componentManifests);
     if (url.pathname === '/api/v1/design-system') return json(exampleDesignSystem);
+    if (url.pathname.startsWith('/api/v1/preview/sessions')) {
+      if (init?.method === 'DELETE') return new Response(null, { status: 204 });
+      return json(
+        {
+          token: 'gsp_test-token',
+          sessionId: 'preview-session-1',
+          previewUrl: 'http://localhost:5174/',
+          origin: 'http://localhost:5174',
+          protocolVersion: 1,
+          expiresAt: '2026-07-23T12:00:00.000Z',
+        },
+        201,
+      );
+    }
     if (url.pathname === '/api/v1/content') return json(entries);
     if (url.pathname === '/api/v1/operations/summary') {
       return json({
@@ -181,6 +195,43 @@ describe('GridStory Studio', () => {
     expect(panel.textContent).toContain('Dead jobs');
   });
 
+  it('starts and revokes a secure application iframe preview', async () => {
+    const user = userEvent.setup();
+    render(<App client={createTestClient()} />);
+
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'App iframe' }));
+    const frame = await screen.findByTitle('Application draft preview');
+    expect(frame.getAttribute('src')).toBe('http://localhost:5174/');
+    expect(frame.getAttribute('sandbox')).toBe('allow-scripts allow-same-origin');
+    expect(screen.getByText(/iframe .*connecting/)).toBeTruthy();
+
+    await user.click(screen.getByRole('button', { name: 'Close app preview' }));
+    expect(screen.queryByTitle('Application draft preview')).toBeNull();
+  });
+
+  it('opens standalone preview before awaiting the scoped session grant', async () => {
+    const user = userEvent.setup();
+    const replace = vi.fn();
+    const popup = {
+      closed: false,
+      close: vi.fn(),
+      location: { replace },
+      postMessage: vi.fn(),
+    } as unknown as Window;
+    const open = vi.spyOn(window, 'open').mockReturnValue(popup);
+    render(<App client={createTestClient()} />);
+
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Standalone' }));
+    expect(open).toHaveBeenCalledWith(
+      'about:blank',
+      'gridstory-standalone-preview',
+      'popup,width=1280,height=900',
+    );
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('http://localhost:5174/'));
+    expect(screen.getByText(/standalone .*connecting/)).toBeTruthy();
+  });
   it('edits nested compositions through layers, slots, keyboard movement, and history', async () => {
     const user = userEvent.setup();
     render(<App client={createTestClient()} />);

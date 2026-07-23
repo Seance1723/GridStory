@@ -4,9 +4,39 @@ test('edits, protects, saves, publishes, and delivers React content', async ({ p
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Pages' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Welcome to GridStory' })).toBeVisible();
-
   const heroHeading = page.locator('.block-editor').first().getByLabel('Heading');
+  await page.getByRole('button', { name: 'App iframe' }).click();
+  const applicationFrame = page.frameLocator('iframe[title="Application draft preview"]');
+  await expect(
+    applicationFrame.getByRole('heading', { name: 'Your application stays yours.' }),
+  ).toBeVisible();
+  await expect(page.locator('.preview-browser-bar div')).toHaveText('/welcome');
+
+  await heroHeading.fill('Live through the secure preview bridge');
+  await expect(
+    applicationFrame.getByRole('heading', { name: 'Live through the secure preview bridge' }),
+  ).toBeVisible();
+  await applicationFrame.locator('[data-gridstory-node]').first().click();
+  await expect(
+    page
+      .getByRole('region', { name: 'Selected component inspector' })
+      .getByRole('heading', { name: 'Hero' }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Close app preview' }).click();
+  await expect(page.getByTitle('Application draft preview')).toHaveCount(0);
+
+  const popupPromise = page.waitForEvent('popup');
+  await page.getByRole('button', { name: 'Standalone' }).click();
+  const popup = await popupPromise;
+  await expect(
+    popup.getByRole('heading', { name: 'Live through the secure preview bridge' }),
+  ).toBeVisible();
   await heroHeading.fill('Published from the browser walkthrough');
+  await expect(
+    popup.getByRole('heading', { name: 'Published from the browser walkthrough' }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Close app preview' }).click();
+  await expect.poll(() => popup.isClosed()).toBe(true);
   await expect(page.getByText('Unsaved changes')).toBeVisible();
 
   page.once('dialog', async (dialog) => {

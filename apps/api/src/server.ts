@@ -252,6 +252,7 @@ export async function buildServer({
       else callback(new Error('Origin is not allowed by GridStory CORS policy.'), false);
     },
     allowedHeaders: [
+      'authorization',
       'content-type',
       'x-gridstory-organization',
       'x-gridstory-tenant',
@@ -393,13 +394,17 @@ export async function buildServer({
     '/api/v1/preview/sessions/:id',
     async (request, reply) => {
       const token = request.headers.authorization?.replace(/^Bearer\s+/i, '');
-      if (!token)
-        throw new GridStoryError('Preview token is required.', 'invalid_preview_token', 401);
-      const claims = previews.authenticate(token, request.headers.origin);
-      if (claims.sessionId !== request.params.id) {
-        throw new GridStoryError('Preview session does not match.', 'preview_scope_denied', 403);
+      if (token) {
+        const claims = previews.authenticate(token, request.headers.origin);
+        if (claims.sessionId !== request.params.id) {
+          throw new GridStoryError('Preview session does not match.', 'preview_scope_denied', 403);
+        }
+        previews.revoke(request.params.id);
+      } else {
+        const context = requestContext(request, 'draft');
+        authorize(policy, context, GridStoryActions.contentRead, { kind: 'content' });
+        previews.revoke(request.params.id, contentScope(context));
       }
-      previews.revoke(request.params.id);
       return reply.status(204).send();
     },
   );

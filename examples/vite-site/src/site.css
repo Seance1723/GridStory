@@ -41,6 +41,14 @@ footer span {
   color: #9ca3af;
   font-size: 0.85rem;
 }
+[data-gridstory-node] {
+  cursor: pointer;
+  outline: 2px solid transparent;
+  outline-offset: -2px;
+}
+[data-gridstory-node]:hover {
+  outline-color: #6366f1;
+}
 @media (max-width: 620px) {
   footer {
     align-items: flex-start;

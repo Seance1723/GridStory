@@ -13,6 +13,21 @@ describe('API configuration', () => {
     });
   });
 
+  it('loads distinct preview signing and exact-origin configuration', () => {
+    expect(
+      loadConfig({
+        GRIDSTORY_PREVIEW_SIGNING_SECRET: 'preview-secret-with-at-least-32-characters',
+        GRIDSTORY_PREVIEW_ALLOWED_ORIGINS: ' https://preview.example.test , http://localhost:5174 ',
+      }),
+    ).toMatchObject({
+      previewSigningSecret: 'preview-secret-with-at-least-32-characters',
+      allowedPreviewOrigins: ['https://preview.example.test', 'http://localhost:5174'],
+    });
+    expect(() => loadConfig({ GRIDSTORY_PREVIEW_ALLOWED_ORIGINS: '  ' })).toThrow(
+      /GRIDSTORY_PREVIEW_ALLOWED_ORIGINS/,
+    );
+  });
+
   it('parses locale configuration and rejects malformed environment JSON', () => {
     expect(
       loadConfig({

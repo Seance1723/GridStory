@@ -8,6 +8,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Added scope-checked management revocation for origin-bound preview grants so Studio can close sessions without impersonating the preview application (`BUG-0066`).
+- Kept the explicit browser preview entry free of the Zod-backed schema barrel, restoring small production module graphs while retaining compile-time protocol drift detection (`BUG-0067`).
+- Serialized application-side message acceptance so back-to-back navigation and patch messages cannot be reordered into false replay failures (`BUG-0071`).
+- Corrected preview configuration, bodyless revocation, and status-text regressions discovered during focused verification (`BUG-0068` through `BUG-0070`).
+- Allowed the browser preview runtime's token-authenticated message requests through CORS preflight by admitting the `authorization` header (`BUG-0073`).
+- Corrected the Edge iframe assertion to distinguish the entry title from the rendered Hero heading (`BUG-0074`).
+- Prevented embedded and opener-controlled preview applications from fetching or priming published delivery caches while awaiting authenticated draft patches (`BUG-0075`).
+- Preserved Studio's authoritative queued preview route when the runtime becomes ready, removing a timing-dependent bootstrap-path overwrite (`BUG-0076`).
+- Preserved formatter-required LF line endings during Windows verification (`BUG-0072`).
+- Removed a recurring CRLF/byte-order-marker artifact from the final preview patch set (`BUG-0077`).
 - Normalized optional root component acceptance before Studio palette filtering so strict type checking remains sound.
 - Documented and used scoped process-launch approval for Windows schema generation and Vite-backed verification in the managed workspace.
 - Replaced static composition interactions with semantic buttons, sections, and fieldsets and simplified slot typography selectors so accessibility and stylesheet lint remain clean.
@@ -20,6 +30,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Mapped malformed preview targets into the stable `invalid_preview_url` response boundary instead of allowing generic URL exceptions to become server errors.
 
 ### Added
+- Added an explicit `@gridstory/client/preview` browser entry with exact-origin/source-checked controller and application runtimes, credential-free preview URLs, bounded bootstrap retry, queued live patches, bidirectional route synchronization, replay-checked readiness, and click-to-edit selection messages.
+- Added typed universal-client methods for preview session creation, isolated token-authenticated draft/message requests, self-revocation, and management revocation without leaking tenant or actor headers into preview requests.
+- Added Studio application-preview controls for sandboxed iframes and standalone popup sessions, live unsaved draft patches, route/status display, source-click selection, session cleanup, and scoped revocation.
+- Added the preview runtime and source overlays to the ordinary Vite React application plus dedicated preview secret/origin/application/Studio environment configuration and an Edge walkthrough covering iframe, standalone, routing, live patching, selection, publication, and delivery.
 
 - Added versioned embedded/standalone preview session and message contracts for handshake, readiness, full-content live patches, route navigation, click-to-edit selection, and stable errors.
 - Added short-lived HMAC-signed preview grants bound to audience, full content scope, target origin, route, mode, optional entry, and expiry, with HTTPS/allow-list enforcement, revocation, monotonic message ordering, nonce replay rejection, and bounded replay memory.

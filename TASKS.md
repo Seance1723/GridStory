@@ -163,11 +163,14 @@
   - Focused interaction verification found `BUG-0061`; its test correction is retained in the permanent bug ledger.
   - Pinned every bound presentation to an immutable design-system version; canonical validation rejects unpinned bindings and runtime resolution safely falls back when application/content versions differ.
   - Verification found and resolved `BUG-0060` through `BUG-0064`; `pnpm check` passes with 83 tests across 27 files, all schema/lint/format/ledger/boundary/type/build gates are clean, nine Studio tests cover composition/design authoring, browser bundles are 203 KB/234 KB, and the Edge walkthrough passes.
-- [~] **M3-003** Add secure iframe and standalone preview sessions, route synchronization, live patches, and click-to-edit overlays.
-  - Preview protocol, credential isolation, origin validation, and transport lifecycle design is in progress.
-  - Added versioned session/message contracts and an HMAC-signed, audience/scope/origin/route/mode/expiry-bound preview service with allow-listed HTTPS targets, revocation, monotonic sequences, nonce replay protection, and bounded replay memory; API/runtime integration is in progress.
+- [x] **M3-003** Add secure iframe and standalone preview sessions, route synchronization, live patches, and click-to-edit overlays.
+  - Implemented the preview protocol, credential isolation, exact source/origin validation, startup retry, ordered transport lifecycle, and scope-checked management cleanup.
+  - Added versioned session/message contracts and an HMAC-signed, audience/scope/origin/route/mode/expiry-bound preview service with allow-listed HTTPS targets, revocation, monotonic sequences, nonce replay protection, and bounded replay memory.
   - Preview service review found and resolved `BUG-0065`; its stable-error correction is retained in the permanent bug ledger.
-  - Added authorized session issuance, token-authenticated draft retrieval, replay-checked message acceptance, and authenticated revocation endpoints with private/no-store separation; client/Studio bridge integration remains in progress.
+  - Added authorized session issuance, token-authenticated draft retrieval, replay-checked message acceptance, self-revocation, and scope-checked management revocation endpoints with private/no-store separation.
+  - Added an explicit browser client entry with controller/application runtimes, token bootstrap outside URLs, queued live draft patches, bidirectional routes, and source-click selection.
+  - Wired sandboxed iframe and standalone popup previews into Studio and the ordinary Vite application with application-owned routing/rendering, source overlays, environment configuration, and lifecycle cleanup.
+  - Verification found and resolved `BUG-0066` through `BUG-0077`; `pnpm check` passes with 93 tests across 30 files plus two intentionally skipped tests, all lint/format/ledger/boundary/type/build gates are clean, Studio/example bundles are 241.57/208.09 KB across 28/24 modules, and the Edge walkthrough passes the complete iframe/standalone/edit/select/route/revoke/save/publish/delivery flow.
 - [ ] **M3-004** Add rich text, references, asset pickers, inline editing, comments, mentions, assignments, and presence.
 - [ ] **M3-005** Add component versioning, migrations, deprecation, usage impact, and visual regression hooks.
 - [ ] **M3-006** Add SEO, accessibility, link integrity, content-quality checks, and configurable publish gates.

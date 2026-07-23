@@ -245,4 +245,63 @@ describe('GridStoryClient browser compatibility', () => {
     ]);
     expect(JSON.parse(String(requests[1]?.init?.body))).toEqual(archive);
   });
+
+  it('isolates management session creation from token-authenticated preview requests', async () => {
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    const client = createGridStoryClient({
+      baseUrl: 'http://gridstory.test',
+      tenantId: 'tenant',
+      fetch: async (input, init) => {
+        requests.push({ url: String(input), ...(init ? { init } : {}) });
+        if (init?.method === 'DELETE') return new Response(null, { status: 204 });
+        if (String(input).endsWith('/preview/sessions')) {
+          return new Response(
+            JSON.stringify({
+              token: 'gsp_token',
+              sessionId: 'session-1',
+              previewUrl: 'https://preview.example.test/',
+              origin: 'https://preview.example.test',
+              protocolVersion: 1,
+              expiresAt: '2026-07-23T12:00:00.000Z',
+            }),
+            { status: 201, headers: { 'content-type': 'application/json' } },
+          );
+        }
+        if (String(input).includes('/preview/content/')) {
+          return new Response(JSON.stringify({ id: 'page-1' }), {
+            headers: { 'content-type': 'application/json' },
+          });
+        }
+        return new Response(JSON.stringify({ accepted: true, sequence: 1 }), {
+          headers: { 'content-type': 'application/json' },
+        });
+      },
+    });
+
+    const grant = await client.createPreviewSession({
+      previewUrl: 'https://preview.example.test/',
+      route: '/welcome',
+      mode: 'iframe',
+      entryId: 'page-1',
+    });
+    await client.getPreviewContent('page-1', grant.token);
+    await client.acceptPreviewMessage(grant.sessionId, grant.token, {
+      type: 'gridstory.preview.ready',
+      protocolVersion: 1,
+      sessionId: grant.sessionId,
+      sequence: 1,
+      nonce: 'nonce-0000000001',
+      payload: { route: '/welcome' },
+    });
+    await client.revokePreviewSession(grant.sessionId, grant.token);
+    await client.revokePreviewSession(grant.sessionId);
+
+    const creationHeaders = new Headers(requests[0]?.init?.headers);
+    const tokenHeaders = new Headers(requests[1]?.init?.headers);
+    const managementRevokeHeaders = new Headers(requests[4]?.init?.headers);
+    expect(creationHeaders.get('x-gridstory-tenant')).toBe('tenant');
+    expect(tokenHeaders.get('authorization')).toBe('Bearer gsp_token');
+    expect(tokenHeaders.has('x-gridstory-tenant')).toBe(false);
+    expect(managementRevokeHeaders.get('x-gridstory-tenant')).toBe('tenant');
+  });
 });

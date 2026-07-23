@@ -175,9 +175,21 @@ export class PreviewSessionService {
     return structuredClone(session.claims);
   }
 
-  revoke(sessionId: string): void {
+  revoke(sessionId: string, expectedScope?: ContentScope): void {
     const session = this.#sessions.get(sessionId);
     if (!session) throw new NotFoundError('Preview session was not found.');
+    if (
+      expectedScope &&
+      (Object.keys(expectedScope) as Array<keyof ContentScope>).some(
+        (key) => expectedScope[key] !== session.claims.scope[key],
+      )
+    ) {
+      throw new GridStoryError(
+        'Preview session does not belong to the active scope.',
+        'preview_scope_denied',
+        403,
+      );
+    }
     session.revoked = true;
   }
 }

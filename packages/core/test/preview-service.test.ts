@@ -82,7 +82,11 @@ describe('PreviewSessionService', () => {
     expect(() => service.acceptMessage(grant.sessionId, 2, 'nonce-0000000001')).toThrowError(
       expect.objectContaining({ code: 'preview_replay' }),
     );
-    service.revoke(grant.sessionId);
+    expect(() => service.revoke(grant.sessionId, { ...scope, siteId: 'other-site' })).toThrowError(
+      expect.objectContaining({ code: 'preview_scope_denied' }),
+    );
+    expect(service.authenticate(grant.token).sessionId).toBe(grant.sessionId);
+    service.revoke(grant.sessionId, scope);
     expect(() => service.authenticate(grant.token)).toThrowError(
       expect.objectContaining({ code: 'preview_expired' }),
     );
