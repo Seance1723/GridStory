@@ -10,6 +10,15 @@ const schema: ContentSchemaDefinition = {
   titleField: 'title',
   fields: [
     { id: 'article.title', name: 'title', label: 'Title', type: 'text', required: true },
+    { id: 'article.body', name: 'body', label: 'Body', type: 'rich-text' },
+    { id: 'article.asset', name: 'asset', label: 'Asset', type: 'asset' },
+    {
+      id: 'article.related',
+      name: 'related',
+      label: 'Related',
+      type: 'relation',
+      targets: ['article'],
+    },
     { id: 'article.blocks', name: 'blocks', label: 'Blocks', type: 'component-tree' },
   ],
 };
@@ -35,6 +44,9 @@ describe('TypeScript contract generation', () => {
   it('emits deterministic content, prop, slot, and lookup types', () => {
     const output = generateTypeScriptContracts([schema], [manifest]);
 
+    expect(output).toContain(
+      "import type {\n  ComponentNode,\n  ContentReference,\n  RichTextDocument,\n  AssetReference,\n} from '@gridstory/schema';",
+    );
     expect(output).toContain('export interface ArticleContent');
     expect(output).toContain('title: string;');
     expect(output).toContain('blocks?: ComponentNode[];');

@@ -219,6 +219,25 @@ export const fieldDefinitionSchema = z.discriminatedUnion('type', [
     id: z.string().min(1),
     name: z.string().min(1),
     label: z.string().min(1),
+    type: z.literal('rich-text'),
+    required: z.boolean().default(false),
+    allowedBlocks: z
+      .array(z.enum(['paragraph', 'heading', 'list', 'quote', 'code', 'embed', 'table']))
+      .default(['paragraph', 'heading', 'list', 'quote', 'code', 'embed', 'table']),
+  }),
+  z.object({
+    id: z.string().min(1),
+    name: z.string().min(1),
+    label: z.string().min(1),
+    type: z.literal('asset'),
+    required: z.boolean().default(false),
+    accepts: z.array(z.enum(['image', 'video', 'file'])).default(['image', 'video', 'file']),
+    requiredAlt: z.boolean().default(false),
+  }),
+  z.object({
+    id: z.string().min(1),
+    name: z.string().min(1),
+    label: z.string().min(1),
     type: z.literal('component-tree'),
     required: z.boolean().default(false),
     minimum: z.number().int().nonnegative().default(0),

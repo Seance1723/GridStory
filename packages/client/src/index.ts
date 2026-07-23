@@ -1,4 +1,8 @@
 import type {
+  CollaborationSnapshot,
+  CollaborationTarget,
+  CommentThread,
+  PresenceParticipant,
   ComponentManifest,
   ContentEntry,
   ContentConnection,
@@ -233,6 +237,28 @@ export interface GridStoryClientOptions {
   fetch?: typeof globalThis.fetch;
 }
 
+export interface CreateCommentThreadInput {
+  target?: Omit<CollaborationTarget, 'entryId'>;
+  body: string;
+  mentions?: string[];
+  assigneeId?: string;
+  dueAt?: string;
+  signal?: AbortSignal;
+}
+
+export interface UpdateCommentThreadInput {
+  assigneeId?: string | null;
+  dueAt?: string | null;
+  resolved?: boolean;
+  signal?: AbortSignal;
+}
+
+export interface PresenceHeartbeatInput {
+  displayName: string;
+  field?: string;
+  nodeId?: string;
+  signal?: AbortSignal;
+}
 export interface CreatePreviewSessionInput {
   previewUrl: string;
   route: string;
@@ -718,6 +744,83 @@ export class GridStoryClient {
       ...(signal ? { signal } : {}),
     });
   }
+  getCollaboration(id: string, signal?: AbortSignal): Promise<CollaborationSnapshot> {
+    return this.#request(`/api/v1/content/${encodeURIComponent(id)}/collaboration`, {
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  createCommentThread(id: string, input: CreateCommentThreadInput): Promise<CommentThread> {
+    return this.#request(`/api/v1/content/${encodeURIComponent(id)}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({
+        ...(input.target ? { target: input.target } : {}),
+        body: input.body,
+        ...(input.mentions ? { mentions: input.mentions } : {}),
+        ...(input.assigneeId ? { assigneeId: input.assigneeId } : {}),
+        ...(input.dueAt ? { dueAt: input.dueAt } : {}),
+      }),
+      ...(input.signal ? { signal: input.signal } : {}),
+    });
+  }
+
+  replyToComment(
+    entryId: string,
+    threadId: string,
+    body: string,
+    mentions?: string[],
+    signal?: AbortSignal,
+  ): Promise<CommentThread> {
+    return this.#request(
+      `/api/v1/content/${encodeURIComponent(entryId)}/comments/${encodeURIComponent(threadId)}/replies`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ body, ...(mentions ? { mentions } : {}) }),
+        ...(signal ? { signal } : {}),
+      },
+    );
+  }
+
+  updateCommentThread(
+    entryId: string,
+    threadId: string,
+    input: UpdateCommentThreadInput,
+  ): Promise<CommentThread> {
+    return this.#request(
+      `/api/v1/content/${encodeURIComponent(entryId)}/comments/${encodeURIComponent(threadId)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({
+          ...(input.assigneeId !== undefined ? { assigneeId: input.assigneeId } : {}),
+          ...(input.dueAt !== undefined ? { dueAt: input.dueAt } : {}),
+          ...(input.resolved !== undefined ? { resolved: input.resolved } : {}),
+        }),
+        ...(input.signal ? { signal: input.signal } : {}),
+      },
+    );
+  }
+
+  heartbeatPresence(
+    entryId: string,
+    input: PresenceHeartbeatInput,
+  ): Promise<PresenceParticipant[]> {
+    return this.#request(`/api/v1/content/${encodeURIComponent(entryId)}/presence`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        displayName: input.displayName,
+        ...(input.field ? { field: input.field } : {}),
+        ...(input.nodeId ? { nodeId: input.nodeId } : {}),
+      }),
+      ...(input.signal ? { signal: input.signal } : {}),
+    });
+  }
+
+  leavePresence(entryId: string, signal?: AbortSignal): Promise<void> {
+    return this.#request(`/api/v1/content/${encodeURIComponent(entryId)}/presence`, {
+      method: 'DELETE',
+      ...(signal ? { signal } : {}),
+    });
+  }
 }
 
 export function createGridStoryClient(options: GridStoryClientOptions): GridStoryClient {
@@ -725,6 +828,10 @@ export function createGridStoryClient(options: GridStoryClientOptions): GridStor
 }
 
 export type {
+  CollaborationSnapshot,
+  CollaborationTarget,
+  CommentThread,
+  PresenceParticipant,
   ContentEntry,
   ContentConnection,
   ContentFilter,

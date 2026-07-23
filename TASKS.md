@@ -171,7 +171,13 @@
   - Added an explicit browser client entry with controller/application runtimes, token bootstrap outside URLs, queued live draft patches, bidirectional routes, and source-click selection.
   - Wired sandboxed iframe and standalone popup previews into Studio and the ordinary Vite application with application-owned routing/rendering, source overlays, environment configuration, and lifecycle cleanup.
   - Verification found and resolved `BUG-0066` through `BUG-0077`; `pnpm check` passes with 93 tests across 30 files plus two intentionally skipped tests, all lint/format/ledger/boundary/type/build gates are clean, Studio/example bundles are 241.57/208.09 KB across 28/24 modules, and the Edge walkthrough passes the complete iframe/standalone/edit/select/route/revoke/save/publish/delivery flow.
-- [ ] **M3-004** Add rich text, references, asset pickers, inline editing, comments, mentions, assignments, and presence.
+- [x] **M3-004** Add rich text, references, asset pickers, inline editing, comments, mentions, assignments, and presence.
+  - Added canonical semantic rich-text, asset-reference, comment-thread, mention, assignment, resolution, and expiring presence contracts with strict field validation and generated content types.
+  - Added a scope-bound framework-neutral collaboration service, permissions, private API routes, browser-safe CORS, stable errors, and typed universal-client methods; collaboration remains outside published delivery and caches.
+  - Replaced raw JSON authoring for the new fields with semantic block controls, asset and searchable content-reference pickers, selected-component inline preview controls, and a Studio comment/presence workspace.
+  - Added a version 4 example page contract and authoring/collaboration guide, including the explicit process-local collaboration-adapter and demonstration asset-library boundaries ahead of M4 durability and asset infrastructure.
+  - Focused and full verification found and resolved `BUG-0078` through `BUG-0090`; schema/core/API/client/Studio regressions cover canonical validation, scope isolation, permissions, CORS, stable due dates, mentions, assignments, resolution, presence expiry, field controls, inline edits, and localization compatibility.
+  - Verification: `pnpm check` passes with 100 tests across 32 files plus two intentionally skipped tests, all lint/format/ledger/boundary/schema/type/build gates are clean, Studio/example bundles are 254.55/209.45 KB across 29/24 modules, and the bounded Edge walkthrough passes in 16.5 seconds.
 - [ ] **M3-005** Add component versioning, migrations, deprecation, usage impact, and visual regression hooks.
 - [ ] **M3-006** Add SEO, accessibility, link integrity, content-quality checks, and configurable publish gates.
 

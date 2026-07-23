@@ -8,6 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Returned stable `invalid_due_date` errors, admitted browser `PATCH` preflight, excluded trailing punctuation from actor mentions, honored default asset-kind inputs, corrected Studio collaboration semantics, target coherence, and lifecycle dependencies, restored lint-clean tests and ledgers, kept localization completeness fixtures aligned, made generated imports formatter-stable, and bounded browser and Windows formatter lifecycle verification (`BUG-0078` through `BUG-0090`).
 - Added scope-checked management revocation for origin-bound preview grants so Studio can close sessions without impersonating the preview application (`BUG-0066`).
 - Kept the explicit browser preview entry free of the Zod-backed schema barrel, restoring small production module graphs while retaining compile-time protocol drift detection (`BUG-0067`).
 - Serialized application-side message acceptance so back-to-back navigation and patch messages cannot be reordered into false replay failures (`BUG-0071`).
@@ -30,6 +31,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Mapped malformed preview targets into the stable `invalid_preview_url` response boundary instead of allowing generic URL exceptions to become server errors.
 
 ### Added
+
+- Added versioned semantic rich-text documents, typed asset references, rich-text/asset field definitions and validation, generated authoring types, and a version 4 example page schema with story, social-image, and related-page fields.
+- Added an explicitly tenant-scoped collaboration service and private API/client surface for entry/field/node comment threads, actor mentions, assignees, due dates, replies, resolution, and expiring presence heartbeats with viewer/author permissions.
+- Added Studio semantic block controls, rich-text marks, demonstration asset and searchable reference pickers, selected-component inline preview editing, active-editor presence, and threaded comment authoring through the typed client.
+- Added schema, core, API, client, and Studio regressions plus the authoring/collaboration guide covering validation, authorization, cache/preview isolation, adapter durability, and M4 asset boundaries.
 - Added an explicit `@gridstory/client/preview` browser entry with exact-origin/source-checked controller and application runtimes, credential-free preview URLs, bounded bootstrap retry, queued live patches, bidirectional route synchronization, replay-checked readiness, and click-to-edit selection messages.
 - Added typed universal-client methods for preview session creation, isolated token-authenticated draft/message requests, self-revocation, and management revocation without leaking tenant or actor headers into preview requests.
 - Added Studio application-preview controls for sandboxed iframes and standalone popup sessions, live unsaved draft patches, route/status display, source-click selection, session cleanup, and scoped revocation.

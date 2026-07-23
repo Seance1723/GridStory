@@ -1,5 +1,6 @@
 export * from './authorization.js';
 export * from './audit-service.js';
+export * from './collaboration-service.js';
 export * from './content-service.js';
 export * from './content-query.js';
 export * from './errors.js';

@@ -1,4 +1,4 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -74,6 +74,49 @@ function entry(id: string, headline: string, path: string): ContentEntry {
 }
 
 const entries = [entry('one', 'First page', 'first'), entry('two', 'Second page', 'second')];
+const componentTreeField = schema.fields.find((field) => field.type === 'component-tree');
+if (!componentTreeField) throw new Error('Test schema must include a component tree.');
+
+const authoringSchema: ContentSchemaDefinition = {
+  ...schema,
+  fields: [
+    ...schema.fields.slice(0, 2),
+    {
+      id: 'page.story',
+      name: 'story',
+      label: 'Editorial story',
+      type: 'rich-text',
+      allowedBlocks: ['paragraph', 'heading', 'list', 'quote', 'code', 'table'],
+    },
+    {
+      id: 'page.social-image',
+      name: 'socialImage',
+      label: 'Social image',
+      type: 'asset',
+      accepts: ['image'],
+      requiredAlt: true,
+    },
+    {
+      id: 'page.related-pages',
+      name: 'relatedPages',
+      label: 'Related pages',
+      type: 'relation',
+      targets: ['page'],
+      multiple: true,
+      maximum: 2,
+    },
+    componentTreeField,
+  ],
+};
+
+const authoringEntries = entries.map((candidate) => ({
+  ...candidate,
+  data: {
+    ...candidate.data,
+    story: { version: 1, blocks: [] },
+    relatedPages: [],
+  },
+}));
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -82,10 +125,16 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-function createTestClient() {
+function createTestClient(
+  options: { schema?: ContentSchemaDefinition; entries?: ContentEntry[] } = {},
+) {
+  const testSchema = options.schema ?? schema;
+  const testEntries = options.entries ?? entries;
+  const threads: Array<Record<string, unknown>> = [];
+  const presence = [{ actorId: 'local-admin', displayName: 'Studio editor', lastSeenAt: now }];
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
-    if (url.pathname === '/api/v1/schemas') return json([schema]);
+    if (url.pathname === '/api/v1/schemas') return json([testSchema]);
     if (url.pathname === '/api/v1/components') return json(componentManifests);
     if (url.pathname === '/api/v1/design-system') return json(exampleDesignSystem);
     if (url.pathname.startsWith('/api/v1/preview/sessions')) {
@@ -102,7 +151,7 @@ function createTestClient() {
         201,
       );
     }
-    if (url.pathname === '/api/v1/content') return json(entries);
+    if (url.pathname === '/api/v1/content') return json(testEntries);
     if (url.pathname === '/api/v1/operations/summary') {
       return json({
         generatedAt: now,
@@ -128,11 +177,59 @@ function createTestClient() {
         recentAudit: [],
       });
     }
+    const collaborationMatch = url.pathname.match(/^\/api\/v1\/content\/([^/]+)\/collaboration$/);
+    if (collaborationMatch) return json({ threads, presence });
+    const presenceMatch = url.pathname.match(/^\/api\/v1\/content\/([^/]+)\/presence$/);
+    if (presenceMatch) {
+      if (init?.method === 'DELETE') return new Response(null, { status: 204 });
+      return json(presence);
+    }
+    const commentMatch = url.pathname.match(/^\/api\/v1\/content\/([^/]+)\/comments$/);
+    if (commentMatch && init?.method === 'POST') {
+      const body = JSON.parse(String(init.body)) as {
+        target?: { field?: string; nodeId?: string };
+        body: string;
+        assigneeId?: string;
+        dueAt?: string;
+      };
+      const thread = {
+        id: `thread-${threads.length + 1}`,
+        organizationId: 'local',
+        tenantId: 'default',
+        workspaceId: 'default',
+        siteId: 'default',
+        environmentId: 'development',
+        locale: 'en',
+        target: { entryId: commentMatch[1], ...body.target },
+        messages: [
+          {
+            id: 'message-1',
+            actorId: 'local-admin',
+            body: body.body,
+            mentions: [...body.body.matchAll(/@([a-z0-9_-]+)/gi)].map((match) => match[1]),
+            createdAt: now,
+          },
+        ],
+        ...(body.assigneeId ? { assigneeId: body.assigneeId } : {}),
+        ...(body.dueAt ? { dueAt: body.dueAt } : {}),
+        createdAt: now,
+        updatedAt: now,
+      };
+      threads.push(thread);
+      return json(thread, 201);
+    }
+    const commentActionMatch = url.pathname.match(
+      /^\/api\/v1\/content\/([^/]+)\/comments\/([^/]+)(?:\/replies)?$/,
+    );
+    if (commentActionMatch) {
+      const thread = threads.find((candidate) => candidate.id === commentActionMatch[2]);
+      return thread ? json(thread) : json({ error: { message: 'Not found.' } }, 404);
+    }
     const revisionMatch = url.pathname.match(/^\/api\/v1\/content\/([^/]+)\/revisions$/);
     if (revisionMatch) return json([]);
     const contentMatch = url.pathname.match(/^\/api\/v1\/content\/([^/]+)$/);
     if (contentMatch) {
-      const selected = entries.find((candidate) => candidate.id === contentMatch[1]);
+      const selected = testEntries.find((candidate) => candidate.id === contentMatch[1]);
       if (url.searchParams.get('perspective') === 'published') {
         return json({ error: { code: 'not_found', message: 'Not published.' } }, 404);
       }
@@ -314,5 +411,43 @@ describe('GridStory Studio', () => {
 
     await user.click(screen.getByRole('button', { name: 'Apply Campaign page' }));
     expect(screen.getByText('6 components')).toBeTruthy();
+  });
+  it('authors rich text, assets, references, inline props, and scoped collaboration', async () => {
+    const user = userEvent.setup();
+    render(
+      <App client={createTestClient({ schema: authoringSchema, entries: authoringEntries })} />,
+    );
+
+    await screen.findByLabelText('Headline');
+    const story = screen.getByRole('region', { name: 'Editorial story' });
+    await user.click(within(story).getByRole('button', { name: '+ heading' }));
+    const headingBlock = within(story).getByLabelText('Editorial story heading block 1');
+    fireEvent.change(headingBlock, { target: { value: 'A semantic story' } });
+
+    const asset = screen.getByRole('region', { name: 'Social image' });
+    await user.click(within(asset).getByRole('button', { name: /Campaign landscape/ }));
+    expect(within(asset).getByLabelText('Alternative text')).toBeTruthy();
+
+    const relations = screen.getByRole('region', { name: 'Related pages' });
+    await user.click(within(relations).getByRole('button', { name: /Second page/ }));
+    expect(relations.textContent).toContain('1 selected / 2');
+
+    await user.click(screen.getByRole('button', { name: /Hero.*one-hero-a/ }));
+    const inlineEditor = screen.getByRole('region', { name: 'Inline component editor' });
+    const inlineHeading = within(inlineEditor).getByLabelText('Heading');
+    fireEvent.change(inlineHeading, { target: { value: 'Edited directly in preview' } });
+    expect(screen.getByRole('heading', { name: 'Edited directly in preview' })).toBeTruthy();
+
+    await waitFor(() => expect(screen.getByText(/Studio editor/)).toBeTruthy());
+    await user.selectOptions(screen.getByLabelText('Comment target'), 'story');
+    fireEvent.change(screen.getByLabelText('New comment'), {
+      target: { value: 'Please check this, @reviewer' },
+    });
+    fireEvent.change(screen.getByLabelText('Assign to'), { target: { value: 'reviewer' } });
+    await user.click(screen.getByRole('button', { name: 'Add comment' }));
+    await waitFor(() => expect(screen.getByText('Mentioned: reviewer')).toBeTruthy());
+    const thread = screen.getByText('Assigned to reviewer').closest('.comment-thread');
+    expect(thread?.textContent).toContain('story');
+    expect(thread?.textContent).not.toContain('one-hero-a');
   });
 });

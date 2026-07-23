@@ -5,6 +5,7 @@ import cors from '@fastify/cors';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import {
   ContentService,
+  CollaborationService,
   AuditService,
   ContentQueryService,
   LocaleRegistry,
@@ -42,6 +43,7 @@ import {
   type LocaleConfiguration,
   type SchemaIrDocument,
   previewMessageSchema,
+  collaborationTargetSchema,
 } from '@gridstory/schema';
 import { componentManifests, pageSchema, welcomePage } from '@gridstory/example-kit/manifests';
 import { exampleDesignSystem } from '@gridstory/example-kit/design-system';
@@ -83,6 +85,15 @@ interface RequestBody {
   mode?: unknown;
   entryId?: unknown;
   ttlSeconds?: unknown;
+  body?: unknown;
+  mentions?: unknown;
+  assigneeId?: unknown;
+  dueAt?: unknown;
+  resolved?: unknown;
+  displayName?: unknown;
+  field?: unknown;
+  nodeId?: unknown;
+  target?: unknown;
 }
 
 function perspective(value: unknown): ContentPerspective {
@@ -205,6 +216,7 @@ export async function buildServer({
     schemas: [pageSchema],
     componentManifests,
   });
+  const collaboration = new CollaborationService();
   const routing = new ContentRoutingService({ contentService: service, redirects });
   const contentQueries = new ContentQueryService({ repository, cursorSecret });
   const localization = new LocalizationService({
@@ -264,7 +276,7 @@ export async function buildServer({
       'x-gridstory-principal-type',
       'x-gridstory-roles',
     ],
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   });
 
   server.addHook('onClose', async () => repository.close());
@@ -744,6 +756,112 @@ export async function buildServer({
     return service.listRevisions({ scope: contentScope(context), id: params.id });
   });
 
+  server.get('/api/v1/content/:id/collaboration', async (request) => {
+    const params = request.params as { id: string };
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.collaborationRead, {
+      kind: 'content',
+      id: params.id,
+    });
+    await service.get({ scope: contentScope(context), id: params.id });
+    return collaboration.snapshot(contentScope(context), params.id);
+  });
+
+  server.post('/api/v1/content/:id/comments', async (request, reply) => {
+    const params = request.params as { id: string };
+    const body = bodyOf(request);
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.collaborationWrite, {
+      kind: 'content',
+      id: params.id,
+    });
+    await service.get({ scope: contentScope(context), id: params.id });
+    const parsedTarget = collaborationTargetSchema.safeParse({
+      ...(typeof body.target === 'object' && body.target !== null ? body.target : {}),
+      entryId: params.id,
+    });
+    if (!parsedTarget.success) {
+      throw new GridStoryError('Comment target is invalid.', 'invalid_comment_target', 400);
+    }
+    const thread = collaboration.createThread({
+      scope: contentScope(context),
+      target: parsedTarget.data,
+      actorId: context.principal.id,
+      body: requiredString(body.body, 'body'),
+      ...(Array.isArray(body.mentions)
+        ? { mentions: body.mentions.filter((value): value is string => typeof value === 'string') }
+        : {}),
+      ...(typeof body.assigneeId === 'string' ? { assigneeId: body.assigneeId } : {}),
+      ...(typeof body.dueAt === 'string' ? { dueAt: body.dueAt } : {}),
+    });
+    return reply.status(201).send(thread);
+  });
+
+  server.post('/api/v1/content/:id/comments/:threadId/replies', async (request, reply) => {
+    const params = request.params as { id: string; threadId: string };
+    const body = bodyOf(request);
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.collaborationWrite, {
+      kind: 'content',
+      id: params.id,
+    });
+    const thread = collaboration.reply({
+      scope: contentScope(context),
+      entryId: params.id,
+      threadId: params.threadId,
+      actorId: context.principal.id,
+      body: requiredString(body.body, 'body'),
+      ...(Array.isArray(body.mentions)
+        ? { mentions: body.mentions.filter((value): value is string => typeof value === 'string') }
+        : {}),
+    });
+    return reply.status(201).send(thread);
+  });
+
+  server.patch('/api/v1/content/:id/comments/:threadId', async (request) => {
+    const params = request.params as { id: string; threadId: string };
+    const body = bodyOf(request);
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.collaborationWrite, {
+      kind: 'content',
+      id: params.id,
+    });
+    return collaboration.updateThread({
+      scope: contentScope(context),
+      entryId: params.id,
+      threadId: params.threadId,
+      actorId: context.principal.id,
+      ...(body.assigneeId === null || typeof body.assigneeId === 'string'
+        ? { assigneeId: body.assigneeId }
+        : {}),
+      ...(body.dueAt === null || typeof body.dueAt === 'string' ? { dueAt: body.dueAt } : {}),
+      ...(typeof body.resolved === 'boolean' ? { resolved: body.resolved } : {}),
+    });
+  });
+
+  server.put('/api/v1/content/:id/presence', async (request) => {
+    const params = request.params as { id: string };
+    const body = bodyOf(request);
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.presenceWrite, { kind: 'content', id: params.id });
+    await service.get({ scope: contentScope(context), id: params.id });
+    return collaboration.heartbeat({
+      scope: contentScope(context),
+      entryId: params.id,
+      actorId: context.principal.id,
+      displayName: requiredString(body.displayName, 'displayName'),
+      ...(typeof body.field === 'string' ? { field: body.field } : {}),
+      ...(typeof body.nodeId === 'string' ? { nodeId: body.nodeId } : {}),
+    });
+  });
+
+  server.delete('/api/v1/content/:id/presence', async (request, reply) => {
+    const params = request.params as { id: string };
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.presenceWrite, { kind: 'content', id: params.id });
+    collaboration.leave(contentScope(context), params.id, context.principal.id);
+    return reply.status(204).send();
+  });
   server.get('/api/v1/delivery/:contentType/:slug', async (request, reply) => {
     const params = request.params as { contentType: string; slug: string };
     const context = requestContext(request, 'published', true);

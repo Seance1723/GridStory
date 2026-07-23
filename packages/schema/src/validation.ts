@@ -1,3 +1,4 @@
+import { assetReferenceSchema, richTextDocumentSchema } from './authoring.js';
 import type {
   ArrayItemDefinition,
   ComponentManifest,
@@ -378,6 +379,55 @@ function validateField(
     return;
   }
 
+  if (field.type === 'rich-text') {
+    const parsed = richTextDocumentSchema.safeParse(value);
+    if (!parsed.success) {
+      issues.push({
+        code: 'invalid_type',
+        path,
+        message: `${field.label} must be a valid rich-text document.`,
+      });
+      return;
+    }
+    const allowed = new Set(field.allowedBlocks);
+    parsed.data.blocks.forEach((block, index) => {
+      if (!allowed.has(block.type)) {
+        issues.push({
+          code: 'invalid_child',
+          path: [...path, 'blocks', index],
+          message: `${block.type} is not allowed in ${field.label}.`,
+        });
+      }
+    });
+    return;
+  }
+
+  if (field.type === 'asset') {
+    const parsed = assetReferenceSchema.safeParse(value);
+    if (!parsed.success) {
+      issues.push({
+        code: 'invalid_type',
+        path,
+        message: `${field.label} must be a valid asset reference.`,
+      });
+      return;
+    }
+    if (!(field.accepts ?? ['image', 'video', 'file']).includes(parsed.data.kind)) {
+      issues.push({
+        code: 'invalid_reference',
+        path,
+        message: `${parsed.data.kind} assets are not allowed in ${field.label}.`,
+      });
+    }
+    if (field.requiredAlt && parsed.data.kind === 'image' && !parsed.data.alt?.trim()) {
+      issues.push({
+        code: 'required',
+        path: [...path, 'alt'],
+        message: `${field.label} requires alternative text.`,
+      });
+    }
+    return;
+  }
   if (field.type === 'number') {
     if (typeof value !== 'number' || !Number.isFinite(value)) {
       issues.push({ code: 'invalid_type', path, message: `${field.label} must be a number.` });

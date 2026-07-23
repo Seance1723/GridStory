@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import {
   GridStoryApiError,
   createGridStoryClient,
+  type CollaborationSnapshot,
   type ComponentManifest,
   type ContentEntry,
   type ContentRevision,
@@ -42,6 +43,7 @@ import {
   type CompositionResult,
   type MoveTarget,
 } from './composition-editor.js';
+import { AssetControl, RelationControl, RichTextControl } from './authoring-controls.js';
 
 const defaultClient = createGridStoryClient({
   baseUrl: import.meta.env.VITE_GRIDSTORY_API_URL ?? 'http://localhost:4000',
@@ -219,10 +221,12 @@ function FieldControl({
 function SchemaFieldControl({
   definition,
   value,
+  entries,
   onChange,
 }: {
   definition: Exclude<FieldDefinition, { type: 'component-tree' }>;
   value: unknown;
+  entries: ContentEntry[];
   onChange: (value: unknown) => void;
 }): ReactNode {
   const id = `field-${definition.id}`.replaceAll(/[^a-zA-Z0-9_-]/g, '-');
@@ -230,7 +234,6 @@ function SchemaFieldControl({
     definition.type === 'object' ||
     definition.type === 'array' ||
     definition.type === 'union' ||
-    definition.type === 'relation' ||
     (definition.type === 'taxonomy' && definition.multiple);
   const [jsonValue, setJsonValue] = useState('');
   const [jsonError, setJsonError] = useState(false);
@@ -238,6 +241,29 @@ function SchemaFieldControl({
     if (structured) setJsonValue(JSON.stringify(value ?? null, null, 2));
   }, [structured, value]);
 
+  if (definition.type === 'rich-text') {
+    return (
+      <RichTextControl
+        definition={definition}
+        value={value}
+        entries={entries}
+        onChange={onChange}
+      />
+    );
+  }
+  if (definition.type === 'asset') {
+    return <AssetControl definition={definition} value={value} onChange={onChange} />;
+  }
+  if (definition.type === 'relation') {
+    return (
+      <RelationControl
+        definition={definition}
+        value={value}
+        entries={entries}
+        onChange={onChange}
+      />
+    );
+  }
   if (definition.type === 'slug') {
     return (
       <label className="gs-field" htmlFor={id}>
@@ -348,6 +374,8 @@ function initialFieldValue(field: FieldDefinition, titleField: string, suffix: s
   if (field.type === 'number') return field.minimum ?? 0;
   if (field.type === 'boolean') return false;
   if (field.type === 'enum') return field.values[0] ?? '';
+  if (field.type === 'rich-text') return { version: 1, blocks: [] };
+  if (field.type === 'asset') return undefined;
   if (field.type === 'array' || (field.type === 'relation' && field.multiple)) return [];
   if (field.type === 'taxonomy' && field.multiple) return [];
   if (field.type === 'object') return {};
@@ -385,6 +413,15 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   );
   const [compositionHistory, setCompositionHistory] = useState(() => createCompositionHistory([]));
   const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
+  const [collaboration, setCollaboration] = useState<CollaborationSnapshot>({
+    threads: [],
+    presence: [],
+  });
+  const [commentBody, setCommentBody] = useState('');
+  const [commentAssignee, setCommentAssignee] = useState('');
+  const [commentDueAt, setCommentDueAt] = useState('');
+  const [commentTargetField, setCommentTargetField] = useState('');
+  const [replyBodies, setReplyBodies] = useState<Record<string, string>>({});
 
   const selectEntry = useCallback(
     async (id: string, componentFieldName?: string) => {
@@ -501,6 +538,40 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
     ? findNode(draftBlocks, compositionHistory.selectedId)
     : undefined;
   const selectedManifest = selectedNode ? manifestById.get(selectedNode.component) : undefined;
+  const selectedEntryId = selected?.id;
+  const selectedCommentNodeId =
+    commentTargetField === componentField?.name ? selectedNode?.id : undefined;
+  const selectedPresenceNodeId =
+    !commentTargetField || commentTargetField === componentField?.name
+      ? selectedNode?.id
+      : undefined;
+
+  useEffect(() => {
+    if (!selectedEntryId) {
+      setCollaboration({ threads: [], presence: [] });
+      return;
+    }
+    const entryId = selectedEntryId;
+    let active = true;
+    const refresh = async () => {
+      const [snapshot, presence] = await Promise.all([
+        client.getCollaboration(entryId),
+        client.heartbeatPresence(entryId, {
+          displayName: 'Studio editor',
+          ...(commentTargetField ? { field: commentTargetField } : {}),
+          ...(selectedPresenceNodeId ? { nodeId: selectedPresenceNodeId } : {}),
+        }),
+      ]);
+      if (active) setCollaboration({ ...snapshot, presence });
+    };
+    void refresh().catch(() => undefined);
+    const interval = window.setInterval(() => void refresh().catch(() => undefined), 10_000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      void client.leavePresence(entryId).catch(() => undefined);
+    };
+  }, [client, commentTargetField, selectedEntryId, selectedPresenceNodeId]);
   const selectedSymbol = selectedNode?.presentation?.symbol
     ? designSystem.symbols.find((symbol) => symbol.id === selectedNode.presentation?.symbol?.id)
     : undefined;
@@ -519,6 +590,57 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
     setDraft((current) => (current ? updater(current) : current));
     setDirty(true);
     setNotice(null);
+  };
+
+  const replaceCollaborationThread = (thread: CollaborationSnapshot['threads'][number]) => {
+    setCollaboration((current) => ({
+      ...current,
+      threads: current.threads.some((candidate) => candidate.id === thread.id)
+        ? current.threads.map((candidate) => (candidate.id === thread.id ? thread : candidate))
+        : [...current.threads, thread],
+    }));
+  };
+
+  const createComment = async () => {
+    if (!selected || !commentBody.trim()) return;
+    try {
+      const thread = await client.createCommentThread(selected.id, {
+        target: {
+          ...(commentTargetField ? { field: commentTargetField } : {}),
+          ...(selectedCommentNodeId ? { nodeId: selectedCommentNodeId } : {}),
+        },
+        body: commentBody,
+        ...(commentAssignee ? { assigneeId: commentAssignee } : {}),
+        ...(commentDueAt ? { dueAt: new Date(commentDueAt).toISOString() } : {}),
+      });
+      replaceCollaborationThread(thread);
+      setCommentBody('');
+      setNotice({ tone: 'success', message: 'Comment thread created.' });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
+
+  const replyToThread = async (threadId: string) => {
+    if (!selected || !replyBodies[threadId]?.trim()) return;
+    try {
+      const thread = await client.replyToComment(selected.id, threadId, replyBodies[threadId]);
+      replaceCollaborationThread(thread);
+      setReplyBodies((current) => ({ ...current, [threadId]: '' }));
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
+
+  const setThreadResolved = async (threadId: string, resolved: boolean) => {
+    if (!selected) return;
+    try {
+      replaceCollaborationThread(
+        await client.updateCommentThread(selected.id, threadId, { resolved }),
+      );
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
   };
 
   const commitBlocks = (nodes: ComponentNode[], selectedId = compositionHistory.selectedId) => {
@@ -1041,12 +1163,142 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                       key={field.id}
                       definition={field}
                       value={draft[field.name]}
+                      entries={entries}
                       onChange={(value) =>
                         changeDraft((current) => ({ ...current, [field.name]: value }))
                       }
                     />
                   );
                 })}
+              </section>
+
+              <section className="collaboration-panel" aria-label="Comments and presence">
+                <div className="section-heading">
+                  <div>
+                    <span className="kicker">Collaboration</span>
+                    <h2>Comments and presence</h2>
+                  </div>
+                  <ul className="presence-list" aria-label="Active editors">
+                    {collaboration.presence.length > 0 ? (
+                      collaboration.presence.map((participant) => (
+                        <li className="presence-chip" key={participant.actorId}>
+                          {participant.displayName}
+                          {participant.field ? ` · ${participant.field}` : ''}
+                        </li>
+                      ))
+                    ) : (
+                      <li className="presence-chip presence-chip--idle">No active editors</li>
+                    )}
+                  </ul>
+                </div>
+                <div className="comment-composer">
+                  <label className="gs-field">
+                    <span>Comment target</span>
+                    <select
+                      value={commentTargetField}
+                      onChange={(event) => setCommentTargetField(event.target.value)}
+                    >
+                      <option value="">Whole entry</option>
+                      {activeSchema?.fields.map((field) => (
+                        <option key={field.id} value={field.name}>
+                          {field.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="gs-field comment-body-field">
+                    <span>New comment</span>
+                    <textarea
+                      rows={3}
+                      placeholder="Write a comment and mention @reviewer"
+                      value={commentBody}
+                      onChange={(event) => setCommentBody(event.target.value)}
+                    />
+                  </label>
+                  <label className="gs-field">
+                    <span>Assign to</span>
+                    <input
+                      placeholder="actor-id"
+                      value={commentAssignee}
+                      onChange={(event) => setCommentAssignee(event.target.value)}
+                    />
+                  </label>
+                  <label className="gs-field">
+                    <span>Due date</span>
+                    <input
+                      type="datetime-local"
+                      value={commentDueAt}
+                      onChange={(event) => setCommentDueAt(event.target.value)}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="button button--secondary"
+                    disabled={!commentBody.trim()}
+                    onClick={() => void createComment()}
+                  >
+                    Add comment
+                  </button>
+                </div>
+                <div className="comment-thread-list">
+                  {collaboration.threads.map((thread) => (
+                    <article
+                      className={`comment-thread${thread.resolvedAt ? ' comment-thread--resolved' : ''}`}
+                      key={thread.id}
+                    >
+                      <header>
+                        <div>
+                          <strong>
+                            {thread.target.field ?? 'Entry'}
+                            {thread.target.nodeId ? ` · ${thread.target.nodeId}` : ''}
+                          </strong>
+                          <small>
+                            {thread.assigneeId ? `Assigned to ${thread.assigneeId}` : 'Unassigned'}
+                            {thread.dueAt
+                              ? ` · due ${new Date(thread.dueAt).toLocaleDateString()}`
+                              : ''}
+                          </small>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void setThreadResolved(thread.id, !thread.resolvedAt)}
+                        >
+                          {thread.resolvedAt ? 'Reopen' : 'Resolve'}
+                        </button>
+                      </header>
+                      <ol>
+                        {thread.messages.map((message) => (
+                          <li key={message.id}>
+                            <strong>{message.actorId}</strong>
+                            <p>{message.body}</p>
+                            {message.mentions.length > 0 ? (
+                              <small>Mentioned: {message.mentions.join(', ')}</small>
+                            ) : null}
+                          </li>
+                        ))}
+                      </ol>
+                      <div className="comment-reply">
+                        <input
+                          aria-label={`Reply to comment ${thread.id}`}
+                          placeholder="Reply…"
+                          value={replyBodies[thread.id] ?? ''}
+                          onChange={(event) =>
+                            setReplyBodies((current) => ({
+                              ...current,
+                              [thread.id]: event.target.value,
+                            }))
+                          }
+                        />
+                        <button type="button" onClick={() => void replyToThread(thread.id)}>
+                          Reply
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                  {collaboration.threads.length === 0 ? (
+                    <p className="empty-copy">No comment threads for this entry.</p>
+                  ) : null}
+                </div>
               </section>
 
               <section className="blocks-section">
@@ -1680,13 +1932,40 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   referrerPolicy="no-referrer"
                 />
               ) : previewContent ? (
-                <GridStoryRenderer
-                  nodes={previewBlocks}
-                  registry={exampleComponentRegistry}
-                  designSystem={designSystem}
-                  breakpoint={previewBreakpoint}
-                  preview={previewPerspective === 'draft'}
-                />
+                <>
+                  {previewPerspective === 'draft' && selectedNode && selectedManifest ? (
+                    <section className="inline-editor" aria-label="Inline component editor">
+                      <span className="kicker">Inline edit · {selectedManifest.name}</span>
+                      <div>
+                        {editablePropsFor(selectedNode, selectedManifest).map((prop) => (
+                          <FieldControl
+                            key={prop.id}
+                            idPrefix={`inline-${selectedNode.id}`}
+                            definition={prop}
+                            value={selectedNode.props[prop.name]}
+                            onChange={(value) =>
+                              changeBlocks(
+                                (current) =>
+                                  updateNodeProps(current, selectedNode.id, {
+                                    ...selectedNode.props,
+                                    [prop.name]: value,
+                                  }),
+                                selectedNode.id,
+                              )
+                            }
+                          />
+                        ))}
+                      </div>
+                    </section>
+                  ) : null}
+                  <GridStoryRenderer
+                    nodes={previewBlocks}
+                    registry={exampleComponentRegistry}
+                    designSystem={designSystem}
+                    breakpoint={previewBreakpoint}
+                    preview={previewPerspective === 'draft'}
+                  />
+                </>
               ) : (
                 <div className="preview-empty">This page has not been published yet.</div>
               )}

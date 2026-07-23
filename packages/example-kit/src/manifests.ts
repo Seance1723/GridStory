@@ -3,12 +3,12 @@ import { defineContentSchema, type ContentDataOf } from '@gridstory/schema/typeg
 
 export const pageSchema = defineContentSchema({
   id: 'page',
-  version: 3,
+  version: 4,
   name: 'Page',
   description: 'A routed page composed from registered React components.',
   collection: 'pages',
   titleField: 'title',
-  localization: { localizedFields: ['title', 'slug', 'blocks'] },
+  localization: { localizedFields: ['title', 'slug', 'story', 'blocks'] },
   route: { pattern: '/:slug', slugField: 'slug' },
   fields: [
     {
@@ -27,6 +27,31 @@ export const pageSchema = defineContentSchema({
       type: 'slug',
       required: true,
       pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$',
+    },
+    {
+      id: 'page.story',
+      name: 'story',
+      label: 'Editorial story',
+      type: 'rich-text',
+      required: false,
+      allowedBlocks: ['paragraph', 'heading', 'list', 'quote', 'code', 'embed', 'table'],
+    },
+    {
+      id: 'page.social-image',
+      name: 'socialImage',
+      label: 'Social image',
+      type: 'asset',
+      accepts: ['image'],
+      requiredAlt: true,
+    },
+    {
+      id: 'page.related-pages',
+      name: 'relatedPages',
+      label: 'Related pages',
+      type: 'relation',
+      targets: ['page'],
+      multiple: true,
+      maximum: 3,
     },
     {
       id: 'page.blocks',
@@ -193,6 +218,23 @@ export type PageContent = ContentDataOf<typeof pageSchema>;
 export const welcomePage: PageContent = {
   title: 'Welcome to GridStory',
   slug: 'welcome',
+  story: {
+    version: 1,
+    blocks: [
+      {
+        id: 'story-intro',
+        type: 'paragraph',
+        content: [
+          {
+            type: 'text',
+            text: 'Edit semantic blocks, connect references, and collaborate without changing application ownership.',
+            marks: [],
+          },
+        ],
+      },
+    ],
+  },
+  relatedPages: [],
   blocks: [
     {
       id: 'welcome-hero',

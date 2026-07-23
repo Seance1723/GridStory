@@ -304,4 +304,59 @@ describe('GridStoryClient browser compatibility', () => {
     expect(tokenHeaders.has('x-gridstory-tenant')).toBe(false);
     expect(managementRevokeHeaders.get('x-gridstory-tenant')).toBe('tenant');
   });
+  it('routes scoped collaboration and presence requests with typed payloads', async () => {
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    const client = createGridStoryClient({
+      baseUrl: 'http://gridstory.test',
+      tenantId: 'tenant',
+      actorId: 'author',
+      fetch: async (input, init) => {
+        requests.push({ url: String(input), ...(init ? { init } : {}) });
+        if (init?.method === 'DELETE') return new Response(null, { status: 204 });
+        return new Response(JSON.stringify({ threads: [], presence: [] }), {
+          headers: { 'content-type': 'application/json' },
+        });
+      },
+    });
+
+    await client.getCollaboration('page-1');
+    await client.createCommentThread('page-1', {
+      target: { field: 'story', nodeId: 'paragraph-1' },
+      body: 'Review @editor',
+      assigneeId: 'editor',
+      dueAt: '2026-08-01T12:00:00.000Z',
+    });
+    await client.replyToComment('page-1', 'thread-1', 'Done.');
+    await client.updateCommentThread('page-1', 'thread-1', {
+      assigneeId: null,
+      dueAt: null,
+      resolved: true,
+    });
+    await client.heartbeatPresence('page-1', {
+      displayName: 'Author',
+      field: 'story',
+      nodeId: 'paragraph-1',
+    });
+    await client.leavePresence('page-1');
+
+    expect(requests.map((request) => [request.url, request.init?.method])).toEqual([
+      ['http://gridstory.test/api/v1/content/page-1/collaboration', undefined],
+      ['http://gridstory.test/api/v1/content/page-1/comments', 'POST'],
+      ['http://gridstory.test/api/v1/content/page-1/comments/thread-1/replies', 'POST'],
+      ['http://gridstory.test/api/v1/content/page-1/comments/thread-1', 'PATCH'],
+      ['http://gridstory.test/api/v1/content/page-1/presence', 'PUT'],
+      ['http://gridstory.test/api/v1/content/page-1/presence', 'DELETE'],
+    ]);
+    expect(JSON.parse(String(requests[1]?.init?.body))).toMatchObject({
+      target: { field: 'story', nodeId: 'paragraph-1' },
+      body: 'Review @editor',
+      assigneeId: 'editor',
+    });
+    expect(JSON.parse(String(requests[3]?.init?.body))).toEqual({
+      assigneeId: null,
+      dueAt: null,
+      resolved: true,
+    });
+    expect(new Headers(requests[4]?.init?.headers).get('x-gridstory-actor')).toBe('author');
+  });
 });

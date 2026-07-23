@@ -10,6 +10,16 @@ const headers = {
 const validPage = {
   title: 'API page',
   slug: 'api-page',
+  story: {
+    version: 1,
+    blocks: [
+      {
+        id: 'api-story',
+        type: 'paragraph',
+        content: [{ type: 'text', text: 'Created in a test.', marks: [] }],
+      },
+    ],
+  },
   blocks: [
     {
       id: 'api-hero',
@@ -897,5 +907,108 @@ describe('GridStory API', () => {
       audit: { valid: true, eventCount: 2 },
     });
     expect(summary.json().recentAudit[0]).toMatchObject({ action: 'content.published' });
+  });
+  it('supports scoped collaboration, browser PATCH preflight, and stable due-date validation', async () => {
+    server = await buildServer({ databasePath: ':memory:', seed: false });
+    const create = await server.inject({
+      method: 'POST',
+      url: '/api/v1/content',
+      headers,
+      payload: { contentType: 'page', data: validPage },
+    });
+    const created = create.json();
+
+    const preflight = await server.inject({
+      method: 'OPTIONS',
+      url: `/api/v1/content/${created.id}/comments/thread-1`,
+      headers: {
+        origin: 'http://localhost:5173',
+        'access-control-request-method': 'PATCH',
+        'access-control-request-headers': 'content-type,x-gridstory-tenant,x-gridstory-actor',
+      },
+    });
+    expect(preflight.statusCode).toBe(204);
+    expect(preflight.headers['access-control-allow-methods']).toContain('PATCH');
+
+    const comment = await server.inject({
+      method: 'POST',
+      url: `/api/v1/content/${created.id}/comments`,
+      headers,
+      payload: {
+        target: { field: 'story', nodeId: 'paragraph-1' },
+        body: 'Please review, @reviewer.',
+        assigneeId: 'reviewer',
+        dueAt: '2026-08-01T12:00:00Z',
+      },
+    });
+    expect(comment.statusCode).toBe(201);
+    expect(comment.json()).toMatchObject({
+      target: { entryId: created.id, field: 'story', nodeId: 'paragraph-1' },
+      assigneeId: 'reviewer',
+      messages: [{ mentions: ['reviewer'] }],
+    });
+
+    const threadId = comment.json().id;
+    const reply = await server.inject({
+      method: 'POST',
+      url: `/api/v1/content/${created.id}/comments/${threadId}/replies`,
+      headers,
+      payload: { body: 'Reviewed.' },
+    });
+    expect(reply.statusCode).toBe(201);
+    expect(reply.json().messages).toHaveLength(2);
+
+    const resolved = await server.inject({
+      method: 'PATCH',
+      url: `/api/v1/content/${created.id}/comments/${threadId}`,
+      headers,
+      payload: { resolved: true },
+    });
+    expect(resolved.json()).toMatchObject({ resolvedBy: 'api-test' });
+
+    const presence = await server.inject({
+      method: 'PUT',
+      url: `/api/v1/content/${created.id}/presence`,
+      headers,
+      payload: { displayName: 'API author', field: 'story' },
+    });
+    expect(presence.json()).toEqual([
+      expect.objectContaining({ actorId: 'api-test', displayName: 'API author', field: 'story' }),
+    ]);
+
+    const visible = await server.inject({
+      method: 'GET',
+      url: `/api/v1/content/${created.id}/collaboration`,
+      headers: { ...headers, 'x-gridstory-roles': 'viewer' },
+    });
+    expect(visible.statusCode).toBe(200);
+    expect(visible.json()).toMatchObject({
+      threads: [{ id: threadId }],
+      presence: [{ field: 'story' }],
+    });
+
+    const denied = await server.inject({
+      method: 'POST',
+      url: `/api/v1/content/${created.id}/comments`,
+      headers: { ...headers, 'x-gridstory-roles': 'viewer' },
+      payload: { body: 'Not allowed.' },
+    });
+    expect(denied.statusCode).toBe(403);
+
+    const isolated = await server.inject({
+      method: 'GET',
+      url: `/api/v1/content/${created.id}/collaboration`,
+      headers: { ...headers, 'x-gridstory-tenant': 'other-tenant' },
+    });
+    expect(isolated.statusCode).toBe(404);
+
+    const invalidDue = await server.inject({
+      method: 'POST',
+      url: `/api/v1/content/${created.id}/comments`,
+      headers,
+      payload: { body: 'Schedule.', dueAt: 'not-a-date' },
+    });
+    expect(invalidDue.statusCode).toBe(400);
+    expect(invalidDue.json().error.code).toBe('invalid_due_date');
   });
 });
