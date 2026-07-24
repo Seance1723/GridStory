@@ -1,4 +1,12 @@
 import type {
+  AssetRecord,
+  AssetRendition,
+  AssetRenditionPreset,
+  AssetUploadPart,
+  AssetUploadSession,
+  AssetUsageReport,
+  StartAssetUploadInput,
+  UpdateAssetInput,
   CollaborationSnapshot,
   CollaborationTarget,
   CommentThread,
@@ -490,6 +498,97 @@ export class GridStoryClient {
     );
   }
 
+  listAssets(signal?: AbortSignal): Promise<AssetRecord[]> {
+    return this.#request('/api/v1/assets', { ...(signal ? { signal } : {}) });
+  }
+
+  getAsset(id: string, signal?: AbortSignal): Promise<AssetRecord> {
+    return this.#request(`/api/v1/assets/${encodeURIComponent(id)}`, {
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  startAssetUpload(
+    input: StartAssetUploadInput,
+    signal?: AbortSignal,
+  ): Promise<AssetUploadSession> {
+    return this.#request('/api/v1/assets/uploads', {
+      method: 'POST',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  getAssetUpload(id: string, signal?: AbortSignal): Promise<AssetUploadSession> {
+    return this.#request(`/api/v1/assets/uploads/${encodeURIComponent(id)}`, {
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  uploadAssetPart(
+    uploadId: string,
+    partNumber: number,
+    body: Uint8Array,
+    signal?: AbortSignal,
+  ): Promise<AssetUploadPart> {
+    const payload = new ArrayBuffer(body.byteLength);
+    new Uint8Array(payload).set(body);
+    return this.#request(
+      `/api/v1/assets/uploads/${encodeURIComponent(uploadId)}/parts/${partNumber}`,
+      {
+        method: 'PUT',
+        headers: { 'content-type': 'application/octet-stream' },
+        body: payload,
+        ...(signal ? { signal } : {}),
+      },
+    );
+  }
+
+  completeAssetUpload(
+    uploadId: string,
+    parts: AssetUploadPart[],
+    signal?: AbortSignal,
+  ): Promise<AssetRecord> {
+    return this.#request(`/api/v1/assets/uploads/${encodeURIComponent(uploadId)}/complete`, {
+      method: 'POST',
+      body: JSON.stringify({ parts }),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  abortAssetUpload(uploadId: string, signal?: AbortSignal): Promise<void> {
+    return this.#request(`/api/v1/assets/uploads/${encodeURIComponent(uploadId)}`, {
+      method: 'DELETE',
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  updateAsset(id: string, input: UpdateAssetInput, signal?: AbortSignal): Promise<AssetRecord> {
+    return this.#request(`/api/v1/assets/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  createAssetRendition(
+    id: string,
+    preset: AssetRenditionPreset,
+    signal?: AbortSignal,
+  ): Promise<AssetRendition> {
+    return this.#request(`/api/v1/assets/${encodeURIComponent(id)}/renditions`, {
+      method: 'POST',
+      body: JSON.stringify(preset),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  getAssetUsage(id: string, signal?: AbortSignal): Promise<AssetUsageReport> {
+    return this.#request(`/api/v1/assets/${encodeURIComponent(id)}/usage`, {
+      ...(signal ? { signal } : {}),
+    });
+  }
+
   getDesignSystem(signal?: AbortSignal): Promise<DesignSystemManifest> {
     return this.#request('/api/v1/design-system', { ...(signal ? { signal } : {}) });
   }
@@ -945,6 +1044,14 @@ export function createGridStoryClient(options: GridStoryClientOptions): GridStor
 }
 
 export type {
+  AssetRecord,
+  AssetRendition,
+  AssetRenditionPreset,
+  AssetUploadPart,
+  AssetUploadSession,
+  AssetUsageReport,
+  StartAssetUploadInput,
+  UpdateAssetInput,
   CollaborationSnapshot,
   CollaborationTarget,
   CommentThread,

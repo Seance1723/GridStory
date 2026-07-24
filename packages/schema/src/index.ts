@@ -1,4 +1,5 @@
 export * from './authoring.js';
+export * from './assets.js';
 export * from './canonical.js';
 export * from './collaboration.js';
 export * from './contracts.js';

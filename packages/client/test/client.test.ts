@@ -418,4 +418,60 @@ describe('GridStoryClient browser compatibility', () => {
       expectedRevisionId: 'revision-1',
     });
   });
+
+  it('routes resumable asset management with binary part bodies', async () => {
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    const client = createGridStoryClient({
+      baseUrl: 'http://gridstory.test',
+      tenantId: 'default',
+      fetch: async (input, init) => {
+        requests.push({ url: String(input), ...(init ? { init } : {}) });
+        if (init?.method === 'DELETE') return new Response(null, { status: 204 });
+        return new Response(JSON.stringify({}), {
+          headers: { 'content-type': 'application/json' },
+        });
+      },
+    });
+
+    await client.listAssets();
+    await client.startAssetUpload({
+      filename: 'hero.jpg',
+      mediaType: 'image/jpeg',
+      size: 4,
+      kind: 'image',
+      metadata: { title: 'Hero' },
+    });
+    await client.getAssetUpload('upload/1');
+    await client.uploadAssetPart('upload/1', 2, new Uint8Array([1, 2, 3, 4]));
+    await client.completeAssetUpload('upload/1', [{ partNumber: 2, etag: 'etag', size: 4 }]);
+    await client.updateAsset('asset/1', { focalPoint: { x: 0.25, y: 0.75 } });
+    await client.createAssetRendition('asset/1', {
+      id: 'card',
+      width: 640,
+      fit: 'cover',
+      format: 'webp',
+      quality: 80,
+    });
+    await client.getAssetUsage('asset/1');
+    await client.abortAssetUpload('upload/1');
+
+    expect(requests.map((request) => [request.url, request.init?.method])).toEqual([
+      ['http://gridstory.test/api/v1/assets', undefined],
+      ['http://gridstory.test/api/v1/assets/uploads', 'POST'],
+      ['http://gridstory.test/api/v1/assets/uploads/upload%2F1', undefined],
+      ['http://gridstory.test/api/v1/assets/uploads/upload%2F1/parts/2', 'PUT'],
+      ['http://gridstory.test/api/v1/assets/uploads/upload%2F1/complete', 'POST'],
+      ['http://gridstory.test/api/v1/assets/asset%2F1', 'PATCH'],
+      ['http://gridstory.test/api/v1/assets/asset%2F1/renditions', 'POST'],
+      ['http://gridstory.test/api/v1/assets/asset%2F1/usage', undefined],
+      ['http://gridstory.test/api/v1/assets/uploads/upload%2F1', 'DELETE'],
+    ]);
+    expect(new Headers(requests[3]?.init?.headers).get('content-type')).toBe(
+      'application/octet-stream',
+    );
+    expect(requests[3]?.init?.body).toBeInstanceOf(ArrayBuffer);
+    const uploadBody = requests[3]?.init?.body;
+    if (!(uploadBody instanceof ArrayBuffer)) throw new Error('Expected binary upload body.');
+    expect(uploadBody.byteLength).toBe(4);
+  });
 });

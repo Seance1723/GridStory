@@ -4,6 +4,9 @@ import { Readable } from 'node:stream';
 import cors from '@fastify/cors';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import {
+  AssetService,
+  InMemoryAssetRepository,
+  InMemoryAssetStorageAdapter,
   ContentService,
   ContentQualityService,
   ComponentLifecycleService,
@@ -26,9 +29,13 @@ import {
   AuthorizationPolicy,
   GridStoryActions,
   PostgresContentRepository,
+  SqliteAssetRepository,
   SqliteContentRepository,
   type ContentPerspective,
   type ContentRepository,
+  type AssetRepository,
+  type AssetRenditionAdapter,
+  type AssetStorageAdapter,
   type ExternalLinkChecker,
   type CacheInvalidator,
   type WebhookTransport,
@@ -43,6 +50,10 @@ import {
   visualModelDocumentSchema,
   visualModelToSchemaIr,
   type ContentQualityPolicy,
+  startAssetUploadSchema,
+  completeAssetUploadSchema,
+  updateAssetSchema,
+  assetRenditionPresetSchema,
   type RedirectDefinition,
   type LocaleConfiguration,
   type SchemaIrDocument,
@@ -72,6 +83,9 @@ export interface BuildServerOptions {
   allowedPreviewOrigins?: string[];
   qualityPolicies?: ContentQualityPolicy[];
   externalLinkChecker?: ExternalLinkChecker;
+  assetRepository?: AssetRepository;
+  assetStorage?: AssetStorageAdapter;
+  assetRenditionAdapter?: AssetRenditionAdapter;
 }
 
 interface RequestBody {
@@ -229,6 +243,9 @@ export async function buildServer({
     },
   ],
   externalLinkChecker,
+  assetRepository,
+  assetStorage = new InMemoryAssetStorageAdapter(),
+  assetRenditionAdapter,
 }: BuildServerOptions): Promise<FastifyInstance> {
   if (!databaseUrl && databasePath !== ':memory:') {
     mkdirSync(dirname(resolve(databasePath)), { recursive: true });
@@ -236,6 +253,11 @@ export async function buildServer({
   const repository: ContentRepository = databaseUrl
     ? new PostgresContentRepository({ connectionString: databaseUrl })
     : new SqliteContentRepository({ filename: databasePath });
+  const resolvedAssetRepository: AssetRepository =
+    assetRepository ??
+    (databaseUrl
+      ? new InMemoryAssetRepository()
+      : new SqliteAssetRepository({ filename: databasePath }));
   const quality = new ContentQualityService({
     repository,
     schemas: [pageSchema],
@@ -247,6 +269,12 @@ export async function buildServer({
     schemas: [pageSchema],
     componentManifests,
     qualityGate: quality,
+  });
+  const assets = new AssetService({
+    storage: assetStorage,
+    contentService: service,
+    repository: resolvedAssetRepository,
+    ...(assetRenditionAdapter ? { renditionAdapter: assetRenditionAdapter } : {}),
   });
   const componentLifecycle = new ComponentLifecycleService({ contentService: service });
   const collaboration = new CollaborationService();
@@ -282,6 +310,11 @@ export async function buildServer({
     { parseAs: 'string' },
     (_request, body, done) => done(null, body),
   );
+  server.addContentTypeParser(
+    'application/octet-stream',
+    { parseAs: 'buffer' },
+    (_request, body, done) => done(null, body),
+  );
   const seedScope = {
     organizationId: 'local',
     tenantId: 'default',
@@ -312,7 +345,10 @@ export async function buildServer({
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   });
 
-  server.addHook('onClose', async () => repository.close());
+  server.addHook('onClose', async () => {
+    await repository.close();
+    await resolvedAssetRepository.close?.();
+  });
   server.addHook('onSend', async (request, reply, payload) => {
     if (request.url.startsWith('/api/v1/delivery/')) {
       reply.header('cache-control', 'public, max-age=0, s-maxage=60, stale-while-revalidate=300');
@@ -429,6 +465,119 @@ export async function buildServer({
     const context = requestContext(request, 'draft');
     authorize(policy, context, GridStoryActions.componentRead, { kind: 'component' });
     return exampleDesignSystem;
+  });
+  server.get('/api/v1/assets', async (request) => {
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.assetRead, { kind: 'asset' });
+    return assets.list(contentScope(context));
+  });
+  server.post('/api/v1/assets/uploads', async (request, reply) => {
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.assetCreate, { kind: 'asset' });
+    const parsed = startAssetUploadSchema.safeParse(bodyOf(request));
+    if (!parsed.success) {
+      throw new GridStoryError('Asset upload input is invalid.', 'invalid_asset_upload', 400, {
+        issues: parsed.error.issues,
+      });
+    }
+    const upload = await assets.startUpload({ scope: contentScope(context), asset: parsed.data });
+    return reply.status(201).send(upload);
+  });
+  server.get('/api/v1/assets/uploads/:id', async (request) => {
+    const params = request.params as { id: string };
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.assetCreate, { kind: 'asset' });
+    return assets.getUpload(contentScope(context), params.id);
+  });
+  server.put('/api/v1/assets/uploads/:id/parts/:partNumber', async (request) => {
+    const params = request.params as { id: string; partNumber: string };
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.assetCreate, { kind: 'asset' });
+    const partNumber = Number(params.partNumber);
+    if (!(request.body instanceof Uint8Array) || !Number.isInteger(partNumber) || partNumber < 1) {
+      throw new GridStoryError(
+        'A binary body and positive part number are required.',
+        'invalid_asset_upload_part',
+        400,
+      );
+    }
+    return assets.uploadPart({
+      scope: contentScope(context),
+      uploadId: params.id,
+      partNumber,
+      body: request.body,
+    });
+  });
+  server.post('/api/v1/assets/uploads/:id/complete', async (request, reply) => {
+    const params = request.params as { id: string };
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.assetCreate, { kind: 'asset' });
+    const parsed = completeAssetUploadSchema.safeParse(bodyOf(request));
+    if (!parsed.success) {
+      throw new GridStoryError('Upload completion is invalid.', 'invalid_asset_upload', 400, {
+        issues: parsed.error.issues,
+      });
+    }
+    const asset = await assets.completeUpload({
+      scope: contentScope(context),
+      uploadId: params.id,
+      parts: parsed.data.parts,
+      actor: { id: context.principal.id },
+    });
+    return reply.status(201).send(asset);
+  });
+  server.delete('/api/v1/assets/uploads/:id', async (request, reply) => {
+    const params = request.params as { id: string };
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.assetCreate, { kind: 'asset' });
+    await assets.abortUpload(contentScope(context), params.id);
+    return reply.status(204).send();
+  });
+  server.get('/api/v1/assets/:id', async (request) => {
+    const params = request.params as { id: string };
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.assetRead, { kind: 'asset', id: params.id });
+    return assets.get(contentScope(context), params.id);
+  });
+  server.patch('/api/v1/assets/:id', async (request) => {
+    const params = request.params as { id: string };
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.assetUpdate, { kind: 'asset', id: params.id });
+    const parsed = updateAssetSchema.safeParse(bodyOf(request));
+    if (!parsed.success) {
+      throw new GridStoryError('Asset update is invalid.', 'invalid_asset_update', 400, {
+        issues: parsed.error.issues,
+      });
+    }
+    return assets.update({
+      scope: contentScope(context),
+      id: params.id,
+      changes: parsed.data,
+      actor: { id: context.principal.id },
+    });
+  });
+  server.post('/api/v1/assets/:id/renditions', async (request, reply) => {
+    const params = request.params as { id: string };
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.assetUpdate, { kind: 'asset', id: params.id });
+    const parsed = assetRenditionPresetSchema.safeParse(bodyOf(request));
+    if (!parsed.success) {
+      throw new GridStoryError('Rendition preset is invalid.', 'invalid_asset_rendition', 400, {
+        issues: parsed.error.issues,
+      });
+    }
+    const rendition = await assets.createRendition({
+      scope: contentScope(context),
+      id: params.id,
+      preset: parsed.data,
+    });
+    return reply.status(201).send(rendition);
+  });
+  server.get('/api/v1/assets/:id/usage', async (request) => {
+    const params = request.params as { id: string };
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.assetRead, { kind: 'asset', id: params.id });
+    return assets.usage(contentScope(context), params.id);
   });
   server.post<{ Body: RequestBody }>('/api/v1/preview/sessions', async (request, reply) => {
     const context = requestContext(request, 'draft');

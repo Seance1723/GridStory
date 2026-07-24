@@ -8,6 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Required completion descriptors to match server-recorded multipart ETags and sizes before consuming storage, chunked Studio files by the negotiated part size, and corrected asset implementation/test integration defects (BUG-0109 through BUG-0139).
+
 - Aligned the temporary browser bundle API URL and CORS origin for deterministic local walkthroughs (BUG-0108).
 - Normalized new report punctuation for Windows-safe source encoding and restored a split changelog bullet (BUG-0106, BUG-0107).
 - Kept the quality-gate error test import type-only under the repository lint contract (BUG-0105).
@@ -46,6 +48,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Mapped malformed preview targets into the stable `invalid_preview_url` response boundary instead of allowing generic URL exceptions to become server errors.
 
 ### Added
+
+- Added canonical scoped asset, immutable revision, portable metadata, focal-point, rendition, multipart upload, and draft/published usage contracts.
+- Added framework-neutral asset service/repository/storage/rendition boundaries, durable local SQLite metadata, an S3-compatible multipart adapter, resumable completion integrity, and scoped usage scanning.
+- Added authorized private/no-store asset REST routes and matching universal-client methods for listing, upload resume/abort/complete, metadata revisions, renditions, and usage.
+- Added a responsive Studio asset library and managed field picker, negotiated browser chunking, focused schema/core/API/client/Studio regressions, and an asset integration/security-boundary guide.
 
 - Added serializable content-quality policies and explainable SEO, accessibility, scoped link-integrity, and editorial findings with stable paths, severities, deductions, and scores.
 - Added framework-neutral candidate assessment, injected external-link adapters, private REST/client endpoints, revision-safe pre-publication gates, and explicit authorized role bypasses.
@@ -168,6 +175,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Replaced the placeholder README with the working feature set, quick start, verification commands, service URLs, repository map, API snapshot, architecture boundary, governance workflow, and explicit current limitations.
 
 ### Changed
+
+- Local API servers now keep asset metadata in the configured SQLite database; database-URL deployments can inject a durable `AssetRepository` while storage and image processing remain explicit adapters.
 
 - Completed M3-006 with explainable content-quality reports, scoped link checks, configurable publication gates, private management surfaces, Studio remediation workflows, documentation, and full browser/build verification.
 - Completed the governed design-system milestone with versioned tokens/variants/breakpoints/symbols/templates, deterministic React resolution, authorized delivery, Studio authoring controls, lean browser bundles, documentation, and full browser/build verification.

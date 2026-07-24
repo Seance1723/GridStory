@@ -3,7 +3,12 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createGridStoryClient, type ContentEntry } from '@gridstory/client';
+import {
+  createGridStoryClient,
+  type AssetRecord,
+  type AssetUploadSession,
+  type ContentEntry,
+} from '@gridstory/client';
 import { componentManifests } from '@gridstory/example-kit/manifests';
 import { exampleDesignSystem } from '@gridstory/example-kit/design-system';
 import type { ContentSchemaDefinition } from '@gridstory/schema';
@@ -126,10 +131,15 @@ function json(body: unknown, status = 200): Response {
 }
 
 function createTestClient(
-  options: { schema?: ContentSchemaDefinition; entries?: ContentEntry[] } = {},
+  options: {
+    schema?: ContentSchemaDefinition;
+    entries?: ContentEntry[];
+    assets?: AssetRecord[];
+  } = {},
 ) {
   const testSchema = options.schema ?? schema;
   const testEntries = options.entries ?? entries;
+  const testAssets = options.assets ?? [];
   const threads: Array<Record<string, unknown>> = [];
   const presence = [{ actorId: 'local-admin', displayName: 'Studio editor', lastSeenAt: now }];
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -137,6 +147,17 @@ function createTestClient(
     if (url.pathname === '/api/v1/schemas') return json([testSchema]);
     if (url.pathname === '/api/v1/components') return json(componentManifests);
     if (url.pathname === '/api/v1/design-system') return json(exampleDesignSystem);
+    const assetUsageMatch = url.pathname.match(/^\/api\/v1\/assets\/([^/]+)\/usage$/);
+    if (assetUsageMatch) {
+      return json({
+        assetId: assetUsageMatch[1],
+        totalReferences: 2,
+        entries: 1,
+        byPerspective: { draft: 1, published: 1 },
+        locations: [],
+      });
+    }
+    if (url.pathname === '/api/v1/assets') return json(testAssets);
     if (url.pathname === '/api/v1/components/gridstory.hero/migration') {
       return json({
         id: 'component_migration_test',
@@ -535,5 +556,119 @@ describe('GridStory Studio', () => {
     expect(governance.textContent).toContain('4 scoped usages across 2 entries');
     expect(governance.textContent).toContain('1 code-owned scenarios');
     expect(governance.textContent).toContain('data-gridstory-version');
+  });
+
+  it('loads managed assets into the responsive library and field picker', async () => {
+    const user = userEvent.setup();
+    const managedAsset: AssetRecord = {
+      organizationId: 'local',
+      tenantId: 'default',
+      workspaceId: 'default',
+      siteId: 'default',
+      environmentId: 'development',
+      locale: 'en',
+      id: 'managed-hero',
+      kind: 'image',
+      currentRevisionId: 'managed-hero-v1',
+      revisions: [
+        {
+          id: 'managed-hero-v1',
+          version: 1,
+          original: {
+            objectKey: 'assets/managed-hero.jpg',
+            url: 'https://cdn.example.test/managed-hero.jpg',
+            filename: 'managed-hero.jpg',
+            mediaType: 'image/jpeg',
+            size: 4096,
+            checksum: 'managed-checksum',
+            width: 1200,
+            height: 800,
+          },
+          metadata: {
+            title: 'Managed hero',
+            alt: 'Managed alt',
+            tags: ['homepage'],
+            collections: [],
+            custom: {},
+          },
+          focalPoint: { x: 0.25, y: 0.75 },
+          createdAt: now,
+          actorId: 'asset-author',
+        },
+      ],
+      renditions: [],
+      createdAt: now,
+      updatedAt: now,
+    };
+    render(
+      <App
+        client={createTestClient({
+          schema: authoringSchema,
+          entries: authoringEntries,
+          assets: [managedAsset],
+        })}
+      />,
+    );
+
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Assets' }));
+    expect(screen.getByRole('heading', { name: 'Asset library' })).toBeTruthy();
+    expect(screen.getByText('Focal point 0.25, 0.75')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Inspect usage' }));
+    expect((await screen.findByRole('status')).textContent).toContain(
+      '2 references across 1 entries',
+    );
+
+    const picker = screen.getByRole('region', { name: 'Social image' });
+    await user.click(within(picker).getByRole('button', { name: /Managed hero/ }));
+    expect((within(picker).getByLabelText('Alternative text') as HTMLInputElement).value).toBe(
+      'Managed alt',
+    );
+  });
+
+  it('chunks browser files by the resumable upload part size', async () => {
+    const user = userEvent.setup();
+    const client = createTestClient();
+    const uploadSession: AssetUploadSession = {
+      organizationId: 'local',
+      tenantId: 'default',
+      workspaceId: 'default',
+      siteId: 'default',
+      environmentId: 'development',
+      locale: 'en',
+      id: 'upload-1',
+      storageUploadId: 'storage-upload-1',
+      filename: 'ten-bytes.bin',
+      mediaType: 'application/octet-stream',
+      size: 10,
+      kind: 'file',
+      state: 'pending',
+      partSize: 4,
+      parts: [],
+      createdAt: now,
+      expiresAt: '2026-07-25T00:00:00.000Z',
+    };
+    vi.spyOn(client, 'startAssetUpload').mockResolvedValue(uploadSession);
+    const uploadPart = vi
+      .spyOn(client, 'uploadAssetPart')
+      .mockImplementation(async (_uploadId, partNumber, body) => ({
+        partNumber,
+        etag: `etag-${partNumber}`,
+        size: body.byteLength,
+      }));
+    const complete = vi.spyOn(client, 'completeAssetUpload').mockResolvedValue(undefined as never);
+    render(<App client={client} />);
+
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Assets' }));
+    const bytes = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    const file = new File([bytes], 'ten-bytes.bin', { type: 'application/octet-stream' });
+    Object.defineProperty(file, 'arrayBuffer', { value: async () => bytes.buffer });
+    fireEvent.change(screen.getByLabelText('Upload asset'), { target: { files: [file] } });
+
+    await waitFor(() => expect(complete).toHaveBeenCalledOnce());
+    expect(uploadPart).toHaveBeenCalledTimes(3);
+    expect(uploadPart.mock.calls.map((call) => call[2].byteLength)).toEqual([4, 4, 2]);
+    expect(complete.mock.calls[0]?.[1].map((part) => part.size)).toEqual([4, 4, 2]);
   });
 });

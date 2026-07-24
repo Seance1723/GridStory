@@ -14,7 +14,7 @@ type RichTextField = Extract<FieldDefinition, { type: 'rich-text' }>;
 type AssetField = Extract<FieldDefinition, { type: 'asset' }>;
 type RelationField = Extract<FieldDefinition, { type: 'relation' }>;
 
-const assetLibrary: AssetReference[] = [
+const demonstrationAssetLibrary: AssetReference[] = [
   {
     id: 'asset-campaign',
     kind: 'image',
@@ -294,16 +294,19 @@ export function AssetControl({
   definition,
   value,
   onChange,
+  assets = demonstrationAssetLibrary,
 }: {
   definition: AssetField;
   value: unknown;
   onChange: (value: AssetReference | undefined) => void;
+  assets?: AssetReference[];
 }): ReactNode {
   const selected =
     typeof value === 'object' && value !== null && 'kind' in value
       ? (value as AssetReference)
       : undefined;
-  const choices = assetLibrary.filter((asset) =>
+  const availableAssets = assets.length > 0 ? assets : demonstrationAssetLibrary;
+  const choices = availableAssets.filter((asset) =>
     (definition.accepts ?? ['image', 'video', 'file']).includes(asset.kind),
   );
   return (

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import {
   GridStoryApiError,
   createGridStoryClient,
+  type AssetRecord,
+  type AssetUsageReport,
   type CollaborationSnapshot,
   type ComponentManifest,
   type ComponentMigrationPlanResponse,
@@ -22,6 +24,7 @@ import { exampleDesignSystem } from '@gridstory/example-kit/design-system';
 import { exampleComponentRegistry } from '@gridstory/example-kit/react';
 import { GridStoryRenderer } from '@gridstory/react';
 import type {
+  AssetReference,
   ComponentNode,
   ContentSchemaDefinition,
   DesignSystemManifest,
@@ -230,12 +233,14 @@ function SchemaFieldControl({
   definition,
   value,
   entries,
+  assets,
   onChange,
 }: {
   definition: Exclude<FieldDefinition, { type: 'component-tree' }>;
   value: unknown;
   entries: ContentEntry[];
   onChange: (value: unknown) => void;
+  assets: AssetReference[];
 }): ReactNode {
   const id = `field-${definition.id}`.replaceAll(/[^a-zA-Z0-9_-]/g, '-');
   const structured =
@@ -260,7 +265,9 @@ function SchemaFieldControl({
     );
   }
   if (definition.type === 'asset') {
-    return <AssetControl definition={definition} value={value} onChange={onChange} />;
+    return (
+      <AssetControl definition={definition} value={value} assets={assets} onChange={onChange} />
+    );
   }
   if (definition.type === 'relation') {
     return (
@@ -403,6 +410,11 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   const [schemas, setSchemas] = useState<ContentSchemaDefinition[]>([]);
   const [manifests, setManifests] = useState<ComponentManifest[]>(componentManifests);
   const [designSystem, setDesignSystem] = useState<DesignSystemManifest>(exampleDesignSystem);
+  const [assets, setAssets] = useState<AssetRecord[]>([]);
+  const [assetLibraryOpen, setAssetLibraryOpen] = useState(false);
+  const [assetUsage, setAssetUsage] = useState<AssetUsageReport | null>(null);
+  const [assetUploading, setAssetUploading] = useState(false);
+
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(true);
   const [notice, setNotice] = useState<Notice>(null);
@@ -493,12 +505,14 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
       client.getComponentManifests(controller.signal),
       client.getSchemas(controller.signal),
       client.getDesignSystem(controller.signal),
+      client.listAssets(controller.signal).catch(() => []),
     ])
-      .then(async ([entryList, manifestList, schemaList, designSystemManifest]) => {
+      .then(async ([entryList, manifestList, schemaList, designSystemManifest, assetList]) => {
         setEntries(entryList);
         setManifests(manifestList);
         setSchemas(schemaList);
         setDesignSystem(designSystemManifest);
+        setAssets(assetList);
         if (entryList[0]) {
           const fieldName = schemaList
             .find((schema) => schema.id === entryList[0]?.contentType)
@@ -530,6 +544,28 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
     [manifests],
   );
 
+  const assetChoices = useMemo<AssetReference[]>(
+    () =>
+      assets.flatMap((asset) => {
+        const revision = asset.revisions.find(
+          (candidate) => candidate.id === asset.currentRevisionId,
+        );
+        if (!revision) return [];
+        return [
+          {
+            id: asset.id,
+            kind: asset.kind,
+            url: revision.original.url,
+            title: revision.metadata.title,
+            ...(revision.metadata.alt ? { alt: revision.metadata.alt } : {}),
+            mimeType: revision.original.mediaType,
+            ...(revision.original.width ? { width: revision.original.width } : {}),
+            ...(revision.original.height ? { height: revision.original.height } : {}),
+          },
+        ];
+      }),
+    [assets],
+  );
   const activeSchema = useMemo(
     () => schemas.find((schema) => schema.id === selected?.contentType) ?? schemas[0],
     [schemas, selected?.contentType],
@@ -598,6 +634,52 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
         : [],
     [componentField, published],
   );
+
+  const refreshAssets = useCallback(async () => {
+    setAssets(await client.listAssets());
+  }, [client]);
+
+  const uploadAssetFile = async (file: File) => {
+    setAssetUploading(true);
+    setAssetUsage(null);
+    setNotice(null);
+    try {
+      const body = new Uint8Array(await file.arrayBuffer());
+      const kind = file.type.startsWith('image/')
+        ? 'image'
+        : file.type.startsWith('video/')
+          ? 'video'
+          : 'file';
+      const upload = await client.startAssetUpload({
+        filename: file.name,
+        mediaType: file.type || 'application/octet-stream',
+        size: body.byteLength,
+        kind,
+        metadata: { title: file.name },
+      });
+      const parts = [];
+      for (let offset = 0, partNumber = 1; offset < body.byteLength; partNumber += 1) {
+        const end = Math.min(offset + upload.partSize, body.byteLength);
+        parts.push(await client.uploadAssetPart(upload.id, partNumber, body.subarray(offset, end)));
+        offset = end;
+      }
+      await client.completeAssetUpload(upload.id, parts);
+      await refreshAssets();
+      setNotice({ tone: 'success', message: `${file.name} added to the asset library.` });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    } finally {
+      setAssetUploading(false);
+    }
+  };
+
+  const inspectAssetUsage = async (assetId: string) => {
+    try {
+      setAssetUsage(await client.getAssetUsage(assetId));
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
 
   const changeDraft = (updater: (current: EditableContent) => EditableContent) => {
     setDraft((current) => (current ? updater(current) : current));
@@ -1142,6 +1224,14 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
           <button
             type="button"
             className="button button--secondary"
+            onClick={() => setAssetLibraryOpen((current) => !current)}
+            aria-expanded={assetLibraryOpen}
+          >
+            Assets
+          </button>{' '}
+          <button
+            type="button"
+            className="button button--secondary"
             onClick={() => void toggleQuality()}
             aria-expanded={qualityReport !== null}
             disabled={!selected || busy}
@@ -1166,6 +1256,85 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
           </button>
         </div>
       </header>
+      {assetLibraryOpen ? (
+        <section className="asset-library-panel" aria-label="Asset library">
+          <div className="section-heading">
+            <div>
+              <span className="kicker">Digital assets</span>
+              <h2>Asset library</h2>
+              <p>Resumable uploads, governed metadata, renditions, and scoped usage.</p>
+            </div>
+            <label className="button button--primary asset-upload-button">
+              {assetUploading ? 'Uploading...' : 'Upload asset'}
+              <input
+                type="file"
+                disabled={assetUploading}
+                onChange={(event) => {
+                  const file = event.currentTarget.files?.[0];
+                  event.currentTarget.value = '';
+                  if (file) void uploadAssetFile(file);
+                }}
+              />
+            </label>
+          </div>
+          <div className="asset-library-grid">
+            {assets.length > 0 ? (
+              assets.map((asset) => {
+                const revision = asset.revisions.find(
+                  (candidate) => candidate.id === asset.currentRevisionId,
+                );
+                if (!revision) return null;
+                return (
+                  <article className="asset-library-card" key={asset.id}>
+                    <div>
+                      <strong>{revision.metadata.title}</strong>
+                      <span>
+                        {asset.kind} - {revision.original.mediaType}
+                      </span>
+                    </div>
+                    <dl>
+                      <div>
+                        <dt>Version</dt>
+                        <dd>{revision.version}</dd>
+                      </div>
+                      <div>
+                        <dt>Renditions</dt>
+                        <dd>{asset.renditions.length}</dd>
+                      </div>
+                      <div>
+                        <dt>Size</dt>
+                        <dd>{revision.original.size} B</dd>
+                      </div>
+                    </dl>
+                    {revision.focalPoint ? (
+                      <small>
+                        Focal point {revision.focalPoint.x.toFixed(2)},{' '}
+                        {revision.focalPoint.y.toFixed(2)}
+                      </small>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="button button--secondary"
+                      onClick={() => void inspectAssetUsage(asset.id)}
+                    >
+                      Inspect usage
+                    </button>
+                  </article>
+                );
+              })
+            ) : (
+              <p className="empty-state">Upload the first asset for this tenant and locale.</p>
+            )}
+          </div>
+          {assetUsage ? (
+            <p className="asset-usage-summary" role="status">
+              {assetUsage.totalReferences} references across {assetUsage.entries} entries -{' '}
+              {assetUsage.byPerspective.draft} draft - {assetUsage.byPerspective.published}{' '}
+              published
+            </p>
+          ) : null}
+        </section>
+      ) : null}
       {operationsDashboard ? (
         <section className="operations-panel" aria-label="Administrator operations">
           <div>
@@ -1394,6 +1563,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                       definition={field}
                       value={draft[field.name]}
                       entries={entries}
+                      assets={assetChoices}
                       onChange={(value) =>
                         changeDraft((current) => ({ ...current, [field.name]: value }))
                       }

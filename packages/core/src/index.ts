@@ -1,3 +1,6 @@
+export * from './asset-service.js';
+export * from './s3-asset-storage.js';
+export * from './sqlite-asset-repository.js';
 export * from './authorization.js';
 export * from './audit-service.js';
 export * from './collaboration-service.js';

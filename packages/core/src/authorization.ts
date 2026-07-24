@@ -6,6 +6,9 @@ export const GridStoryActions = {
   schemaPlan: 'schema.plan',
   schemaDeploy: 'schema.deploy',
   componentRead: 'component.read',
+  assetRead: 'asset.read',
+  assetCreate: 'asset.create',
+  assetUpdate: 'asset.update',
   collaborationRead: 'collaboration.read',
   collaborationWrite: 'collaboration.write',
   presenceWrite: 'presence.write',
@@ -28,7 +31,7 @@ export const GridStoryActions = {
 export type GridStoryAction = (typeof GridStoryActions)[keyof typeof GridStoryActions];
 
 export interface AuthorizationResource {
-  kind: 'schema' | 'component' | 'content' | 'delivery' | 'platform';
+  kind: 'schema' | 'component' | 'asset' | 'content' | 'delivery' | 'platform';
   id?: string;
   contentType?: string;
   ownerId?: string;
@@ -61,6 +64,7 @@ export const defaultRoles: RoleDefinition[] = [
     actions: [
       GridStoryActions.schemaRead,
       GridStoryActions.componentRead,
+      GridStoryActions.assetRead,
       GridStoryActions.contentRead,
       GridStoryActions.contentHistoryRead,
       GridStoryActions.collaborationRead,
@@ -71,6 +75,9 @@ export const defaultRoles: RoleDefinition[] = [
     actions: [
       GridStoryActions.schemaRead,
       GridStoryActions.componentRead,
+      GridStoryActions.assetRead,
+      GridStoryActions.assetCreate,
+      GridStoryActions.assetUpdate,
       GridStoryActions.contentRead,
       GridStoryActions.contentHistoryRead,
       GridStoryActions.contentCreate,
@@ -85,6 +92,9 @@ export const defaultRoles: RoleDefinition[] = [
     actions: [
       GridStoryActions.schemaRead,
       GridStoryActions.componentRead,
+      GridStoryActions.assetRead,
+      GridStoryActions.assetCreate,
+      GridStoryActions.assetUpdate,
       GridStoryActions.contentRead,
       GridStoryActions.contentHistoryRead,
       GridStoryActions.contentCreate,

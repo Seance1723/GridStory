@@ -191,7 +191,11 @@
 
 ## Milestone 4 — Assets, workflow, releases, and search
 
-- [ ] **M4-001** Add S3-compatible assets, resumable uploads, renditions, focal points, metadata, and usage tracking.
+- [x] **M4-001** Add S3-compatible assets, resumable uploads, renditions, focal points, metadata, and usage tracking.
+  - Added canonical fully scoped asset/upload/rendition/metadata/focal-point/usage contracts, immutable asset revisions, framework-neutral repository/storage/rendition boundaries, durable local SQLite metadata, and an S3-compatible multipart client adapter.
+  - Added exact recorded-part completion integrity, resume/abort state, private no-store REST authorization, universal-client methods, draft/published usage locations, and injected image-rendition processing without leaking preview or draft credentials into published caches.
+  - Added a responsive Studio asset library with negotiated browser chunking, governed card metadata, focal/rendition/revision details, usage inspection, and managed schema-field choices; documented production adapters and the explicit M4-002 MIME/quarantine/private-delivery boundary.
+  - Verification found and resolved `BUG-0109` through `BUG-0139`; the full pre-walkthrough `pnpm check` passed with 124 tests across 42 files plus two intentional skips, final lint/format/Studio typecheck and all 16 Studio tests pass, production builds are 265.56/211.97 KB across 29/24 modules, the canonical Playwright flow passes in 19.5 seconds, and 1440x900 plus 700x900 in-app asset upload/usage checks show responsive 3/1-column layouts with no console errors or horizontal overflow.
 - [ ] **M4-002** Add MIME/content verification, SVG sanitization, malware quarantine hooks, and signed private delivery.
 - [ ] **M4-003** Add custom workflows, approvals, separation of duties, schedules, notifications, and escalations.
 - [ ] **M4-004** Add atomic multi-entry releases, future-state preview, validation, scheduling, and rollback policy.
