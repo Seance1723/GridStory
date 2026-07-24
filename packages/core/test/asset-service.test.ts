@@ -75,7 +75,7 @@ describe('AssetService', () => {
   afterEach(async () => await contentRepository.close());
 
   it('resumes multipart uploads, versions metadata, creates renditions, and tracks usage', async () => {
-    const body = new TextEncoder().encode('hero');
+    const body = Uint8Array.from([0xff, 0xd8, 0xff, 0xd9]);
     const upload = await assets.startUpload({
       scope: scope(),
       asset: {
@@ -103,6 +103,13 @@ describe('AssetService', () => {
       parts: [part],
       actor: { id: 'author-a' },
       now: new Date('2026-07-24T00:01:00.000Z'),
+    });
+    expect(asset.revisions[0]?.security).toMatchObject({
+      status: 'verified',
+      declaredMediaType: 'image/jpeg',
+      detectedMediaType: 'image/jpeg',
+      sanitized: false,
+      malware: { status: 'not_configured' },
     });
     expect(asset.revisions[0]?.original).toMatchObject({
       filename: 'hero.jpg',
@@ -205,5 +212,136 @@ describe('AssetService', () => {
         actor: { id: 'author-a' },
       }),
     ).rejects.toMatchObject({ code: 'asset_size_mismatch', statusCode: 422 });
+  });
+
+  it('stores sanitized SVG bytes and exposes only a verified revision for private reads', async () => {
+    const secureAssets = new AssetService({
+      storage: new InMemoryAssetStorageAdapter('https://private-assets.example.test'),
+    });
+    const source = new TextEncoder().encode(
+      '<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"><script>alert(1)</script><rect width="10" height="10" /></svg>',
+    );
+    const upload = await secureAssets.startUpload({
+      scope: scope(),
+      asset: {
+        filename: 'icon.svg',
+        mediaType: 'image/svg+xml',
+        size: source.byteLength,
+        kind: 'image',
+        metadata: { title: 'Icon' },
+      },
+    });
+    const part = await secureAssets.uploadPart({
+      scope: scope(),
+      uploadId: upload.id,
+      partNumber: 1,
+      body: source,
+    });
+    const asset = await secureAssets.completeUpload({
+      scope: scope(),
+      uploadId: upload.id,
+      parts: [part],
+      actor: { id: 'author-a' },
+      now: new Date('2026-07-24T01:00:00.000Z'),
+    });
+
+    expect(asset.revisions[0]?.security).toMatchObject({
+      status: 'verified',
+      sanitized: true,
+      detectedMediaType: 'image/svg+xml',
+      findings: ['svg_active_content_removed', 'svg_event_handler_removed'],
+    });
+    const delivered = await secureAssets.readPrivateObject(
+      scope(),
+      asset.id,
+      asset.currentRevisionId,
+    );
+    const deliveredSvg = new TextDecoder().decode(delivered.body);
+    expect(deliveredSvg).not.toMatch(/script|onload/i);
+    expect(deliveredSvg).toContain('<rect');
+  });
+
+  it('quarantines infected uploads and scanner failures, denying reads and renditions', async () => {
+    const infectedAssets = new AssetService({
+      storage: new InMemoryAssetStorageAdapter(),
+      renditionAdapter,
+      malwareScanner: {
+        scan: async () => ({ verdict: 'infected', provider: 'test-scanner', signature: 'EICAR' }),
+      },
+    });
+    const body = Uint8Array.from([0xff, 0xd8, 0xff, 0xd9]);
+    const upload = await infectedAssets.startUpload({
+      scope: scope(),
+      asset: {
+        filename: 'infected.jpg',
+        mediaType: 'image/jpeg',
+        size: body.byteLength,
+        kind: 'image',
+        metadata: { title: 'Infected' },
+      },
+    });
+    const part = await infectedAssets.uploadPart({
+      scope: scope(),
+      uploadId: upload.id,
+      partNumber: 1,
+      body,
+    });
+    const asset = await infectedAssets.completeUpload({
+      scope: scope(),
+      uploadId: upload.id,
+      parts: [part],
+      actor: { id: 'author-a' },
+    });
+    expect(asset.revisions[0]?.security).toMatchObject({
+      status: 'quarantined',
+      malware: { status: 'infected', provider: 'test-scanner', signature: 'EICAR' },
+      findings: ['malware_detected'],
+    });
+    await expect(
+      infectedAssets.readPrivateObject(scope(), asset.id, asset.currentRevisionId),
+    ).rejects.toMatchObject({ code: 'asset_not_deliverable', statusCode: 423 });
+    await expect(
+      infectedAssets.createRendition({
+        scope: scope(),
+        id: asset.id,
+        preset: { id: 'thumb', width: 200 },
+      }),
+    ).rejects.toMatchObject({ code: 'asset_not_deliverable', statusCode: 423 });
+
+    const scannerFailureAssets = new AssetService({
+      storage: new InMemoryAssetStorageAdapter(),
+      malwareScanner: {
+        scan: async () => {
+          throw new Error('scanner unavailable');
+        },
+      },
+    });
+    const failedUpload = await scannerFailureAssets.startUpload({
+      scope: scope(),
+      asset: {
+        filename: 'unscanned.jpg',
+        mediaType: 'image/jpeg',
+        size: body.byteLength,
+        kind: 'image',
+        metadata: { title: 'Unscanned' },
+      },
+    });
+    const failedPart = await scannerFailureAssets.uploadPart({
+      scope: scope(),
+      uploadId: failedUpload.id,
+      partNumber: 1,
+      body,
+    });
+    const failedAsset = await scannerFailureAssets.completeUpload({
+      scope: scope(),
+      uploadId: failedUpload.id,
+      parts: [failedPart],
+      actor: { id: 'author-a' },
+    });
+    expect(failedAsset.revisions[0]?.security).toMatchObject({
+      status: 'quarantined',
+      malware: { status: 'error' },
+      findings: ['malware_scan_failed'],
+    });
   });
 });

@@ -19,11 +19,13 @@ describe('S3AssetStorageAdapter', () => {
       checksum: 'checksum-1',
     }));
     const abortMultipartUpload = vi.fn(async () => undefined);
+    const getObject = vi.fn(async () => ({ body: new Uint8Array([1, 2, 3, 4]) }));
     const client: S3MultipartClient = {
       createMultipartUpload,
       uploadPart,
       completeMultipartUpload,
       abortMultipartUpload,
+      getObject,
     };
     const storage = new S3AssetStorageAdapter({
       client,
@@ -80,5 +82,15 @@ describe('S3AssetStorageAdapter', () => {
         parts: [{ partNumber: 1, etag: 'etag-1' }],
       }),
     );
+    await expect(storage.readObject({ scope, object })).resolves.toEqual(
+      new Uint8Array([1, 2, 3, 4]),
+    );
+    expect(getObject).toHaveBeenCalledWith({
+      bucket: 'gridstory-assets',
+      key: object.objectKey,
+    });
+    await expect(
+      storage.readObject({ scope: { ...scope, tenantId: 'tenant-b' }, object }),
+    ).rejects.toMatchObject({ statusCode: 404 });
   });
 });

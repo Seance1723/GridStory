@@ -58,7 +58,7 @@ describe('asset management API', () => {
       seed: false,
       assetRenditionAdapter: renditionAdapter,
     });
-    const body = Buffer.from('hero');
+    const body = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
     const start = await server.inject({
       method: 'POST',
       url: '/api/v1/assets/uploads',
@@ -101,6 +101,36 @@ describe('asset management API', () => {
     });
     expect(completed.statusCode).toBe(201);
     const asset = completed.json();
+    expect(asset.revisions[0].security).toMatchObject({
+      status: 'verified',
+      detectedMediaType: 'image/jpeg',
+      malware: { status: 'not_configured' },
+    });
+
+    const delivery = await server.inject({
+      method: 'POST',
+      url: `/api/v1/assets/${asset.id}/delivery`,
+      headers,
+      payload: { ttlSeconds: 60 },
+    });
+    expect(delivery.statusCode).toBe(201);
+    const grant = delivery.json();
+    expect(grant).toMatchObject({ assetId: asset.id, revisionId: asset.currentRevisionId });
+    const content = await server.inject({ method: 'GET', url: grant.url });
+    expect(content.statusCode).toBe(200);
+    expect(content.rawPayload).toEqual(body);
+    expect(content.headers['content-type']).toContain('image/jpeg');
+    expect(content.headers['cache-control']).toBe('private, no-store');
+    expect(content.headers['x-content-type-options']).toBe('nosniff');
+
+    const tamperedUrl = new URL(grant.url, 'http://gridstory.test');
+    const token = tamperedUrl.searchParams.get('token') ?? '';
+    tamperedUrl.searchParams.set('token', `${token.slice(0, -1)}x`);
+    const tampered = await server.inject({
+      method: 'GET',
+      url: `${tamperedUrl.pathname}${tamperedUrl.search}`,
+    });
+    expect(tampered.statusCode).toBe(401);
 
     const isolated = await server.inject({
       method: 'GET',
@@ -175,5 +205,57 @@ describe('asset management API', () => {
       },
     });
     expect(denied.statusCode).toBe(403);
+  });
+
+  it('quarantines infected objects and refuses delivery grants', async () => {
+    server = await buildServer({
+      databasePath: ':memory:',
+      seed: false,
+      assetMalwareScanner: {
+        scan: async () => ({ verdict: 'infected', provider: 'test-scanner', signature: 'EICAR' }),
+      },
+    });
+    const body = Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31]);
+    const start = await server.inject({
+      method: 'POST',
+      url: '/api/v1/assets/uploads',
+      headers,
+      payload: {
+        filename: 'infected.pdf',
+        mediaType: 'application/pdf',
+        size: body.byteLength,
+        kind: 'file',
+        metadata: { title: 'Infected PDF' },
+      },
+    });
+    const upload = start.json();
+    const uploaded = await server.inject({
+      method: 'PUT',
+      url: `/api/v1/assets/uploads/${upload.id}/parts/1`,
+      headers: { ...headers, 'content-type': 'application/octet-stream' },
+      payload: body,
+    });
+    const completed = await server.inject({
+      method: 'POST',
+      url: `/api/v1/assets/uploads/${upload.id}/complete`,
+      headers,
+      payload: { parts: [uploaded.json()] },
+    });
+    expect(completed.statusCode).toBe(201);
+    const asset = completed.json();
+    expect(asset.revisions[0].security).toMatchObject({
+      status: 'quarantined',
+      malware: { status: 'infected', provider: 'test-scanner', signature: 'EICAR' },
+      findings: ['malware_detected'],
+    });
+
+    const delivery = await server.inject({
+      method: 'POST',
+      url: `/api/v1/assets/${asset.id}/delivery`,
+      headers,
+      payload: {},
+    });
+    expect(delivery.statusCode).toBe(423);
+    expect(delivery.json().error.code).toBe('asset_not_deliverable');
   });
 });

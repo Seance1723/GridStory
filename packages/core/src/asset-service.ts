@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type {
   AssetObject,
+  AssetRevision,
   AssetRecord,
   AssetRendition,
   AssetRenditionPreset,
@@ -21,6 +22,8 @@ import {
   startAssetUploadSchema,
   updateAssetSchema,
 } from '@gridstory/schema';
+import { BuiltInAssetContentInspector } from './asset-security.js';
+import type { AssetContentInspector, AssetMalwareScanner } from './asset-security.js';
 import { GridStoryError, NotFoundError } from './errors.js';
 import type { ContentService } from './content-service.js';
 import type { Actor, Awaitable } from './types.js';
@@ -98,6 +101,7 @@ export interface AssetStorageAdapter {
     width?: number;
     height?: number;
   }): Awaitable<AssetObject>;
+  readObject(input: { scope: ContentScope; object: AssetObject }): Awaitable<Uint8Array>;
   abortMultipart(input: { scope: ContentScope; uploadId: string }): Awaitable<void>;
 }
 
@@ -108,6 +112,7 @@ interface MemoryUpload {
 
 export class InMemoryAssetStorageAdapter implements AssetStorageAdapter {
   readonly #uploads = new Map<string, MemoryUpload>();
+  readonly #objects = new Map<string, { scope: ContentScope; body: Uint8Array }>();
   readonly #baseUrl: string;
 
   constructor(baseUrl = 'https://assets.gridstory.local') {
@@ -172,8 +177,7 @@ export class InMemoryAssetStorageAdapter implements AssetStorageAdapter {
       });
     const body = Buffer.concat(buffers);
     const objectKey = `${scopeKey(input.scope).replaceAll('\u001f', '/')}/${randomUUID()}/${safeFilename(input.filename)}`;
-    this.#uploads.delete(input.uploadId);
-    return {
+    const object = {
       objectKey,
       url: `${this.#baseUrl}/${objectKey.split('/').map(encodeURIComponent).join('/')}`,
       filename: input.filename,
@@ -183,8 +187,20 @@ export class InMemoryAssetStorageAdapter implements AssetStorageAdapter {
       ...(input.width ? { width: input.width } : {}),
       ...(input.height ? { height: input.height } : {}),
     };
+    this.#uploads.delete(input.uploadId);
+    this.#objects.set(objectKey, {
+      scope: structuredClone(input.scope),
+      body: Uint8Array.from(body),
+    });
+    return object;
   }
 
+  readObject(input: { scope: ContentScope; object: AssetObject }): Uint8Array {
+    const stored = this.#objects.get(input.object.objectKey);
+    if (!stored) throw new NotFoundError('Asset object was not found.');
+    assertScope(stored.scope, input.scope);
+    return Uint8Array.from(stored.body);
+  }
   abortMultipart(input: { scope: ContentScope; uploadId: string }): void {
     const upload = this.#uploads.get(input.uploadId);
     if (!upload) return;
@@ -205,6 +221,7 @@ export interface AssetRenditionAdapter {
 interface PendingUpload {
   session: AssetUploadSession;
   input: ReturnType<typeof startAssetUploadSchema.parse>;
+  bodies: Map<number, Uint8Array>;
 }
 
 function collectAssetReferences(
@@ -234,6 +251,8 @@ export class AssetService {
   readonly #storage: AssetStorageAdapter;
   readonly #renditions: AssetRenditionAdapter | undefined;
   readonly #content: ContentService | undefined;
+  readonly #inspector: AssetContentInspector;
+  readonly #malwareScanner: AssetMalwareScanner | undefined;
   readonly #uploads = new Map<string, PendingUpload>();
 
   constructor(input: {
@@ -241,11 +260,15 @@ export class AssetService {
     storage: AssetStorageAdapter;
     renditionAdapter?: AssetRenditionAdapter;
     contentService?: ContentService;
+    contentInspector?: AssetContentInspector;
+    malwareScanner?: AssetMalwareScanner;
   }) {
     this.#repository = input.repository ?? new InMemoryAssetRepository();
     this.#storage = input.storage;
     this.#renditions = input.renditionAdapter;
     this.#content = input.contentService;
+    this.#inspector = input.contentInspector ?? new BuiltInAssetContentInspector();
+    this.#malwareScanner = input.malwareScanner;
   }
 
   async list(scope: ContentScope): Promise<AssetRecord[]> {
@@ -257,6 +280,35 @@ export class AssetService {
     const asset = await this.#repository.get(scope, id);
     if (!asset) throw new NotFoundError(`Asset ${id} was not found.`);
     return assetRecordSchema.parse(asset);
+  }
+
+  async getDeliverableRevision(
+    scope: ContentScope,
+    id: string,
+    revisionId?: string,
+  ): Promise<{ asset: AssetRecord; revision: AssetRevision }> {
+    const asset = await this.get(scope, id);
+    const selectedRevisionId = revisionId ?? asset.currentRevisionId;
+    const revision = asset.revisions.find((candidate) => candidate.id === selectedRevisionId);
+    if (!revision) throw new NotFoundError(`Asset revision ${selectedRevisionId} was not found.`);
+    if (revision.security?.status !== 'verified') {
+      throw new GridStoryError(
+        'Asset revision is quarantined or has not passed security inspection.',
+        'asset_not_deliverable',
+        423,
+      );
+    }
+    return { asset, revision };
+  }
+
+  async readPrivateObject(
+    scope: ContentScope,
+    id: string,
+    revisionId: string,
+  ): Promise<{ asset: AssetRecord; revision: AssetRevision; body: Uint8Array }> {
+    const { asset, revision } = await this.getDeliverableRevision(scope, id, revisionId);
+    const body = await this.#storage.readObject({ scope, object: revision.original });
+    return { asset, revision, body };
   }
 
   async startUpload(input: {
@@ -286,7 +338,7 @@ export class AssetService {
       createdAt: now.toISOString(),
       expiresAt: new Date(now.getTime() + UPLOAD_TTL_MS).toISOString(),
     });
-    this.#uploads.set(session.id, { session, input: parsed });
+    this.#uploads.set(session.id, { session, input: parsed, bodies: new Map() });
     return structuredClone(session);
   }
 
@@ -319,6 +371,7 @@ export class AssetService {
       ...pending.session.parts.filter((candidate) => candidate.partNumber !== part.partNumber),
       part,
     ].sort((left, right) => left.partNumber - right.partNumber);
+    pending.bodies.set(part.partNumber, Uint8Array.from(input.body));
     pending.session.state = 'uploading';
     return structuredClone(part);
   }
@@ -363,16 +416,108 @@ export class AssetService {
         422,
       );
     }
-    const object = await this.#storage.completeMultipart({
-      scope: input.scope,
-      uploadId: pending.session.storageUploadId,
-      parts: submittedParts,
+    const uploadedBody = Buffer.concat(
+      recordedParts.map((part) => {
+        const body = pending.bodies.get(part.partNumber);
+        if (!body) {
+          throw new GridStoryError(
+            'An uploaded part body is unavailable for inspection.',
+            'asset_part_body_missing',
+            409,
+          );
+        }
+        return body;
+      }),
+    );
+    const inspection = await this.#inspector.inspect({
+      body: uploadedBody,
       filename: pending.input.filename,
-      mediaType: pending.input.mediaType,
-      ...(pending.input.width ? { width: pending.input.width } : {}),
-      ...(pending.input.height ? { height: pending.input.height } : {}),
+      declaredMediaType: pending.input.mediaType,
+      kind: pending.input.kind,
     });
     const now = input.now ?? new Date();
+    const originalChecksum = createHash('sha256').update(uploadedBody).digest('hex');
+    const findings = new Set(inspection.findings);
+    let status: 'verified' | 'quarantined' = 'verified';
+    let malware: {
+      status: 'not_configured' | 'clean' | 'infected' | 'error';
+      provider?: string;
+      signature?: string;
+      checkedAt?: string;
+    } = { status: 'not_configured' };
+    if (this.#malwareScanner) {
+      try {
+        const scan = await this.#malwareScanner.scan({
+          scope: input.scope,
+          filename: pending.input.filename,
+          mediaType: inspection.detectedMediaType,
+          body: uploadedBody,
+          checksum: originalChecksum,
+        });
+        malware = {
+          status: scan.verdict,
+          provider: scan.provider,
+          checkedAt: now.toISOString(),
+          ...(scan.signature ? { signature: scan.signature } : {}),
+        };
+        if (scan.verdict === 'infected') {
+          status = 'quarantined';
+          findings.add('malware_detected');
+        }
+      } catch {
+        status = 'quarantined';
+        malware = { status: 'error', checkedAt: now.toISOString() };
+        findings.add('malware_scan_failed');
+      }
+    }
+
+    let object: AssetObject;
+    if (status === 'verified' && inspection.sanitized) {
+      await this.#storage.abortMultipart({
+        scope: input.scope,
+        uploadId: pending.session.storageUploadId,
+      });
+      const sanitizedUpload = await this.#storage.startMultipart({
+        scope: input.scope,
+        filename: pending.input.filename,
+        mediaType: inspection.detectedMediaType,
+        size: inspection.body.byteLength,
+      });
+      const sanitizedParts: AssetUploadPart[] = [];
+      for (
+        let offset = 0, partNumber = 1;
+        offset < inspection.body.byteLength;
+        offset += sanitizedUpload.partSize, partNumber += 1
+      ) {
+        sanitizedParts.push(
+          await this.#storage.uploadPart({
+            scope: input.scope,
+            uploadId: sanitizedUpload.uploadId,
+            partNumber,
+            body: inspection.body.slice(offset, offset + sanitizedUpload.partSize),
+          }),
+        );
+      }
+      object = await this.#storage.completeMultipart({
+        scope: input.scope,
+        uploadId: sanitizedUpload.uploadId,
+        parts: sanitizedParts,
+        filename: pending.input.filename,
+        mediaType: inspection.detectedMediaType,
+        ...(pending.input.width ? { width: pending.input.width } : {}),
+        ...(pending.input.height ? { height: pending.input.height } : {}),
+      });
+    } else {
+      object = await this.#storage.completeMultipart({
+        scope: input.scope,
+        uploadId: pending.session.storageUploadId,
+        parts: submittedParts,
+        filename: pending.input.filename,
+        mediaType: inspection.detectedMediaType,
+        ...(pending.input.width ? { width: pending.input.width } : {}),
+        ...(pending.input.height ? { height: pending.input.height } : {}),
+      });
+    }
     const id = randomUUID();
     const revisionId = randomUUID();
     const asset = assetRecordSchema.parse({
@@ -387,6 +532,15 @@ export class AssetService {
           original: object,
           metadata: assetMetadataSchema.parse(pending.input.metadata),
           createdAt: now.toISOString(),
+          security: {
+            status,
+            declaredMediaType: pending.input.mediaType,
+            detectedMediaType: inspection.detectedMediaType,
+            sanitized: status === 'verified' && inspection.sanitized,
+            inspectedAt: now.toISOString(),
+            malware,
+            findings: [...findings].sort(),
+          },
           actorId: input.actor.id,
         },
       ],
@@ -464,6 +618,13 @@ export class AssetService {
     const current = asset.revisions.find((revision) => revision.id === asset.currentRevisionId);
     if (!current)
       throw new GridStoryError('Asset revision is missing.', 'asset_revision_missing', 500);
+    if (current.security?.status !== 'verified') {
+      throw new GridStoryError(
+        'Asset revision is quarantined or has not passed security inspection.',
+        'asset_not_deliverable',
+        423,
+      );
+    }
     const existing = asset.renditions.find((rendition) => rendition.preset.id === preset.id);
     if (existing) return existing;
     const object = await this.#renditions.create({

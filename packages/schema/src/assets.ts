@@ -11,6 +11,23 @@ const contentScopeSchema = z.object({
 
 export const assetKindSchema = z.enum(['image', 'video', 'file']);
 
+export const assetMalwareStatusSchema = z.enum(['not_configured', 'clean', 'infected', 'error']);
+
+export const assetSecuritySchema = z.object({
+  status: z.enum(['verified', 'quarantined']),
+  declaredMediaType: z.string().min(1),
+  detectedMediaType: z.string().min(1),
+  sanitized: z.boolean().default(false),
+  inspectedAt: z.string().datetime(),
+  malware: z.object({
+    status: assetMalwareStatusSchema,
+    provider: z.string().min(1).optional(),
+    signature: z.string().min(1).optional(),
+    checkedAt: z.string().datetime().optional(),
+  }),
+  findings: z.array(z.string().min(1)).default([]),
+});
+
 export const assetFocalPointSchema = z.object({
   x: z.number().min(0).max(1),
   y: z.number().min(0).max(1),
@@ -67,6 +84,7 @@ export const assetRevisionSchema = z.object({
   metadata: assetMetadataSchema,
   focalPoint: assetFocalPointSchema.optional(),
   createdAt: z.string().datetime(),
+  security: assetSecuritySchema.optional(),
   actorId: z.string().min(1),
 });
 
@@ -114,6 +132,18 @@ export const completeAssetUploadSchema = z.object({
   parts: z.array(assetUploadPartSchema).min(1),
 });
 
+export const createAssetDeliverySchema = z.object({
+  revisionId: z.string().min(1).optional(),
+  ttlSeconds: z.number().int().min(30).max(900).default(300),
+});
+
+export const assetDeliveryGrantSchema = z.object({
+  assetId: z.string().min(1),
+  revisionId: z.string().min(1),
+  url: z.string().min(1),
+  expiresAt: z.string().datetime(),
+});
+
 export const updateAssetSchema = z
   .object({
     metadata: assetMetadataSchema.optional(),
@@ -141,6 +171,8 @@ export const assetUsageReportSchema = z.object({
 });
 
 export type AssetKind = z.infer<typeof assetKindSchema>;
+export type AssetMalwareStatus = z.infer<typeof assetMalwareStatusSchema>;
+export type AssetSecurity = z.infer<typeof assetSecuritySchema>;
 export type AssetFocalPoint = z.infer<typeof assetFocalPointSchema>;
 export type AssetMetadata = z.infer<typeof assetMetadataSchema>;
 export type AssetObject = z.infer<typeof assetObjectSchema>;
@@ -152,6 +184,8 @@ export type AssetUploadPart = z.infer<typeof assetUploadPartSchema>;
 export type AssetUploadSession = z.infer<typeof assetUploadSessionSchema>;
 export type StartAssetUploadInput = z.input<typeof startAssetUploadSchema>;
 export type CompleteAssetUploadInput = z.input<typeof completeAssetUploadSchema>;
+export type CreateAssetDeliveryInput = z.input<typeof createAssetDeliverySchema>;
+export type AssetDeliveryGrant = z.infer<typeof assetDeliveryGrantSchema>;
 export type UpdateAssetInput = z.input<typeof updateAssetSchema>;
 export type AssetUsageLocation = z.infer<typeof assetUsageLocationSchema>;
 export type AssetUsageReport = z.infer<typeof assetUsageReportSchema>;

@@ -427,6 +427,17 @@ describe('GridStoryClient browser compatibility', () => {
       fetch: async (input, init) => {
         requests.push({ url: String(input), ...(init ? { init } : {}) });
         if (init?.method === 'DELETE') return new Response(null, { status: 204 });
+        if (String(input).endsWith('/delivery')) {
+          return new Response(
+            JSON.stringify({
+              assetId: 'asset/1',
+              revisionId: 'revision-1',
+              url: '/api/v1/assets/asset%2F1/content?token=signed',
+              expiresAt: '2026-07-24T00:01:00.000Z',
+            }),
+            { headers: { 'content-type': 'application/json' } },
+          );
+        }
         return new Response(JSON.stringify({}), {
           headers: { 'content-type': 'application/json' },
         });
@@ -434,6 +445,8 @@ describe('GridStoryClient browser compatibility', () => {
     });
 
     await client.listAssets();
+    const delivery = await client.createAssetDelivery('asset/1', { ttlSeconds: 60 });
+    expect(delivery.url).toBe('http://gridstory.test/api/v1/assets/asset%2F1/content?token=signed');
     await client.startAssetUpload({
       filename: 'hero.jpg',
       mediaType: 'image/jpeg',
@@ -457,6 +470,7 @@ describe('GridStoryClient browser compatibility', () => {
 
     expect(requests.map((request) => [request.url, request.init?.method])).toEqual([
       ['http://gridstory.test/api/v1/assets', undefined],
+      ['http://gridstory.test/api/v1/assets/asset%2F1/delivery', 'POST'],
       ['http://gridstory.test/api/v1/assets/uploads', 'POST'],
       ['http://gridstory.test/api/v1/assets/uploads/upload%2F1', undefined],
       ['http://gridstory.test/api/v1/assets/uploads/upload%2F1/parts/2', 'PUT'],
@@ -466,11 +480,11 @@ describe('GridStoryClient browser compatibility', () => {
       ['http://gridstory.test/api/v1/assets/asset%2F1/usage', undefined],
       ['http://gridstory.test/api/v1/assets/uploads/upload%2F1', 'DELETE'],
     ]);
-    expect(new Headers(requests[3]?.init?.headers).get('content-type')).toBe(
+    expect(new Headers(requests[4]?.init?.headers).get('content-type')).toBe(
       'application/octet-stream',
     );
-    expect(requests[3]?.init?.body).toBeInstanceOf(ArrayBuffer);
-    const uploadBody = requests[3]?.init?.body;
+    expect(requests[4]?.init?.body).toBeInstanceOf(ArrayBuffer);
+    const uploadBody = requests[4]?.init?.body;
     if (!(uploadBody instanceof ArrayBuffer)) throw new Error('Expected binary upload body.');
     expect(uploadBody.byteLength).toBe(4);
   });

@@ -8,6 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Closed SVG namespace, XML processing-instruction, and external-URI sanitizer bypasses; corrected M4-002 fixture, patching, lint, graph, ledger, process-launch, and root test-runner defects (BUG-0140 through BUG-0154).
 - Required completion descriptors to match server-recorded multipart ETags and sizes before consuming storage, chunked Studio files by the negotiated part size, and corrected asset implementation/test integration defects (BUG-0109 through BUG-0139).
 
 - Aligned the temporary browser bundle API URL and CORS origin for deterministic local walkthroughs (BUG-0108).
@@ -49,6 +50,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Added immutable per-revision asset security verdicts, magic-byte/text MIME and kind verification, conservative fail-closed SVG sanitization, injected malware scanning, infection/scanner-failure quarantine, and verified-only rendition/private-read enforcement.
+- Added scope/asset/revision-bound short-lived HMAC private-delivery grants, private/no-store streaming with `nosniff` and SVG CSP headers, S3 private-object reads, API configuration, universal-client resolution, verified/quarantined Studio states, focused cross-layer regressions, and completed asset-security documentation.
+- Made intentionally testless example-kit and example Vite packages compatible with the root interactive test command while retaining their one-shot verification scripts.
 - Added canonical scoped asset, immutable revision, portable metadata, focal-point, rendition, multipart upload, and draft/published usage contracts.
 - Added framework-neutral asset service/repository/storage/rendition boundaries, durable local SQLite metadata, an S3-compatible multipart adapter, resumable completion integrity, and scoped usage scanning.
 - Added authorized private/no-store asset REST routes and matching universal-client methods for listing, upload resume/abort/complete, metadata revisions, renditions, and usage.

@@ -550,7 +550,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
         const revision = asset.revisions.find(
           (candidate) => candidate.id === asset.currentRevisionId,
         );
-        if (!revision) return [];
+        if (revision?.security?.status !== 'verified') return [];
         return [
           {
             id: asset.id,
@@ -1262,7 +1262,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
             <div>
               <span className="kicker">Digital assets</span>
               <h2>Asset library</h2>
-              <p>Resumable uploads, governed metadata, renditions, and scoped usage.</p>
+              <p>Verified uploads, quarantine status, governed metadata, and scoped usage.</p>
             </div>
             <label className="button button--primary asset-upload-button">
               {assetUploading ? 'Uploading...' : 'Upload asset'}
@@ -1287,10 +1287,28 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                 return (
                   <article className="asset-library-card" key={asset.id}>
                     <div>
-                      <strong>{revision.metadata.title}</strong>
+                      <div className="asset-library-title-row">
+                        <strong>{revision.metadata.title}</strong>
+                        <span
+                          className={`asset-security-badge asset-security-badge--${revision.security?.status ?? 'unverified'}`}
+                        >
+                          {revision.security?.status === 'verified'
+                            ? 'Verified'
+                            : revision.security?.status === 'quarantined'
+                              ? 'Quarantined'
+                              : 'Unverified'}
+                        </span>
+                      </div>
                       <span>
                         {asset.kind} - {revision.original.mediaType}
                       </span>
+                      {revision.security ? (
+                        <small>
+                          Detected {revision.security.detectedMediaType} - malware{' '}
+                          {revision.security.malware.status}
+                          {revision.security.sanitized ? ' - sanitized' : ''}
+                        </small>
+                      ) : null}
                     </div>
                     <dl>
                       <div>

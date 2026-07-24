@@ -1217,6 +1217,32 @@ button:disabled {
   gap: 0.2rem;
 }
 
+.asset-library-title-row {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: space-between;
+}
+
+.asset-security-badge {
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  padding: 0.2rem 0.45rem;
+  text-transform: uppercase;
+}
+
+.asset-library-card .asset-security-badge--verified {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.asset-library-card .asset-security-badge--quarantined,
+.asset-library-card .asset-security-badge--unverified {
+  background: #fee2e2;
+  color: #991b1b;
+}
 .asset-library-card span,
 .asset-library-card small {
   color: #64748b;

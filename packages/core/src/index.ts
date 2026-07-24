@@ -1,3 +1,5 @@
+export * from './asset-delivery-service.js';
+export * from './asset-security.js';
 export * from './asset-service.js';
 export * from './s3-asset-storage.js';
 export * from './sqlite-asset-repository.js';

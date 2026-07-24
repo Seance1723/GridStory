@@ -4,6 +4,7 @@ import { Readable } from 'node:stream';
 import cors from '@fastify/cors';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import {
+  AssetDeliveryService,
   AssetService,
   InMemoryAssetRepository,
   InMemoryAssetStorageAdapter,
@@ -36,6 +37,8 @@ import {
   type AssetRepository,
   type AssetRenditionAdapter,
   type AssetStorageAdapter,
+  type AssetContentInspector,
+  type AssetMalwareScanner,
   type ExternalLinkChecker,
   type CacheInvalidator,
   type WebhookTransport,
@@ -52,6 +55,7 @@ import {
   type ContentQualityPolicy,
   startAssetUploadSchema,
   completeAssetUploadSchema,
+  createAssetDeliverySchema,
   updateAssetSchema,
   assetRenditionPresetSchema,
   type RedirectDefinition,
@@ -86,6 +90,9 @@ export interface BuildServerOptions {
   assetRepository?: AssetRepository;
   assetStorage?: AssetStorageAdapter;
   assetRenditionAdapter?: AssetRenditionAdapter;
+  assetContentInspector?: AssetContentInspector;
+  assetMalwareScanner?: AssetMalwareScanner;
+  assetDeliverySigningSecret?: string;
 }
 
 interface RequestBody {
@@ -246,6 +253,9 @@ export async function buildServer({
   assetRepository,
   assetStorage = new InMemoryAssetStorageAdapter(),
   assetRenditionAdapter,
+  assetContentInspector,
+  assetMalwareScanner,
+  assetDeliverySigningSecret = 'gridstory-local-asset-delivery-secret-change-me',
 }: BuildServerOptions): Promise<FastifyInstance> {
   if (!databaseUrl && databasePath !== ':memory:') {
     mkdirSync(dirname(resolve(databasePath)), { recursive: true });
@@ -275,6 +285,11 @@ export async function buildServer({
     contentService: service,
     repository: resolvedAssetRepository,
     ...(assetRenditionAdapter ? { renditionAdapter: assetRenditionAdapter } : {}),
+    ...(assetContentInspector ? { contentInspector: assetContentInspector } : {}),
+    ...(assetMalwareScanner ? { malwareScanner: assetMalwareScanner } : {}),
+  });
+  const assetDeliveries = new AssetDeliveryService({
+    signingSecret: assetDeliverySigningSecret,
   });
   const componentLifecycle = new ComponentLifecycleService({ contentService: service });
   const collaboration = new CollaborationService();
@@ -532,6 +547,51 @@ export async function buildServer({
     authorize(policy, context, GridStoryActions.assetCreate, { kind: 'asset' });
     await assets.abortUpload(contentScope(context), params.id);
     return reply.status(204).send();
+  });
+  server.post('/api/v1/assets/:id/delivery', async (request, reply) => {
+    const params = request.params as { id: string };
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.assetRead, { kind: 'asset', id: params.id });
+    const parsed = createAssetDeliverySchema.safeParse(bodyOf(request));
+    if (!parsed.success) {
+      throw new GridStoryError('Asset delivery input is invalid.', 'invalid_asset_delivery', 400, {
+        issues: parsed.error.issues,
+      });
+    }
+    const { revision } = await assets.getDeliverableRevision(
+      contentScope(context),
+      params.id,
+      parsed.data.revisionId,
+    );
+    const grant = assetDeliveries.create({
+      scope: contentScope(context),
+      assetId: params.id,
+      revisionId: revision.id,
+      ttlSeconds: parsed.data.ttlSeconds,
+    });
+    return reply.status(201).send(grant);
+  });
+  server.get('/api/v1/assets/:id/content', async (request, reply) => {
+    const params = request.params as { id: string };
+    const query = request.query as { token?: unknown };
+    const token = requiredString(query.token, 'token');
+    const claims = assetDeliveries.authenticate(token, params.id);
+    const { revision, body } = await assets.readPrivateObject(claims, params.id, claims.revisionId);
+    const dispositionFilename = encodeURIComponent(revision.original.filename).replaceAll(
+      "'",
+      '%27',
+    );
+    reply.header('content-type', revision.original.mediaType);
+    reply.header('content-length', body.byteLength);
+    reply.header('content-disposition', `inline; filename*=UTF-8''${dispositionFilename}`);
+    reply.header('x-content-type-options', 'nosniff');
+    if (revision.original.mediaType === 'image/svg+xml') {
+      reply.header(
+        'content-security-policy',
+        "sandbox; default-src 'none'; style-src 'unsafe-inline'",
+      );
+    }
+    return reply.send(Buffer.from(body));
   });
   server.get('/api/v1/assets/:id', async (request) => {
     const params = request.params as { id: string };

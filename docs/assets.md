@@ -31,7 +31,8 @@ Upload-session coordination is process-local in the built-in service. A horizont
 - create multipart upload;
 - upload a numbered part;
 - complete using numbered ETags;
-- abort a multipart upload.
+- abort a multipart upload;
+- read a completed private object for signed delivery.
 
 It builds object keys from the full scope plus a random object segment and never derives authorization from a URL. Applications can adapt AWS S3, MinIO, Cloudflare R2, or another compatible implementation without introducing an SDK dependency into core. The default local server uses `InMemoryAssetStorageAdapter` for development; production must inject durable object storage.
 
@@ -53,6 +54,8 @@ The private REST surface is:
 - `PUT /api/v1/assets/uploads/:id/parts/:partNumber`
 - `POST /api/v1/assets/uploads/:id/complete`
 - `DELETE /api/v1/assets/uploads/:id`
+- `POST /api/v1/assets/:id/delivery`
+- `GET /api/v1/assets/:id/content?token=...`
 - `GET /api/v1/assets/:id`
 - `PATCH /api/v1/assets/:id`
 - `POST /api/v1/assets/:id/renditions`
@@ -62,14 +65,20 @@ Viewer roles can read assets and usage. Author and publisher roles can also crea
 
 The universal client mirrors these routes with typed asset methods. Binary upload bodies use `application/octet-stream`; all other request and response bodies use the canonical serializable contracts.
 
-## Security boundary for M4-002
+## Security inspection, quarantine, and private delivery
 
-M4-001 trusts the declared media type and stores the object URL returned by the configured adapter. It does not yet inspect magic bytes, sanitize SVG, run malware quarantine hooks, or issue signed private-delivery URLs. Those controls belong to M4-002.
+Completion buffers the exact server-recorded upload parts and passes them through `AssetContentInspector` before storage becomes deliverable. The built-in inspector recognizes JPEG, PNG, GIF, WebP, PDF, ZIP, MP4, SVG, JSON, Markdown, CSV, and UTF-8 text. It rejects declared MIME mismatches and image/video kind mismatches with stable 422 errors. `application/octet-stream` remains an explicit generic-file wildcard.
 
-Until M4-002 is complete:
+SVG uploads run through `ConservativeSvgSanitizer`. It rejects document types and entities, removes executable/embedded elements, event and style attributes, external links, and non-fragment URL references, then stores the sanitized bytes instead of the original. Deployments with a stronger policy can inject another `AssetContentInspector` or `AssetSvgSanitizer` without moving vendor code into the control plane.
 
-- do not treat an asset URL as proof that content is safe;
-- do not expose confidential objects through a public base URL;
-- keep private buckets inaccessible and add delivery authorization in the application adapter;
-- perform upload inspection and quarantine before making an object publicly reachable;
-- never place preview credentials or draft-only metadata in object keys, URLs, or published caches.
+`AssetMalwareScanner` is an injected hook over the original uploaded bytes and checksum. A clean verdict makes the inspected revision deliverable. An infected verdict or scanner exception fails closed: the immutable revision records a quarantined security verdict and findings, and GridStory denies rendition generation, delivery-grant creation, and object reads with `asset_not_deliverable`. When no scanner is configured the revision records `not_configured`; production deployments that require malware scanning must inject a provider adapter.
+
+Each revision records declared and detected MIME types, inspection time, sanitization state, malware verdict/provider/signature, findings, and its verified or quarantined status. Studio displays this state and offers only verified managed revisions to asset fields. Legacy revisions without a security verdict are not deliverable through the signed route.
+
+### Signed private delivery
+
+Authorized readers request a grant with `POST /api/v1/assets/:id/delivery`, optionally selecting a revision and a 30-900 second lifetime. `AssetDeliveryService` signs an HMAC-SHA256 token containing the complete six-dimensional scope, exact asset and revision IDs, issue/expiry times, and a nonce. The universal client method is `createAssetDelivery`; it resolves the returned relative content path against the configured API base URL.
+
+`GET /api/v1/assets/:id/content?token=...` authenticates that token without tenant headers, rechecks the stored revision's verified state, scope-checks the storage object key, and streams only that private object. Responses use `Cache-Control: private, no-store`, `X-Content-Type-Options: nosniff`, a safe encoded filename, and a restrictive sandbox CSP for SVG. Invalid, tampered, wrong-asset, or expired grants return 401.
+
+Production object storage must remain private. The descriptor URL is metadata for the configured adapter, not an authorization grant; applications should render confidential bytes through a fresh signed delivery URL. Use a distinct random `GRIDSTORY_ASSET_DELIVERY_SIGNING_SECRET` of at least 32 characters, rotate it independently of preview/cursor/webhook secrets, and never place preview credentials, draft content, or delivery tokens in object keys or published cache keys.

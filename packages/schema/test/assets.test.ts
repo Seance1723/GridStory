@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   assetMetadataSchema,
+  assetSecuritySchema,
+  createAssetDeliverySchema,
   assetRecordSchema,
   assetRenditionPresetSchema,
   assetUploadSessionSchema,
@@ -78,5 +80,25 @@ describe('asset contracts', () => {
         expiresAt: '2026-07-25T00:00:00.000Z',
       }).success,
     ).toBe(true);
+  });
+
+  it('models immutable inspection verdicts and bounded private-delivery requests', () => {
+    expect(
+      assetSecuritySchema.parse({
+        status: 'verified',
+        declaredMediaType: 'image/svg+xml',
+        detectedMediaType: 'image/svg+xml',
+        inspectedAt: '2026-07-24T00:00:00.000Z',
+        malware: { status: 'clean', provider: 'scanner' },
+      }),
+    ).toMatchObject({
+      status: 'verified',
+      sanitized: false,
+      findings: [],
+      malware: { status: 'clean' },
+    });
+    expect(createAssetDeliverySchema.parse({})).toEqual({ ttlSeconds: 300 });
+    expect(createAssetDeliverySchema.safeParse({ ttlSeconds: 29 }).success).toBe(false);
+    expect(createAssetDeliverySchema.safeParse({ ttlSeconds: 901 }).success).toBe(false);
   });
 });

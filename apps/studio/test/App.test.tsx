@@ -593,6 +593,15 @@ describe('GridStory Studio', () => {
           },
           focalPoint: { x: 0.25, y: 0.75 },
           createdAt: now,
+          security: {
+            status: 'verified',
+            declaredMediaType: 'image/jpeg',
+            detectedMediaType: 'image/jpeg',
+            sanitized: false,
+            inspectedAt: now,
+            malware: { status: 'clean', provider: 'test-scanner', checkedAt: now },
+            findings: [],
+          },
           actorId: 'asset-author',
         },
       ],
@@ -614,6 +623,8 @@ describe('GridStory Studio', () => {
     await user.click(screen.getByRole('button', { name: 'Assets' }));
     expect(screen.getByRole('heading', { name: 'Asset library' })).toBeTruthy();
     expect(screen.getByText('Focal point 0.25, 0.75')).toBeTruthy();
+    expect(screen.getByText('Verified')).toBeTruthy();
+    expect(screen.getByText(/malware clean/)).toBeTruthy();
     await user.click(screen.getByRole('button', { name: 'Inspect usage' }));
     expect((await screen.findByRole('status')).textContent).toContain(
       '2 references across 1 entries',

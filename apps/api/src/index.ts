@@ -8,6 +8,7 @@ const server = await buildServer({
   allowedOrigins: config.allowedOrigins,
   cursorSecret: config.cursorSecret,
   previewSigningSecret: config.previewSigningSecret,
+  assetDeliverySigningSecret: config.assetDeliverySigningSecret,
   allowedPreviewOrigins: config.allowedPreviewOrigins,
   locales: config.locales,
   webhookSigningSecret: config.webhookSigningSecret,

@@ -1,10 +1,12 @@
 import type {
+  AssetDeliveryGrant,
   AssetRecord,
   AssetRendition,
   AssetRenditionPreset,
   AssetUploadPart,
   AssetUploadSession,
   AssetUsageReport,
+  CreateAssetDeliveryInput,
   StartAssetUploadInput,
   UpdateAssetInput,
   CollaborationSnapshot,
@@ -508,6 +510,24 @@ export class GridStoryClient {
     });
   }
 
+  async createAssetDelivery(
+    id: string,
+    input: CreateAssetDeliveryInput = {},
+    signal?: AbortSignal,
+  ): Promise<AssetDeliveryGrant> {
+    const grant = await this.#request<AssetDeliveryGrant>(
+      `/api/v1/assets/${encodeURIComponent(id)}/delivery`,
+      {
+        method: 'POST',
+        body: JSON.stringify(input),
+        ...(signal ? { signal } : {}),
+      },
+    );
+    return {
+      ...grant,
+      url: new URL(grant.url, `${this.#baseUrl}/`).toString(),
+    };
+  }
   startAssetUpload(
     input: StartAssetUploadInput,
     signal?: AbortSignal,
@@ -1044,12 +1064,14 @@ export function createGridStoryClient(options: GridStoryClientOptions): GridStor
 }
 
 export type {
+  AssetDeliveryGrant,
   AssetRecord,
   AssetRendition,
   AssetRenditionPreset,
   AssetUploadPart,
   AssetUploadSession,
   AssetUsageReport,
+  CreateAssetDeliveryInput,
   StartAssetUploadInput,
   UpdateAssetInput,
   CollaborationSnapshot,

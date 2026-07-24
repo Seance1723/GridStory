@@ -8,6 +8,7 @@ export interface ApiConfig {
   allowedOrigins: string[];
   cursorSecret: string;
   previewSigningSecret: string;
+  assetDeliverySigningSecret: string;
   allowedPreviewOrigins: string[];
   locales: LocaleConfiguration[];
   webhookSigningSecret: string;
@@ -85,6 +86,9 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiCon
       environment.GRIDSTORY_PREVIEW_SIGNING_SECRET ??
       'gridstory-local-preview-signing-secret-change-me',
     allowedPreviewOrigins,
+    assetDeliverySigningSecret:
+      environment.GRIDSTORY_ASSET_DELIVERY_SIGNING_SECRET ??
+      'gridstory-local-asset-delivery-secret-change-me',
     locales: parseLocales(environment.GRIDSTORY_LOCALES_JSON),
     webhookSigningSecret:
       environment.GRIDSTORY_WEBHOOK_SIGNING_SECRET ??

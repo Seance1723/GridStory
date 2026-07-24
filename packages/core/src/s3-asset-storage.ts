@@ -24,6 +24,7 @@ export interface S3MultipartClient {
     parts: Array<{ partNumber: number; etag: string }>;
   }): Awaitable<{ size: number; checksum: string; url?: string }>;
   abortMultipartUpload(input: { bucket: string; key: string; uploadId: string }): Awaitable<void>;
+  getObject(input: { bucket: string; key: string }): Awaitable<{ body: Uint8Array }>;
 }
 
 export interface S3AssetStorageOptions {
@@ -136,6 +137,17 @@ export class S3AssetStorageAdapter implements AssetStorageAdapter {
     };
   }
 
+  async readObject(input: { scope: ContentScope; object: AssetObject }): Promise<Uint8Array> {
+    const expectedPrefix = `${this.#keyPrefix}/${serializedScope(input.scope)}/`;
+    if (!input.object.objectKey.startsWith(expectedPrefix)) {
+      throw new NotFoundError('Asset object was not found.');
+    }
+    const object = await this.#client.getObject({
+      bucket: this.#bucket,
+      key: input.object.objectKey,
+    });
+    return Uint8Array.from(object.body);
+  }
   async abortMultipart(input: { scope: ContentScope; uploadId: string }): Promise<void> {
     const descriptor = this.#uploads.get(input.uploadId);
     if (!descriptor) return;
