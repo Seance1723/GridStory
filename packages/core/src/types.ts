@@ -15,6 +15,24 @@ export interface Actor {
   roles?: string[];
 }
 
+export interface ContentWorkflowGate {
+  contentCreated(input: {
+    scope: ContentScope;
+    entry: ContentEntry;
+    actor: Actor;
+  }): Awaitable<void>;
+  draftUpdated(input: { scope: ContentScope; entry: ContentEntry; actor: Actor }): Awaitable<void>;
+  assertCanPublish(input: {
+    scope: ContentScope;
+    entry: ContentEntry;
+    actor: Actor;
+  }): Awaitable<void>;
+  contentPublished(input: {
+    scope: ContentScope;
+    entry: ContentEntry;
+    actor: Actor;
+  }): Awaitable<void>;
+}
 export interface ContentPublishGate {
   assess(input: {
     scope: ContentScope;
@@ -271,6 +289,7 @@ export interface ContentServiceOptions {
   schemas: ContentSchemaDefinition[];
   componentManifests: ComponentManifest[];
   qualityGate?: ContentPublishGate;
+  workflowGate?: ContentWorkflowGate;
 }
 
 export type {

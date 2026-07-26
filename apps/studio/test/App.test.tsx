@@ -142,11 +142,124 @@ function createTestClient(
   const testAssets = options.assets ?? [];
   const threads: Array<Record<string, unknown>> = [];
   const presence = [{ actorId: 'local-admin', displayName: 'Studio editor', lastSeenAt: now }];
+  const workflowDefinition = {
+    organizationId: 'local',
+    tenantId: 'default',
+    workspaceId: 'default',
+    siteId: 'default',
+    environmentId: 'development',
+    locale: 'en',
+    id: 'page-editorial',
+    name: 'Editorial review',
+    contentType: 'page',
+    version: 1,
+    initialStateId: 'draft',
+    states: [
+      { id: 'draft', label: 'Draft', kind: 'draft', terminal: false },
+      { id: 'in-review', label: 'In review', kind: 'review', terminal: false },
+      { id: 'approved', label: 'Approved', kind: 'approved', terminal: false },
+      { id: 'published', label: 'Published', kind: 'published', terminal: false },
+    ],
+    transitions: [
+      {
+        id: 'submit-review',
+        label: 'Submit for review',
+        from: 'draft',
+        to: 'in-review',
+        allowedRoles: ['admin'],
+      },
+      {
+        id: 'approve',
+        label: 'Request approval',
+        from: 'in-review',
+        to: 'approved',
+        allowedRoles: ['admin'],
+        approval: {
+          minimumApprovals: 1,
+          allowedRoles: ['admin'],
+          separationOfDuties: true,
+          escalateToRoles: ['admin'],
+          fields: [],
+          locales: [],
+        },
+      },
+      {
+        id: 'publish',
+        label: 'Publish',
+        from: 'approved',
+        to: 'published',
+        allowedRoles: ['admin'],
+      },
+    ],
+    createdAt: now,
+    updatedAt: now,
+  };
+  const workflowInstances = new Map(
+    testEntries.map((candidate) => [
+      candidate.id,
+      {
+        organizationId: 'local',
+        tenantId: 'default',
+        workspaceId: 'default',
+        siteId: 'default',
+        environmentId: 'development',
+        locale: 'en',
+        entryId: candidate.id,
+        contentType: 'page',
+        workflowId: 'page-editorial',
+        workflowVersion: 1,
+        stateId: 'draft',
+        revisionId: candidate.draftRevisionId,
+        schedules: [],
+        notifications: [],
+        history: [],
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]),
+  );
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
     if (url.pathname === '/api/v1/schemas') return json([testSchema]);
     if (url.pathname === '/api/v1/components') return json(componentManifests);
     if (url.pathname === '/api/v1/design-system') return json(exampleDesignSystem);
+    if (url.pathname === '/api/v1/workflows') return json([workflowDefinition]);
+    const workflowMatch = url.pathname.match(/^\/api\/v1\/content\/([^/]+)\/workflow$/);
+    if (workflowMatch) return json(workflowInstances.get(workflowMatch[1] ?? '') ?? {});
+    const workflowTransitionMatch = url.pathname.match(
+      /^\/api\/v1\/content\/([^/]+)\/workflow\/transitions\/([^/]+)$/,
+    );
+    if (workflowTransitionMatch) {
+      const instance = workflowInstances.get(workflowTransitionMatch[1] ?? '');
+      if (!instance) return json({ error: { message: 'Not found.' } }, 404);
+      const transitionId = workflowTransitionMatch[2];
+      if (transitionId === 'submit-review') instance.stateId = 'in-review';
+      if (transitionId === 'approve') {
+        Object.assign(instance, {
+          pendingApproval: {
+            id: 'approval-1',
+            transitionId: 'approve',
+            revisionId: instance.revisionId,
+            requestedBy: 'local-admin',
+            requestedByRoles: ['admin'],
+            requestedAt: now,
+            changedFields: ['headline'],
+            decisions: [],
+          },
+        });
+      }
+      return json(instance);
+    }
+    const workflowApprovalMatch = url.pathname.match(
+      /^\/api\/v1\/content\/([^/]+)\/workflow\/approvals\/([^/]+)$/,
+    );
+    if (workflowApprovalMatch) {
+      const instance = workflowInstances.get(workflowApprovalMatch[1] ?? '');
+      if (!instance) return json({ error: { message: 'Not found.' } }, 404);
+      instance.stateId = 'approved';
+      delete (instance as typeof instance & { pendingApproval?: unknown }).pendingApproval;
+      return json(instance);
+    }
     const assetUsageMatch = url.pathname.match(/^\/api\/v1\/assets\/([^/]+)\/usage$/);
     if (assetUsageMatch) {
       return json({
@@ -681,5 +794,25 @@ describe('GridStory Studio', () => {
     expect(uploadPart).toHaveBeenCalledTimes(3);
     expect(uploadPart.mock.calls.map((call) => call[2].byteLength)).toEqual([4, 4, 2]);
     expect(complete.mock.calls[0]?.[1].map((part) => part.size)).toEqual([4, 4, 2]);
+  });
+  it('shows configured workflow state and requests governed review without exposing publish early', async () => {
+    const user = userEvent.setup();
+    render(<App client={createTestClient()} />);
+
+    const panel = await screen.findByRole('region', { name: 'Editorial workflow' });
+    expect(panel.textContent).toContain('Editorial review');
+    expect(panel.textContent).toContain('Draft');
+    expect((screen.getByRole('button', { name: 'Publish' }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+
+    await user.click(within(panel).getByRole('button', { name: 'Submit for review' }));
+    await waitFor(() => expect(panel.textContent).toContain('In review'));
+    await user.click(within(panel).getByRole('button', { name: 'Request approval' }));
+    await waitFor(() => expect(panel.textContent).toContain('Approval pending'));
+    expect(within(panel).getByRole('button', { name: 'Approve' })).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Publish' }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
   });
 });

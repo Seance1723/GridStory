@@ -14,6 +14,8 @@ import {
   type GridStoryClient,
   type OperationsDashboardRecord,
   type PreviewSessionGrant,
+  type WorkflowDefinition,
+  type WorkflowInstance,
 } from '@gridstory/client';
 import {
   createGridStoryPreviewController,
@@ -54,7 +56,7 @@ import { AssetControl, RelationControl, RichTextControl } from './authoring-cont
 const defaultClient = createGridStoryClient({
   baseUrl: import.meta.env.VITE_GRIDSTORY_API_URL ?? 'http://localhost:4000',
   tenantId: import.meta.env.VITE_GRIDSTORY_TENANT ?? 'default',
-  actorId: 'studio-local-admin',
+  actorId: import.meta.env.VITE_GRIDSTORY_ACTOR_ID ?? 'studio-local-admin',
 });
 
 type Notice = { tone: 'success' | 'error' | 'info'; message: string } | null;
@@ -446,24 +448,33 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   const [commentDueAt, setCommentDueAt] = useState('');
   const [commentTargetField, setCommentTargetField] = useState('');
   const [replyBodies, setReplyBodies] = useState<Record<string, string>>({});
+  const [workflowDefinitions, setWorkflowDefinitions] = useState<WorkflowDefinition[]>([]);
+  const [workflowInstance, setWorkflowInstance] = useState<WorkflowInstance | null>(null);
+  const [workflowScheduleAt, setWorkflowScheduleAt] = useState('');
+  const [workflowTimeZone, setWorkflowTimeZone] = useState(
+    () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+  );
 
   const selectEntry = useCallback(
     async (id: string, componentFieldName?: string) => {
       setBusy(true);
       setNotice(null);
       try {
-        const [entry, history, publishedEntry] = await Promise.all([
+        const [entry, history, publishedEntry, workflowState] = await Promise.all([
           client.getContent(id, { perspective: 'draft' }),
           client.listRevisions(id),
           client.getContent(id, { perspective: 'published' }).catch((error: unknown) => {
             if (error instanceof GridStoryApiError && error.status === 404) return null;
             throw error;
           }),
+          client.getContentWorkflow(id),
         ]);
         setSelected(entry);
         setDraft(asEditableContent(entry));
         setPublished(publishedEntry ? asEditableContent(publishedEntry) : null);
         setRevisions(history);
+        setWorkflowInstance(workflowState);
+        setWorkflowScheduleAt('');
         setQualityReport(null);
         setCompositionHistory(createCompositionHistory(compositionFrom(entry, componentFieldName)));
         setDirty(false);
@@ -506,20 +517,31 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
       client.getSchemas(controller.signal),
       client.getDesignSystem(controller.signal),
       client.listAssets(controller.signal).catch(() => []),
+      client.listWorkflows(controller.signal),
     ])
-      .then(async ([entryList, manifestList, schemaList, designSystemManifest, assetList]) => {
-        setEntries(entryList);
-        setManifests(manifestList);
-        setSchemas(schemaList);
-        setDesignSystem(designSystemManifest);
-        setAssets(assetList);
-        if (entryList[0]) {
-          const fieldName = schemaList
-            .find((schema) => schema.id === entryList[0]?.contentType)
-            ?.fields.find((field) => field.type === 'component-tree')?.name;
-          await selectEntry(entryList[0].id, fieldName);
-        } else setBusy(false);
-      })
+      .then(
+        async ([
+          entryList,
+          manifestList,
+          schemaList,
+          designSystemManifest,
+          assetList,
+          workflowList,
+        ]) => {
+          setEntries(entryList);
+          setManifests(manifestList);
+          setSchemas(schemaList);
+          setDesignSystem(designSystemManifest);
+          setAssets(assetList);
+          setWorkflowDefinitions(workflowList);
+          if (entryList[0]) {
+            const fieldName = schemaList
+              .find((schema) => schema.id === entryList[0]?.contentType)
+              ?.fields.find((field) => field.type === 'component-tree')?.name;
+            await selectEntry(entryList[0].id, fieldName);
+          } else setBusy(false);
+        },
+      )
       .catch((error: unknown) => {
         if ((error as { name?: string }).name !== 'AbortError') {
           setNotice({ tone: 'error', message: messageFrom(error) });
@@ -569,6 +591,21 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   const activeSchema = useMemo(
     () => schemas.find((schema) => schema.id === selected?.contentType) ?? schemas[0],
     [schemas, selected?.contentType],
+  );
+  const activeWorkflow = workflowDefinitions.find(
+    (definition) => definition.id === workflowInstance?.workflowId,
+  );
+  const workflowState = activeWorkflow?.states.find(
+    (state) => state.id === workflowInstance?.stateId,
+  );
+  const availableWorkflowTransitions =
+    activeWorkflow?.transitions.filter(
+      (transition) => transition.from === workflowInstance?.stateId,
+    ) ?? [];
+  const publishWorkflowTransition = availableWorkflowTransitions.find((transition) =>
+    activeWorkflow?.states.some(
+      (state) => state.id === transition.to && state.kind === 'published',
+    ),
   );
   const componentField = activeSchema?.fields.find((field) => field.type === 'component-tree');
   const rootAccepts = useMemo(() => componentField?.accepts ?? [], [componentField]);
@@ -927,6 +964,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
       setSelected(updated);
       setEntries((current) => current.map((entry) => (entry.id === updated.id ? updated : entry)));
       setRevisions(await client.listRevisions(updated.id));
+      setWorkflowInstance(await client.getContentWorkflow(updated.id));
       setDirty(false);
       setNotice({ tone: 'success', message: 'Draft saved as a new immutable revision.' });
       return updated;
@@ -972,6 +1010,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
       setSelected(result);
       setPublished(asEditableContent(result));
       setEntries((current) => current.map((entry) => (entry.id === result.id ? result : entry)));
+      setWorkflowInstance(await client.getContentWorkflow(result.id));
       setNotice({
         tone: 'success',
         message: 'Published revision is now available to React applications.',
@@ -985,6 +1024,97 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
       ) {
         setQualityReport((error.details as { report: ContentQualityReport }).report);
       }
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const runWorkflowTransition = async (transitionId: string) => {
+    if (!selected) return;
+    let entry = selected;
+    if (dirty) {
+      const saved = await save();
+      if (!saved) return;
+      entry = saved;
+    }
+    setBusy(true);
+    try {
+      const result = await client.requestWorkflowTransition(
+        entry.id,
+        transitionId,
+        activeSchema?.fields.map((field) => field.name) ?? [],
+      );
+      setWorkflowInstance(result);
+      setNotice({
+        tone: 'success',
+        message: result.pendingApproval
+          ? 'Approval request sent to the configured reviewer roles.'
+          : 'Workflow state updated.',
+      });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const decideWorkflow = async (decision: 'approved' | 'rejected') => {
+    if (!selected || !workflowInstance?.pendingApproval) return;
+    if (dirty) {
+      setNotice({ tone: 'error', message: 'Save or discard draft changes before reviewing.' });
+      return;
+    }
+    setBusy(true);
+    try {
+      const result = await client.decideWorkflowApproval(
+        selected.id,
+        workflowInstance.pendingApproval.id,
+        decision,
+      );
+      setWorkflowInstance(result);
+      setNotice({
+        tone: decision === 'approved' ? 'success' : 'info',
+        message: decision === 'approved' ? 'Approval recorded.' : 'Changes requested.',
+      });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const scheduleWorkflowTransition = async (transitionId: string) => {
+    if (!selected || !workflowScheduleAt) return;
+    const instant = new Date(workflowScheduleAt);
+    if (!Number.isFinite(instant.getTime())) {
+      setNotice({ tone: 'error', message: 'Choose a valid schedule date and time.' });
+      return;
+    }
+    setBusy(true);
+    try {
+      const result = await client.scheduleWorkflowTransition(selected.id, {
+        transitionId,
+        runAt: instant.toISOString(),
+        timeZone: workflowTimeZone,
+      });
+      setWorkflowInstance(result);
+      setWorkflowScheduleAt('');
+      setNotice({ tone: 'success', message: 'Workflow transition scheduled.' });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const cancelWorkflowSchedule = async (scheduleId: string) => {
+    if (!selected) return;
+    setBusy(true);
+    try {
+      setWorkflowInstance(await client.cancelWorkflowSchedule(selected.id, scheduleId));
+      setNotice({ tone: 'info', message: 'Workflow schedule cancelled.' });
+    } catch (error) {
       setNotice({ tone: 'error', message: messageFrom(error) });
     } finally {
       setBusy(false);
@@ -1250,7 +1380,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
             type="button"
             className="button button--primary"
             onClick={() => void publish()}
-            disabled={!selected || busy}
+            disabled={!selected || busy || !publishWorkflowTransition}
           >
             Publish
           </button>
@@ -1588,6 +1718,179 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                     />
                   );
                 })}
+              </section>
+
+              <section className="workflow-panel" aria-label="Editorial workflow">
+                <div className="section-heading">
+                  <div>
+                    <span className="kicker">Governance</span>
+                    <h2>Editorial workflow</h2>
+                    <p>
+                      {activeWorkflow?.name ?? 'Configured workflow'} · version{' '}
+                      {workflowInstance?.workflowVersion ?? '—'}
+                    </p>
+                  </div>
+                  <span
+                    className={`workflow-state workflow-state--${workflowState?.kind ?? 'draft'}`}
+                  >
+                    {workflowState?.label ?? workflowInstance?.stateId ?? 'Loading'}
+                  </span>
+                </div>
+
+                <div className="workflow-grid">
+                  <div className="workflow-actions">
+                    <h3>Available actions</h3>
+                    <div className="workflow-action-row">
+                      {availableWorkflowTransitions
+                        .filter((transition) => transition.id !== publishWorkflowTransition?.id)
+                        .map((transition) => (
+                          <button
+                            key={transition.id}
+                            type="button"
+                            className="button button--secondary"
+                            disabled={busy || workflowInstance?.pendingApproval !== undefined}
+                            onClick={() => void runWorkflowTransition(transition.id)}
+                          >
+                            {transition.label}
+                          </button>
+                        ))}
+                      {availableWorkflowTransitions.length === 0 ? (
+                        <span className="empty-copy">
+                          Save a new draft to restart editorial review.
+                        </span>
+                      ) : null}
+                    </div>
+
+                    {workflowInstance?.pendingApproval ? (
+                      <article className="approval-card">
+                        <div>
+                          <strong>Approval pending</strong>
+                          <p>
+                            Requested by {workflowInstance.pendingApproval.requestedBy}
+                            {workflowInstance.pendingApproval.dueAt
+                              ? ` · due ${new Date(
+                                  workflowInstance.pendingApproval.dueAt,
+                                ).toLocaleString()}`
+                              : ''}
+                          </p>
+                          <small>
+                            {
+                              workflowInstance.pendingApproval.decisions.filter(
+                                (decision) => decision.decision === 'approved',
+                              ).length
+                            }{' '}
+                            approvals recorded
+                            {workflowInstance.pendingApproval.escalatedAt ? ' · escalated' : ''}
+                          </small>
+                        </div>
+                        <div className="workflow-action-row">
+                          <button
+                            type="button"
+                            className="button button--primary"
+                            disabled={busy || dirty}
+                            onClick={() => void decideWorkflow('approved')}
+                          >
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            className="button button--secondary"
+                            disabled={busy || dirty}
+                            onClick={() => void decideWorkflow('rejected')}
+                          >
+                            Reject and request changes
+                          </button>
+                        </div>
+                      </article>
+                    ) : null}
+
+                    {publishWorkflowTransition ? (
+                      <div className="workflow-scheduler">
+                        <h3>Schedule publication</h3>
+                        <label className="gs-field">
+                          <span>Date and time</span>
+                          <input
+                            type="datetime-local"
+                            value={workflowScheduleAt}
+                            onChange={(event) => setWorkflowScheduleAt(event.target.value)}
+                          />
+                        </label>
+                        <label className="gs-field">
+                          <span>IANA time zone</span>
+                          <input
+                            value={workflowTimeZone}
+                            onChange={(event) => setWorkflowTimeZone(event.target.value)}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          className="button button--secondary"
+                          disabled={!workflowScheduleAt || busy}
+                          onClick={() =>
+                            void scheduleWorkflowTransition(publishWorkflowTransition.id)
+                          }
+                        >
+                          Schedule publish
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className="workflow-activity">
+                    <h3>Schedules and notifications</h3>
+                    {workflowInstance?.schedules.length ? (
+                      <ul className="workflow-list">
+                        {workflowInstance.schedules
+                          .slice()
+                          .reverse()
+                          .slice(0, 4)
+                          .map((schedule) => (
+                            <li key={schedule.id}>
+                              <div>
+                                <strong>{schedule.transitionId}</strong>
+                                <small>
+                                  {new Date(schedule.runAt).toLocaleString()} · {schedule.timeZone}{' '}
+                                  · {schedule.state}
+                                </small>
+                              </div>
+                              {schedule.state === 'pending' ? (
+                                <button
+                                  type="button"
+                                  disabled={busy}
+                                  onClick={() => void cancelWorkflowSchedule(schedule.id)}
+                                >
+                                  Cancel
+                                </button>
+                              ) : null}
+                            </li>
+                          ))}
+                      </ul>
+                    ) : null}
+                    {workflowInstance?.notifications.length ? (
+                      <ol className="workflow-list workflow-notifications">
+                        {workflowInstance.notifications
+                          .slice()
+                          .reverse()
+                          .slice(0, 5)
+                          .map((notification) => (
+                            <li key={notification.id}>
+                              <div>
+                                <strong>{notification.message}</strong>
+                                <small>
+                                  {new Date(notification.createdAt).toLocaleString()}
+                                  {notification.audienceRoles.length
+                                    ? ` · ${notification.audienceRoles.join(', ')}`
+                                    : ''}
+                                </small>
+                              </div>
+                            </li>
+                          ))}
+                      </ol>
+                    ) : (
+                      <p className="empty-copy">No workflow activity yet.</p>
+                    )}
+                  </div>
+                </div>
               </section>
 
               <section className="collaboration-panel" aria-label="Comments and presence">

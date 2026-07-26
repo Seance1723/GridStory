@@ -8,6 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Corrected workflow initialization, accessibility, verification fixtures, HTTP handling, matcher usage, Awaitable assertions, and cleanup regressions found during M4-003 verification (BUG-0155 through BUG-0168).
+
 - Closed SVG namespace, XML processing-instruction, and external-URI sanitizer bypasses; corrected M4-002 fixture, patching, lint, graph, ledger, process-launch, and root test-runner defects (BUG-0140 through BUG-0154).
 - Required completion descriptors to match server-recorded multipart ETags and sizes before consuming storage, chunked Studio files by the negotiated part size, and corrected asset implementation/test integration defects (BUG-0109 through BUG-0139).
 
@@ -49,6 +51,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Mapped malformed preview targets into the stable `invalid_preview_url` response boundary instead of allowing generic URL exceptions to become server errors.
 
 ### Added
+
+- Added canonical versioned workflow state/transition/approval/schedule/notification/history contracts, field/locale approval conditions, fully scoped in-memory/SQLite/PostgreSQL repositories, and a framework-neutral workflow service with separation of duties and deadline escalation.
+- Added private authorized workflow definition/entry/transition/approval/schedule endpoints, worker execution, universal-client methods, a responsive Studio governance panel, focused cross-layer regressions, and the editorial workflow integration guide.
 
 - Added immutable per-revision asset security verdicts, magic-byte/text MIME and kind verification, conservative fail-closed SVG sanitization, injected malware scanning, infection/scanner-failure quarantine, and verified-only rendition/private-read enforcement.
 - Added scope/asset/revision-bound short-lived HMAC private-delivery grants, private/no-store streaming with `nosniff` and SVG CSP headers, S3 private-object reads, API configuration, universal-client resolution, verified/quarantined Studio states, focused cross-layer regressions, and completed asset-security documentation.
@@ -179,6 +184,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Replaced the placeholder README with the working feature set, quick start, verification commands, service URLs, repository map, API snapshot, architecture boundary, governance workflow, and explicit current limitations.
 
 ### Changed
+
+- Content publication now uses the workflow gate inside ContentService across REST and GraphQL, saving a new revision invalidates stale approval/schedules, and the operations worker processes due workflow schedules and approval escalations without copying draft data into jobs, notifications, or published caches.
 
 - Local API servers now keep asset metadata in the configured SQLite database; database-URL deployments can inject a durable `AssetRepository` while storage and image processing remain explicit adapters.
 

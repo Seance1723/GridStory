@@ -17,6 +17,11 @@ export const GridStoryActions = {
   contentDraftUpdate: 'content.draft.update',
   contentPublish: 'content.publish',
   contentHistoryRead: 'content.history.read',
+  workflowRead: 'workflow.read',
+  workflowManage: 'workflow.manage',
+  workflowTransition: 'workflow.transition',
+  workflowApprove: 'workflow.approve',
+  workflowSchedule: 'workflow.schedule',
   deliveryRead: 'delivery.read',
   operationsRead: 'operations.read',
   operationsManage: 'operations.manage',
@@ -31,7 +36,7 @@ export const GridStoryActions = {
 export type GridStoryAction = (typeof GridStoryActions)[keyof typeof GridStoryActions];
 
 export interface AuthorizationResource {
-  kind: 'schema' | 'component' | 'asset' | 'content' | 'delivery' | 'platform';
+  kind: 'schema' | 'component' | 'asset' | 'content' | 'workflow' | 'delivery' | 'platform';
   id?: string;
   contentType?: string;
   ownerId?: string;
@@ -67,6 +72,7 @@ export const defaultRoles: RoleDefinition[] = [
       GridStoryActions.assetRead,
       GridStoryActions.contentRead,
       GridStoryActions.contentHistoryRead,
+      GridStoryActions.workflowRead,
       GridStoryActions.collaborationRead,
     ],
   },
@@ -82,6 +88,8 @@ export const defaultRoles: RoleDefinition[] = [
       GridStoryActions.contentHistoryRead,
       GridStoryActions.contentCreate,
       GridStoryActions.contentDraftUpdate,
+      GridStoryActions.workflowRead,
+      GridStoryActions.workflowTransition,
       GridStoryActions.collaborationRead,
       GridStoryActions.collaborationWrite,
       GridStoryActions.presenceWrite,
@@ -100,6 +108,10 @@ export const defaultRoles: RoleDefinition[] = [
       GridStoryActions.contentCreate,
       GridStoryActions.contentDraftUpdate,
       GridStoryActions.contentPublish,
+      GridStoryActions.workflowRead,
+      GridStoryActions.workflowTransition,
+      GridStoryActions.workflowApprove,
+      GridStoryActions.workflowSchedule,
       GridStoryActions.collaborationRead,
       GridStoryActions.collaborationWrite,
       GridStoryActions.presenceWrite,

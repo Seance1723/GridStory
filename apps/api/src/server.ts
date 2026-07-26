@@ -32,6 +32,9 @@ import {
   PostgresContentRepository,
   SqliteAssetRepository,
   SqliteContentRepository,
+  PostgresWorkflowRepository,
+  SqliteWorkflowRepository,
+  WorkflowService,
   type ContentPerspective,
   type ContentRepository,
   type AssetRepository,
@@ -44,6 +47,8 @@ import {
   type WebhookTransport,
   type ContentEventType,
   type ImportConflictPolicy,
+  type WorkflowRepository,
+  type DueWorkflowExecution,
 } from '@gridstory/core';
 import {
   generatedTypesFingerprint,
@@ -61,14 +66,17 @@ import {
   type RedirectDefinition,
   type LocaleConfiguration,
   type SchemaIrDocument,
+  type WorkflowDefinitionInput,
   previewMessageSchema,
   collaborationTargetSchema,
+  workflowDefinitionInputSchema,
 } from '@gridstory/schema';
 import { componentManifests, pageSchema, welcomePage } from '@gridstory/example-kit/manifests';
 import { exampleDesignSystem } from '@gridstory/example-kit/design-system';
 import { authorize, contentScope, requestContext } from './request-context.js';
 import { parseContentQuery } from './content-query.js';
 import { registerGridStoryGraphql } from './graphql.js';
+import { defaultPageQualityPolicies, defaultWorkflowDefinitions } from './defaults.js';
 
 export interface BuildServerOptions {
   databasePath?: string;
@@ -88,6 +96,7 @@ export interface BuildServerOptions {
   qualityPolicies?: ContentQualityPolicy[];
   externalLinkChecker?: ExternalLinkChecker;
   assetRepository?: AssetRepository;
+  workflowRepository?: WorkflowRepository;
   assetStorage?: AssetStorageAdapter;
   assetRenditionAdapter?: AssetRenditionAdapter;
   assetContentInspector?: AssetContentInspector;
@@ -122,6 +131,12 @@ interface RequestBody {
   nodeId?: unknown;
   target?: unknown;
   channel?: unknown;
+  transitionId?: unknown;
+  changedFields?: unknown;
+  decision?: unknown;
+  comment?: unknown;
+  runAt?: unknown;
+  timeZone?: unknown;
 }
 
 function perspective(value: unknown): ContentPerspective {
@@ -207,6 +222,14 @@ function candidateDocument(value: unknown, fallback: SchemaIrDocument): SchemaIr
   );
 }
 
+function workflowDefinition(value: unknown): WorkflowDefinitionInput {
+  const parsed = workflowDefinitionInputSchema.safeParse(value);
+  if (parsed.success) return parsed.data;
+  throw new GridStoryError('Workflow definition is invalid.', 'invalid_workflow_definition', 400, {
+    issues: parsed.error.issues,
+  });
+}
+
 export async function buildServer({
   databasePath = '.gridstory/gridstory.db',
   databaseUrl,
@@ -232,25 +255,11 @@ export async function buildServer({
   allowedWebhookHosts,
   previewSigningSecret = 'gridstory-local-preview-signing-secret-change-me',
   allowedPreviewOrigins = ['http://localhost:5174', 'http://127.0.0.1:5174'],
-  qualityPolicies = [
-    {
-      id: 'page-web-quality-v1',
-      contentType: 'page',
-      channels: ['web'],
-      seo: { titleMinLength: 15, titleMaxLength: 60, requireCanonicalRoute: true },
-      accessibility: {
-        requireImageAlt: true,
-        rejectGenericLinkText: true,
-        enforceHeadingOrder: true,
-        requireTableHeader: true,
-      },
-      links: { requirePublishedReferences: true, checkExternal: false },
-      content: { minWords: 20, prohibitedPhrases: [] },
-      gate: { blockedSeverities: ['error'], minimumScore: 50 },
-    },
-  ],
+  qualityPolicies = defaultPageQualityPolicies,
+
   externalLinkChecker,
   assetRepository,
+  workflowRepository,
   assetStorage = new InMemoryAssetStorageAdapter(),
   assetRenditionAdapter,
   assetContentInspector,
@@ -268,6 +277,15 @@ export async function buildServer({
     (databaseUrl
       ? new InMemoryAssetRepository()
       : new SqliteAssetRepository({ filename: databasePath }));
+  const resolvedWorkflowRepository: WorkflowRepository =
+    workflowRepository ??
+    (databaseUrl
+      ? new PostgresWorkflowRepository({ connectionString: databaseUrl })
+      : new SqliteWorkflowRepository({ filename: databasePath }));
+  const workflows = new WorkflowService({
+    repository: resolvedWorkflowRepository,
+    defaultDefinitions: defaultWorkflowDefinitions,
+  });
   const quality = new ContentQualityService({
     repository,
     schemas: [pageSchema],
@@ -279,7 +297,43 @@ export async function buildServer({
     schemas: [pageSchema],
     componentManifests,
     qualityGate: quality,
+    workflowGate: workflows,
   });
+  const executeWorkflowSchedule = async ({
+    scope,
+    instance,
+    schedule,
+  }: DueWorkflowExecution): Promise<void> => {
+    const entry = await service.get({ scope, id: instance.entryId, perspective: 'draft' });
+    const definition = await workflows.getDefinition(scope, instance.workflowId);
+    const transition = definition.transitions.find(
+      (candidate) => candidate.id === schedule.transitionId && candidate.from === instance.stateId,
+    );
+    if (!transition) {
+      throw new GridStoryError(
+        'The scheduled transition is no longer available from the current state.',
+        'workflow_transition_unavailable',
+        409,
+      );
+    }
+    const actor = { id: schedule.requestedBy, roles: schedule.requestedByRoles };
+    const target = definition.states.find((state) => state.id === transition.to);
+    if (target?.kind === 'published') {
+      await service.publish({
+        scope,
+        id: entry.id,
+        expectedRevisionId: schedule.revisionId,
+        actor,
+      });
+      return;
+    }
+    await workflows.requestTransition({
+      scope,
+      entry,
+      transitionId: transition.id,
+      actor,
+    });
+  };
   const assets = new AssetService({
     storage: assetStorage,
     contentService: service,
@@ -363,6 +417,7 @@ export async function buildServer({
   server.addHook('onClose', async () => {
     await repository.close();
     await resolvedAssetRepository.close?.();
+    await resolvedWorkflowRepository.close();
   });
   server.addHook('onSend', async (request, reply, payload) => {
     if (request.url.startsWith('/api/v1/delivery/')) {
@@ -895,6 +950,130 @@ export async function buildServer({
     return operations.replayJob(contentScope(context), params.id);
   });
 
+  server.get('/api/v1/workflows', async (request) => {
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.workflowRead, { kind: 'workflow' });
+    return workflows.listDefinitions(contentScope(context));
+  });
+
+  server.put('/api/v1/workflows/:id', async (request) => {
+    const params = request.params as { id: string };
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.workflowManage, {
+      kind: 'workflow',
+      id: params.id,
+    });
+    return workflows.saveDefinition({
+      scope: contentScope(context),
+      id: params.id,
+      definition: workflowDefinition(request.body),
+    });
+  });
+
+  server.get('/api/v1/content/:id/workflow', async (request) => {
+    const params = request.params as { id: string };
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.workflowRead, {
+      kind: 'workflow',
+      id: params.id,
+    });
+    const entry = await service.get({ scope: contentScope(context), id: params.id });
+    return workflows.getInstance({ scope: contentScope(context), entry });
+  });
+
+  server.post('/api/v1/content/:id/workflow/transitions/:transitionId', async (request) => {
+    const params = request.params as { id: string; transitionId: string };
+    const body = bodyOf(request);
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.workflowTransition, {
+      kind: 'workflow',
+      id: params.id,
+    });
+    const entry = await service.get({ scope: contentScope(context), id: params.id });
+    return workflows.requestTransition({
+      scope: contentScope(context),
+      entry,
+      transitionId: params.transitionId,
+      actor: { id: context.principal.id, roles: context.principal.roles },
+      ...(Array.isArray(body.changedFields)
+        ? {
+            changedFields: body.changedFields.filter(
+              (field): field is string => typeof field === 'string' && field.length > 0,
+            ),
+          }
+        : {}),
+    });
+  });
+
+  server.post('/api/v1/content/:id/workflow/approvals/:requestId', async (request) => {
+    const params = request.params as { id: string; requestId: string };
+    const body = bodyOf(request);
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.workflowApprove, {
+      kind: 'workflow',
+      id: params.id,
+    });
+    if (body.decision !== 'approved' && body.decision !== 'rejected') {
+      throw new GridStoryError('decision must be approved or rejected.', 'invalid_request', 400);
+    }
+    const entry = await service.get({ scope: contentScope(context), id: params.id });
+    return workflows.decideApproval({
+      scope: contentScope(context),
+      entry,
+      requestId: params.requestId,
+      decision: body.decision,
+      actor: { id: context.principal.id, roles: context.principal.roles },
+      ...(typeof body.comment === 'string' && body.comment.length > 0
+        ? { comment: body.comment }
+        : {}),
+    });
+  });
+
+  server.post('/api/v1/content/:id/workflow/schedules', async (request, reply) => {
+    const params = request.params as { id: string };
+    const body = bodyOf(request);
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.workflowSchedule, {
+      kind: 'workflow',
+      id: params.id,
+    });
+    const entry = await service.get({ scope: contentScope(context), id: params.id });
+    const instance = await workflows.scheduleTransition({
+      scope: contentScope(context),
+      entry,
+      transitionId: requiredString(body.transitionId, 'transitionId'),
+      runAt: requiredString(body.runAt, 'runAt'),
+      timeZone: requiredString(body.timeZone, 'timeZone'),
+      actor: { id: context.principal.id, roles: context.principal.roles },
+    });
+    return reply.status(201).send(instance);
+  });
+
+  server.delete('/api/v1/content/:id/workflow/schedules/:scheduleId', async (request) => {
+    const params = request.params as { id: string; scheduleId: string };
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.workflowSchedule, {
+      kind: 'workflow',
+      id: params.id,
+    });
+    const entry = await service.get({ scope: contentScope(context), id: params.id });
+    return workflows.cancelSchedule({
+      scope: contentScope(context),
+      entry,
+      scheduleId: params.scheduleId,
+      actor: { id: context.principal.id, roles: context.principal.roles },
+    });
+  });
+
+  server.post('/api/v1/workflows/process-due', async (request) => {
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.operationsRun, { kind: 'platform' });
+    return workflows.processDue({
+      scope: contentScope(context),
+      execute: executeWorkflowSchedule,
+    });
+  });
+
   server.get('/api/v1/content', async (request) => {
     const query = request.query as { contentType?: string; perspective?: string };
     const selectedPerspective = perspective(query.perspective);
@@ -1274,11 +1453,32 @@ export async function buildServer({
       data: welcomePage,
       actor: { id: 'gridstory-seed' },
     });
+    const seedRequester = { id: 'gridstory-seed', roles: ['publisher'] };
+    await workflows.requestTransition({
+      scope: seedScope,
+      entry: created,
+      transitionId: 'submit-review',
+      actor: seedRequester,
+    });
+    const pending = await workflows.requestTransition({
+      scope: seedScope,
+      entry: created,
+      transitionId: 'approve',
+      actor: seedRequester,
+    });
+    const seedReviewer = { id: 'gridstory-seed-reviewer', roles: ['publisher'] };
+    await workflows.decideApproval({
+      scope: seedScope,
+      entry: created,
+      requestId: pending.pendingApproval?.id ?? '',
+      decision: 'approved',
+      actor: seedReviewer,
+    });
     await service.publish({
       scope: seedScope,
       id: created.id,
       expectedRevisionId: created.draftRevisionId,
-      actor: { id: 'gridstory-seed' },
+      actor: seedReviewer,
     });
   }
   if (seed) await lifecycle.initialize(seedScope, { id: 'gridstory-schema-bootstrap' });

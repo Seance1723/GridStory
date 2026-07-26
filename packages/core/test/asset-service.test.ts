@@ -87,7 +87,7 @@ describe('AssetService', () => {
         height: 900,
         metadata: { title: 'Hero', alt: 'Sunrise' },
       },
-      now: new Date('2026-07-24T00:00:00.000Z'),
+      now: new Date('2099-07-24T00:00:00.000Z'),
     });
     const part = await assets.uploadPart({
       scope: scope(),
@@ -102,7 +102,7 @@ describe('AssetService', () => {
       uploadId: upload.id,
       parts: [part],
       actor: { id: 'author-a' },
-      now: new Date('2026-07-24T00:01:00.000Z'),
+      now: new Date('2099-07-24T00:01:00.000Z'),
     });
     expect(asset.revisions[0]?.security).toMatchObject({
       status: 'verified',
@@ -129,7 +129,7 @@ describe('AssetService', () => {
         focalPoint: { x: 0.25, y: 0.75 },
       },
       actor: { id: 'editor-a' },
-      now: new Date('2026-07-24T00:02:00.000Z'),
+      now: new Date('2099-07-24T00:02:00.000Z'),
     });
     expect(updated.revisions).toHaveLength(2);
     expect(updated.revisions[1]).toMatchObject({

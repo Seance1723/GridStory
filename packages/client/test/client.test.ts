@@ -488,4 +488,52 @@ describe('GridStoryClient browser compatibility', () => {
     if (!(uploadBody instanceof ArrayBuffer)) throw new Error('Expected binary upload body.');
     expect(uploadBody.byteLength).toBe(4);
   });
+  it('sends workflow transitions, decisions, schedules, and cancellation through scoped management routes', async () => {
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    const client = createGridStoryClient({
+      baseUrl: 'http://gridstory.test',
+      tenantId: 'default',
+      fetch: async (input, init) => {
+        requests.push({ url: String(input), ...(init ? { init } : {}) });
+        return new Response(JSON.stringify({ stateId: 'draft' }), {
+          headers: { 'content-type': 'application/json' },
+        });
+      },
+    });
+
+    await client.getContentWorkflow('entry/1');
+    await client.requestWorkflowTransition('entry/1', 'submit-review', ['title']);
+    await client.decideWorkflowApproval('entry/1', 'request/1', 'approved', 'Ready.');
+    await client.scheduleWorkflowTransition('entry/1', {
+      transitionId: 'publish',
+      runAt: '2026-07-27T00:00:00.000Z',
+      timeZone: 'Asia/Kolkata',
+    });
+    await client.cancelWorkflowSchedule('entry/1', 'schedule/1');
+
+    expect(requests.map((request) => request.url)).toEqual([
+      'http://gridstory.test/api/v1/content/entry%2F1/workflow',
+      'http://gridstory.test/api/v1/content/entry%2F1/workflow/transitions/submit-review',
+      'http://gridstory.test/api/v1/content/entry%2F1/workflow/approvals/request%2F1',
+      'http://gridstory.test/api/v1/content/entry%2F1/workflow/schedules',
+      'http://gridstory.test/api/v1/content/entry%2F1/workflow/schedules/schedule%2F1',
+    ]);
+    expect(requests.map((request) => request.init?.method)).toEqual([
+      undefined,
+      'POST',
+      'POST',
+      'POST',
+      'DELETE',
+    ]);
+    expect(JSON.parse(String(requests[1]?.init?.body))).toEqual({ changedFields: ['title'] });
+    expect(JSON.parse(String(requests[2]?.init?.body))).toEqual({
+      decision: 'approved',
+      comment: 'Ready.',
+    });
+    expect(JSON.parse(String(requests[3]?.init?.body))).toEqual({
+      transitionId: 'publish',
+      runAt: '2026-07-27T00:00:00.000Z',
+      timeZone: 'Asia/Kolkata',
+    });
+  });
 });

@@ -22,3 +22,6 @@ export * from './schema-lifecycle-service.js';
 export * from './sqlite-repository.js';
 export * from './scope-registry.js';
 export * from './types.js';
+
+export * from './workflow-repository.js';
+export * from './workflow-service.js';

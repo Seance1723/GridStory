@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { buildServer } from '../src/server.js';
+import { approveForPublication } from './workflow-helpers.js';
 
 const headers = {
   'content-type': 'application/json',
@@ -61,6 +62,7 @@ describe('GridStory API', () => {
     expect(otherSiteResponse.statusCode).toBe(200);
     expect(otherSiteResponse.json()).toEqual([]);
 
+    await approveForPublication(server, created, headers);
     const publishResponse = await server.inject({
       method: 'POST',
       url: `/api/v1/content/${created.id}/publish`,
@@ -149,6 +151,7 @@ describe('GridStory API', () => {
       revisionId: created.draftRevisionId,
     });
 
+    await approveForPublication(server, created, headers);
     const blocked = await server.inject({
       method: 'POST',
       url: `/api/v1/content/${created.id}/publish`,
@@ -458,6 +461,7 @@ describe('GridStory API', () => {
     expect(tampered.json().error.code).toBe('invalid_query');
 
     const draft = first.json().nodes[0];
+    await approveForPublication(server, draft, headers);
     const publish = await server.inject({
       method: 'POST',
       url: `/api/v1/content/${draft.id}/publish`,
@@ -521,6 +525,7 @@ describe('GridStory API', () => {
       },
     });
 
+    await approveForPublication(server, created, headers);
     const publish = await server.inject({
       method: 'POST',
       url: '/graphql',
@@ -607,6 +612,7 @@ describe('GridStory API', () => {
       payload: { contentType: 'page', data: { ...validPage, title: 'Hello', slug: 'hello' } },
     });
     const english = create.json();
+    await approveForPublication(server, english, headers);
     await server.inject({
       method: 'POST',
       url: `/api/v1/content/${english.id}/publish`,
@@ -661,10 +667,12 @@ describe('GridStory API', () => {
       data: { title: 'Bonjour', slug: 'bonjour' },
     });
     const french = translated.json().data.createTranslation;
+    const frenchHeaders = { ...headers, 'x-gridstory-locale': 'fr' };
+    await approveForPublication(server, french, frenchHeaders);
     const publishFrench = await server.inject({
       method: 'POST',
       url: `/api/v1/content/${french.id}/publish`,
-      headers: { ...headers, 'x-gridstory-locale': 'fr' },
+      headers: frenchHeaders,
       payload: { expectedRevisionId: french.draftRevisionId },
     });
     expect(publishFrench.statusCode).toBe(200);
@@ -761,6 +769,7 @@ describe('GridStory API', () => {
       },
     });
     const created = create.json();
+    await approveForPublication(server, created, headers);
     await server.inject({
       method: 'POST',
       url: `/api/v1/content/${created.id}/publish`,
@@ -853,6 +862,7 @@ describe('GridStory API', () => {
       payload: { contentType: 'page', data: validPage },
     });
     const created = create.json();
+    await approveForPublication(server, created, headers);
     await server.inject({
       method: 'POST',
       url: `/api/v1/content/${created.id}/publish`,
@@ -938,6 +948,7 @@ describe('GridStory API', () => {
       payload: { contentType: 'page', data: validPage },
     });
     const created = create.json();
+    await approveForPublication(server, created, headers);
     await server.inject({
       method: 'POST',
       url: `/api/v1/content/${created.id}/publish`,

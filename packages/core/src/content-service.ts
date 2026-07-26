@@ -26,12 +26,20 @@ export class ContentService {
   readonly #schemas: ReadonlyMap<string, ContentSchemaDefinition>;
   readonly #componentManifests: ComponentManifest[];
   readonly #qualityGate?: ContentServiceOptions['qualityGate'];
+  readonly #workflowGate?: ContentServiceOptions['workflowGate'];
 
-  constructor({ repository, schemas, componentManifests, qualityGate }: ContentServiceOptions) {
+  constructor({
+    repository,
+    schemas,
+    componentManifests,
+    qualityGate,
+    workflowGate,
+  }: ContentServiceOptions) {
     this.#repository = repository;
     this.#schemas = new Map(schemas.map((schema) => [schema.id, schema]));
     this.#componentManifests = componentManifests;
     this.#qualityGate = qualityGate;
+    this.#workflowGate = workflowGate;
   }
 
   getSchemas(): ContentSchemaDefinition[] {
@@ -158,13 +166,15 @@ export class ContentService {
   }): Promise<ContentEntry> {
     this.#validate(input.contentType, input.data);
     await this.#validateReferences(input.scope, input.contentType, input.data);
-    return await this.#repository.create({
+    const entry = await this.#repository.create({
       scope: input.scope,
       contentType: input.contentType,
       data: input.data,
       actor: input.actor,
       ...(input.translationGroupId ? { translationGroupId: input.translationGroupId } : {}),
     });
+    await this.#workflowGate?.contentCreated({ scope: input.scope, entry, actor: input.actor });
+    return entry;
   }
 
   async updateDraft(input: {
@@ -177,13 +187,15 @@ export class ContentService {
     const current = await this.get({ scope: input.scope, id: input.id, perspective: 'draft' });
     this.#validate(current.contentType, input.data);
     await this.#validateReferences(input.scope, current.contentType, input.data);
-    return await this.#repository.updateDraft({
+    const entry = await this.#repository.updateDraft({
       scope: input.scope,
       id: input.id,
       expectedRevisionId: input.expectedRevisionId,
       data: input.data,
       actor: input.actor,
     });
+    await this.#workflowGate?.draftUpdated({ scope: input.scope, entry, actor: input.actor });
+    return entry;
   }
 
   async publish(input: {
@@ -195,6 +207,11 @@ export class ContentService {
   }): Promise<ContentEntry> {
     const current = await this.get({ scope: input.scope, id: input.id, perspective: 'draft' });
     this.#validate(current.contentType, current.data);
+    await this.#workflowGate?.assertCanPublish({
+      scope: input.scope,
+      entry: current,
+      actor: input.actor,
+    });
     if (this.#qualityGate) {
       const report = await this.#qualityGate.assess({
         scope: input.scope,
@@ -205,7 +222,13 @@ export class ContentService {
       if (!report.passed) throw new PublishQualityGateError(report);
     }
     await this.#validatePublishedRoute(input.scope, current);
-    return await this.#repository.publish(input);
+    const published = await this.#repository.publish(input);
+    await this.#workflowGate?.contentPublished({
+      scope: input.scope,
+      entry: published,
+      actor: input.actor,
+    });
+    return published;
   }
 
   async listRevisions(input: { scope: ContentScope; id: string }): Promise<ContentRevision[]> {

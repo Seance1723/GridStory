@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { buildServer } from '../src/server.js';
+import { approveForPublication } from './workflow-helpers.js';
 
 const headers = {
   'content-type': 'application/json',
@@ -36,6 +37,7 @@ describe('component lifecycle API', () => {
       payload: { contentType: 'page', data: page },
     });
     const created = createdResponse.json();
+    await approveForPublication(server, created, headers);
     await server.inject({
       method: 'POST',
       url: `/api/v1/content/${created.id}/publish`,

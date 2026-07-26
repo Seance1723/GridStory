@@ -38,6 +38,9 @@ import type {
   TranslationCompletenessReport,
   ValidationIssue,
   VisualModelDocument,
+  WorkflowDefinition,
+  WorkflowDefinitionInput,
+  WorkflowInstance,
 } from '@gridstory/schema';
 
 export interface SchemaDeploymentRecord {
@@ -695,6 +698,100 @@ export class GridStoryClient {
     });
   }
 
+  listWorkflows(signal?: AbortSignal): Promise<WorkflowDefinition[]> {
+    return this.#request('/api/v1/workflows', signal ? { signal } : {});
+  }
+
+  saveWorkflow(
+    id: string,
+    definition: WorkflowDefinitionInput,
+    signal?: AbortSignal,
+  ): Promise<WorkflowDefinition> {
+    return this.#request(`/api/v1/workflows/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(definition),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  getContentWorkflow(entryId: string, signal?: AbortSignal): Promise<WorkflowInstance> {
+    return this.#request(
+      `/api/v1/content/${encodeURIComponent(entryId)}/workflow`,
+      signal ? { signal } : {},
+    );
+  }
+
+  requestWorkflowTransition(
+    entryId: string,
+    transitionId: string,
+    changedFields: string[] = [],
+    signal?: AbortSignal,
+  ): Promise<WorkflowInstance> {
+    return this.#request(
+      `/api/v1/content/${encodeURIComponent(entryId)}/workflow/transitions/${encodeURIComponent(transitionId)}`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ changedFields }),
+        ...(signal ? { signal } : {}),
+      },
+    );
+  }
+
+  decideWorkflowApproval(
+    entryId: string,
+    requestId: string,
+    decision: 'approved' | 'rejected',
+    comment?: string,
+    signal?: AbortSignal,
+  ): Promise<WorkflowInstance> {
+    return this.#request(
+      `/api/v1/content/${encodeURIComponent(entryId)}/workflow/approvals/${encodeURIComponent(requestId)}`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ decision, ...(comment ? { comment } : {}) }),
+        ...(signal ? { signal } : {}),
+      },
+    );
+  }
+
+  scheduleWorkflowTransition(
+    entryId: string,
+    input: { transitionId: string; runAt: string; timeZone: string; signal?: AbortSignal },
+  ): Promise<WorkflowInstance> {
+    return this.#request(`/api/v1/content/${encodeURIComponent(entryId)}/workflow/schedules`, {
+      method: 'POST',
+      body: JSON.stringify({
+        transitionId: input.transitionId,
+        runAt: input.runAt,
+        timeZone: input.timeZone,
+      }),
+      ...(input.signal ? { signal: input.signal } : {}),
+    });
+  }
+
+  cancelWorkflowSchedule(
+    entryId: string,
+    scheduleId: string,
+    signal?: AbortSignal,
+  ): Promise<WorkflowInstance> {
+    return this.#request(
+      `/api/v1/content/${encodeURIComponent(entryId)}/workflow/schedules/${encodeURIComponent(scheduleId)}`,
+      { method: 'DELETE', ...(signal ? { signal } : {}) },
+    );
+  }
+
+  processDueWorkflows(signal?: AbortSignal): Promise<{
+    escalated: number;
+    executed: number;
+    failed: number;
+  }> {
+    return this.#request('/api/v1/workflows/process-due', {
+      method: 'POST',
+      body: JSON.stringify({}),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
   listContent(
     options: { contentType?: string; perspective?: ContentPerspective; signal?: AbortSignal } = {},
   ): Promise<ContentEntry[]> {
@@ -1100,4 +1197,7 @@ export type {
   SchemaMigrationPlan,
   TranslationCompletenessReport,
   VisualModelDocument,
+  WorkflowDefinition,
+  WorkflowDefinitionInput,
+  WorkflowInstance,
 };

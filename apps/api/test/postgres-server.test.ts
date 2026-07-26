@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildServer } from '../src/server.js';
+import { approveForPublication } from './workflow-helpers.js';
 
 const connectionString = process.env.GRIDSTORY_TEST_POSTGRES_URL;
 const headers = {
@@ -46,6 +47,7 @@ describe.skipIf(!connectionString)('GridStory API with PostgreSQL', () => {
     });
     expect(createResponse.statusCode).toBe(201);
     const created = createResponse.json();
+    await approveForPublication(server, created, headers);
 
     const managementQuery = await server.inject({
       method: 'POST',
