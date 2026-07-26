@@ -1,0 +1,75 @@
+# OWASP ASVS 5.0 profile
+
+GridStory uses OWASP Application Security Verification Standard 5.0.0 as a stable requirements vocabulary. References are version-qualified as `v5.0.0-<chapter>.<section>.<requirement>`. The target is **Level 2-oriented** because GridStory is a multi-tenant authoring and delivery system with authenticated privileged operations, private drafts/assets, integrations, and publication workflows.
+
+This profile is deliberately honest about evidence. It is a selected, project-specific control and applicability record—not an ASVS certification, not a complete copy of all ASVS requirements, and not proof for an arbitrary deployment. The canonical data is [`security/asvs-v5.0.0-profile.json`](../../security/asvs-v5.0.0-profile.json); normative GridStory requirements are in [Security requirements](security-requirements.md); risks and boundaries are in [Threat model](threat-model.md).
+
+## Status meanings
+
+| Status | Meaning |
+|---|---|
+| Verified | Current implementation plus automated or inspectable repository evidence supports the GridStory requirement. |
+| Partial | A real control exists, but named code, deployment, operational, or independent evidence is incomplete. |
+| Planned | Required before v1 GA and linked to a delivery milestone. |
+| Conditional | Required when the named optional feature/topology is deployed; the current repository foundation alone is not proof. |
+
+A `verified` project requirement can cover only the selected ASVS reference and stated GridStory scope. It does not imply every requirement in that ASVS chapter or level is verified.
+
+## Chapter applicability
+
+| Chapter | Applicability | GridStory treatment |
+|---|---|---|
+| V1 Encoding and Sanitization | Applicable | Parameterized persistence, structured rendering rules, SVG sanitization, and outbound URL/SSRF policy. |
+| V2 Validation and Business Logic | Applicable | Trusted-layer schemas, revision/order checks, atomic publication/import, and pre-GA anti-automation. |
+| V3 Web Frontend Security | Applicable | Exact CORS/postMessage origins and private asset headers exist; full production CSP/header policy remains. |
+| V4 API and Web Service | Applicable | REST/GraphQL boundaries, trusted intermediary requirements, bounded queries, and introspection policy. |
+| V5 File Handling | Applicable | Multipart integrity, byte/type inspection, private keys, quarantine, safe delivery; deployment quotas/scanner remain. |
+| V6 Authentication | Conditional | OIDC/service-token foundations exist; production IdP middleware, pathway policy, and abuse controls remain. |
+| V7 Session Management | Conditional | In-memory lifecycle foundation exists; production persistent browser-session controls remain. |
+| V8 Authorization | Applicable | Deny-by-default RBAC/ABAC and complete scope exist; M5-002 performs exhaustive isolation proof. |
+| V9 Self-contained Tokens | Applicable | Preview, cursor, and asset grants use purpose/scope/time-bound HMAC verification. |
+| V10 OAuth and OIDC | Conditional | Applies to the production relying-party adapter; no OAuth authorization server is in scope. |
+| V11 Cryptography | Applicable | Platform crypto and approved hashes/CSPRNG exist; formal inventory/lifecycle remains. |
+| V12 Secure Communication | Applicable | HTTPS is required for risky outbound/preview paths; deployment TLS evidence remains. |
+| V13 Configuration | Applicable | Explicit origins/hosts/secrets/adapters exist; production fail-safe validation and vault evidence remain. |
+| V14 Data Protection | Applicable | Draft/private/public cache separation exists; full classification, retention, and telemetry treatment remain. |
+| V15 Secure Coding and Architecture | Applicable | Explicit boundaries and validation exist; SBOM, vulnerability SLA, provenance, signatures, and tested limits remain. |
+| V16 Security Logging and Error Handling | Applicable | Hash-chain audit and generic API errors exist; complete security telemetry/redaction/alerting remains. |
+| V17 WebRTC | Not applicable | GridStory has no peer connection, signaling, media negotiation, or WebRTC data channel. Reassess if added. |
+
+Every ASVS chapter is explicitly represented so an omitted area cannot be mistaken for a security decision.
+
+## Evidence summary
+
+The machine profile contains 29 stable `GS-SEC-###` requirements:
+
+- Verified controls cover trusted-layer validation, parameterized persistence, SVG sanitization, atomic operations, exact origin messaging, deny-by-default authorization, signed token validation, approved platform cryptography, and fail-closed generic errors.
+- Partial controls cover structured rendering, SSRF/egress, browser headers, GraphQL cost/introspection, upload limits/scanning, external adapter configuration, sensitive-data policy, cache containment, minimal API fields, and security-event logging.
+- Planned controls cover anti-automation, trusted production intermediary/identity configuration, cryptographic inventory/secret lifecycle, production fail-safe configuration, vulnerability/SBOM policy, and published resource limits.
+- Conditional controls cover production OIDC, persistent sessions, OIDC browser-flow binding, and deployed TLS/service communication.
+
+Evidence paths point to repository code, tests, or documentation. Operational verification names are intentional future evidence and are linked to tasks. `pnpm security:check` rejects verified requirements without local evidence, malformed or duplicate IDs, unknown threat references, missing chapter coverage, invalid ASVS references, and unresolved partial/planned/conditional controls without stable task ownership.
+
+## Highest-priority gaps
+
+| Gap | ASVS areas | Owner task |
+|---|---|---|
+| Exhaustive tenant isolation across persistence, caches, search, assets, jobs, events, and telemetry | V8, V14, V15, V16 | M5-002 |
+| Production identity/session and trusted-proxy boundary | V4, V6, V7, V10, V13 | M5-002; enterprise extensions M6-002 |
+| Plugin capability, isolation, signature, and lifecycle boundary | V8, V11, V13, V15 | M5-003 |
+| Security logging inventory, redaction, alerting, adapter health, and secret operations | V11, V13, V14, V16 | M5-004 |
+| Restore, graceful shutdown, rotation, and rolling-upgrade proof | V13, V15, V16 | M5-005 |
+| Browser CSP/header and application-rendering certification | V1, V3, V14 | M5-006 |
+| Abuse limits, benchmarks, SBOM, vulnerability SLA, provenance, and signatures | V2, V4, V5, V15 | M5-007 |
+| Independent readiness/risk acceptance | All applicable chapters | M5-008 |
+
+## How to update the profile
+
+1. Use the exact stable ASVS release named in the profile. Do not silently switch references to the moving `master` branch.
+2. Add the relevant version-qualified ASVS IDs to the chapter and GridStory requirement.
+3. Link the requirement to modeled threats and concrete evidence. `verified` requires repository evidence that exists now.
+4. For partial, planned, or conditional requirements, state the verification that remains and link a stable task.
+5. If a chapter is not applicable, record a concrete architectural reason and a trigger for reconsideration.
+6. Run `pnpm security:check`, proportionate tests, and a human evidence review.
+
+The ASVS source release is `https://github.com/OWASP/ASVS/tree/v5.0.0/5.0`. Reviewers should compare requirement wording there; this repository records GridStory obligations and traceability rather than reproducing the standard.

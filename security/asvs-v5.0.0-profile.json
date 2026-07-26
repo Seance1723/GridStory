@@ -1,0 +1,638 @@
+{
+  "schemaVersion": 1,
+  "profile": {
+    "id": "GRIDSTORY-ASVS-5",
+    "title": "GridStory ASVS 5.0.0 Level 2-oriented security profile",
+    "standard": "OWASP Application Security Verification Standard",
+    "standardVersion": "5.0.0",
+    "targetLevel": "L2-oriented",
+    "reviewedAt": "2026-07-26",
+    "source": "https://github.com/OWASP/ASVS/tree/v5.0.0/5.0",
+    "statement": "This is a project-specific selection and applicability record, not an ASVS certification or a claim that every ASVS L2 requirement has been independently verified.",
+    "statusDefinitions": {
+      "verified": "Current implementation and automated or inspectable evidence support this project requirement.",
+      "partial": "Some controls exist, but the stated gap or independent deployment evidence remains.",
+      "planned": "Required before v1 GA and linked to a delivery task.",
+      "conditional": "Required when the named optional deployment feature or topology is used."
+    }
+  },
+  "chapters": [
+    {
+      "id": "V1",
+      "name": "Encoding and Sanitization",
+      "applicability": "applicable",
+      "rationale": "GridStory accepts structured content, URLs, SVG, query expressions, and database inputs.",
+      "selectedAsvsRefs": ["v5.0.0-1.2.4", "v5.0.0-1.3.1", "v5.0.0-1.3.4", "v5.0.0-1.3.6"]
+    },
+    {
+      "id": "V2",
+      "name": "Validation and Business Logic",
+      "applicability": "applicable",
+      "rationale": "Authoring, workflows, releases, imports, uploads, and replay have ordered business invariants.",
+      "selectedAsvsRefs": ["v5.0.0-2.1.1", "v5.0.0-2.2.2", "v5.0.0-2.3.3", "v5.0.0-2.4.1"]
+    },
+    {
+      "id": "V3",
+      "name": "Web Frontend Security",
+      "applicability": "applicable",
+      "rationale": "Studio, preview, private assets, and delivery run in browsers.",
+      "selectedAsvsRefs": [
+        "v5.0.0-3.4.2",
+        "v5.0.0-3.4.3",
+        "v5.0.0-3.4.4",
+        "v5.0.0-3.4.6",
+        "v5.0.0-3.5.5"
+      ]
+    },
+    {
+      "id": "V4",
+      "name": "API and Web Service",
+      "applicability": "applicable",
+      "rationale": "GridStory exposes REST and GraphQL APIs.",
+      "selectedAsvsRefs": ["v5.0.0-4.1.3", "v5.0.0-4.3.1", "v5.0.0-4.3.2"]
+    },
+    {
+      "id": "V5",
+      "name": "File Handling",
+      "applicability": "applicable",
+      "rationale": "Assets and logical archives cross file boundaries.",
+      "selectedAsvsRefs": [
+        "v5.0.0-5.1.1",
+        "v5.0.0-5.2.1",
+        "v5.0.0-5.2.2",
+        "v5.0.0-5.3.2",
+        "v5.0.0-5.4.3"
+      ]
+    },
+    {
+      "id": "V6",
+      "name": "Authentication",
+      "applicability": "conditional",
+      "rationale": "The core has OIDC/service-token foundations; the production identity adapter and policy are deployment work.",
+      "selectedAsvsRefs": ["v5.0.0-6.1.3", "v5.0.0-6.8.1", "v5.0.0-6.8.2"]
+    },
+    {
+      "id": "V7",
+      "name": "Session Management",
+      "applicability": "conditional",
+      "rationale": "Applies when the in-memory foundation is replaced by the production browser-session deployment.",
+      "selectedAsvsRefs": ["v5.0.0-7.1.1", "v5.0.0-7.2.1", "v5.0.0-7.2.3", "v5.0.0-7.4.1"]
+    },
+    {
+      "id": "V8",
+      "name": "Authorization",
+      "applicability": "applicable",
+      "rationale": "Every management capability and data object is role/grant and tenant scoped.",
+      "selectedAsvsRefs": [
+        "v5.0.0-8.1.1",
+        "v5.0.0-8.2.1",
+        "v5.0.0-8.2.2",
+        "v5.0.0-8.3.1",
+        "v5.0.0-8.4.1"
+      ]
+    },
+    {
+      "id": "V9",
+      "name": "Self-contained Tokens",
+      "applicability": "applicable",
+      "rationale": "Preview, cursor, and asset grants carry signed context and expiry.",
+      "selectedAsvsRefs": [
+        "v5.0.0-9.1.1",
+        "v5.0.0-9.1.2",
+        "v5.0.0-9.2.1",
+        "v5.0.0-9.2.2",
+        "v5.0.0-9.2.3"
+      ]
+    },
+    {
+      "id": "V10",
+      "name": "OAuth and OIDC",
+      "applicability": "conditional",
+      "rationale": "Required for the planned production OIDC relying-party adapter, not the development header identity.",
+      "selectedAsvsRefs": [
+        "v5.0.0-10.1.1",
+        "v5.0.0-10.1.2",
+        "v5.0.0-10.5.1",
+        "v5.0.0-10.5.2",
+        "v5.0.0-10.5.3",
+        "v5.0.0-10.5.4"
+      ]
+    },
+    {
+      "id": "V11",
+      "name": "Cryptography",
+      "applicability": "applicable",
+      "rationale": "GridStory hashes audit/archive/token secrets and signs grants, cursors, and webhooks.",
+      "selectedAsvsRefs": [
+        "v5.0.0-11.1.1",
+        "v5.0.0-11.1.2",
+        "v5.0.0-11.2.1",
+        "v5.0.0-11.4.1",
+        "v5.0.0-11.5.1"
+      ]
+    },
+    {
+      "id": "V12",
+      "name": "Secure Communication",
+      "applicability": "applicable",
+      "rationale": "Browser, API, database, object-store, IdP, and adapter communication require protected transport in production.",
+      "selectedAsvsRefs": ["v5.0.0-12.1.1", "v5.0.0-12.2.1", "v5.0.0-12.3.1", "v5.0.0-12.3.2"]
+    },
+    {
+      "id": "V13",
+      "name": "Configuration",
+      "applicability": "applicable",
+      "rationale": "Security depends on origin, host, secret, storage, database, worker, and adapter configuration.",
+      "selectedAsvsRefs": [
+        "v5.0.0-13.1.1",
+        "v5.0.0-13.1.3",
+        "v5.0.0-13.1.4",
+        "v5.0.0-13.2.4",
+        "v5.0.0-13.2.5",
+        "v5.0.0-13.3.1",
+        "v5.0.0-13.4.2"
+      ]
+    },
+    {
+      "id": "V14",
+      "name": "Data Protection",
+      "applicability": "applicable",
+      "rationale": "Draft content, credentials, private assets, actor attributes, and operational records require differentiated protection.",
+      "selectedAsvsRefs": [
+        "v5.0.0-14.1.1",
+        "v5.0.0-14.1.2",
+        "v5.0.0-14.2.1",
+        "v5.0.0-14.2.2",
+        "v5.0.0-14.3.2"
+      ]
+    },
+    {
+      "id": "V15",
+      "name": "Secure Coding and Architecture",
+      "applicability": "applicable",
+      "rationale": "The monorepo, external dependencies, framework-neutral interfaces, projections, and adapters need secure lifecycle controls.",
+      "selectedAsvsRefs": [
+        "v5.0.0-15.1.1",
+        "v5.0.0-15.1.2",
+        "v5.0.0-15.1.3",
+        "v5.0.0-15.3.1",
+        "v5.0.0-15.3.2",
+        "v5.0.0-15.3.3"
+      ]
+    },
+    {
+      "id": "V16",
+      "name": "Security Logging and Error Handling",
+      "applicability": "applicable",
+      "rationale": "Audit, authentication, authorization, adapter, and operational failures need safe, correlatable handling.",
+      "selectedAsvsRefs": [
+        "v5.0.0-16.1.1",
+        "v5.0.0-16.2.1",
+        "v5.0.0-16.2.5",
+        "v5.0.0-16.3.2",
+        "v5.0.0-16.5.1",
+        "v5.0.0-16.5.3"
+      ]
+    },
+    {
+      "id": "V17",
+      "name": "WebRTC",
+      "applicability": "not-applicable",
+      "rationale": "GridStory has no WebRTC feature, media peer connection, signaling service, or WebRTC data channel.",
+      "selectedAsvsRefs": []
+    }
+  ],
+  "requirements": [
+    {
+      "id": "GS-SEC-001",
+      "title": "Trusted-layer input validation",
+      "status": "verified",
+      "owner": "Schema owner",
+      "statement": "All untrusted API, archive, content, query, workflow, release, and adapter inputs SHALL be positively validated at a trusted server/core boundary before security-relevant use.",
+      "asvsRefs": ["v5.0.0-2.1.1", "v5.0.0-2.2.2", "v5.0.0-15.3.3"],
+      "threatRefs": ["THREAT-0001", "THREAT-0009", "THREAT-0017"],
+      "evidence": [
+        "packages/schema/src",
+        "apps/api/src/server.ts",
+        "packages/core/src/portability-service.ts"
+      ],
+      "verification": ["pnpm schema:check", "pnpm test:run"],
+      "taskIds": ["M5-001"]
+    },
+    {
+      "id": "GS-SEC-002",
+      "title": "Database injection prevention",
+      "status": "verified",
+      "owner": "Persistence owner",
+      "statement": "Repositories SHALL use parameterized database statements and SHALL NOT concatenate untrusted values into executable SQL.",
+      "asvsRefs": ["v5.0.0-1.2.4"],
+      "threatRefs": ["THREAT-0001"],
+      "evidence": [
+        "packages/core/src/sqlite-repository.ts",
+        "packages/core/src/postgres-repository.ts"
+      ],
+      "verification": ["packages/core/test/repository-conformance.test.ts", "pnpm test:postgres"],
+      "taskIds": ["M5-001"]
+    },
+    {
+      "id": "GS-SEC-003",
+      "title": "Safe structured rendering",
+      "status": "partial",
+      "owner": "Rendering owner",
+      "statement": "GridStory SHALL store validated structured content only; rich text, URLs, Markdown-like content, and application-owned rendering SHALL use context-appropriate encoding or sanitization and SHALL never execute editor-authored code.",
+      "asvsRefs": ["v5.0.0-1.3.1"],
+      "threatRefs": ["THREAT-0017"],
+      "evidence": ["packages/schema/src", "packages/react/src", "README.md"],
+      "verification": [
+        "packages/react/test/renderer.test.tsx",
+        "Application integration security review"
+      ],
+      "taskIds": ["M5-006"]
+    },
+    {
+      "id": "GS-SEC-004",
+      "title": "SVG sanitization",
+      "status": "verified",
+      "owner": "Asset owner",
+      "statement": "Uploaded SVG SHALL be rejected or sanitized to remove executable, embedded, external-reference, event, style, entity, and processing-instruction content before delivery.",
+      "asvsRefs": ["v5.0.0-1.3.4"],
+      "threatRefs": ["THREAT-0007", "THREAT-0017"],
+      "evidence": ["packages/core/src/asset-security.ts", "docs/assets.md"],
+      "verification": ["packages/core/test/asset-security.test.ts"],
+      "taskIds": ["M4-002", "M5-001"]
+    },
+    {
+      "id": "GS-SEC-005",
+      "title": "Outbound request and SSRF policy",
+      "status": "partial",
+      "owner": "Operations owner",
+      "statement": "Server-originated requests SHALL use HTTPS where applicable, explicit host/protocol policy, no credential-bearing URLs, no redirects by default, bounded timeouts, and infrastructure egress/DNS enforcement.",
+      "asvsRefs": ["v5.0.0-1.3.6", "v5.0.0-13.2.4", "v5.0.0-13.2.5", "v5.0.0-15.3.2"],
+      "threatRefs": ["THREAT-0005", "THREAT-0018"],
+      "evidence": [
+        "packages/core/src/operations-service.ts",
+        "docs/operations.md",
+        "docs/workflow-actions.md"
+      ],
+      "verification": ["packages/core/test/operations-service.test.ts", "Deployment egress review"],
+      "taskIds": ["M5-002", "M5-004"]
+    },
+    {
+      "id": "GS-SEC-006",
+      "title": "Atomic high-value operations",
+      "status": "verified",
+      "owner": "Content owner",
+      "statement": "Content publication, releases, imports, and outbox creation SHALL either commit their complete validated state or leave the previous correct state intact.",
+      "asvsRefs": ["v5.0.0-2.3.3"],
+      "threatRefs": ["THREAT-0009", "THREAT-0013", "THREAT-0014"],
+      "evidence": [
+        "packages/core/src/sqlite-repository.ts",
+        "packages/core/src/postgres-repository.ts",
+        "docs/releases.md",
+        "docs/portability.md"
+      ],
+      "verification": [
+        "packages/core/test/repository-conformance.test.ts",
+        "packages/core/test/release-service.test.ts",
+        "packages/core/test/portability-service.test.ts"
+      ],
+      "taskIds": ["M3-005", "M4-004", "M5-001"]
+    },
+    {
+      "id": "GS-SEC-007",
+      "title": "Anti-automation and abuse limits",
+      "status": "planned",
+      "owner": "Reliability owner",
+      "statement": "Production deployments SHALL enforce benchmark-backed request, identity, tenant, query, upload, import, job, and expensive-operation rate and concurrency limits.",
+      "asvsRefs": ["v5.0.0-2.4.1"],
+      "threatRefs": ["THREAT-0010", "THREAT-0019"],
+      "evidence": ["docs/content-queries.md"],
+      "verification": ["Load and abuse test profile"],
+      "taskIds": ["M5-007"]
+    },
+    {
+      "id": "GS-SEC-008",
+      "title": "Browser origin policy",
+      "status": "verified",
+      "owner": "API owner",
+      "statement": "CORS and preview messaging SHALL accept only absent origins where safe or exact configured origins; postMessage payloads SHALL pass exact origin/source and schema validation.",
+      "asvsRefs": ["v5.0.0-3.4.2", "v5.0.0-3.5.5"],
+      "threatRefs": ["THREAT-0003", "THREAT-0021"],
+      "evidence": [
+        "apps/api/src/server.ts",
+        "packages/client/src/preview.ts",
+        "packages/core/src/preview-service.ts"
+      ],
+      "verification": ["apps/api/test/preview.test.ts", "packages/client/test/preview.test.ts"],
+      "taskIds": ["M3-003", "M5-001"]
+    },
+    {
+      "id": "GS-SEC-009",
+      "title": "Browser response hardening",
+      "status": "partial",
+      "owner": "Web platform owner",
+      "statement": "Production HTML and sensitive file responses SHALL use a reviewed CSP, nosniff, anti-framing policy, referrer policy, and other browser headers appropriate to their embedding contract.",
+      "asvsRefs": ["v5.0.0-3.4.3", "v5.0.0-3.4.4", "v5.0.0-3.4.6"],
+      "threatRefs": ["THREAT-0008", "THREAT-0017", "THREAT-0021"],
+      "evidence": ["apps/api/src/server.ts", "docs/assets.md"],
+      "verification": ["apps/api/test/assets.test.ts", "Production header conformance test"],
+      "taskIds": ["M5-006"]
+    },
+    {
+      "id": "GS-SEC-010",
+      "title": "Trusted intermediary headers",
+      "status": "planned",
+      "owner": "Deployment owner",
+      "statement": "Production identity, origin, client-IP, scheme, and host decisions SHALL use only headers installed by explicitly trusted intermediaries and unavailable for caller override.",
+      "asvsRefs": ["v5.0.0-4.1.3"],
+      "threatRefs": ["THREAT-0002", "THREAT-0021"],
+      "evidence": ["apps/api/src/server.ts", "README.md"],
+      "verification": ["Production proxy and identity conformance test"],
+      "taskIds": ["M5-002"]
+    },
+    {
+      "id": "GS-SEC-011",
+      "title": "Bounded GraphQL execution",
+      "status": "partial",
+      "owner": "API owner",
+      "statement": "GraphQL SHALL bound depth, aliases, amount, input size, and execution cost; batching/subscriptions SHALL remain disabled unless separately threat-modeled; production introspection SHALL follow deployment policy.",
+      "asvsRefs": ["v5.0.0-4.3.1", "v5.0.0-4.3.2"],
+      "threatRefs": ["THREAT-0010"],
+      "evidence": ["apps/api/src/graphql.ts", "docs/content-queries.md"],
+      "verification": [
+        "apps/api/test/graphql.test.ts",
+        "Benchmark-backed cost and introspection tests"
+      ],
+      "taskIds": ["M5-007"]
+    },
+    {
+      "id": "GS-SEC-012",
+      "title": "Safe file admission and storage",
+      "status": "partial",
+      "owner": "Asset owner",
+      "statement": "Every accepted upload SHALL have documented type/size rules, server-side size and content verification, internally generated storage keys, malware policy, quarantine, and safe download behavior.",
+      "asvsRefs": ["v5.0.0-5.1.1", "v5.0.0-5.2.1", "v5.0.0-5.2.2", "v5.0.0-5.3.2", "v5.0.0-5.4.3"],
+      "threatRefs": ["THREAT-0007", "THREAT-0008", "THREAT-0019"],
+      "evidence": [
+        "packages/core/src/asset-service.ts",
+        "packages/core/src/asset-security.ts",
+        "docs/assets.md"
+      ],
+      "verification": [
+        "packages/core/test/asset-service.test.ts",
+        "packages/core/test/asset-security.test.ts",
+        "Deployment quota and scanner conformance test"
+      ],
+      "taskIds": ["M4-002", "M5-007"]
+    },
+    {
+      "id": "GS-SEC-013",
+      "title": "Authentication pathways",
+      "status": "conditional",
+      "owner": "Identity owner",
+      "statement": "Before production use, every user and service authentication pathway SHALL be documented and consistently verify trusted issuer, signature, audience, time, nonce/replay semantics, subject namespace, and required authentication strength.",
+      "asvsRefs": [
+        "v5.0.0-6.1.3",
+        "v5.0.0-6.8.1",
+        "v5.0.0-6.8.2",
+        "v5.0.0-10.5.1",
+        "v5.0.0-10.5.2",
+        "v5.0.0-10.5.3",
+        "v5.0.0-10.5.4"
+      ],
+      "threatRefs": ["THREAT-0002", "THREAT-0016"],
+      "evidence": ["packages/core/src/identity.ts", "README.md"],
+      "verification": ["Production OIDC adapter conformance suite"],
+      "taskIds": ["M5-002", "M6-002"]
+    },
+    {
+      "id": "GS-SEC-014",
+      "title": "Session lifecycle",
+      "status": "conditional",
+      "owner": "Identity owner",
+      "statement": "Production browser sessions SHALL be backend-verified, CSPRNG-generated with at least 128 bits of entropy, bounded by documented idle/absolute lifetimes, rotated at authentication, and invalid after logout, expiry, account disablement, or administrative revocation.",
+      "asvsRefs": ["v5.0.0-7.1.1", "v5.0.0-7.2.1", "v5.0.0-7.2.3", "v5.0.0-7.4.1"],
+      "threatRefs": ["THREAT-0002", "THREAT-0016"],
+      "evidence": ["packages/core/src/identity.ts"],
+      "verification": ["Persistent session adapter conformance suite"],
+      "taskIds": ["M5-002", "M6-002"]
+    },
+    {
+      "id": "GS-SEC-015",
+      "title": "Deny-by-default scoped authorization",
+      "status": "verified",
+      "owner": "Authorization owner",
+      "statement": "Every non-public operation SHALL authorize its function and object at a trusted layer; unmatched roles/grants SHALL be denied and the complete organization/tenant/workspace/site/environment/locale scope SHALL be non-bypassable.",
+      "asvsRefs": ["v5.0.0-8.1.1", "v5.0.0-8.2.1", "v5.0.0-8.2.2", "v5.0.0-8.3.1", "v5.0.0-8.4.1"],
+      "threatRefs": ["THREAT-0001", "THREAT-0014"],
+      "evidence": ["packages/core/src/authorization.ts", "apps/api/src/server.ts"],
+      "verification": [
+        "packages/core/test/authorization.test.ts",
+        "apps/api/test/authorization.test.ts"
+      ],
+      "taskIds": ["M2-002", "M5-002"]
+    },
+    {
+      "id": "GS-SEC-016",
+      "title": "Signed token purpose and scope",
+      "status": "verified",
+      "owner": "Security architecture owner",
+      "statement": "Self-contained grants SHALL use a fixed approved MAC algorithm, trusted key source, signature verification before claims, explicit purpose/audience, complete relevant scope, expiry, and constant-time comparison.",
+      "asvsRefs": ["v5.0.0-9.1.1", "v5.0.0-9.1.2", "v5.0.0-9.2.1", "v5.0.0-9.2.2", "v5.0.0-9.2.3"],
+      "threatRefs": ["THREAT-0003", "THREAT-0008", "THREAT-0011", "THREAT-0016"],
+      "evidence": [
+        "packages/core/src/preview-service.ts",
+        "packages/core/src/content-query.ts",
+        "packages/core/src/asset-delivery-service.ts"
+      ],
+      "verification": [
+        "packages/core/test/preview-service.test.ts",
+        "packages/core/test/content-query.test.ts",
+        "packages/core/test/asset-delivery-service.test.ts"
+      ],
+      "taskIds": ["M2-006", "M3-003", "M4-002"]
+    },
+    {
+      "id": "GS-SEC-017",
+      "title": "OIDC browser-flow binding",
+      "status": "conditional",
+      "owner": "Identity owner",
+      "statement": "A production OIDC client SHALL keep tokens only in components that need them and bind authorization responses to the initiating browser session using unpredictable state, nonce, and PKCE where applicable.",
+      "asvsRefs": ["v5.0.0-10.1.1", "v5.0.0-10.1.2"],
+      "threatRefs": ["THREAT-0002", "THREAT-0016"],
+      "evidence": ["packages/core/src/identity.ts"],
+      "verification": ["Production OIDC browser-flow conformance suite"],
+      "taskIds": ["M5-002", "M6-002"]
+    },
+    {
+      "id": "GS-SEC-018",
+      "title": "Cryptographic inventory and key lifecycle",
+      "status": "planned",
+      "owner": "Security operations owner",
+      "statement": "GridStory deployments SHALL maintain an inventory and lifecycle for every signing, hashing, encryption, certificate, and service credential, with separate purposes, approved algorithms, owners, storage, rotation, and emergency revocation.",
+      "asvsRefs": ["v5.0.0-11.1.1", "v5.0.0-11.1.2", "v5.0.0-13.1.4", "v5.0.0-13.3.1"],
+      "threatRefs": ["THREAT-0016"],
+      "evidence": [".env.example", "docs/assets.md", "docs/operations.md"],
+      "verification": ["Deployment secret inventory and rotation exercise"],
+      "taskIds": ["M5-004", "M5-005"]
+    },
+    {
+      "id": "GS-SEC-019",
+      "title": "Approved cryptographic primitives",
+      "status": "verified",
+      "owner": "Core owner",
+      "statement": "Application cryptography SHALL use the Node.js platform crypto implementation, SHA-256/HMAC-SHA-256 or stronger approved primitives, constant-time verification, and CSPRNG values with at least 128 bits of entropy where unpredictability is required.",
+      "asvsRefs": ["v5.0.0-11.2.1", "v5.0.0-11.4.1", "v5.0.0-11.5.1"],
+      "threatRefs": ["THREAT-0003", "THREAT-0008", "THREAT-0011", "THREAT-0016"],
+      "evidence": [
+        "packages/core/src/identity.ts",
+        "packages/core/src/preview-service.ts",
+        "packages/core/src/content-query.ts",
+        "packages/core/src/asset-delivery-service.ts",
+        "packages/core/src/audit-service.ts"
+      ],
+      "verification": ["pnpm test:run", "Cryptographic inventory review"],
+      "taskIds": ["M5-001"]
+    },
+    {
+      "id": "GS-SEC-020",
+      "title": "Protected communications",
+      "status": "conditional",
+      "owner": "Deployment owner",
+      "statement": "Production external and service-to-service communication SHALL use TLS 1.2 or 1.3 without plaintext fallback and SHALL validate server certificates against configured trust roots.",
+      "asvsRefs": ["v5.0.0-12.1.1", "v5.0.0-12.2.1", "v5.0.0-12.3.1", "v5.0.0-12.3.2"],
+      "threatRefs": ["THREAT-0018", "THREAT-0021"],
+      "evidence": ["docs/operations.md", "docs/assets.md"],
+      "verification": ["Production TLS and adapter transport scan"],
+      "taskIds": ["M5-004", "M5-008"]
+    },
+    {
+      "id": "GS-SEC-021",
+      "title": "External dependency configuration",
+      "status": "partial",
+      "owner": "Platform integration owner",
+      "statement": "Every database, storage, search, cache, IdP, scanner, webhook, and notification connection SHALL document scope, authentication, least privilege, destinations, timeouts, connection/concurrency limits, retries, failure behavior, and health signals.",
+      "asvsRefs": ["v5.0.0-13.1.1", "v5.0.0-13.1.3"],
+      "threatRefs": ["THREAT-0005", "THREAT-0018", "THREAT-0019"],
+      "evidence": [
+        "docs/operations.md",
+        "docs/assets.md",
+        "docs/search-and-taxonomies.md",
+        "docs/troubleshooting.md"
+      ],
+      "verification": ["Adapter conformance and operations review"],
+      "taskIds": ["M5-004", "M5-005"]
+    },
+    {
+      "id": "GS-SEC-022",
+      "title": "Production-safe configuration",
+      "status": "planned",
+      "owner": "Deployment owner",
+      "statement": "Production startup and deployment SHALL reject development identity, default/short secrets, debug exposure, unsafe origins, unbounded external destinations, public object storage, and missing durable adapters required by the selected topology.",
+      "asvsRefs": ["v5.0.0-13.4.2"],
+      "threatRefs": ["THREAT-0002", "THREAT-0016", "THREAT-0021", "THREAT-0022"],
+      "evidence": [".env.example", "README.md"],
+      "verification": ["Production configuration conformance test"],
+      "taskIds": ["M5-002", "M5-004", "M5-008"]
+    },
+    {
+      "id": "GS-SEC-023",
+      "title": "Sensitive-data classification",
+      "status": "partial",
+      "owner": "Security and privacy owner",
+      "statement": "GridStory SHALL classify draft/published content, identity attributes, credentials/tokens, private assets, audit/operational data, and telemetry, with explicit access, encryption, logging, caching, retention, export, and deletion rules.",
+      "asvsRefs": ["v5.0.0-14.1.1", "v5.0.0-14.1.2"],
+      "threatRefs": ["THREAT-0001", "THREAT-0004", "THREAT-0015", "THREAT-0016"],
+      "evidence": [
+        "docs/security/security-requirements.md",
+        "docs/assets.md",
+        "docs/audit-and-administration.md"
+      ],
+      "verification": ["Data-flow and retention review"],
+      "taskIds": ["M5-004", "M6-003"]
+    },
+    {
+      "id": "GS-SEC-024",
+      "title": "Credential and cache containment",
+      "status": "partial",
+      "owner": "Delivery owner",
+      "statement": "Credentials, preview grants, service tokens, and sensitive draft/private responses SHALL not enter public URLs or shared caches; sensitive responses SHALL use private, no-store and published caches SHALL contain published data only.",
+      "asvsRefs": ["v5.0.0-14.2.1", "v5.0.0-14.2.2", "v5.0.0-14.3.2"],
+      "threatRefs": ["THREAT-0003", "THREAT-0004", "THREAT-0008"],
+      "evidence": ["apps/api/src/server.ts", "docs/content-queries.md", "docs/assets.md"],
+      "verification": [
+        "apps/api/test/server.test.ts",
+        "apps/api/test/assets.test.ts",
+        "M5-002 cache review"
+      ],
+      "taskIds": ["M5-002"]
+    },
+    {
+      "id": "GS-SEC-025",
+      "title": "Vulnerability and component lifecycle",
+      "status": "planned",
+      "owner": "Release engineering owner",
+      "statement": "The project SHALL maintain risk-based vulnerability remediation timeframes, a current SBOM from trusted locked dependencies, provenance/signatures, and a documented disclosure and support policy.",
+      "asvsRefs": ["v5.0.0-15.1.1", "v5.0.0-15.1.2"],
+      "threatRefs": ["THREAT-0020"],
+      "evidence": ["pnpm-lock.yaml", "TASKS.md"],
+      "verification": ["Release artifact and vulnerability-process review"],
+      "taskIds": ["M5-007"]
+    },
+    {
+      "id": "GS-SEC-026",
+      "title": "Resource-demand inventory",
+      "status": "planned",
+      "owner": "Reliability owner",
+      "statement": "The project SHALL identify resource-demanding functions and publish tested limits for bodies, queries, uploads, archives, indexes, histories, queues, retries, concurrency, and retention.",
+      "asvsRefs": ["v5.0.0-15.1.3"],
+      "threatRefs": ["THREAT-0007", "THREAT-0009", "THREAT-0010", "THREAT-0019"],
+      "evidence": ["docs/content-queries.md", "docs/operations.md", "TASKS.md"],
+      "verification": ["Benchmark and saturation profile"],
+      "taskIds": ["M5-007"]
+    },
+    {
+      "id": "GS-SEC-027",
+      "title": "Minimal response and explicit assignment",
+      "status": "partial",
+      "owner": "API owner",
+      "statement": "APIs SHALL return only authorized required fields, use explicit schemas for mutable fields, and SHALL NOT bind arbitrary client objects to persisted models.",
+      "asvsRefs": ["v5.0.0-15.3.1", "v5.0.0-15.3.3"],
+      "threatRefs": ["THREAT-0001", "THREAT-0017", "THREAT-0022"],
+      "evidence": [
+        "packages/schema/src",
+        "apps/api/src/server.ts",
+        "packages/core/src/content-query.ts"
+      ],
+      "verification": ["pnpm test:run", "Field-level authorization review"],
+      "taskIds": ["M5-002"]
+    },
+    {
+      "id": "GS-SEC-028",
+      "title": "Security-event logging and audit",
+      "status": "partial",
+      "owner": "Security operations owner",
+      "statement": "GridStory SHALL inventory logs and record correlatable authentication, authorization failure, privileged mutation, publication, workflow/release, import/export, credential, adapter, and security-control events without recording secrets or unnecessary content.",
+      "asvsRefs": ["v5.0.0-16.1.1", "v5.0.0-16.2.1", "v5.0.0-16.2.5", "v5.0.0-16.3.2"],
+      "threatRefs": ["THREAT-0015", "THREAT-0016", "THREAT-0022"],
+      "evidence": ["packages/core/src/audit-service.ts", "docs/audit-and-administration.md"],
+      "verification": [
+        "packages/core/test/audit-service.test.ts",
+        "Telemetry and redaction conformance test"
+      ],
+      "taskIds": ["M5-004"]
+    },
+    {
+      "id": "GS-SEC-029",
+      "title": "Safe error handling",
+      "status": "verified",
+      "owner": "API owner",
+      "statement": "Unhandled and security-sensitive failures SHALL return a generic stable envelope, SHALL not expose internal details, and SHALL fail closed without applying the protected operation.",
+      "asvsRefs": ["v5.0.0-16.5.1", "v5.0.0-16.5.3"],
+      "threatRefs": ["THREAT-0007", "THREAT-0018", "THREAT-0022"],
+      "evidence": ["apps/api/src/server.ts", "packages/core/src/asset-service.ts"],
+      "verification": ["apps/api/test/server.test.ts", "packages/core/test/asset-service.test.ts"],
+      "taskIds": ["M5-001"]
+    }
+  ]
+}

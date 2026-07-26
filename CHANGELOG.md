@@ -8,6 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Corrected stale README capability/identity milestones and used the verified exact-formatter and unrestricted full-check paths for Windows validation (BUG-0191 through BUG-0193).
+
 - Corrected search contract defaults, adapter wiring, Windows edit artifacts, operations expectations, and the unsafe successful no-op search runner found during M4-006 verification (BUG-0181 through BUG-0190).
 
 - Corrected exact-optional integration, missing Studio action type import, and saved-input assertion defects found during M4-005 verification (BUG-0174 through BUG-0180).
@@ -57,6 +59,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Mapped malformed preview targets into the stable `invalid_preview_url` response boundary instead of allowing generic URL exceptions to become server errors.
 
 ### Added
+
+- Added a canonical STRIDE threat model covering actors, assets, nine trust boundaries, twelve data flows, 22 owned threats, risk scoring, mitigations, evidence, and review triggers.
+- Added an OWASP ASVS 5.0.0 Level 2-oriented profile with explicit applicability for all 17 chapters and 29 stable GridStory security requirements linked to threats, evidence, owners, and delivery tasks.
+- Added human-readable threat-model, security-requirements, and ASVS-profile guides plus deterministic validation and negative self-tests through pnpm security:check and the root lint gate.
 
 - Added pluggable scoped search contracts and a repository-backed default adapter with bounded full-text queries, content-type filters, hierarchical taxonomy facets, exact-perspective results, and typed universal-client access.
 - Added durable incremental indexing and scoped rebuild/status operations, schema-derived backlinks, explainable related-content scoring, authorized private REST routes, worker execution, Studio discovery tooling, focused regressions, and an integration guide.
@@ -200,6 +206,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- Corrected README capability status and linked the security model, requirements, ASVS profile, and validation command from the primary project guide.
+
 - Expanded each committed content outbox event with an idempotent search.index job and reused the leased retry, dead-letter, and replay machinery for indexing and rebuilds without placing draft content in job payloads.
 
 - Reused the existing leased durable-job executor for workflow actions, including claim recovery, bounded exponential retries, maximum-attempt dead letters, immutable replay records, and adapter-neutral notification, cache, and webhook delivery.
@@ -279,6 +287,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Fixed SQLite upgrade ordering so existing tenant-only databases gain scope columns before the new composite index (`BUG-0021`).
 
 ### Security
+
+- Established normative tenant, authorization, preview/cache, input/rendering, API, file/archive, token, integration, cryptography, transport, data-protection, logging/error, and supply-chain requirements without claiming ASVS certification; unresolved production controls remain explicitly assigned to M5-002 through M5-008 and M6-002/M6-003.
 
 - Kept search documents, queries, taxonomy facets, backlinks, related results, rebuilds, jobs, and status explicitly scoped by organization, tenant, workspace, site, environment, locale, and perspective behind private/no-store authorization boundaries.
 

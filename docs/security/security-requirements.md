@@ -1,0 +1,110 @@
+# GridStory security requirements
+
+These requirements are normative for GridStory code and supported production deployments. `SHALL` is mandatory, `SHOULD` is the expected default with a documented exception, and `MAY` is optional. The canonical requirement records, ASVS references, status, evidence, owner, threats, and delivery tasks live in [`security/asvs-v5.0.0-profile.json`](../../security/asvs-v5.0.0-profile.json).
+
+The profile is Level 2-oriented because GridStory handles authenticated authoring, multi-tenant private drafts, privileged publication, private assets, and service integrations. It is not an ASVS certification. A production deployment must verify its own identity, infrastructure, transport, secret, data-protection, logging, and application-rendering controls.
+
+## Security invariants
+
+- Tenant scope SHALL be explicit in storage, API, cache, search, asset, event, job, audit, export/import, and telemetry contracts.
+- Authorization SHALL be deny by default and checked at the trusted service/API layer for both function and object.
+- Browser, server, worker, and React Server Component entry points SHALL remain explicit; secrets and privileged adapters SHALL not enter browser bundles.
+- Preview credentials and draft/private content SHALL never enter published caches, public asset storage, public routes, analytics URLs, or ordinary delivery responses.
+- Published delivery SHALL resolve exact published revisions only. Management, GraphQL, preview, private asset, audit, workflow, and operational responses SHALL use private, no-store caching.
+- GridStory SHALL store validated structured data and code-owned component identifiers; it SHALL never execute editor-authored JavaScript.
+- Security-critical verification SHALL fail closed. A scanner, identity verifier, signature check, authorization decision, import check, or release validation failure SHALL not silently permit the protected action.
+- Stable security identifiers (`GS-SEC-###` and `THREAT-####`) SHALL not be recycled.
+
+## Data classification
+
+| Class | Examples | Required protection |
+|---|---|---|
+| Public | Published content, published routes, public component/schema metadata intended for delivery | Integrity, exact tenant/revision cache keys, availability, safe rendering. Public caching is allowed only for exact published responses. |
+| Internal | Non-sensitive configuration metadata, health/readiness summaries, aggregate operational counts | Authenticated access unless explicitly public; no unnecessary implementation detail. |
+| Confidential | Drafts, revision history, workflows, releases, preview data, private assets, user attributes, search/index state, job payloads, audit exports, logical archives | Least privilege, complete tenant scope, private/no-store delivery, protected transport/storage, controlled export and retention, log minimization. |
+| Restricted secret | OIDC/session material, service tokens, preview/cursor/asset/webhook signing keys, database/object-store credentials | Approved secret manager, least privilege, never logged or placed in URLs/source/build artifacts, independent purpose, rotation and emergency revocation. |
+
+Published status does not remove integrity or tenant-isolation requirements. A customer's content classification may be stricter than this baseline.
+
+## Identity, sessions, and authorization
+
+- `GS-SEC-013`: production authentication SHALL replace development identity headers and verify every documented user/service path consistently, including issuer namespace, signature, audience, time, nonce/replay semantics, and required authentication strength.
+- `GS-SEC-014`: production sessions SHALL use backend verification, at least 128 bits of CSPRNG entropy, documented idle/absolute lifetimes, rotation, logout, expiry, account-disable, and administrative revocation.
+- `GS-SEC-015`: every non-public operation SHALL authorize both the action and object against complete organization, tenant, workspace, site, environment, and locale scope. No role/grant match means deny.
+- Service-account grants SHALL be least privilege, tenant scoped, expiring where practical, hashed at rest, revocable, and attributable in audit/security events.
+- High-value workflow and release operations SHOULD use distinct permissions and separation of duties. Expected revisions and policy snapshots SHALL prevent stale or reordered approval.
+
+Current `IdentityService` is a framework-neutral foundation with in-memory sessions/accounts/tokens; it is not a deployed identity boundary or persistent production session store.
+
+## Input, content, and browser safety
+
+- `GS-SEC-001`: every untrusted input SHALL pass a positive schema or explicit allow-list at a trusted boundary. Client-side checks are usability only.
+- `GS-SEC-002`: all database statements SHALL be parameterized.
+- `GS-SEC-003`: structured content and application-owned rendering SHALL use context-appropriate encoding/sanitization; unsafe rich-text, URL, Markdown/template, and CSS contexts require an explicit policy.
+- `GS-SEC-004`: SVG SHALL be conservatively sanitized or rejected before delivery.
+- Mutation handlers SHALL select allowed fields explicitly; arbitrary object binding and prototype-sensitive path segments are prohibited.
+- `GS-SEC-008`: CORS and preview messaging SHALL enforce exact configured origins; postMessage SHALL enforce source, origin, and message schema.
+- `GS-SEC-009`: production HTML and sensitive files SHALL use reviewed CSP, nosniff, anti-framing, referrer, and resource policies appropriate to intentional preview embedding.
+- The project SHALL document supported browser security features and verify them with M5-006's browser/accessibility certification.
+
+## API, query, file, and archive safety
+
+- REST and GraphQL SHALL use bounded bodies and stable generic error envelopes.
+- `GS-SEC-011`: GraphQL SHALL bound depth, amount, aliases, and execution cost. Batching and subscriptions remain disabled unless separately threat-modeled. Production introspection requires an explicit decision.
+- Signed cursors SHALL be purpose-, scope-, perspective-, filter-, sort-, projection-, and expiry/version-bound as applicable and verified in constant time.
+- `GS-SEC-012`: uploads SHALL have documented permitted types and limits, exact multipart descriptor checks, byte/signature validation, internally generated keys, quarantine, malware policy, and safe download headers.
+- Production asset processing SHALL set byte, part, pixel, decompression, file-count, per-tenant storage, concurrency, and timeout limits. Missing mandatory malware scanning SHALL fail closed.
+- Logical archives SHALL verify format/schema versions, exact scope, per-record and aggregate checksums before mutation, support dry-run/conflict reporting, and roll back atomically. Archive bytes, records, nesting, and processing time SHALL be bounded.
+
+## Preview, tokens, caching, and delivery
+
+- `GS-SEC-016`: every self-contained grant SHALL use a fixed approved MAC/signature algorithm, trusted purpose-specific key, verification before claim use, explicit audience/purpose, exact relevant scope, bounded lifetime, and constant-time comparison.
+- Preview grants SHALL be short lived, origin/route/mode/scope bound, revocable, and replay checked. Preview applications SHALL not load published delivery while an authenticated draft session is active.
+- Private asset grants SHALL be short lived, scope/asset/revision bound, and recheck immutable security verdict and storage scope when read.
+- `GS-SEC-024`: draft/private responses SHALL be private, no-store. Public cache tags/keys SHALL include complete scope and exact revision/perspective semantics; invalidation SHALL never be derived from caller-only scope.
+- Published caches SHALL never contain credentials, preview data, draft content, private assets, audit data, job payloads, or administrator responses.
+
+## Jobs, integrations, and external requests
+
+- `GS-SEC-005`: outbound URLs SHALL use explicit protocol/host policy, reject embedded credentials and private/reserved destinations, avoid redirects by default, and be revalidated at execution. Production egress and DNS controls SHALL enforce the same or stricter allow-list.
+- `GS-SEC-021`: every adapter SHALL document complete tenant scope, authentication, least privilege, destinations, connection/concurrency limits, timeouts, retry/backoff, failure behavior, and health signals.
+- Content writes SHALL use a transactional outbox. Jobs SHALL carry bounded payloads and complete scope, use owner-checked expiring leases and full-scope idempotency keys, and preserve immutable failure/replay history.
+- Search/index adapters SHALL key by complete scope and perspective. Incremental jobs SHOULD carry identifiers instead of draft content and reload under the claimed scope.
+- Webhooks SHALL use TLS, HMAC over timestamp plus exact raw body, immutable delivery/event identifiers, bounded response time, and no redirects. Receiver documentation SHALL require freshness and delivery-ID deduplication.
+- Security-sensitive adapters SHALL fail closed; availability fallbacks SHALL not weaken authorization, tenant, integrity, or confidentiality decisions.
+
+## Cryptography, secrets, and transport
+
+- `GS-SEC-018`: deployments SHALL inventory each key, secret, certificate, algorithm, owner, purpose, storage location, rotation period, revocation procedure, and prohibited use.
+- Preview, cursor, asset-delivery, webhook, session, and service credentials SHALL use separate high-entropy secrets. One secret SHALL NOT be silently reused across purposes.
+- `GS-SEC-019`: implementation cryptography SHALL use maintained platform libraries, approved SHA-256/HMAC-SHA-256-or-stronger primitives, CSPRNGs for unpredictable values, and constant-time comparisons.
+- Secret values SHALL come from a production secret manager, never source control or build artifacts; access SHALL be least privilege and rotations SHALL be exercised.
+- `GS-SEC-020`: production client, external, database, storage, IdP, monitoring, and service-to-service connections SHALL use TLS 1.2/1.3 or a stronger appropriate encrypted protocol without plaintext fallback and with certificate validation.
+
+## Logging, error handling, and operations
+
+- `GS-SEC-028`: a maintained log inventory SHALL define event, metadata, format, sink, access, retention, correlation, and alerting. At minimum cover authentication, failed authorization, privileged mutation, publication, workflow/release, import/export, credential lifecycle, adapter failure, and control bypass.
+- Logs and traces SHALL NOT contain secret values, raw bearer/signed grants, unnecessary draft content, private asset bytes, archive contents, or sensitive user attributes. Required sensitive references SHALL be masked, hashed, or stable opaque identifiers.
+- Audit history SHALL remain tenant scoped and hash chained; verification/export access SHALL be administrator-only. Production security logs SHOULD be shipped to a separately protected system because an in-database hash chain is tamper-evident, not deletion-proof.
+- `GS-SEC-029`: unexpected errors SHALL return a generic stable response with a request ID and SHALL fail closed. Internal detail belongs only in protected, redacted logs.
+- Health/readiness endpoints SHALL reveal only the minimum operational status and SHALL not expose secrets, version inventory, topology, or customer data.
+
+## Secure development and release
+
+- Threat-model and ASVS profile changes SHALL accompany new boundaries, sensitive data, external communication, authentication/authorization, cache/preview, file/import, job, logging, or deployment behavior.
+- `GS-SEC-025`: before GA the project SHALL publish vulnerability reporting/remediation timeframes, a current SBOM, trusted dependency policy, artifact provenance, signatures, and verification steps.
+- `GS-SEC-026`: before GA the project SHALL publish tested body, query, upload, archive, history, queue, retry, concurrency, and retention limits.
+- Security fixes SHALL include focused regression tests where mechanically testable. Critical/high defects SHALL be entered in `BUGS.md` before fixing and linked to their task/changelog entry.
+- `pnpm security:check` SHALL pass in the root validation path. Passing shape validation is necessary but does not replace code review, abuse testing, dependency analysis, deployment verification, or penetration testing.
+
+## Verification ownership
+
+| Area | Primary owner | Required evidence before v1 GA |
+|---|---|---|
+| Cross-tenant authorization and data paths | Authorization/control-plane owner | M5-002 exhaustive storage/cache/search/asset/job/event/telemetry isolation suite. |
+| Production identity/session/proxy | Identity/API/deployment owner | OIDC and persistent-session conformance, dev-header rejection, trusted-proxy tests. |
+| Browser/rendering | Studio/application owners | M5-006 CSP/header/rendering/browser review. |
+| Operations, secrets, and telemetry | Platform/security operations owner | M5-004 inventory, redaction, alerting, secret lifecycle, adapter health evidence. |
+| Recovery and deployment | Reliability/deployment owner | M5-005 restore, graceful shutdown, rolling upgrade, and secret rotation exercises. |
+| Limits and supply chain | Release engineering owner | M5-007 benchmarks, SBOM, vulnerability SLA, provenance, and signatures. |
+| GA risk acceptance | Security owner and release owner | M5-008 current model/profile, resolved critical risks, explicit expiring high-risk acceptances. |

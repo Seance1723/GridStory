@@ -224,7 +224,11 @@
 
 ## Milestone 5 — Security, reliability, and v1 GA
 
-- [ ] **M5-001** Complete OWASP ASVS-aligned threat models and security requirements.
+- [x] **M5-001** Complete OWASP ASVS-aligned threat models and security requirements.
+  - Added the canonical OWASP four-question/STRIDE model with eight actors, twelve protected assets, nine trust boundaries, twelve data flows, 22 stable owned threats, quantified risk, mitigations, evidence, assumptions, and lifecycle triggers.
+  - Added an explicitly non-certifying OWASP ASVS 5.0.0 Level 2-oriented profile covering all 17 chapters, 29 normative GridStory requirements, current evidence, residual gaps, owners, threat links, and M5/M6 delivery ownership.
+  - Added human security/threat/ASVS guides and `pnpm security:check`; the validator's negative self-tests cover risk, duplicate-ID, and broken-reference failures and the root lint gate enforces model/profile structure, applicability, traceability, and evidence paths.
+  - Verification found and resolved BUG-0191 through BUG-0193; `pnpm security:check` passes, and unrestricted `pnpm check` passes lint, formatting, ledgers, boundaries, schema generation, every typecheck, 161 tests across 55 passing files plus two intentional PostgreSQL skips, and all production builds.
 - [ ] **M5-002** Harden tenant isolation across storage, cache, search, assets, jobs, events, and telemetry.
 - [ ] **M5-003** Add plugin SDK capability manifests, grants, isolation, signatures, test harness, and lifecycle.
 - [ ] **M5-004** Add OpenTelemetry logs/metrics/traces, dashboards, retention, health, and operational runbooks.

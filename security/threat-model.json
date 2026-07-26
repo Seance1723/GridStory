@@ -1,0 +1,829 @@
+{
+  "schemaVersion": 1,
+  "model": {
+    "id": "GRIDSTORY-TM-001",
+    "title": "GridStory control plane and delivery threat model",
+    "version": "1.0.0",
+    "reviewedAt": "2026-07-26",
+    "owners": ["GridStory security owner", "GridStory architecture owner"],
+    "methodology": "OWASP four-question threat modeling with STRIDE categorization",
+    "scope": [
+      "Studio and custom authoring clients",
+      "standalone API and GraphQL endpoint",
+      "framework-neutral core services",
+      "SQLite and PostgreSQL persistence",
+      "asset/object storage and private delivery",
+      "preview applications and live-preview protocol",
+      "workers, outbox, durable jobs, search, cache, and webhook adapters",
+      "published REST delivery and application-owned React rendering",
+      "logical archive export and import"
+    ],
+    "outOfScope": [
+      "security of application-owned React components after validated data leaves GridStory",
+      "identity-provider internals",
+      "cloud, CDN, database, object-store, and network controls not configured by GridStory",
+      "plugin execution until M5-003 defines its capability and isolation boundary"
+    ],
+    "riskModel": {
+      "formula": "likelihood * impact",
+      "scale": "likelihood and impact are integers from 1 (low) to 5 (critical)",
+      "thresholds": { "low": "1-4", "medium": "5-9", "high": "10-16", "critical": "17-25" }
+    }
+  },
+  "actors": [
+    {
+      "id": "ACTOR-001",
+      "name": "Anonymous delivery consumer",
+      "trust": "untrusted",
+      "capabilities": ["read published delivery"]
+    },
+    {
+      "id": "ACTOR-002",
+      "name": "Authenticated editor",
+      "trust": "partially trusted",
+      "capabilities": ["read and mutate authorized drafts"]
+    },
+    {
+      "id": "ACTOR-003",
+      "name": "Publisher or administrator",
+      "trust": "privileged",
+      "capabilities": ["approve, publish, operate, export, and configure"]
+    },
+    {
+      "id": "ACTOR-004",
+      "name": "Service account",
+      "trust": "credential-scoped",
+      "capabilities": ["perform granted API actions"]
+    },
+    {
+      "id": "ACTOR-005",
+      "name": "Preview application",
+      "trust": "origin- and token-scoped",
+      "capabilities": ["read exact draft preview and exchange bounded messages"]
+    },
+    {
+      "id": "ACTOR-006",
+      "name": "Operations worker",
+      "trust": "privileged internal",
+      "capabilities": ["claim and execute scoped jobs"]
+    },
+    {
+      "id": "ACTOR-007",
+      "name": "External adapter or webhook receiver",
+      "trust": "external",
+      "capabilities": ["receive events or provide storage, search, cache, identity, and scanning"]
+    },
+    {
+      "id": "ACTOR-008",
+      "name": "Malicious tenant or internet attacker",
+      "trust": "hostile",
+      "capabilities": ["send crafted requests, content, archives, assets, URLs, and tokens"]
+    }
+  ],
+  "assets": [
+    {
+      "id": "ASSET-001",
+      "name": "Draft content and revision history",
+      "securityProperties": ["confidentiality", "integrity", "tenant isolation"]
+    },
+    {
+      "id": "ASSET-002",
+      "name": "Published content and routes",
+      "securityProperties": ["integrity", "availability", "cache correctness"]
+    },
+    {
+      "id": "ASSET-003",
+      "name": "Tenant and locale scope",
+      "securityProperties": ["integrity", "non-bypassability"]
+    },
+    {
+      "id": "ASSET-004",
+      "name": "Identity, roles, grants, and sessions",
+      "securityProperties": ["confidentiality", "integrity", "revocability"]
+    },
+    {
+      "id": "ASSET-005",
+      "name": "Signing secrets and service credentials",
+      "securityProperties": ["confidentiality", "rotation", "separation"]
+    },
+    {
+      "id": "ASSET-006",
+      "name": "Private asset bytes and security verdicts",
+      "securityProperties": ["confidentiality", "integrity", "safe delivery"]
+    },
+    {
+      "id": "ASSET-007",
+      "name": "Workflow approvals and release intent",
+      "securityProperties": ["integrity", "accountability", "atomicity"]
+    },
+    {
+      "id": "ASSET-008",
+      "name": "Outbox events, job payloads, leases, and delivery history",
+      "securityProperties": ["integrity", "availability", "idempotency"]
+    },
+    {
+      "id": "ASSET-009",
+      "name": "Audit events and export checksums",
+      "securityProperties": ["integrity", "completeness", "attribution"]
+    },
+    {
+      "id": "ASSET-010",
+      "name": "Search indexes, taxonomies, and cache tags",
+      "securityProperties": ["tenant isolation", "perspective isolation", "freshness"]
+    },
+    {
+      "id": "ASSET-011",
+      "name": "Logical archives and schema metadata",
+      "securityProperties": ["integrity", "portability", "scope safety"]
+    },
+    {
+      "id": "ASSET-012",
+      "name": "Service availability and operational capacity",
+      "securityProperties": ["availability", "recoverability"]
+    }
+  ],
+  "trustBoundaries": [
+    {
+      "id": "BOUNDARY-001",
+      "name": "Public internet to API/delivery",
+      "controls": ["TLS at deployment edge", "CORS allow-list", "input schemas", "bounded queries"]
+    },
+    {
+      "id": "BOUNDARY-002",
+      "name": "Authoring browser to management API",
+      "controls": [
+        "principal establishment",
+        "deny-by-default authorization",
+        "private no-store responses"
+      ]
+    },
+    {
+      "id": "BOUNDARY-003",
+      "name": "Tenant scope to persistence and indexes",
+      "controls": [
+        "explicit scope contract",
+        "scoped repository predicates",
+        "scope-keyed adapters"
+      ]
+    },
+    {
+      "id": "BOUNDARY-004",
+      "name": "Draft/preview to published delivery",
+      "controls": ["perspective separation", "published-only delivery", "scope/revision cache tags"]
+    },
+    {
+      "id": "BOUNDARY-005",
+      "name": "API to preview application",
+      "controls": [
+        "short-lived HMAC grant",
+        "exact origin and source checks",
+        "nonce and sequence replay checks"
+      ]
+    },
+    {
+      "id": "BOUNDARY-006",
+      "name": "API/worker to external adapters",
+      "controls": ["HTTPS and host allow-lists", "no redirects", "timeouts", "signed payloads"]
+    },
+    {
+      "id": "BOUNDARY-007",
+      "name": "Upload client to private object storage",
+      "controls": [
+        "multipart descriptor matching",
+        "content inspection",
+        "quarantine",
+        "signed private delivery"
+      ]
+    },
+    {
+      "id": "BOUNDARY-008",
+      "name": "Transactional write to asynchronous worker",
+      "controls": [
+        "transactional outbox",
+        "identifier-only search jobs",
+        "scoped leases",
+        "idempotency keys"
+      ]
+    },
+    {
+      "id": "BOUNDARY-009",
+      "name": "Logical archive to repository",
+      "controls": [
+        "checksums",
+        "schema/version validation",
+        "dry-run",
+        "scope checks",
+        "atomic rollback"
+      ]
+    }
+  ],
+  "dataFlows": [
+    {
+      "id": "FLOW-001",
+      "from": "ACTOR-002",
+      "to": "BOUNDARY-002",
+      "data": "identity, complete scope, draft mutations",
+      "assets": ["ASSET-001", "ASSET-003", "ASSET-004"]
+    },
+    {
+      "id": "FLOW-002",
+      "from": "ACTOR-001",
+      "to": "BOUNDARY-001",
+      "data": "published delivery query",
+      "assets": ["ASSET-002", "ASSET-010"]
+    },
+    {
+      "id": "FLOW-003",
+      "from": "BOUNDARY-002",
+      "to": "BOUNDARY-003",
+      "data": "authorized scoped repository operation",
+      "assets": ["ASSET-001", "ASSET-003"]
+    },
+    {
+      "id": "FLOW-004",
+      "from": "BOUNDARY-004",
+      "to": "ACTOR-001",
+      "data": "published revision and public cache tags",
+      "assets": ["ASSET-002", "ASSET-010"]
+    },
+    {
+      "id": "FLOW-005",
+      "from": "BOUNDARY-002",
+      "to": "BOUNDARY-005",
+      "data": "preview grant and draft messages",
+      "assets": ["ASSET-001", "ASSET-005"]
+    },
+    {
+      "id": "FLOW-006",
+      "from": "ACTOR-008",
+      "to": "BOUNDARY-007",
+      "data": "untrusted file bytes and metadata",
+      "assets": ["ASSET-006", "ASSET-012"]
+    },
+    {
+      "id": "FLOW-007",
+      "from": "BOUNDARY-007",
+      "to": "ACTOR-002",
+      "data": "short-lived private asset response",
+      "assets": ["ASSET-005", "ASSET-006"]
+    },
+    {
+      "id": "FLOW-008",
+      "from": "BOUNDARY-003",
+      "to": "BOUNDARY-008",
+      "data": "outbox event and scoped identifiers",
+      "assets": ["ASSET-008"]
+    },
+    {
+      "id": "FLOW-009",
+      "from": "ACTOR-006",
+      "to": "BOUNDARY-006",
+      "data": "signed webhook, cache invalidation, search update, notification",
+      "assets": ["ASSET-005", "ASSET-008", "ASSET-010"]
+    },
+    {
+      "id": "FLOW-010",
+      "from": "ACTOR-003",
+      "to": "BOUNDARY-009",
+      "data": "checksummed archive import/export",
+      "assets": ["ASSET-009", "ASSET-011"]
+    },
+    {
+      "id": "FLOW-011",
+      "from": "ACTOR-003",
+      "to": "BOUNDARY-002",
+      "data": "workflow approval and release command",
+      "assets": ["ASSET-007"]
+    },
+    {
+      "id": "FLOW-012",
+      "from": "BOUNDARY-003",
+      "to": "ACTOR-003",
+      "data": "audit verification and export",
+      "assets": ["ASSET-009"]
+    }
+  ],
+  "assumptions": [
+    "Production deployments terminate TLS and protect databases, queues, object stores, logs, and secret stores with least privilege.",
+    "Development identity headers and default secrets are never exposed on a production listener.",
+    "Applications validate and safely render application-owned components; GridStory never executes editor-authored JavaScript.",
+    "External adapters implement the documented timeouts, redirect, egress, credential, and tenant-scope contracts.",
+    "A full M5-002 isolation review must verify every persistence, cache, search, asset, job, event, and telemetry path before v1 GA."
+  ],
+  "threats": [
+    {
+      "id": "THREAT-0001",
+      "title": "Cross-tenant object access or mutation",
+      "stride": ["Spoofing", "Information Disclosure", "Elevation of Privilege"],
+      "scenario": "An attacker supplies another tenant's object ID or scope headers and reaches content, assets, jobs, search results, audit history, or configuration.",
+      "actors": ["ACTOR-008"],
+      "assets": ["ASSET-001", "ASSET-003", "ASSET-006", "ASSET-008", "ASSET-009", "ASSET-010"],
+      "boundaries": ["BOUNDARY-002", "BOUNDARY-003"],
+      "likelihood": 4,
+      "impact": 5,
+      "risk": 20,
+      "response": "mitigate",
+      "owner": "Control-plane owner",
+      "mitigations": [
+        "Require complete scope in request, storage, cache, event, job, audit, and adapter contracts.",
+        "Deny by default and authorize the resource action before access.",
+        "Run cross-scope conformance tests and database-policy review in M5-002."
+      ],
+      "verification": [
+        "packages/core/test/authorization.test.ts",
+        "packages/core/test/repository-conformance.test.ts",
+        "M5-002"
+      ]
+    },
+    {
+      "id": "THREAT-0002",
+      "title": "Development identity headers accepted in production",
+      "stride": ["Spoofing", "Elevation of Privilege"],
+      "scenario": "A public deployment trusts caller-controlled actor, role, or tenant headers and grants administrative access.",
+      "actors": ["ACTOR-008"],
+      "assets": ["ASSET-003", "ASSET-004"],
+      "boundaries": ["BOUNDARY-001", "BOUNDARY-002"],
+      "likelihood": 3,
+      "impact": 5,
+      "risk": 15,
+      "response": "mitigate",
+      "owner": "API owner",
+      "mitigations": [
+        "Treat current header identity as development-only.",
+        "Require deployed OIDC or service-token middleware and trusted-proxy configuration before production.",
+        "Fail startup when production mode lacks identity configuration."
+      ],
+      "verification": ["README.md", "packages/core/src/identity.ts", "M5-002"]
+    },
+    {
+      "id": "THREAT-0003",
+      "title": "Preview token disclosure or replay",
+      "stride": ["Spoofing", "Information Disclosure"],
+      "scenario": "A leaked preview grant is replayed from another origin or used after revocation to read draft content.",
+      "actors": ["ACTOR-005", "ACTOR-008"],
+      "assets": ["ASSET-001", "ASSET-005"],
+      "boundaries": ["BOUNDARY-004", "BOUNDARY-005"],
+      "likelihood": 3,
+      "impact": 4,
+      "risk": 12,
+      "response": "mitigate",
+      "owner": "Preview owner",
+      "mitigations": [
+        "Use short-lived HMAC grants bound to audience, full scope, origin, route, mode, and optional entry.",
+        "Check origin/source, expiry, revocation, monotonically increasing sequence, and nonce uniqueness.",
+        "Never place grants in published URLs or caches."
+      ],
+      "verification": [
+        "packages/core/test/preview-service.test.ts",
+        "apps/api/test/preview.test.ts",
+        "docs/troubleshooting.md"
+      ]
+    },
+    {
+      "id": "THREAT-0004",
+      "title": "Draft content enters a public cache",
+      "stride": ["Information Disclosure", "Tampering"],
+      "scenario": "A mixed perspective response or incomplete cache key exposes draft content to anonymous delivery consumers.",
+      "actors": ["ACTOR-001", "ACTOR-008"],
+      "assets": ["ASSET-001", "ASSET-002", "ASSET-010"],
+      "boundaries": ["BOUNDARY-004"],
+      "likelihood": 3,
+      "impact": 5,
+      "risk": 15,
+      "response": "mitigate",
+      "owner": "Delivery owner",
+      "mitigations": [
+        "Force published perspective on public delivery.",
+        "Use private, no-store for management, GraphQL, preview, assets, and operations.",
+        "Include full scope and exact revision in public cache tags and vary policy."
+      ],
+      "verification": [
+        "apps/api/test/server.test.ts",
+        "apps/api/test/content-query.test.ts",
+        "docs/content-queries.md"
+      ]
+    },
+    {
+      "id": "THREAT-0005",
+      "title": "Webhook SSRF or DNS rebinding",
+      "stride": ["Information Disclosure", "Elevation of Privilege"],
+      "scenario": "A privileged user supplies a destination that reaches localhost, private infrastructure, metadata services, or redirects to them.",
+      "actors": ["ACTOR-003", "ACTOR-008"],
+      "assets": ["ASSET-005", "ASSET-008", "ASSET-012"],
+      "boundaries": ["BOUNDARY-006"],
+      "likelihood": 3,
+      "impact": 5,
+      "risk": 15,
+      "response": "mitigate",
+      "owner": "Operations owner",
+      "mitigations": [
+        "Require HTTPS public hosts and reject credentials, localhost, local/reserved literals, and redirects.",
+        "Configure a production host allow-list and network egress/DNS controls.",
+        "Revalidate the destination at execution time."
+      ],
+      "verification": [
+        "packages/core/test/operations-service.test.ts",
+        "docs/operations.md",
+        "M5-002"
+      ]
+    },
+    {
+      "id": "THREAT-0006",
+      "title": "Forged or replayed outbound event",
+      "stride": ["Spoofing", "Repudiation", "Tampering"],
+      "scenario": "A receiver accepts a forged webhook or processes a legitimate durable delivery repeatedly.",
+      "actors": ["ACTOR-007", "ACTOR-008"],
+      "assets": ["ASSET-005", "ASSET-008"],
+      "boundaries": ["BOUNDARY-006", "BOUNDARY-008"],
+      "likelihood": 3,
+      "impact": 3,
+      "risk": 9,
+      "response": "mitigate",
+      "owner": "Operations owner",
+      "mitigations": [
+        "Sign timestamp and exact raw body with HMAC-SHA256.",
+        "Expose immutable delivery and event IDs.",
+        "Require receiver freshness checks and delivery-ID deduplication."
+      ],
+      "verification": ["packages/core/test/operations-service.test.ts", "docs/workflow-actions.md"]
+    },
+    {
+      "id": "THREAT-0007",
+      "title": "Malicious or mislabeled asset upload",
+      "stride": ["Tampering", "Denial of Service", "Elevation of Privilege"],
+      "scenario": "A polyglot, active SVG, malware, oversized payload, pixel bomb, or false MIME type reaches storage or a browser.",
+      "actors": ["ACTOR-008"],
+      "assets": ["ASSET-006", "ASSET-012"],
+      "boundaries": ["BOUNDARY-007"],
+      "likelihood": 4,
+      "impact": 4,
+      "risk": 16,
+      "response": "mitigate",
+      "owner": "Asset owner",
+      "mitigations": [
+        "Match server-recorded multipart descriptors and inspect exact bytes.",
+        "Verify signatures/type, sanitize SVG, inject malware scanning, and fail closed into immutable quarantine.",
+        "Enforce deployment-specific size, dimension, decompression, and processing limits."
+      ],
+      "verification": [
+        "packages/core/test/asset-security.test.ts",
+        "packages/core/test/asset-service.test.ts",
+        "docs/assets.md",
+        "M5-007"
+      ]
+    },
+    {
+      "id": "THREAT-0008",
+      "title": "Private asset grant leakage or substitution",
+      "stride": ["Spoofing", "Information Disclosure"],
+      "scenario": "A signed asset URL is leaked, altered to another object, cached publicly, or reused beyond its intended lifetime.",
+      "actors": ["ACTOR-008"],
+      "assets": ["ASSET-005", "ASSET-006"],
+      "boundaries": ["BOUNDARY-007"],
+      "likelihood": 3,
+      "impact": 4,
+      "risk": 12,
+      "response": "mitigate",
+      "owner": "Asset owner",
+      "mitigations": [
+        "Bind HMAC grant to complete scope and exact asset/revision with 30-900 second expiry.",
+        "Recheck verified state and scope-safe object key at read time.",
+        "Return private, no-store with nosniff and SVG sandbox CSP."
+      ],
+      "verification": [
+        "packages/core/test/asset-delivery-service.test.ts",
+        "apps/api/test/assets.test.ts",
+        "docs/assets.md"
+      ]
+    },
+    {
+      "id": "THREAT-0009",
+      "title": "Archive tampering or cross-scope import",
+      "stride": ["Tampering", "Elevation of Privilege", "Denial of Service"],
+      "scenario": "A crafted logical archive changes history, injects another scope, exceeds capacity, or partially imports before failure.",
+      "actors": ["ACTOR-003", "ACTOR-008"],
+      "assets": ["ASSET-001", "ASSET-003", "ASSET-009", "ASSET-011", "ASSET-012"],
+      "boundaries": ["BOUNDARY-009"],
+      "likelihood": 3,
+      "impact": 5,
+      "risk": 15,
+      "response": "mitigate",
+      "owner": "Portability owner",
+      "mitigations": [
+        "Verify canonical per-entry and aggregate checksums, format/schema versions, and exact target scope.",
+        "Offer dry-run/conflict reporting and atomic rollback.",
+        "Set archive, record, depth, and execution limits before GA."
+      ],
+      "verification": [
+        "packages/core/test/portability-service.test.ts",
+        "docs/portability.md",
+        "M5-007"
+      ]
+    },
+    {
+      "id": "THREAT-0010",
+      "title": "GraphQL or query complexity exhaustion",
+      "stride": ["Denial of Service"],
+      "scenario": "Nested, broad, aliased, batched, or expensive filters consume excessive CPU, memory, or database work.",
+      "actors": ["ACTOR-001", "ACTOR-008"],
+      "assets": ["ASSET-012"],
+      "boundaries": ["BOUNDARY-001"],
+      "likelihood": 4,
+      "impact": 4,
+      "risk": 16,
+      "response": "mitigate",
+      "owner": "API owner",
+      "mitigations": [
+        "Limit GraphQL depth to 12; disable batching and subscriptions.",
+        "Bound page, filter, sort, and projection inputs.",
+        "Add cost, alias, payload, concurrency, and rate limits with benchmark-backed thresholds before GA."
+      ],
+      "verification": ["apps/api/test/graphql.test.ts", "docs/content-queries.md", "M5-007"]
+    },
+    {
+      "id": "THREAT-0011",
+      "title": "Cursor tampering or query-context substitution",
+      "stride": ["Tampering", "Information Disclosure"],
+      "scenario": "An attacker edits a continuation cursor or reuses it for another scope, perspective, filter, sort, or projection.",
+      "actors": ["ACTOR-008"],
+      "assets": ["ASSET-001", "ASSET-002", "ASSET-003"],
+      "boundaries": ["BOUNDARY-001", "BOUNDARY-003"],
+      "likelihood": 3,
+      "impact": 4,
+      "risk": 12,
+      "response": "mitigate",
+      "owner": "Query owner",
+      "mitigations": [
+        "Sign cursors and bind them to complete scope and canonical query shape.",
+        "Use constant-time signature comparison and stable validation errors.",
+        "Rotate the cursor secret deliberately."
+      ],
+      "verification": ["packages/core/test/content-query.test.ts", "docs/content-queries.md"]
+    },
+    {
+      "id": "THREAT-0012",
+      "title": "Search perspective or tenant bleed",
+      "stride": ["Information Disclosure", "Tampering"],
+      "scenario": "An adapter returns another tenant's records, exposes draft data to published search, or serves stale results after publication.",
+      "actors": ["ACTOR-007", "ACTOR-008"],
+      "assets": ["ASSET-001", "ASSET-002", "ASSET-003", "ASSET-010"],
+      "boundaries": ["BOUNDARY-003", "BOUNDARY-004", "BOUNDARY-006"],
+      "likelihood": 3,
+      "impact": 5,
+      "risk": 15,
+      "response": "mitigate",
+      "owner": "Search owner",
+      "mitigations": [
+        "Make full scope and perspective mandatory adapter keys.",
+        "Put identifiers, not content, in incremental jobs and reload under scope.",
+        "Expose scoped rebuild/status and run cross-adapter isolation tests in M5-002."
+      ],
+      "verification": [
+        "packages/core/test/search-service.test.ts",
+        "docs/search-and-taxonomies.md",
+        "M5-002"
+      ]
+    },
+    {
+      "id": "THREAT-0013",
+      "title": "Durable job scope confusion or duplicate effect",
+      "stride": ["Tampering", "Repudiation", "Information Disclosure"],
+      "scenario": "A job payload carries the wrong tenant or stale draft content, a lease is stolen, or retry/replay duplicates an external side effect.",
+      "actors": ["ACTOR-006", "ACTOR-008"],
+      "assets": ["ASSET-003", "ASSET-008"],
+      "boundaries": ["BOUNDARY-008"],
+      "likelihood": 3,
+      "impact": 5,
+      "risk": 15,
+      "response": "mitigate",
+      "owner": "Operations owner",
+      "mitigations": [
+        "Persist full scope separately from bounded payloads and use identifier-only payloads where possible.",
+        "Use expiring owner-checked leases and full-scope idempotency keys.",
+        "Preserve immutable completion/dead-letter history and create a new identity for replay."
+      ],
+      "verification": [
+        "packages/core/test/operations-service.test.ts",
+        "packages/core/test/repository-conformance.test.ts",
+        "docs/operations.md"
+      ]
+    },
+    {
+      "id": "THREAT-0014",
+      "title": "Workflow approval or release-policy bypass",
+      "stride": ["Tampering", "Repudiation", "Elevation of Privilege"],
+      "scenario": "A user self-approves despite separation-of-duties rules, executes an unvalidated/stale release, or overwrites concurrent intent.",
+      "actors": ["ACTOR-002", "ACTOR-003", "ACTOR-008"],
+      "assets": ["ASSET-001", "ASSET-002", "ASSET-007", "ASSET-009"],
+      "boundaries": ["BOUNDARY-002", "BOUNDARY-003"],
+      "likelihood": 3,
+      "impact": 5,
+      "risk": 15,
+      "response": "mitigate",
+      "owner": "Editorial workflow owner",
+      "mitigations": [
+        "Authorize distinct transition, approval, schedule, execute, and rollback actions.",
+        "Enforce separation of duties and exact expected revisions.",
+        "Publish releases atomically after future-state validation and audit every action."
+      ],
+      "verification": [
+        "packages/core/test/workflow-service.test.ts",
+        "packages/core/test/release-service.test.ts",
+        "docs/releases.md"
+      ]
+    },
+    {
+      "id": "THREAT-0015",
+      "title": "Audit tampering, truncation, or log injection",
+      "stride": ["Tampering", "Repudiation", "Information Disclosure"],
+      "scenario": "An attacker alters or removes audit events, injects misleading text, or causes secrets/content to enter operational logs.",
+      "actors": ["ACTOR-003", "ACTOR-008"],
+      "assets": ["ASSET-005", "ASSET-009"],
+      "boundaries": ["BOUNDARY-002", "BOUNDARY-003"],
+      "likelihood": 3,
+      "impact": 4,
+      "risk": 12,
+      "response": "mitigate",
+      "owner": "Security operations owner",
+      "mitigations": [
+        "Hash-chain events within exact scope and checksum exports.",
+        "Restrict audit read/export to administrators.",
+        "Define structured security-event logging, redaction, external retention, alerting, and append-only protection in M5-004."
+      ],
+      "verification": [
+        "packages/core/test/audit-service.test.ts",
+        "docs/audit-and-administration.md",
+        "M5-004"
+      ]
+    },
+    {
+      "id": "THREAT-0016",
+      "title": "Signing secret or service credential compromise",
+      "stride": ["Spoofing", "Information Disclosure", "Elevation of Privilege"],
+      "scenario": "A weak, shared, logged, or unrotated secret permits forged preview, cursor, webhook, asset, or service-account credentials.",
+      "actors": ["ACTOR-008"],
+      "assets": ["ASSET-004", "ASSET-005"],
+      "boundaries": ["BOUNDARY-001", "BOUNDARY-006"],
+      "likelihood": 3,
+      "impact": 5,
+      "risk": 15,
+      "response": "mitigate",
+      "owner": "Deployment owner",
+      "mitigations": [
+        "Use independent high-entropy secrets and constant-time comparisons.",
+        "Store service secrets as hashes and support expiry/revocation.",
+        "Use a production secret manager, rotation schedule, credential inventory, and emergency revocation runbook."
+      ],
+      "verification": [
+        "packages/core/src/identity.ts",
+        "packages/core/src/preview-service.ts",
+        "packages/core/src/asset-delivery-service.ts",
+        "M5-004"
+      ]
+    },
+    {
+      "id": "THREAT-0017",
+      "title": "Stored content causes script or markup execution",
+      "stride": ["Tampering", "Elevation of Privilege"],
+      "scenario": "Untrusted content, rich text, SVG, component props, or URLs execute in Studio, preview, or the consuming application.",
+      "actors": ["ACTOR-002", "ACTOR-008"],
+      "assets": ["ASSET-001", "ASSET-002", "ASSET-006"],
+      "boundaries": ["BOUNDARY-002", "BOUNDARY-004", "BOUNDARY-007"],
+      "likelihood": 4,
+      "impact": 4,
+      "risk": 16,
+      "response": "mitigate",
+      "owner": "Schema and rendering owner",
+      "mitigations": [
+        "Store validated structured data and code-owned component IDs; never execute editor-authored JavaScript.",
+        "Validate URL and rich-text contracts and sanitize SVG.",
+        "Require context-appropriate output encoding and safe rendering in each consuming application."
+      ],
+      "verification": [
+        "packages/schema/test/content-schema.test.ts",
+        "packages/react/test/renderer.test.tsx",
+        "packages/core/test/asset-security.test.ts"
+      ]
+    },
+    {
+      "id": "THREAT-0018",
+      "title": "External adapter failure or compromise",
+      "stride": ["Tampering", "Information Disclosure", "Denial of Service"],
+      "scenario": "A cache, search, storage, scanner, identity, or notification adapter leaks scoped data, hangs, returns hostile data, or corrupts state.",
+      "actors": ["ACTOR-007"],
+      "assets": ["ASSET-001", "ASSET-003", "ASSET-005", "ASSET-006", "ASSET-010", "ASSET-012"],
+      "boundaries": ["BOUNDARY-006", "BOUNDARY-007"],
+      "likelihood": 3,
+      "impact": 5,
+      "risk": 15,
+      "response": "mitigate",
+      "owner": "Platform integration owner",
+      "mitigations": [
+        "Keep explicit framework-neutral interfaces and pass complete scope.",
+        "Validate adapter outputs and fail closed for security-critical scanning/identity.",
+        "Set bounded timeouts, retries, circuit breaking, least-privilege credentials, and health telemetry."
+      ],
+      "verification": [
+        "docs/operations.md",
+        "docs/assets.md",
+        "docs/search-and-taxonomies.md",
+        "M5-004"
+      ]
+    },
+    {
+      "id": "THREAT-0019",
+      "title": "Resource exhaustion and unbounded retention",
+      "stride": ["Denial of Service"],
+      "scenario": "Large bodies, archives, uploads, queries, revisions, jobs, retries, or audit history exhaust memory, disk, database, or worker capacity.",
+      "actors": ["ACTOR-008"],
+      "assets": ["ASSET-012"],
+      "boundaries": ["BOUNDARY-001", "BOUNDARY-007", "BOUNDARY-008", "BOUNDARY-009"],
+      "likelihood": 4,
+      "impact": 4,
+      "risk": 16,
+      "response": "mitigate",
+      "owner": "Reliability owner",
+      "mitigations": [
+        "Retain existing bounded query, action, retry, and worker-batch limits.",
+        "Define body/upload/archive/concurrency/rate/retention quotas and benchmark them before GA.",
+        "Monitor saturation and fail predictably."
+      ],
+      "verification": ["docs/content-queries.md", "docs/operations.md", "M5-004", "M5-007"]
+    },
+    {
+      "id": "THREAT-0020",
+      "title": "Dependency or build artifact compromise",
+      "stride": ["Tampering", "Elevation of Privilege"],
+      "scenario": "A malicious dependency, install script, registry response, CI token, or unsigned release modifies shipped packages.",
+      "actors": ["ACTOR-008"],
+      "assets": ["ASSET-002", "ASSET-005", "ASSET-012"],
+      "boundaries": ["BOUNDARY-006"],
+      "likelihood": 3,
+      "impact": 5,
+      "risk": 15,
+      "response": "mitigate",
+      "owner": "Release engineering owner",
+      "mitigations": [
+        "Keep lockfile-pinned dependencies and protected CI credentials.",
+        "Add automated vulnerability handling, SBOM generation, provenance, signatures, and release verification in M5-007.",
+        "Document remediation service levels."
+      ],
+      "verification": ["pnpm-lock.yaml", "M5-007"]
+    },
+    {
+      "id": "THREAT-0021",
+      "title": "Transport or proxy misconfiguration",
+      "stride": ["Spoofing", "Information Disclosure"],
+      "scenario": "Missing TLS, unsafe forwarded-header trust, broad CORS, or incorrect origin configuration leaks credentials or changes the perceived caller/origin.",
+      "actors": ["ACTOR-008"],
+      "assets": ["ASSET-004", "ASSET-005", "ASSET-006"],
+      "boundaries": ["BOUNDARY-001", "BOUNDARY-002", "BOUNDARY-005"],
+      "likelihood": 3,
+      "impact": 5,
+      "risk": 15,
+      "response": "mitigate",
+      "owner": "Deployment owner",
+      "mitigations": [
+        "Use explicit CORS and preview-origin allow-lists.",
+        "Terminate modern TLS and configure trusted proxies explicitly.",
+        "Add production configuration validation and deployment conformance checks."
+      ],
+      "verification": ["apps/api/src/server.ts", "docs/troubleshooting.md", "M5-002"]
+    },
+    {
+      "id": "THREAT-0022",
+      "title": "Sensitive error or debug disclosure",
+      "stride": ["Information Disclosure"],
+      "scenario": "Stack traces, internal exceptions, secrets, tokens, content, or database detail are returned to an untrusted caller or logged without redaction.",
+      "actors": ["ACTOR-008"],
+      "assets": ["ASSET-001", "ASSET-005"],
+      "boundaries": ["BOUNDARY-001", "BOUNDARY-002"],
+      "likelihood": 3,
+      "impact": 4,
+      "risk": 12,
+      "response": "mitigate",
+      "owner": "API owner",
+      "mitigations": [
+        "Return stable generic envelopes for unexpected server errors.",
+        "Treat known validation errors as bounded client errors.",
+        "Add structured redaction tests and production debug-off validation in M5-004."
+      ],
+      "verification": ["apps/api/src/server.ts", "apps/api/test/server.test.ts", "M5-004"]
+    }
+  ],
+  "review": {
+    "cadence": "At least quarterly and before each release candidate",
+    "triggers": [
+      "new trust boundary or external adapter",
+      "authentication, authorization, tenant-scope, cache, preview, asset, import, job, or logging change",
+      "security incident or newly relevant vulnerability",
+      "major dependency, deployment topology, or data-classification change"
+    ],
+    "exitCriteria": [
+      "all actors, assets, boundaries, and flows are current",
+      "every threat has an owner, response, mitigations, verification, and residual plan",
+      "critical and high residual risks have a linked task or explicit signed acceptance",
+      "the ASVS profile and evidence links pass automated validation"
+    ]
+  }
+}
