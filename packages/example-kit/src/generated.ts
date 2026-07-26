@@ -12,6 +12,7 @@ export interface PageContent {
   story?: RichTextDocument;
   socialImage?: AssetReference;
   relatedPages?: ContentReference[];
+  topics?: string[];
   blocks: ComponentNode[];
 }
 

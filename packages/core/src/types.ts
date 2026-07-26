@@ -89,7 +89,12 @@ export interface OutboxEvent extends ContentScope {
 
 export interface DurableJob extends ContentScope {
   id: string;
-  type: 'cache.invalidate' | 'webhook.deliver';
+  type:
+    | 'cache.invalidate'
+    | 'webhook.deliver'
+    | 'workflow.action'
+    | 'search.index'
+    | 'search.rebuild';
   idempotencyKey: string;
   payload: Record<string, unknown>;
   state: DurableState;

@@ -1,6 +1,10 @@
 import { createHmac, randomUUID } from 'node:crypto';
 import { isIP } from 'node:net';
-import type { ContentEntry, ContentScope } from '@gridstory/schema';
+import {
+  workflowActionDefinitionSchema,
+  type ContentEntry,
+  type ContentScope,
+} from '@gridstory/schema';
 import { verifyAuditEvents, type AuditVerification } from './audit-service.js';
 import { GridStoryError, NotFoundError } from './errors.js';
 import type {
@@ -33,6 +37,17 @@ export interface OperationsServiceOptions {
   webhookSigningSecret: string;
   webhookTransport?: WebhookTransport;
   cacheInvalidator?: CacheInvalidator;
+  workflowActionNotifier?: (input: {
+    scope: ContentScope;
+    entryId: string;
+    message: string;
+    audienceRoles: string[];
+  }) => Promise<void>;
+  searchJobRunner?: (input: {
+    scope: ContentScope;
+    type: 'search.index' | 'search.rebuild';
+    payload: Record<string, unknown>;
+  }) => Promise<Record<string, unknown>>;
   allowedWebhookHosts?: string[];
   now?: () => Date;
   createId?: () => string;
@@ -155,6 +170,8 @@ export class OperationsService {
   readonly #webhookSigningSecret: string;
   readonly #webhookTransport: WebhookTransport;
   readonly #cacheInvalidator: CacheInvalidator;
+  readonly #workflowActionNotifier: NonNullable<OperationsServiceOptions['workflowActionNotifier']>;
+  readonly #searchJobRunner: NonNullable<OperationsServiceOptions['searchJobRunner']>;
   readonly #allowedWebhookHosts?: ReadonlySet<string>;
   readonly #now: () => Date;
   readonly #createId: () => string;
@@ -164,6 +181,10 @@ export class OperationsService {
     webhookSigningSecret,
     webhookTransport = defaultWebhookTransport,
     cacheInvalidator = async () => undefined,
+    workflowActionNotifier = async () => undefined,
+    searchJobRunner = async () => {
+      throw new Error('Search job runner is not configured.');
+    },
     allowedWebhookHosts,
     now = () => new Date(),
     createId = randomUUID,
@@ -179,6 +200,8 @@ export class OperationsService {
     this.#webhookSigningSecret = webhookSigningSecret;
     this.#webhookTransport = webhookTransport;
     this.#cacheInvalidator = cacheInvalidator;
+    this.#workflowActionNotifier = workflowActionNotifier;
+    this.#searchJobRunner = searchJobRunner;
     if (allowedWebhookHosts) {
       this.#allowedWebhookHosts = new Set(
         allowedWebhookHosts.map((host) => host.toLocaleLowerCase('en-US')),
@@ -231,6 +254,12 @@ export class OperationsService {
 
   listJobs(scope: ContentScope, limit?: number): Promise<DurableJob[]> {
     return Promise.resolve(this.#repository.listJobs({ scope, ...(limit ? { limit } : {}) }));
+  }
+
+  async listWorkflowActions(scope: ContentScope, limit = 100): Promise<DurableJob[]> {
+    return (await this.listJobs(scope, 1000))
+      .filter((job) => job.type === 'workflow.action')
+      .slice(0, Math.max(1, Math.min(limit, 1000)));
   }
 
   listOperationalScopes(limit?: number): Promise<ContentScope[]> {
@@ -288,6 +317,14 @@ export class OperationsService {
     });
   }
 
+  async replayWorkflowAction(scope: ContentScope, id: string): Promise<DurableJob> {
+    const job = await this.#repository.getJob({ scope, id });
+    if (job?.type !== 'workflow.action') {
+      throw new NotFoundError('Workflow action delivery was not found.');
+    }
+    return await this.replayJob(scope, id);
+  }
+
   async #expandOutbox(scope: ContentScope, workerId: string, event: OutboxEvent): Promise<number> {
     let enqueued = 0;
     await this.#repository.enqueueJob({
@@ -295,6 +332,20 @@ export class OperationsService {
       type: 'cache.invalidate',
       idempotencyKey: `outbox:${event.id}:cache`,
       payload: { eventId: event.id, tags: event.cacheTags },
+      runAt: iso(this.#now()),
+      maxAttempts: 8,
+    });
+    enqueued += 1;
+    await this.#repository.enqueueJob({
+      scope,
+      type: 'search.index',
+      idempotencyKey: `outbox:${event.id}:search`,
+      payload: {
+        eventId: event.id,
+        eventType: event.type,
+        entryId: event.aggregateId,
+        revisionId: event.revisionId,
+      },
       runAt: iso(this.#now()),
       maxAttempts: 8,
     });
@@ -326,6 +377,17 @@ export class OperationsService {
   }
 
   async #runJob(scope: ContentScope, workerId: string, job: DurableJob): Promise<void> {
+    if (job.type === 'search.index' || job.type === 'search.rebuild') {
+      const result = await this.#searchJobRunner({ scope, type: job.type, payload: job.payload });
+      await this.#repository.completeJob({
+        scope,
+        id: job.id,
+        workerId,
+        completedAt: iso(this.#now()),
+        result,
+      });
+      return;
+    }
     if (job.type === 'cache.invalidate') {
       const tags = Array.isArray(job.payload.tags)
         ? job.payload.tags.filter((tag): tag is string => typeof tag === 'string')
@@ -337,6 +399,62 @@ export class OperationsService {
         workerId,
         completedAt: iso(this.#now()),
         result: { invalidatedTags: tags.length },
+      });
+      return;
+    }
+    if (job.type === 'workflow.action') {
+      const action = workflowActionDefinitionSchema.parse(job.payload.action);
+      const entryId = typeof job.payload.entryId === 'string' ? job.payload.entryId : '';
+      if (!entryId) throw new Error('Workflow action entryId is invalid.');
+      let result: Record<string, unknown>;
+      if (action.type === 'notification') {
+        await this.#workflowActionNotifier({
+          scope,
+          entryId,
+          message: action.message,
+          audienceRoles: action.audienceRoles,
+        });
+        result = { delivered: true, audienceRoles: action.audienceRoles.length };
+      } else if (action.type === 'cache-invalidate') {
+        await this.#cacheInvalidator(action.tags);
+        result = { invalidatedTags: action.tags.length };
+      } else {
+        const body = JSON.stringify({
+          deliveryId: job.id,
+          idempotencyKey: job.idempotencyKey,
+          eventId: job.payload.eventId,
+          workflowId: job.payload.workflowId,
+          workflowVersion: job.payload.workflowVersion,
+          entryId,
+          revisionId: job.payload.revisionId,
+          transitionId: job.payload.transitionId,
+          action: { id: action.id, label: action.label, type: action.type },
+        });
+        const timestamp = String(Math.floor(this.#now().getTime() / 1000));
+        const response = await this.#webhookTransport({
+          url: validateWebhookUrl(action.url, this.#allowedWebhookHosts),
+          body,
+          headers: {
+            'content-type': 'application/json',
+            'user-agent': 'GridStory-Workflow-Actions/1.0',
+            'x-gridstory-delivery': job.id,
+            'x-gridstory-event': action.eventName,
+            'x-gridstory-timestamp': timestamp,
+            'x-gridstory-signature': signWebhookPayload(
+              this.#webhookSigningSecret,
+              timestamp,
+              body,
+            ),
+          },
+        });
+        result = { httpStatus: response.status };
+      }
+      await this.#repository.completeJob({
+        scope,
+        id: job.id,
+        workerId,
+        completedAt: iso(this.#now()),
+        result,
       });
       return;
     }

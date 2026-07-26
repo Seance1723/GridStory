@@ -43,7 +43,7 @@ Schedules store an absolute ISO-8601 instant plus the originating IANA time zone
 
 Approval deadlines are processed by the same worker loop. Passing a deadline marks the request escalated once and creates a notification for the configured escalation roles. Notifications are durable, bounded records containing only workflow metadata and audience roles. They do not contain draft field values, preview credentials, tokens, webhook secrets, or published-cache payloads. An injected notifier can deliver those records to an external system without moving vendor code into the control plane.
 
-Workflow history is append-only within the durable instance and records initialization, transitions, approvals, rejection, scheduling, and escalation. Content publication continues to use the existing hash-chained content audit and transactional outbox. M4-004 adds atomic multi-entry release semantics; M4-005 adds the broader visual action designer, retries, dead letters, idempotency, and delivery logs.
+Workflow history is append-only within the durable instance and records initialization, transitions, approvals, rejection, scheduling, escalation, and exact completed-transition action snapshots. Content publication continues to use the existing hash-chained content audit and transactional outbox. Durable transition actions, recovery, retries, dead letters, idempotency, and delivery logs are documented in [Durable workflow actions](workflow-actions.md).
 
 ## Deployment notes
 

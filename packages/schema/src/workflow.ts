@@ -40,6 +40,32 @@ export const workflowApprovalRuleSchema = z.object({
   locales: z.array(z.string().min(1)).default([]),
 });
 
+export const workflowActionDefinitionSchema = z.discriminatedUnion('type', [
+  z.object({
+    id: identifierSchema,
+    label: z.string().min(1).max(100),
+    type: z.literal('notification'),
+    message: z.string().min(1).max(500),
+    audienceRoles: z.array(z.string().min(1)).min(1).max(20),
+    maxAttempts: z.number().int().min(1).max(20).default(5),
+  }),
+  z.object({
+    id: identifierSchema,
+    label: z.string().min(1).max(100),
+    type: z.literal('webhook'),
+    url: z.string().url().startsWith('https://'),
+    eventName: identifierSchema,
+    maxAttempts: z.number().int().min(1).max(20).default(8),
+  }),
+  z.object({
+    id: identifierSchema,
+    label: z.string().min(1).max(100),
+    type: z.literal('cache-invalidate'),
+    tags: z.array(z.string().min(1).max(200)).min(1).max(100),
+    maxAttempts: z.number().int().min(1).max(20).default(5),
+  }),
+]);
+
 export const workflowTransitionDefinitionSchema = z.object({
   id: identifierSchema,
   label: z.string().min(1).max(100),
@@ -47,6 +73,7 @@ export const workflowTransitionDefinitionSchema = z.object({
   to: identifierSchema,
   allowedRoles: z.array(z.string().min(1)).min(1),
   approval: workflowApprovalRuleSchema.optional(),
+  actions: z.array(workflowActionDefinitionSchema).max(20).default([]),
 });
 
 export const workflowDefinitionInputSchema = z
@@ -84,6 +111,14 @@ export const workflowDefinitionInputSchema = z
         });
       }
       transitionIds.add(transition.id);
+      const actionIds = new Set(transition.actions.map((action) => action.id));
+      if (actionIds.size !== transition.actions.length) {
+        context.addIssue({
+          code: 'custom',
+          path: ['transitions', index, 'actions'],
+          message: 'Workflow action IDs must be unique within a transition.',
+        });
+      }
       if (!states.has(transition.from) || !states.has(transition.to)) {
         context.addIssue({
           code: 'custom',
@@ -198,6 +233,7 @@ export const workflowInstanceSchema = contentScopeSchema.extend({
 export type WorkflowStateKind = z.infer<typeof workflowStateKindSchema>;
 export type WorkflowStateDefinition = z.infer<typeof workflowStateDefinitionSchema>;
 export type WorkflowApprovalRule = z.infer<typeof workflowApprovalRuleSchema>;
+export type WorkflowActionDefinition = z.infer<typeof workflowActionDefinitionSchema>;
 export type WorkflowTransitionDefinition = z.infer<typeof workflowTransitionDefinitionSchema>;
 export type WorkflowDefinitionInput = z.infer<typeof workflowDefinitionInputSchema>;
 export type WorkflowDefinition = z.infer<typeof workflowDefinitionSchema>;

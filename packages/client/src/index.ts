@@ -44,6 +44,12 @@ import type {
   Release,
   ReleaseInput,
   ReleasePreview,
+  BacklinkRecord,
+  RelatedContentRecord,
+  SearchIndexStatus,
+  SearchQuery,
+  SearchResponse,
+  TaxonomyDefinition,
 } from '@gridstory/schema';
 
 export interface SchemaDeploymentRecord {
@@ -140,7 +146,12 @@ export interface OutboxEventRecord {
 
 export interface DurableJobRecord {
   id: string;
-  type: 'cache.invalidate' | 'webhook.deliver';
+  type:
+    | 'cache.invalidate'
+    | 'webhook.deliver'
+    | 'workflow.action'
+    | 'search.index'
+    | 'search.rebuild';
   idempotencyKey: string;
   payload: Record<string, unknown>;
   state: 'pending' | 'processing' | 'succeeded' | 'dead';
@@ -170,6 +181,11 @@ export interface OperationsDrainResult {
   completedJobs: number;
   retriedJobs: number;
   deadJobs: number;
+}
+
+export interface WorkflowActionDrainResult {
+  reconciliation: { discovered: number; reconciled: number };
+  delivery: OperationsDrainResult;
 }
 
 export interface LogicalArchiveRevision {
@@ -795,6 +811,26 @@ export class GridStoryClient {
     });
   }
 
+  listWorkflowActions(signal?: AbortSignal): Promise<DurableJobRecord[]> {
+    return this.#request('/api/v1/workflow-actions', signal ? { signal } : {});
+  }
+
+  drainWorkflowActions(limit = 25, signal?: AbortSignal): Promise<WorkflowActionDrainResult> {
+    return this.#request('/api/v1/workflow-actions/drain', {
+      method: 'POST',
+      body: JSON.stringify({ limit }),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  replayWorkflowAction(id: string, signal?: AbortSignal): Promise<DurableJobRecord> {
+    return this.#request(`/api/v1/workflow-actions/${encodeURIComponent(id)}/replay`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
   listReleases(signal?: AbortSignal): Promise<Release[]> {
     return this.#request('/api/v1/releases', signal ? { signal } : {});
   }
@@ -879,6 +915,58 @@ export class GridStoryClient {
     });
   }
 
+  search(query: SearchQuery = {}, signal?: AbortSignal): Promise<SearchResponse> {
+    return this.#request('/api/v1/search', {
+      method: 'POST',
+      body: JSON.stringify(query),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  listTaxonomies(signal?: AbortSignal): Promise<TaxonomyDefinition[]> {
+    return this.#request('/api/v1/taxonomies', signal ? { signal } : {});
+  }
+
+  getSearchIndexStatus(signal?: AbortSignal): Promise<SearchIndexStatus> {
+    return this.#request('/api/v1/search/index/status', signal ? { signal } : {});
+  }
+
+  rebuildSearchIndex(
+    perspective: ContentPerspective = 'published',
+    signal?: AbortSignal,
+  ): Promise<DurableJobRecord> {
+    return this.#request('/api/v1/search/index/rebuild', {
+      method: 'POST',
+      body: JSON.stringify({ perspective }),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  listBacklinks(
+    entryId: string,
+    perspective: ContentPerspective = 'published',
+    signal?: AbortSignal,
+  ): Promise<BacklinkRecord[]> {
+    const search = new URLSearchParams({ perspective });
+    return this.#request(`/api/v1/content/${encodeURIComponent(entryId)}/backlinks?${search}`, {
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  listRelatedContent(
+    entryId: string,
+    options: {
+      perspective?: ContentPerspective;
+      limit?: number;
+      signal?: AbortSignal;
+    } = {},
+  ): Promise<RelatedContentRecord[]> {
+    const search = new URLSearchParams({ perspective: options.perspective ?? 'published' });
+    if (options.limit !== undefined) search.set('limit', String(options.limit));
+    return this.#request(`/api/v1/content/${encodeURIComponent(entryId)}/related?${search}`, {
+      ...(options.signal ? { signal: options.signal } : {}),
+    });
+  }
   queryContent(query: ContentQuery = {}, signal?: AbortSignal): Promise<ContentConnection> {
     return this.#request('/api/v1/content/query', {
       method: 'POST',
@@ -1278,4 +1366,10 @@ export type {
   Release,
   ReleaseInput,
   ReleasePreview,
+  BacklinkRecord,
+  RelatedContentRecord,
+  SearchIndexStatus,
+  SearchQuery,
+  SearchResponse,
+  TaxonomyDefinition,
 };

@@ -11,7 +11,7 @@ pnpm --filter @gridstory/api start
 pnpm worker
 ```
 
-During development, `pnpm dev:worker` runs the TypeScript worker. `GRIDSTORY_WORKER_INTERVAL_MS` controls polling from 100 to 60000 milliseconds. The worker discovers scopes with pending work, processes due atomic releases before workflow schedules and approval escalations, claims up to 100 outbox/job records per scope, and exits gracefully after `SIGINT` or `SIGTERM`. Release execution is documented in [Atomic multi-entry releases](releases.md), and workflow execution is documented in [Editorial workflows, approvals, and schedules](workflows.md).
+During development, `pnpm dev:worker` runs the TypeScript worker. `GRIDSTORY_WORKER_INTERVAL_MS` controls polling from 100 to 60000 milliseconds. The worker discovers scopes with pending work, processes due atomic releases before workflow schedules and approval escalations, reconciles completed-transition action snapshots, claims up to 100 outbox/job records per scope, and exits gracefully after `SIGINT` or `SIGTERM`. Release execution is documented in [Atomic multi-entry releases](releases.md), workflow execution is documented in [Editorial workflows, approvals, and schedules](workflows.md), and transition action recovery is documented in [Durable workflow actions](workflow-actions.md).
 
 SQLite is suitable for one local worker. PostgreSQL claims with row locks and `SKIP LOCKED`, allowing multiple worker replicas without duplicate ownership. Both adapters use expiring leases so another worker can recover abandoned work.
 
@@ -22,11 +22,16 @@ Content mutations emit `content.created`, `content.draft.updated`, or `content.p
 The worker expands each event into:
 
 - one `cache.invalidate` job;
+- one `search.index` job that reloads the scoped revision at execution time;
 - one `webhook.deliver` job for each active scoped subscription matching the event type.
 
 Expansion is restart-safe: every job has a full-scope unique idempotency key derived from the outbox event and destination. An event is marked succeeded only after all jobs are durably enqueued. Jobs move through `pending`, `processing`, `succeeded`, or `dead`; claims increment attempts, failures use capped exponential backoff, and exhausted attempts retain their last error as a dead letter.
 
 The administrative API can inspect `/api/v1/operations/outbox` and `/api/v1/operations/jobs`, read the bounded scope summary at `/api/v1/operations/summary`, manually run `/api/v1/operations/drain`, and replay a completed or dead job through `/api/v1/operations/jobs/:id/replay`. Replays create a new job and idempotency key; immutable history is not overwritten. These operations are admin-only by default through separate read/manage/run/replay permissions. Audit integrity and incident handling are documented in [Audit integrity and administrator operations](audit-and-administration.md).
+
+Scoped manual rebuilds enqueue `search.rebuild` jobs into the same leased queue. Incremental and rebuild jobs retain retries, dead letters, and replay, while their payloads contain identifiers rather than draft content. Search adapter configuration and operational status are covered in [Search, taxonomies, backlinks, and related content](search-and-taxonomies.md).
+
+Completed workflow transitions enqueue `workflow.action` jobs into the same leased queue. The worker reconciles exact action snapshots from workflow history before claiming jobs, so a crash between transition persistence and enqueue is restart-safe. Operators can use the dedicated, private/no-store `/api/v1/workflow-actions` list, `/drain`, and `/:id/replay` endpoints or the Studio delivery log without mixing action permissions into general operations permissions.
 
 ## Cache tags
 

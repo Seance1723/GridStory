@@ -65,11 +65,32 @@ describe('workflow API', () => {
     });
     expect(invalidDefinition.statusCode).toBe(400);
     expect(invalidDefinition.json().error.code).toBe('invalid_workflow_definition');
+    const currentDefinition = definitions.json()[0];
     const updatedDefinition = await server.inject({
       method: 'PUT',
       url: '/api/v1/workflows/page-editorial',
       headers: adminHeaders,
-      payload: { ...definitions.json()[0], version: 2 },
+      payload: {
+        ...currentDefinition,
+        version: 2,
+        transitions: currentDefinition.transitions.map((transition: { id: string }) =>
+          transition.id === 'submit-review'
+            ? {
+                ...transition,
+                actions: [
+                  {
+                    id: 'notify-reviewers',
+                    label: 'Notify reviewers',
+                    type: 'notification',
+                    message: 'Review requested.',
+                    audienceRoles: ['publisher'],
+                    maxAttempts: 3,
+                  },
+                ],
+              }
+            : transition,
+        ),
+      },
     });
     expect(updatedDefinition.statusCode).toBe(200);
     expect(updatedDefinition.json()).toMatchObject({ id: 'page-editorial', version: 2 });
@@ -104,6 +125,42 @@ describe('workflow API', () => {
       payload: { changedFields: ['title'] },
     });
     expect(submitted.json().stateId).toBe('in-review');
+    const queuedActions = await server.inject({
+      method: 'GET',
+      url: '/api/v1/workflow-actions',
+      headers: adminHeaders,
+    });
+    expect(queuedActions.statusCode).toBe(200);
+    expect(queuedActions.headers['cache-control']).toBe('private, no-store');
+    expect(queuedActions.json()).toEqual([
+      expect.objectContaining({ type: 'workflow.action', state: 'pending', attempts: 0 }),
+    ]);
+    const drainedActions = await server.inject({
+      method: 'POST',
+      url: '/api/v1/workflow-actions/drain',
+      headers: adminHeaders,
+      payload: { limit: 20 },
+    });
+    expect(drainedActions.statusCode).toBe(200);
+    expect(drainedActions.json()).toMatchObject({
+      reconciliation: { discovered: 1, reconciled: 1 },
+      delivery: { completedJobs: 3 },
+    });
+    const completedActions = await server.inject({
+      method: 'GET',
+      url: '/api/v1/workflow-actions',
+      headers: adminHeaders,
+    });
+    const completedActionId = completedActions.json()[0].id;
+    expect(completedActions.json()[0]).toMatchObject({ state: 'succeeded', attempts: 1 });
+    const replayedAction = await server.inject({
+      method: 'POST',
+      url: `/api/v1/workflow-actions/${completedActionId}/replay`,
+      headers: adminHeaders,
+      payload: {},
+    });
+    expect(replayedAction.statusCode).toBe(200);
+    expect(replayedAction.json()).toMatchObject({ state: 'pending', attempts: 0 });
     const requested = await server.inject({
       method: 'POST',
       url: `/api/v1/content/${entry.id}/workflow/transitions/approve`,

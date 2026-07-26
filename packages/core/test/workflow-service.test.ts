@@ -3,6 +3,7 @@ import type { ComponentManifest, ContentSchemaDefinition, ContentScope } from '@
 import {
   ContentService,
   GridStoryError,
+  OperationsService,
   InMemoryWorkflowRepository,
   SqliteContentRepository,
   WorkflowService,
@@ -62,22 +63,26 @@ describe('WorkflowService', () => {
     }),
   );
 
-  async function harness() {
+  async function harness(definition = defaultEditorialWorkflow()) {
     let clock = new Date('2026-07-26T00:00:00.000Z');
     let id = 0;
+    const contentRepository = new SqliteContentRepository({
+      filename: ':memory:',
+      now: () => clock.toISOString(),
+    });
+    repositories.push(contentRepository);
     const workflowRepository = new InMemoryWorkflowRepository();
     const workflow = new WorkflowService({
       repository: workflowRepository,
+      jobRepository: contentRepository,
       now: () => clock,
       createId: () => `workflow-id-${++id}`,
     });
     await workflow.saveDefinition({
       scope,
       id: 'page-editorial',
-      definition: defaultEditorialWorkflow(),
+      definition,
     });
-    const contentRepository = new SqliteContentRepository({ filename: ':memory:' });
-    repositories.push(contentRepository);
     const content = new ContentService({
       repository: contentRepository,
       schemas: [schema],
@@ -87,6 +92,7 @@ describe('WorkflowService', () => {
     return {
       workflow,
       content,
+      contentRepository,
       setClock(value: string) {
         clock = new Date(value);
       },
@@ -240,6 +246,137 @@ describe('WorkflowService', () => {
       state: 'executed',
       timeZone: 'Asia/Kolkata',
     });
+  });
+
+  it('enqueues transition actions idempotently and records retries, dead letters, replay, and delivery results', async () => {
+    const definition = defaultEditorialWorkflow();
+    const submit = definition.transitions.find((transition) => transition.id === 'submit-review');
+    if (!submit) throw new Error('Submit transition fixture was not found.');
+    submit.actions = [
+      {
+        id: 'notify-reviewers',
+        label: 'Notify reviewers',
+        type: 'notification',
+        message: 'A page is ready for review.',
+        audienceRoles: ['publisher'],
+        maxAttempts: 3,
+      },
+      {
+        id: 'transient-webhook',
+        label: 'Transient webhook',
+        type: 'webhook',
+        url: 'https://hooks.example.test/transient',
+        eventName: 'review-requested',
+        maxAttempts: 2,
+      },
+      {
+        id: 'dead-webhook',
+        label: 'Dead webhook',
+        type: 'webhook',
+        url: 'https://hooks.example.test/dead',
+        eventName: 'review-requested',
+        maxAttempts: 1,
+      },
+    ];
+    const { workflow, content, contentRepository, setClock } = await harness(definition);
+    const entry = await content.create({
+      scope,
+      contentType: 'page',
+      data: page('Actions'),
+      actor: { id: 'author-a', roles: ['author'] },
+    });
+    await workflow.requestTransition({
+      scope,
+      entry,
+      transitionId: 'submit-review',
+      actor: { id: 'author-a', roles: ['author'] },
+    });
+
+    const initialActions = (await contentRepository.listJobs({ scope })).filter(
+      (job) => job.type === 'workflow.action',
+    );
+    expect(initialActions).toHaveLength(3);
+    expect(initialActions.every((job) => job.payload.workflowVersion === 1)).toBe(true);
+    await workflow.saveDefinition({
+      scope,
+      id: 'page-editorial',
+      definition: { ...definition, version: 2 },
+    });
+    const upgraded = await workflow.requestTransition({
+      scope,
+      entry,
+      transitionId: 'request-changes',
+      actor: { id: 'publisher-b', roles: ['publisher'] },
+    });
+    expect(upgraded.workflowVersion).toBe(2);
+    await workflow.reconcileActions(scope);
+    await workflow.reconcileActions(scope);
+    expect(
+      (await contentRepository.listJobs({ scope })).filter((job) => job.type === 'workflow.action'),
+    ).toHaveLength(3);
+    expect(
+      (await contentRepository.listJobs({ scope }))
+        .filter((job) => job.type === 'workflow.action')
+        .every((job) => job.idempotencyKey.startsWith('workflow:page-editorial:1:')),
+    ).toBe(true);
+
+    const notifications: string[] = [];
+    let transientFailures = 1;
+    const operations = new OperationsService({
+      repository: contentRepository,
+      webhookSigningSecret: 'workflow-action-secret-with-at-least-32-characters',
+      now: () => new Date('2026-07-26T00:00:00.000Z'),
+      searchJobRunner: async () => ({ indexedDocuments: 1 }),
+      workflowActionNotifier: async ({ message }) => {
+        notifications.push(message);
+      },
+      webhookTransport: async ({ url }) => {
+        if (url.endsWith('/dead')) throw new Error('permanent delivery failure');
+        if (transientFailures > 0) {
+          transientFailures -= 1;
+          throw new Error('temporary delivery failure');
+        }
+        return { status: 202 };
+      },
+    });
+    expect(await operations.drain({ scope, workerId: 'workflow-worker', limit: 20 })).toMatchObject(
+      {
+        completedJobs: 3,
+        retriedJobs: 1,
+        deadJobs: 1,
+      },
+    );
+    expect(notifications).toEqual(['A page is ready for review.']);
+
+    setClock('2026-07-26T00:00:03.000Z');
+    const retryOperations = new OperationsService({
+      repository: contentRepository,
+      webhookSigningSecret: 'workflow-action-secret-with-at-least-32-characters',
+      now: () => new Date('2026-07-26T00:00:03.000Z'),
+      searchJobRunner: async () => ({ indexedDocuments: 1 }),
+      webhookTransport: async () => ({ status: 202 }),
+    });
+    expect(
+      await retryOperations.drain({ scope, workerId: 'workflow-worker', limit: 20 }),
+    ).toMatchObject({ completedJobs: 1, retriedJobs: 0 });
+    const deliveries = await retryOperations.listWorkflowActions(scope);
+    expect(deliveries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          state: 'succeeded',
+          attempts: 2,
+          result: { httpStatus: 202 },
+        }),
+        expect.objectContaining({
+          state: 'dead',
+          attempts: 1,
+          lastError: 'permanent delivery failure',
+        }),
+      ]),
+    );
+    const dead = deliveries.find((job) => job.state === 'dead');
+    const replay = await retryOperations.replayWorkflowAction(scope, dead?.id ?? '');
+    expect(replay).toMatchObject({ type: 'workflow.action', state: 'pending', attempts: 0 });
   });
 
   it('rejects invalid time zones and stale workflow definition versions', async () => {

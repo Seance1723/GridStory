@@ -19,6 +19,7 @@ export * from './preview-service.js';
 export * from './postgres-repository.js';
 export * from './routing-service.js';
 export * from './schema-lifecycle-service.js';
+export * from './search-service.js';
 export * from './sqlite-repository.js';
 export * from './scope-registry.js';
 export * from './types.js';

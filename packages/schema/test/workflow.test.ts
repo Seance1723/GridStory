@@ -56,6 +56,49 @@ describe('workflow definition contract', () => {
     });
   });
 
+  it('normalizes durable transition actions and rejects duplicate action IDs', () => {
+    const withActions = {
+      ...definition,
+      transitions: definition.transitions.map((transition) =>
+        transition.id === 'request-legal'
+          ? {
+              ...transition,
+              actions: [
+                {
+                  id: 'notify-legal',
+                  label: 'Notify legal',
+                  type: 'notification' as const,
+                  message: 'Legal review is ready.',
+                  audienceRoles: ['legal-reviewer'],
+                },
+              ],
+            }
+          : transition,
+      ),
+    };
+    const parsed = workflowDefinitionInputSchema.parse(withActions);
+    expect(parsed.transitions[0]?.actions[0]).toMatchObject({
+      id: 'notify-legal',
+      type: 'notification',
+      maxAttempts: 5,
+    });
+    const duplicate = {
+      ...withActions,
+      transitions: withActions.transitions.map((transition) =>
+        transition.id === 'request-legal' && transition.actions
+          ? { ...transition, actions: [...transition.actions, transition.actions[0]] }
+          : transition,
+      ),
+    };
+    const result = workflowDefinitionInputSchema.safeParse(duplicate);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((issue) => issue.message)).toContain(
+        'Workflow action IDs must be unique within a transition.',
+      );
+    }
+  });
+
   it('rejects dangling transitions, duplicate states, and missing published state', () => {
     const invalid = {
       ...definition,

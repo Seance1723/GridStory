@@ -11,6 +11,7 @@ import {
   type ContentEntry,
   type ContentQualityReport,
   type ContentRevision,
+  type DurableJobRecord,
   type GridStoryClient,
   type OperationsDashboardRecord,
   type PreviewSessionGrant,
@@ -18,6 +19,11 @@ import {
   type WorkflowInstance,
   type Release,
   type ReleasePreview,
+  type BacklinkRecord,
+  type RelatedContentRecord,
+  type SearchIndexStatus,
+  type SearchResponse,
+  type TaxonomyDefinition,
 } from '@gridstory/client';
 import {
   createGridStoryPreviewController,
@@ -34,6 +40,7 @@ import type {
   DesignSystemManifest,
   FieldDefinition,
   PropDefinition,
+  WorkflowActionDefinition,
 } from '@gridstory/schema';
 import {
   addNode,
@@ -436,6 +443,14 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   const [operationsDashboard, setOperationsDashboard] = useState<OperationsDashboardRecord | null>(
     null,
   );
+  const [searchPanelOpen, setSearchPanelOpen] = useState(false);
+  const [searchBusy, setSearchBusy] = useState(false);
+  const [searchText, setSearchText] = useState('');
+  const [searchResponse, setSearchResponse] = useState<SearchResponse | null>(null);
+  const [searchTaxonomies, setSearchTaxonomies] = useState<TaxonomyDefinition[]>([]);
+  const [searchIndexStatus, setSearchIndexStatus] = useState<SearchIndexStatus | null>(null);
+  const [backlinks, setBacklinks] = useState<BacklinkRecord[]>([]);
+  const [relatedContent, setRelatedContent] = useState<RelatedContentRecord[]>([]);
   const [componentGovernance, setComponentGovernance] = useState<ComponentGovernanceState | null>(
     null,
   );
@@ -453,6 +468,9 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   const [workflowDefinitions, setWorkflowDefinitions] = useState<WorkflowDefinition[]>([]);
   const [workflowInstance, setWorkflowInstance] = useState<WorkflowInstance | null>(null);
   const [workflowScheduleAt, setWorkflowScheduleAt] = useState('');
+  const [workflowDesignerOpen, setWorkflowDesignerOpen] = useState(false);
+  const [workflowDesign, setWorkflowDesign] = useState<WorkflowDefinition | null>(null);
+  const [workflowActionDeliveries, setWorkflowActionDeliveries] = useState<DurableJobRecord[]>([]);
   const [workflowTimeZone, setWorkflowTimeZone] = useState(
     () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
   );
@@ -1289,6 +1307,230 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
       setBusy(false);
     }
   };
+  const refreshWorkflowActionDeliveries = async () => {
+    const deliveries = await client.listWorkflowActions();
+    setWorkflowActionDeliveries(deliveries);
+  };
+
+  const toggleWorkflowDesigner = async () => {
+    if (workflowDesignerOpen) {
+      setWorkflowDesignerOpen(false);
+      return;
+    }
+    setBusy(true);
+    setNotice(null);
+    try {
+      const definitions = await client.listWorkflows();
+      setWorkflowDefinitions(definitions);
+      setWorkflowDesign(definitions[0] ? structuredClone(definitions[0]) : null);
+      await refreshWorkflowActionDeliveries();
+      setWorkflowDesignerOpen(true);
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const addWorkflowAction = (transitionId: string, type: WorkflowActionDefinition['type']) => {
+    const suffix = crypto.randomUUID().slice(0, 8);
+    const action: WorkflowActionDefinition =
+      type === 'notification'
+        ? {
+            id: `notify-${suffix}`,
+            label: 'Notify reviewers',
+            type,
+            message: 'A workflow transition completed.',
+            audienceRoles: ['publisher'],
+            maxAttempts: 5,
+          }
+        : type === 'webhook'
+          ? {
+              id: `webhook-${suffix}`,
+              label: 'Deliver webhook',
+              type,
+              url: 'https://hooks.example.com/gridstory',
+              eventName: 'workflow-transition',
+              maxAttempts: 8,
+            }
+          : {
+              id: `cache-${suffix}`,
+              label: 'Invalidate cache tags',
+              type,
+              tags: ['gridstory:workflow'],
+              maxAttempts: 5,
+            };
+    setWorkflowDesign((current) =>
+      current
+        ? {
+            ...current,
+            transitions: current.transitions.map((transition) =>
+              transition.id === transitionId
+                ? { ...transition, actions: [...transition.actions, action] }
+                : transition,
+            ),
+          }
+        : current,
+    );
+  };
+
+  const updateWorkflowAction = (
+    transitionId: string,
+    actionId: string,
+    update: (action: WorkflowActionDefinition) => WorkflowActionDefinition,
+  ) => {
+    setWorkflowDesign((current) =>
+      current
+        ? {
+            ...current,
+            transitions: current.transitions.map((transition) =>
+              transition.id === transitionId
+                ? {
+                    ...transition,
+                    actions: transition.actions.map((action) =>
+                      action.id === actionId ? update(action) : action,
+                    ),
+                  }
+                : transition,
+            ),
+          }
+        : current,
+    );
+  };
+
+  const removeWorkflowAction = (transitionId: string, actionId: string) => {
+    setWorkflowDesign((current) =>
+      current
+        ? {
+            ...current,
+            transitions: current.transitions.map((transition) =>
+              transition.id === transitionId
+                ? {
+                    ...transition,
+                    actions: transition.actions.filter((action) => action.id !== actionId),
+                  }
+                : transition,
+            ),
+          }
+        : current,
+    );
+  };
+
+  const saveWorkflowDesign = async () => {
+    if (!workflowDesign) return;
+    setBusy(true);
+    setNotice(null);
+    try {
+      const saved = await client.saveWorkflow(workflowDesign.id, {
+        ...workflowDesign,
+        version: workflowDesign.version + 1,
+      });
+      setWorkflowDesign(saved);
+      setWorkflowDefinitions((current) => [
+        saved,
+        ...current.filter((definition) => definition.id !== saved.id),
+      ]);
+      setNotice({ tone: 'success', message: `Workflow version ${saved.version} saved.` });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const drainWorkflowActions = async () => {
+    setBusy(true);
+    setNotice(null);
+    try {
+      const result = await client.drainWorkflowActions(50);
+      await refreshWorkflowActionDeliveries();
+      setNotice({
+        tone: 'success',
+        message: `${result.delivery.completedJobs} workflow delivery job(s) completed; ${result.delivery.retriedJobs} retrying and ${result.delivery.deadJobs} dead.`,
+      });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const replayWorkflowAction = async (id: string) => {
+    setBusy(true);
+    setNotice(null);
+    try {
+      await client.replayWorkflowAction(id);
+      await refreshWorkflowActionDeliveries();
+      setNotice({ tone: 'success', message: 'Workflow action queued for replay.' });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const refreshSearchContext = async () => {
+    const selectedId = selected?.id;
+    const [taxonomies, status, selectedBacklinks, selectedRelated] = await Promise.all([
+      client.listTaxonomies(),
+      client.getSearchIndexStatus(),
+      selectedId ? client.listBacklinks(selectedId, 'draft') : Promise.resolve([]),
+      selectedId
+        ? client.listRelatedContent(selectedId, { perspective: 'draft', limit: 8 })
+        : Promise.resolve([]),
+    ]);
+    setSearchTaxonomies(taxonomies);
+    setSearchIndexStatus(status);
+    setBacklinks(selectedBacklinks);
+    setRelatedContent(selectedRelated);
+  };
+
+  const runSearch = async () => {
+    setSearchBusy(true);
+    setNotice(null);
+    try {
+      setSearchResponse(await client.search({ text: searchText, perspective: 'draft', first: 20 }));
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    } finally {
+      setSearchBusy(false);
+    }
+  };
+
+  const toggleSearchPanel = async () => {
+    if (searchPanelOpen) {
+      setSearchPanelOpen(false);
+      return;
+    }
+    setSearchPanelOpen(true);
+    setSearchBusy(true);
+    setNotice(null);
+    try {
+      await Promise.all([refreshSearchContext(), runSearch()]);
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    } finally {
+      setSearchBusy(false);
+    }
+  };
+
+  const rebuildSearchIndex = async () => {
+    setSearchBusy(true);
+    setNotice(null);
+    try {
+      await client.rebuildSearchIndex('draft');
+      const result = await client.drainOperations(100);
+      await refreshSearchContext();
+      setNotice({
+        tone: 'success',
+        message: `Search rebuild completed with ${result.completedJobs} durable job(s).`,
+      });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    } finally {
+      setSearchBusy(false);
+    }
+  };
   const toggleOperations = async () => {
     if (operationsDashboard) {
       setOperationsDashboard(null);
@@ -1506,10 +1748,26 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
           <button
             type="button"
             className="button button--secondary"
+            onClick={() => void toggleWorkflowDesigner()}
+            aria-expanded={workflowDesignerOpen}
+          >
+            Workflows
+          </button>{' '}
+          <button
+            type="button"
+            className="button button--secondary"
             onClick={() => setReleasePanelOpen((current) => !current)}
             aria-expanded={releasePanelOpen}
           >
             Releases
+          </button>{' '}
+          <button
+            type="button"
+            className="button button--secondary"
+            onClick={() => void toggleSearchPanel()}
+            aria-expanded={searchPanelOpen}
+          >
+            Search
           </button>{' '}
           <button
             type="button"
@@ -1562,6 +1820,312 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
           </button>
         </div>
       </header>
+      {workflowDesignerOpen ? (
+        <section className="workflow-designer" aria-label="Workflow action designer">
+          <div className="section-heading">
+            <div>
+              <span className="kicker">Durable automation</span>
+              <h2>Workflow action designer</h2>
+              <p>
+                Attach scoped side effects to completed transitions, then inspect every leased
+                delivery, retry, and dead letter.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="button button--secondary"
+              disabled={busy}
+              onClick={() => void drainWorkflowActions()}
+            >
+              Run due actions
+            </button>
+          </div>
+
+          <div className="workflow-designer-layout">
+            <div className="workflow-definition-editor">
+              <div className="workflow-designer-toolbar">
+                <label className="gs-field">
+                  <span>Workflow</span>
+                  <select
+                    value={workflowDesign?.id ?? ''}
+                    onChange={(event) => {
+                      const definition = workflowDefinitions.find(
+                        (candidate) => candidate.id === event.target.value,
+                      );
+                      setWorkflowDesign(definition ? structuredClone(definition) : null);
+                    }}
+                  >
+                    {workflowDefinitions.map((definition) => (
+                      <option key={definition.id} value={definition.id}>
+                        {definition.name} · v{definition.version}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  className="button button--primary"
+                  disabled={!workflowDesign || busy}
+                  onClick={() => void saveWorkflowDesign()}
+                >
+                  Save next version
+                </button>
+              </div>
+
+              {workflowDesign ? (
+                <>
+                  <ul className="workflow-state-map" aria-label="Workflow states">
+                    {workflowDesign.states.map((state) => (
+                      <li
+                        className={`workflow-state-node workflow-state-node--${state.kind}`}
+                        key={state.id}
+                      >
+                        <strong>{state.label}</strong>
+                        <code>{state.id}</code>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="workflow-transition-list">
+                    {workflowDesign.transitions.map((transition) => (
+                      <article className="workflow-transition-card" key={transition.id}>
+                        <div className="workflow-transition-heading">
+                          <div>
+                            <strong>{transition.label}</strong>
+                            <span>
+                              {transition.from} → {transition.to}
+                            </span>
+                          </div>
+                          <code>{transition.id}</code>
+                        </div>
+                        <fieldset className="workflow-action-adders">
+                          <legend>Add actions to {transition.label}</legend>
+                          <button
+                            type="button"
+                            onClick={() => addWorkflowAction(transition.id, 'notification')}
+                          >
+                            + Notification
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => addWorkflowAction(transition.id, 'webhook')}
+                          >
+                            + Webhook
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => addWorkflowAction(transition.id, 'cache-invalidate')}
+                          >
+                            + Cache tags
+                          </button>
+                        </fieldset>
+                        {transition.actions.length ? (
+                          <ul className="workflow-action-definitions">
+                            {transition.actions.map((action) => (
+                              <li key={action.id}>
+                                <div className="workflow-action-definition-heading">
+                                  <span className="workflow-action-kind">{action.type}</span>
+                                  <button
+                                    type="button"
+                                    className="text-button text-button--danger"
+                                    onClick={() => removeWorkflowAction(transition.id, action.id)}
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                                <label className="gs-field">
+                                  <span>Action label</span>
+                                  <input
+                                    aria-label={`${transition.label} ${action.id} label`}
+                                    value={action.label}
+                                    onChange={(event) =>
+                                      updateWorkflowAction(transition.id, action.id, (current) => ({
+                                        ...current,
+                                        label: event.target.value,
+                                      }))
+                                    }
+                                  />
+                                </label>
+                                {action.type === 'notification' ? (
+                                  <>
+                                    <label className="gs-field">
+                                      <span>Message</span>
+                                      <input
+                                        value={action.message}
+                                        onChange={(event) =>
+                                          updateWorkflowAction(
+                                            transition.id,
+                                            action.id,
+                                            (current) =>
+                                              current.type === 'notification'
+                                                ? { ...current, message: event.target.value }
+                                                : current,
+                                          )
+                                        }
+                                      />
+                                    </label>
+                                    <label className="gs-field">
+                                      <span>Audience roles</span>
+                                      <input
+                                        value={action.audienceRoles.join(', ')}
+                                        onChange={(event) =>
+                                          updateWorkflowAction(
+                                            transition.id,
+                                            action.id,
+                                            (current) =>
+                                              current.type === 'notification'
+                                                ? {
+                                                    ...current,
+                                                    audienceRoles: event.target.value
+                                                      .split(',')
+                                                      .map((role) => role.trim())
+                                                      .filter(Boolean),
+                                                  }
+                                                : current,
+                                          )
+                                        }
+                                      />
+                                    </label>
+                                  </>
+                                ) : action.type === 'webhook' ? (
+                                  <>
+                                    <label className="gs-field">
+                                      <span>HTTPS endpoint</span>
+                                      <input
+                                        value={action.url}
+                                        onChange={(event) =>
+                                          updateWorkflowAction(
+                                            transition.id,
+                                            action.id,
+                                            (current) =>
+                                              current.type === 'webhook'
+                                                ? { ...current, url: event.target.value }
+                                                : current,
+                                          )
+                                        }
+                                      />
+                                    </label>
+                                    <label className="gs-field">
+                                      <span>Event name</span>
+                                      <input
+                                        value={action.eventName}
+                                        onChange={(event) =>
+                                          updateWorkflowAction(
+                                            transition.id,
+                                            action.id,
+                                            (current) =>
+                                              current.type === 'webhook'
+                                                ? { ...current, eventName: event.target.value }
+                                                : current,
+                                          )
+                                        }
+                                      />
+                                    </label>
+                                  </>
+                                ) : (
+                                  <label className="gs-field">
+                                    <span>Cache tags</span>
+                                    <input
+                                      value={action.tags.join(', ')}
+                                      onChange={(event) =>
+                                        updateWorkflowAction(transition.id, action.id, (current) =>
+                                          current.type === 'cache-invalidate'
+                                            ? {
+                                                ...current,
+                                                tags: event.target.value
+                                                  .split(',')
+                                                  .map((tag) => tag.trim())
+                                                  .filter(Boolean),
+                                              }
+                                            : current,
+                                        )
+                                      }
+                                    />
+                                  </label>
+                                )}
+                                <label className="gs-field workflow-attempt-field">
+                                  <span>Maximum attempts</span>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    max="20"
+                                    value={action.maxAttempts}
+                                    onChange={(event) =>
+                                      updateWorkflowAction(transition.id, action.id, (current) => ({
+                                        ...current,
+                                        maxAttempts: Number(event.target.value),
+                                      }))
+                                    }
+                                  />
+                                </label>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="empty-copy">No durable actions on this transition.</p>
+                        )}
+                      </article>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <p className="empty-copy">No workflow definition is available.</p>
+              )}
+            </div>
+
+            <aside className="workflow-delivery-log" aria-label="Workflow action delivery log">
+              <div className="workflow-delivery-log-heading">
+                <div>
+                  <span className="kicker">Delivery log</span>
+                  <h3>Attempts and dead letters</h3>
+                </div>
+                <span>{workflowActionDeliveries.length}</span>
+              </div>
+              {workflowActionDeliveries.length ? (
+                <ol>
+                  {workflowActionDeliveries.map((delivery) => (
+                    <li key={delivery.id}>
+                      <div>
+                        <strong>
+                          {String(
+                            delivery.payload.action &&
+                              typeof delivery.payload.action === 'object' &&
+                              'label' in delivery.payload.action
+                              ? delivery.payload.action.label
+                              : 'Workflow action',
+                          )}
+                        </strong>
+                        <span
+                          className={`workflow-delivery-state workflow-delivery-state--${delivery.state}`}
+                        >
+                          {delivery.state}
+                        </span>
+                      </div>
+                      <code>{delivery.idempotencyKey}</code>
+                      <small>
+                        {delivery.attempts}/{delivery.maxAttempts} attempt(s) ·{' '}
+                        {new Date(delivery.updatedAt).toLocaleString()}
+                      </small>
+                      {delivery.lastError ? <p>{delivery.lastError}</p> : null}
+                      {delivery.state === 'dead' || delivery.state === 'succeeded' ? (
+                        <button
+                          type="button"
+                          className="text-button"
+                          disabled={busy}
+                          onClick={() => void replayWorkflowAction(delivery.id)}
+                        >
+                          Replay delivery
+                        </button>
+                      ) : null}
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="empty-copy">No workflow action deliveries yet.</p>
+              )}
+            </aside>
+          </div>
+        </section>
+      ) : null}
       {releasePanelOpen ? (
         <section className="release-panel" aria-label="Release manager">
           <div className="section-heading">
@@ -1900,6 +2464,99 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
           ) : null}
         </section>
       ) : null}
+      {searchPanelOpen ? (
+        <section className="search-panel" aria-label="Search and discovery">
+          <div className="search-panel__query">
+            <div>
+              <span className="kicker">Discovery</span>
+              <h2>Search content</h2>
+              <p>
+                Search draft content, inspect taxonomy facets, and follow content relationships.
+              </p>
+            </div>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                void runSearch();
+              }}
+            >
+              <label htmlFor="studio-search">Search terms</label>
+              <div>
+                <input
+                  id="studio-search"
+                  type="search"
+                  value={searchText}
+                  onChange={(event) => setSearchText(event.target.value)}
+                  placeholder="Title, body, slug…"
+                />
+                <button className="button button--primary" type="submit" disabled={searchBusy}>
+                  Search
+                </button>
+              </div>
+            </form>
+            <fieldset className="search-taxonomies">
+              <legend>Available taxonomies</legend>
+              {searchTaxonomies.map((taxonomy) => (
+                <span key={taxonomy.id}>
+                  {taxonomy.name} · {taxonomy.terms.length} terms
+                </span>
+              ))}
+            </fieldset>
+          </div>
+          <div className="search-panel__results" aria-live="polite">
+            <strong>{searchResponse?.total ?? 0} result(s)</strong>
+            <ul>
+              {searchResponse?.hits.map((hit) => (
+                <li key={hit.entry.id}>
+                  <button type="button" onClick={() => void selectEntry(hit.entry.id)}>
+                    {entryTitle(hit.entry, schemas)}
+                  </button>
+                  <span>Score {hit.score}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <aside className="search-panel__context">
+            <div className="search-index-summary">
+              <span className="kicker">Index</span>
+              <strong>{searchIndexStatus?.adapter ?? 'Loading…'}</strong>
+              <span>
+                {searchIndexStatus?.draftDocuments ?? 0} drafts ·{' '}
+                {searchIndexStatus?.pendingJobs ?? 0} pending · {searchIndexStatus?.deadJobs ?? 0}{' '}
+                dead
+              </span>
+              <button
+                type="button"
+                className="button button--secondary"
+                disabled={searchBusy}
+                onClick={() => void rebuildSearchIndex()}
+              >
+                Rebuild draft index
+              </button>
+            </div>
+            <div>
+              <strong>Backlinks to selected entry</strong>
+              <ul>
+                {backlinks.map((backlink) => (
+                  <li key={backlink.source.id}>{entryTitle(backlink.source, schemas)}</li>
+                ))}
+                {backlinks.length === 0 ? <li>None</li> : null}
+              </ul>
+            </div>
+            <div>
+              <strong>Related content</strong>
+              <ul>
+                {relatedContent.map((related) => (
+                  <li key={related.entry.id}>
+                    {entryTitle(related.entry, schemas)} · {related.reasons.join(', ')}
+                  </li>
+                ))}
+                {relatedContent.length === 0 ? <li>None</li> : null}
+              </ul>
+            </div>
+          </aside>
+        </section>
+      ) : null}{' '}
       {operationsDashboard ? (
         <section className="operations-panel" aria-label="Administrator operations">
           <div>

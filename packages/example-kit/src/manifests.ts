@@ -3,13 +3,26 @@ import { defineContentSchema, type ContentDataOf } from '@gridstory/schema/typeg
 
 export const pageSchema = defineContentSchema({
   id: 'page',
-  version: 4,
+  version: 5,
   name: 'Page',
   description: 'A routed page composed from registered React components.',
   collection: 'pages',
   titleField: 'title',
   localization: { localizedFields: ['title', 'slug', 'story', 'blocks'] },
   route: { pattern: '/:slug', slugField: 'slug' },
+  taxonomies: [
+    {
+      id: 'topics',
+      name: 'Topics',
+      hierarchical: true,
+      terms: [
+        { id: 'product', slug: 'product', label: 'Product' },
+        { id: 'launches', slug: 'launches', label: 'Launches', parentId: 'product' },
+        { id: 'engineering', slug: 'engineering', label: 'Engineering' },
+        { id: 'accessibility', slug: 'accessibility', label: 'Accessibility' },
+      ],
+    },
+  ],
   fields: [
     {
       id: 'page.title',
@@ -52,6 +65,14 @@ export const pageSchema = defineContentSchema({
       targets: ['page'],
       multiple: true,
       maximum: 3,
+    },
+    {
+      id: 'page.topics',
+      name: 'topics',
+      label: 'Topics',
+      type: 'taxonomy',
+      taxonomy: 'topics',
+      multiple: true,
     },
     {
       id: 'page.blocks',
@@ -261,6 +282,7 @@ export const welcomePage: PageContent = {
     ],
   },
   relatedPages: [],
+  topics: ['product'],
   blocks: [
     {
       id: 'welcome-hero',

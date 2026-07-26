@@ -1,10 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import {
+  workflowActionDefinitionSchema,
   workflowDefinitionInputSchema,
   workflowDefinitionSchema,
   workflowInstanceSchema,
   type ContentEntry,
   type ContentScope,
+  type WorkflowActionDefinition,
   type WorkflowDefinition,
   type WorkflowDefinitionInput,
   type WorkflowInstance,
@@ -13,7 +15,7 @@ import {
   type WorkflowTransitionDefinition,
 } from '@gridstory/schema';
 import { ConflictError, GridStoryError, NotFoundError } from './errors.js';
-import type { Actor, ContentWorkflowGate } from './types.js';
+import type { Actor, ContentRepository, ContentWorkflowGate } from './types.js';
 import type { WorkflowRepository } from './workflow-repository.js';
 
 export interface WorkflowNotifier {
@@ -26,6 +28,7 @@ export interface WorkflowNotifier {
 
 export interface WorkflowServiceOptions {
   repository: WorkflowRepository;
+  jobRepository?: Pick<ContentRepository, 'enqueueJob' | 'listJobs'>;
   notifier?: WorkflowNotifier;
   now?: () => Date;
   createId?: () => string;
@@ -136,6 +139,7 @@ export function defaultEditorialWorkflow(): WorkflowDefinitionInput {
 
 export class WorkflowService implements ContentWorkflowGate {
   readonly #repository: WorkflowRepository;
+  readonly #jobRepository: Pick<ContentRepository, 'enqueueJob' | 'listJobs'> | undefined;
   readonly #notifier: WorkflowNotifier;
   readonly #now: () => Date;
   readonly #createId: () => string;
@@ -143,12 +147,14 @@ export class WorkflowService implements ContentWorkflowGate {
 
   constructor({
     repository,
+    jobRepository,
     notifier = { deliver: async () => undefined },
     now = () => new Date(),
     createId = randomUUID,
     defaultDefinitions = [],
   }: WorkflowServiceOptions) {
     this.#repository = repository;
+    this.#jobRepository = jobRepository;
     this.#notifier = notifier;
     this.#now = now;
     this.#createId = createId;
@@ -348,6 +354,75 @@ export class WorkflowService implements ContentWorkflowGate {
     return updated;
   }
 
+  async #enqueueTransitionActions(input: {
+    instance: WorkflowInstance;
+    transitionId: string;
+    eventId: string;
+    workflowVersion: number;
+    actions: WorkflowActionDefinition[];
+  }): Promise<number> {
+    if (!this.#jobRepository || input.actions.length === 0) return 0;
+    const runAt = iso(this.#now());
+    for (const action of input.actions) {
+      await this.#jobRepository.enqueueJob({
+        scope: input.instance,
+        type: 'workflow.action',
+        idempotencyKey: [
+          'workflow',
+          input.instance.workflowId,
+          input.workflowVersion,
+          input.instance.entryId,
+          input.instance.revisionId,
+          input.eventId,
+          action.id,
+        ].join(':'),
+        payload: {
+          eventId: input.eventId,
+          workflowId: input.instance.workflowId,
+          workflowVersion: input.workflowVersion,
+          entryId: input.instance.entryId,
+          revisionId: input.instance.revisionId,
+          transitionId: input.transitionId,
+          action,
+        },
+        runAt,
+        maxAttempts: action.maxAttempts,
+      });
+    }
+    return input.actions.length;
+  }
+
+  async reconcileActions(scope: ContentScope): Promise<{ discovered: number; reconciled: number }> {
+    if (!this.#jobRepository) return { discovered: 0, reconciled: 0 };
+    let discovered = 0;
+    let reconciled = 0;
+    for (const instance of await this.#repository.listInstances(scope)) {
+      for (const event of instance.history) {
+        if (!event.transitionId || !event.details.actions) continue;
+        let actions: WorkflowActionDefinition[];
+        try {
+          actions = workflowActionDefinitionSchema.array().parse(JSON.parse(event.details.actions));
+        } catch {
+          continue;
+        }
+        const storedVersion = Number(event.details.workflowVersion);
+        const workflowVersion =
+          Number.isInteger(storedVersion) && storedVersion > 0
+            ? storedVersion
+            : instance.workflowVersion;
+        discovered += actions.length;
+        reconciled += await this.#enqueueTransitionActions({
+          instance,
+          workflowVersion,
+          transitionId: event.transitionId,
+          eventId: event.id,
+          actions,
+        });
+      }
+    }
+    return { discovered, reconciled };
+  }
+
   async #completeTransition(input: {
     instance: WorkflowInstance;
     definition: WorkflowDefinition;
@@ -356,24 +431,38 @@ export class WorkflowService implements ContentWorkflowGate {
     kind?: 'transition' | 'approval';
   }): Promise<WorkflowInstance> {
     const now = iso(this.#now());
+    const eventId = this.#createId();
     const updated = await this.#repository.saveInstance({
       ...input.instance,
       stateId: input.transition.to,
+      workflowVersion: input.definition.version,
       pendingApproval: undefined,
       history: [
         ...input.instance.history,
         {
-          id: this.#createId(),
+          id: eventId,
           kind: input.kind ?? 'transition',
           actorId: input.actor.id,
           transitionId: input.transition.id,
           fromStateId: input.transition.from,
           toStateId: input.transition.to,
           occurredAt: now,
-          details: {},
+          details: {
+            workflowVersion: String(input.definition.version),
+            ...(input.transition.actions.length
+              ? { actions: JSON.stringify(input.transition.actions) }
+              : {}),
+          },
         },
       ],
       updatedAt: now,
+    });
+    await this.#enqueueTransitionActions({
+      instance: updated,
+      transitionId: input.transition.id,
+      eventId,
+      workflowVersion: input.definition.version,
+      actions: input.transition.actions,
     });
     return await this.#notify(
       updated,
@@ -664,6 +753,7 @@ export class WorkflowService implements ContentWorkflowGate {
     scope: ContentScope;
     execute: (input: DueWorkflowExecution) => Promise<void>;
   }): Promise<{ escalated: number; executed: number; failed: number }> {
+    await this.reconcileActions(input.scope);
     const now = this.#now();
     let escalated = 0;
     let executed = 0;

@@ -8,6 +8,7 @@ import {
   SqliteWorkflowRepository,
   WorkflowService,
   ReleaseService,
+  SearchService,
   PostgresReleaseRepository,
   SqliteReleaseRepository,
   type ContentRepository,
@@ -31,6 +32,7 @@ const releaseRepository: ReleaseRepository = config.databaseUrl
   : new SqliteReleaseRepository({ filename: config.databasePath });
 const workflows = new WorkflowService({
   repository: workflowRepository,
+  jobRepository: repository,
   defaultDefinitions: defaultWorkflowDefinitions,
 });
 const quality = new ContentQualityService({
@@ -49,8 +51,10 @@ const releases = new ReleaseService({
   repository: releaseRepository,
   contentService: content,
 });
+const search = new SearchService({ repository, schemas: [pageSchema] });
 const operations = new OperationsService({
   repository,
+  searchJobRunner: (job) => search.processJob(job),
   webhookSigningSecret: config.webhookSigningSecret,
   ...(config.allowedWebhookHosts ? { allowedWebhookHosts: config.allowedWebhookHosts } : {}),
 });

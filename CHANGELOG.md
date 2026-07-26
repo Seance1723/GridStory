@@ -8,6 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Corrected search contract defaults, adapter wiring, Windows edit artifacts, operations expectations, and the unsafe successful no-op search runner found during M4-006 verification (BUG-0181 through BUG-0190).
+
+- Corrected exact-optional integration, missing Studio action type import, and saved-input assertion defects found during M4-005 verification (BUG-0174 through BUG-0180).
+
 - Corrected release schedule narrowing, collection callbacks, unused types, and Studio release-list accessibility, stable-key, and responsive list-reset defects found during M4-004 verification (BUG-0169 through BUG-0173).
 
 - Corrected workflow initialization, accessibility, verification fixtures, HTTP handling, matcher usage, Awaitable assertions, and cleanup regressions found during M4-003 verification (BUG-0155 through BUG-0168).
@@ -53,6 +57,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Mapped malformed preview targets into the stable `invalid_preview_url` response boundary instead of allowing generic URL exceptions to become server errors.
 
 ### Added
+
+- Added pluggable scoped search contracts and a repository-backed default adapter with bounded full-text queries, content-type filters, hierarchical taxonomy facets, exact-perspective results, and typed universal-client access.
+- Added durable incremental indexing and scoped rebuild/status operations, schema-derived backlinks, explainable related-content scoring, authorized private REST routes, worker execution, Studio discovery tooling, focused regressions, and an integration guide.
+
+- Added bounded notification, signed webhook, and cache-tag actions to versioned workflow transitions, with exact completed-transition snapshots and restart-safe reconciliation into tenant-scoped durable jobs.
+- Added dedicated workflow-action permissions, private/no-store list, drain, and replay APIs, universal-client methods, worker execution, a responsive Studio state/action designer, and an attempts, errors, results, dead-letter, and replay delivery log.
 
 - Added canonical scoped release, member, validation, future-preview, schedule, and rollback-policy contracts; durable in-memory/SQLite/PostgreSQL release repositories; and a framework-neutral release service.
 - Added transactional multi-entry revision publication for SQLite/PostgreSQL, whole-future-state route/reference/workflow/quality validation, exact pinned previews, scheduled execution, policy-aware atomic rollback, authorized REST/client methods, a responsive Studio release manager, regressions, and integration documentation.
@@ -190,6 +200,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- Expanded each committed content outbox event with an idempotent search.index job and reused the leased retry, dead-letter, and replay machinery for indexing and rebuilds without placing draft content in job payloads.
+
+- Reused the existing leased durable-job executor for workflow actions, including claim recovery, bounded exponential retries, maximum-attempt dead letters, immutable replay records, and adapter-neutral notification, cache, and webhook delivery.
+
 - Process due atomic releases before workflow schedules and ordinary operational jobs, and emit each committed or restored member through the existing hash-chained audit and transactional outbox/cache invalidation path.
 
 - Content publication now uses the workflow gate inside ContentService across REST and GraphQL, saving a new revision invalidates stale approval/schedules, and the operations worker processes due workflow schedules and approval escalations without copying draft data into jobs, notifications, or published caches.
@@ -265,6 +279,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Fixed SQLite upgrade ordering so existing tenant-only databases gain scope columns before the new composite index (`BUG-0021`).
 
 ### Security
+
+- Kept search documents, queries, taxonomy facets, backlinks, related results, rebuilds, jobs, and status explicitly scoped by organization, tenant, workspace, site, environment, locale, and perspective behind private/no-store authorization boundaries.
+
+- Kept workflow action definitions, jobs, logs, execution, and replay inside explicit tenant scope and private management caching; webhook action bodies contain identifiers only and reuse HTTPS/public-host validation, optional allow-listing, redirect refusal, timeouts, and HMAC signing.
 
 - Kept pinned future-state content behind fully tenant-scoped private/no-store management routes and required exact draft and prior-published revision pointers before any atomic release or rollback write.
 

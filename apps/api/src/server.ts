@@ -26,6 +26,7 @@ import {
   contentCacheTags,
   ContentRoutingService,
   SchemaLifecycleService,
+  SearchService,
   GridStoryError,
   AuthorizationPolicy,
   GridStoryActions,
@@ -53,6 +54,7 @@ import {
   type WorkflowRepository,
   type DueWorkflowExecution,
   type ReleaseRepository,
+  type SearchAdapter,
 } from '@gridstory/core';
 import {
   generatedTypesFingerprint,
@@ -75,6 +77,8 @@ import {
   collaborationTargetSchema,
   workflowDefinitionInputSchema,
   releaseInputSchema,
+  searchQuerySchema,
+  type ParsedSearchQuery,
   type ReleaseInput,
 } from '@gridstory/schema';
 import { componentManifests, pageSchema, welcomePage } from '@gridstory/example-kit/manifests';
@@ -104,6 +108,7 @@ export interface BuildServerOptions {
   assetRepository?: AssetRepository;
   workflowRepository?: WorkflowRepository;
   releaseRepository?: ReleaseRepository;
+  searchAdapter?: SearchAdapter;
   assetStorage?: AssetStorageAdapter;
   assetRenditionAdapter?: AssetRenditionAdapter;
   assetContentInspector?: AssetContentInspector;
@@ -148,6 +153,7 @@ interface RequestBody {
   entries?: unknown;
   rollbackPolicy?: unknown;
   reason?: unknown;
+  perspective?: unknown;
 }
 
 function perspective(value: unknown): ContentPerspective {
@@ -156,6 +162,15 @@ function perspective(value: unknown): ContentPerspective {
   throw new GridStoryError('Perspective must be draft or published.', 'invalid_perspective', 400);
 }
 
+function parsedSearchQuery(value: unknown): ParsedSearchQuery {
+  const parsed = searchQuerySchema.safeParse(value);
+  if (!parsed.success) {
+    throw new GridStoryError('Search query is invalid.', 'invalid_search', 400, {
+      issues: parsed.error.issues,
+    });
+  }
+  return parsed.data;
+}
 function requiredString(value: unknown, name: string): string {
   if (typeof value !== 'string' || !value.trim()) {
     throw new GridStoryError(`${name} is required.`, 'invalid_request', 400);
@@ -279,6 +294,7 @@ export async function buildServer({
   assetRepository,
   workflowRepository,
   releaseRepository,
+  searchAdapter,
   assetStorage = new InMemoryAssetStorageAdapter(),
   assetRenditionAdapter,
   assetContentInspector,
@@ -308,6 +324,7 @@ export async function buildServer({
       : new SqliteReleaseRepository({ filename: databasePath }));
   const workflows = new WorkflowService({
     repository: resolvedWorkflowRepository,
+    jobRepository: repository,
     defaultDefinitions: defaultWorkflowDefinitions,
   });
   const quality = new ContentQualityService({
@@ -377,6 +394,11 @@ export async function buildServer({
   const collaboration = new CollaborationService();
   const routing = new ContentRoutingService({ contentService: service, redirects });
   const contentQueries = new ContentQueryService({ repository, cursorSecret });
+  const search = new SearchService({
+    repository,
+    schemas: [pageSchema],
+    ...(searchAdapter ? { adapter: searchAdapter } : {}),
+  });
   const localization = new LocalizationService({
     repository,
     contentService: service,
@@ -387,6 +409,7 @@ export async function buildServer({
     webhookSigningSecret,
     ...(webhookTransport ? { webhookTransport } : {}),
     ...(cacheInvalidator ? { cacheInvalidator } : {}),
+    searchJobRunner: (job) => search.processJob(job),
     ...(allowedWebhookHosts ? { allowedWebhookHosts } : {}),
   });
   const portability = new PortabilityService({ repository });
@@ -977,6 +1000,86 @@ export async function buildServer({
     const context = requestContext(request, 'draft');
     authorize(policy, context, GridStoryActions.operationsReplay, { kind: 'platform' });
     return operations.replayJob(contentScope(context), params.id);
+  });
+
+  server.post('/api/v1/search', async (request) => {
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.searchRead, { kind: 'search' });
+    return search.search(contentScope(context), parsedSearchQuery(request.body));
+  });
+
+  server.get('/api/v1/taxonomies', async (request) => {
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.searchRead, { kind: 'search' });
+    return search.listTaxonomies();
+  });
+
+  server.get('/api/v1/search/index/status', async (request) => {
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.searchRead, { kind: 'search' });
+    return search.status(contentScope(context));
+  });
+
+  server.post('/api/v1/search/index/rebuild', async (request, reply) => {
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.searchManage, { kind: 'search' });
+    const body = bodyOf(request);
+    const selected = body.perspective === undefined ? 'published' : perspective(body.perspective);
+    const job = await search.requestRebuild(contentScope(context), selected);
+    return reply.status(202).send(job);
+  });
+
+  server.get('/api/v1/content/:id/backlinks', async (request) => {
+    const params = request.params as { id: string };
+    const query = request.query as { perspective?: unknown };
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.searchRead, { kind: 'content', id: params.id });
+    const selected = query.perspective === undefined ? 'published' : perspective(query.perspective);
+    return search.backlinks(contentScope(context), params.id, selected);
+  });
+
+  server.get('/api/v1/content/:id/related', async (request) => {
+    const params = request.params as { id: string };
+    const query = request.query as { perspective?: unknown; limit?: unknown };
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.searchRead, { kind: 'content', id: params.id });
+    const selected = query.perspective === undefined ? 'published' : perspective(query.perspective);
+    return search.related(
+      contentScope(context),
+      params.id,
+      selected,
+      boundedLimit(query.limit, 10),
+    );
+  });
+  server.get('/api/v1/workflow-actions', async (request) => {
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.workflowActionRead, { kind: 'workflow' });
+    const query = request.query as { limit?: unknown };
+    return operations.listWorkflowActions(contentScope(context), boundedLimit(query.limit));
+  });
+
+  server.post('/api/v1/workflow-actions/drain', async (request) => {
+    const body = bodyOf(request);
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.workflowActionRun, { kind: 'workflow' });
+    const scope = contentScope(context);
+    const reconciliation = await workflows.reconcileActions(scope);
+    const delivery = await operations.drain({
+      scope,
+      workerId: `workflow-api-${request.id}`,
+      limit: boundedLimit(body.limit, 25),
+    });
+    return { reconciliation, delivery };
+  });
+
+  server.post('/api/v1/workflow-actions/:id/replay', async (request) => {
+    const params = request.params as { id: string };
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.workflowActionReplay, {
+      kind: 'workflow',
+      id: params.id,
+    });
+    return operations.replayWorkflowAction(contentScope(context), params.id);
   });
 
   server.get('/api/v1/workflows', async (request) => {

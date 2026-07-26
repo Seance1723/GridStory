@@ -510,6 +510,9 @@ describe('GridStoryClient browser compatibility', () => {
       timeZone: 'Asia/Kolkata',
     });
     await client.cancelWorkflowSchedule('entry/1', 'schedule/1');
+    await client.listWorkflowActions();
+    await client.drainWorkflowActions(10);
+    await client.replayWorkflowAction('action/1');
 
     expect(requests.map((request) => request.url)).toEqual([
       'http://gridstory.test/api/v1/content/entry%2F1/workflow',
@@ -517,6 +520,9 @@ describe('GridStoryClient browser compatibility', () => {
       'http://gridstory.test/api/v1/content/entry%2F1/workflow/approvals/request%2F1',
       'http://gridstory.test/api/v1/content/entry%2F1/workflow/schedules',
       'http://gridstory.test/api/v1/content/entry%2F1/workflow/schedules/schedule%2F1',
+      'http://gridstory.test/api/v1/workflow-actions',
+      'http://gridstory.test/api/v1/workflow-actions/drain',
+      'http://gridstory.test/api/v1/workflow-actions/action%2F1/replay',
     ]);
     expect(requests.map((request) => request.init?.method)).toEqual([
       undefined,
@@ -524,6 +530,9 @@ describe('GridStoryClient browser compatibility', () => {
       'POST',
       'POST',
       'DELETE',
+      undefined,
+      'POST',
+      'POST',
     ]);
     expect(JSON.parse(String(requests[1]?.init?.body))).toEqual({ changedFields: ['title'] });
     expect(JSON.parse(String(requests[2]?.init?.body))).toEqual({
@@ -535,6 +544,7 @@ describe('GridStoryClient browser compatibility', () => {
       runAt: '2026-07-27T00:00:00.000Z',
       timeZone: 'Asia/Kolkata',
     });
+    expect(JSON.parse(String(requests[6]?.init?.body))).toEqual({ limit: 10 });
   });
   it('routes release creation, preview, scheduling, execution, and rollback with encoded IDs', async () => {
     const requests: Array<{ url: string; init?: RequestInit }> = [];
@@ -589,5 +599,42 @@ describe('GridStoryClient browser compatibility', () => {
     expect(JSON.parse(String(requests[8]?.init?.body))).toEqual({
       reason: 'Rollback drill',
     });
+  });
+  it('routes search, taxonomy, index, backlink, and related-content requests', async () => {
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    const client = createGridStoryClient({
+      baseUrl: 'http://gridstory.test',
+      tenantId: 'default',
+      fetch: async (input, init) => {
+        requests.push({ url: String(input), ...(init ? { init } : {}) });
+        return new Response(JSON.stringify({}), {
+          headers: { 'content-type': 'application/json' },
+        });
+      },
+    });
+
+    await client.search({ text: 'launch', taxonomies: { topics: ['product'] } });
+    await client.listTaxonomies();
+    await client.getSearchIndexStatus();
+    await client.rebuildSearchIndex('draft');
+    await client.listBacklinks('entry/1', 'draft');
+    await client.listRelatedContent('entry/1', { perspective: 'published', limit: 5 });
+
+    expect(requests.map((request) => [request.url, request.init?.method])).toEqual([
+      ['http://gridstory.test/api/v1/search', 'POST'],
+      ['http://gridstory.test/api/v1/taxonomies', undefined],
+      ['http://gridstory.test/api/v1/search/index/status', undefined],
+      ['http://gridstory.test/api/v1/search/index/rebuild', 'POST'],
+      ['http://gridstory.test/api/v1/content/entry%2F1/backlinks?perspective=draft', undefined],
+      [
+        'http://gridstory.test/api/v1/content/entry%2F1/related?perspective=published&limit=5',
+        undefined,
+      ],
+    ]);
+    expect(JSON.parse(String(requests[0]?.init?.body))).toEqual({
+      text: 'launch',
+      taxonomies: { topics: ['product'] },
+    });
+    expect(JSON.parse(String(requests[3]?.init?.body))).toEqual({ perspective: 'draft' });
   });
 });

@@ -44,7 +44,7 @@ A validated release can be scheduled with an absolute ISO-8601 instant and an IA
 
 The API exposes `POST /api/v1/releases/process-due` for authorized operational checks and tests. Production workers process due releases before individual workflow schedules and ordinary outbox/jobs. A changed draft, workflow state, route, reference, quality result, or previously published pointer fails safely before the atomic database write.
 
-M4-005 adds generalized leased action execution, idempotency keys, retries, dead letters, and delivery logs. Until that slice, run one active scheduler loop for SQLite. Duplicate PostgreSQL attempts remain content-safe because expected published pointers are checked transactionally, but release-action leasing and automatic reconciliation belong to M4-005.
+Workflow transition actions now use the generalized leased executor, idempotency keys, retries, dead letters, and delivery logs described in [Durable workflow actions](workflow-actions.md). Release scheduling remains protected by transactional expected-pointer checks; run one active scheduler loop for SQLite, while PostgreSQL supports concurrent job workers with row locking and `SKIP LOCKED`.
 
 ## Rollback policy
 

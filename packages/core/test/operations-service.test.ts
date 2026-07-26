@@ -56,6 +56,7 @@ describe('OperationsService', () => {
       cacheInvalidator: async (tags) => {
         invalidated.push(tags);
       },
+      searchJobRunner: async () => ({ indexedDocuments: 1 }),
     });
     await operations.saveWebhook({
       scope,
@@ -84,8 +85,8 @@ describe('OperationsService', () => {
     const first = await operations.drain({ scope, workerId: 'worker' });
     expect(first).toMatchObject({
       completedOutbox: 1,
-      enqueuedJobs: 2,
-      completedJobs: 1,
+      enqueuedJobs: 3,
+      completedJobs: 2,
       retriedJobs: 1,
     });
     expect(invalidated[0]).toContain(`gridstory:entry:${entry.id}`);

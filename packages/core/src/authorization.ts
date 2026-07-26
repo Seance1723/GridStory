@@ -17,11 +17,16 @@ export const GridStoryActions = {
   contentDraftUpdate: 'content.draft.update',
   contentPublish: 'content.publish',
   contentHistoryRead: 'content.history.read',
+  searchRead: 'search.read',
+  searchManage: 'search.manage',
   workflowRead: 'workflow.read',
   workflowManage: 'workflow.manage',
   workflowTransition: 'workflow.transition',
   workflowApprove: 'workflow.approve',
   workflowSchedule: 'workflow.schedule',
+  workflowActionRead: 'workflow.action.read',
+  workflowActionRun: 'workflow.action.run',
+  workflowActionReplay: 'workflow.action.replay',
   releaseRead: 'release.read',
   releaseManage: 'release.manage',
   releaseExecute: 'release.execute',
@@ -46,6 +51,7 @@ export interface AuthorizationResource {
     | 'component'
     | 'asset'
     | 'content'
+    | 'search'
     | 'workflow'
     | 'release'
     | 'delivery'
@@ -85,6 +91,7 @@ export const defaultRoles: RoleDefinition[] = [
       GridStoryActions.assetRead,
       GridStoryActions.contentRead,
       GridStoryActions.contentHistoryRead,
+      GridStoryActions.searchRead,
       GridStoryActions.workflowRead,
       GridStoryActions.releaseRead,
       GridStoryActions.collaborationRead,
@@ -100,6 +107,7 @@ export const defaultRoles: RoleDefinition[] = [
       GridStoryActions.assetUpdate,
       GridStoryActions.contentRead,
       GridStoryActions.contentHistoryRead,
+      GridStoryActions.searchRead,
       GridStoryActions.contentCreate,
       GridStoryActions.contentDraftUpdate,
       GridStoryActions.workflowRead,
@@ -121,6 +129,7 @@ export const defaultRoles: RoleDefinition[] = [
       GridStoryActions.assetUpdate,
       GridStoryActions.contentRead,
       GridStoryActions.contentHistoryRead,
+      GridStoryActions.searchRead,
       GridStoryActions.contentCreate,
       GridStoryActions.contentDraftUpdate,
       GridStoryActions.contentPublish,

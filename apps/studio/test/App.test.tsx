@@ -143,7 +143,7 @@ function createTestClient(
   const testAssets = options.assets ?? [];
   const threads: Array<Record<string, unknown>> = [];
   const presence = [{ actorId: 'local-admin', displayName: 'Studio editor', lastSeenAt: now }];
-  const workflowDefinition = {
+  let workflowDefinition = {
     organizationId: 'local',
     tenantId: 'default',
     workspaceId: 'default',
@@ -168,6 +168,7 @@ function createTestClient(
         from: 'draft',
         to: 'in-review',
         allowedRoles: ['admin'],
+        actions: [],
       },
       {
         id: 'approve',
@@ -175,6 +176,7 @@ function createTestClient(
         from: 'in-review',
         to: 'approved',
         allowedRoles: ['admin'],
+        actions: [],
         approval: {
           minimumApprovals: 1,
           allowedRoles: ['admin'],
@@ -190,12 +192,14 @@ function createTestClient(
         from: 'approved',
         to: 'published',
         allowedRoles: ['admin'],
+        actions: [],
       },
     ],
     createdAt: now,
     updatedAt: now,
   };
   const releaseRecords: Release[] = [];
+  const workflowActionRecords: Array<Record<string, unknown>> = [];
   const workflowInstances = new Map(
     testEntries.map((candidate) => [
       candidate.id,
@@ -226,6 +230,28 @@ function createTestClient(
     if (url.pathname === '/api/v1/components') return json(componentManifests);
     if (url.pathname === '/api/v1/design-system') return json(exampleDesignSystem);
     if (url.pathname === '/api/v1/workflows') return json([workflowDefinition]);
+    if (url.pathname === '/api/v1/workflows/page-editorial' && init?.method === 'PUT') {
+      const body = JSON.parse(String(init.body));
+      workflowDefinition = { ...workflowDefinition, ...body, id: 'page-editorial', updatedAt: now };
+      return json(workflowDefinition);
+    }
+    if (url.pathname === '/api/v1/workflow-actions' && init?.method !== 'POST') {
+      return json(workflowActionRecords);
+    }
+    if (url.pathname === '/api/v1/workflow-actions/drain' && init?.method === 'POST') {
+      return json({
+        reconciliation: { discovered: 0, reconciled: 0 },
+        delivery: {
+          claimedOutbox: 0,
+          completedOutbox: 0,
+          enqueuedJobs: 0,
+          claimedJobs: 0,
+          completedJobs: 0,
+          retriedJobs: 0,
+          deadJobs: 0,
+        },
+      });
+    }
     if (url.pathname === '/api/v1/releases' && init?.method !== 'POST') {
       return json(releaseRecords);
     }
@@ -390,6 +416,57 @@ function createTestClient(
         },
         201,
       );
+    }
+    if (url.pathname === '/api/v1/search' && init?.method === 'POST') {
+      return json({
+        hits: [{ entry: testEntries[1], score: 4, highlights: ['second'], taxonomies: {} }],
+        facets: [],
+        total: 1,
+      });
+    }
+    if (url.pathname === '/api/v1/taxonomies') {
+      return json([
+        {
+          id: 'topics',
+          name: 'Topics',
+          hierarchical: true,
+          terms: [{ id: 'product', slug: 'product', label: 'Product' }],
+        },
+      ]);
+    }
+    if (url.pathname === '/api/v1/search/index/status') {
+      return json({
+        organizationId: 'local',
+        tenantId: 'default',
+        workspaceId: 'default',
+        siteId: 'default',
+        environmentId: 'development',
+        locale: 'en',
+        adapter: 'repository-scan',
+        state: 'ready',
+        draftDocuments: 2,
+        publishedDocuments: 0,
+        pendingJobs: 0,
+        deadJobs: 0,
+      });
+    }
+    if (url.pathname === '/api/v1/search/index/rebuild' && init?.method === 'POST') {
+      return json({ id: 'rebuild-1', type: 'search.rebuild', state: 'pending' }, 202);
+    }
+    if (url.pathname === '/api/v1/operations/drain' && init?.method === 'POST') {
+      return json({
+        claimedOutbox: 0,
+        completedOutbox: 0,
+        enqueuedJobs: 0,
+        claimedJobs: 1,
+        completedJobs: 1,
+        retriedJobs: 0,
+        deadJobs: 0,
+      });
+    }
+    if (/^\/api\/v1\/content\/[^/]+\/backlinks$/.test(url.pathname)) return json([]);
+    if (/^\/api\/v1\/content\/[^/]+\/related$/.test(url.pathname)) {
+      return json([{ entry: testEntries[1], score: 1, reasons: ['same content type'] }]);
     }
     if (url.pathname === '/api/v1/content') return json(testEntries);
     if (url.pathname === '/api/v1/operations/summary') {
@@ -873,6 +950,34 @@ describe('GridStory Studio', () => {
     expect(uploadPart.mock.calls.map((call) => call[2].byteLength)).toEqual([4, 4, 2]);
     expect(complete.mock.calls[0]?.[1].map((part) => part.size)).toEqual([4, 4, 2]);
   });
+  it('designs versioned transition actions and exposes the durable delivery log', async () => {
+    const user = userEvent.setup();
+    render(<App client={createTestClient()} />);
+
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Workflows' }));
+    const designer = await screen.findByRole('region', { name: 'Workflow action designer' });
+    expect(designer.textContent).toContain('Draft');
+    expect(designer.textContent).toContain('In review');
+    expect(designer.textContent).toContain('No workflow action deliveries yet.');
+
+    const transitionHeading = within(designer).getByText('Submit for review');
+    const transitionCard = transitionHeading.closest('article');
+    if (!transitionCard) throw new Error('Submit transition card was not found.');
+    await user.click(within(transitionCard).getByRole('button', { name: '+ Notification' }));
+    const actionLabel = within(transitionCard).getByLabelText('Action label');
+    await user.clear(actionLabel);
+    await user.type(actionLabel, 'Notify launch reviewers');
+    await user.click(within(designer).getByRole('button', { name: 'Save next version' }));
+    await screen.findByText('Workflow version 2 saved.');
+    expect((within(transitionCard).getByLabelText('Action label') as HTMLInputElement).value).toBe(
+      'Notify launch reviewers',
+    );
+
+    await user.click(within(designer).getByRole('button', { name: 'Run due actions' }));
+    await screen.findByText(/0 workflow delivery job\(s\) completed/);
+  });
+
   it('shows configured workflow state and requests governed review without exposing publish early', async () => {
     const user = userEvent.setup();
     render(<App client={createTestClient()} />);
@@ -913,5 +1018,25 @@ describe('GridStory Studio', () => {
     expect(panel.textContent).toContain('/first');
     expect(panel.textContent).toContain('/second');
     expect(within(panel).getByRole('button', { name: 'Publish release' })).toBeTruthy();
+  });
+  it('searches drafts and exposes index and relationship context', async () => {
+    const user = userEvent.setup();
+    render(<App client={createTestClient()} />);
+
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Search' }));
+    const panel = await screen.findByRole('region', { name: 'Search and discovery' });
+    await waitFor(() => expect(panel.textContent).toContain('1 result(s)'));
+    expect(panel.textContent).toContain('Second page');
+    expect(panel.textContent).toContain('Topics · 1 terms');
+    expect(panel.textContent).toContain('repository-scan');
+    expect(panel.textContent).toContain('same content type');
+
+    const input = within(panel).getByLabelText('Search terms');
+    await user.type(input, 'second');
+    await user.click(within(panel).getByRole('button', { name: 'Search' }));
+    await waitFor(() => expect(panel.textContent).toContain('Score 4'));
+    await user.click(within(panel).getByRole('button', { name: 'Rebuild draft index' }));
+    await screen.findByText('Search rebuild completed with 1 durable job(s).');
   });
 });
