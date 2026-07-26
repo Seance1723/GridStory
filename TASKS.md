@@ -229,7 +229,11 @@
   - Added an explicitly non-certifying OWASP ASVS 5.0.0 Level 2-oriented profile covering all 17 chapters, 29 normative GridStory requirements, current evidence, residual gaps, owners, threat links, and M5/M6 delivery ownership.
   - Added human security/threat/ASVS guides and `pnpm security:check`; the validator's negative self-tests cover risk, duplicate-ID, and broken-reference failures and the root lint gate enforces model/profile structure, applicability, traceability, and evidence paths.
   - Verification found and resolved BUG-0191 through BUG-0193; `pnpm security:check` passes, and unrestricted `pnpm check` passes lint, formatting, ledgers, boundaries, schema generation, every typecheck, 161 tests across 55 passing files plus two intentional PostgreSQL skips, and all production builds.
-- [ ] **M5-002** Harden tenant isolation across storage, cache, search, assets, jobs, events, and telemetry.
+- [x] **M5-002** Harden tenant isolation across storage, cache, search, assets, jobs, events, and telemetry.
+  - Added one validated, collision-safe six-field scope contract for keys, object paths, cache prefixes, adapter checks, and bounded secret-safe telemetry envelopes; OIDC roles and service-account grants are explicitly tenant bound.
+  - Made asset, audit, search, webhook, outbox, durable-job, cache, and operational boundaries fail closed on mismatched scope; hostile search totals, facets, highlights, and taxonomy metadata are rebuilt from accepted authoritative records.
+  - Added `pnpm tenant:check`, cross-scope/hostile-adapter regressions, and updated security/threat/ASVS/operations/search/asset documentation while leaving production identity/proxy and telemetry sink lifecycle under M6-002, M5-008, and M5-004.
+  - Verification resolved BUG-0194 through BUG-0202; `pnpm check` passes 171 tests with two intentional PostgreSQL skips plus all lint, format, security, tenant-contract, type, and build gates, and `pnpm test:e2e` passes the canonical Edge workflow.
 - [ ] **M5-003** Add plugin SDK capability manifests, grants, isolation, signatures, test harness, and lifecycle.
 - [ ] **M5-004** Add OpenTelemetry logs/metrics/traces, dashboards, retention, health, and operational runbooks.
 - [ ] **M5-005** Add backups, point-in-time recovery guidance, restore tests, graceful shutdown, and rolling-upgrade checks.

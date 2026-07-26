@@ -12,6 +12,7 @@ const viewer: Principal = {
   id: 'viewer-1',
   type: 'user',
   roles: ['viewer'],
+  roleAssignments: [{ roleId: 'viewer', tenantId: 'default' }],
   authenticationMethod: 'oidc',
 };
 
@@ -49,6 +50,12 @@ describe('request context and authorization', () => {
     ).toBe(true);
     expect(
       policy.decide(context(), GridStoryActions.contentCreate, {
+        kind: 'content',
+        contentType: 'page',
+      }).allowed,
+    ).toBe(false);
+    expect(
+      policy.decide({ ...context(), tenantId: 'neighbor' }, GridStoryActions.contentRead, {
         kind: 'content',
         contentType: 'page',
       }).allowed,

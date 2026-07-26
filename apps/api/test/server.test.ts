@@ -726,7 +726,7 @@ describe('GridStory API', () => {
         deliveries.push({ body, headers: deliveryHeaders });
         return { status: 202 };
       },
-      cacheInvalidator: async (tags) => {
+      cacheInvalidator: async ({ tags }) => {
         invalidations.push(tags);
       },
     });
@@ -832,8 +832,8 @@ describe('GridStory API', () => {
       url: '/api/v1/delivery/page/operational-page',
       headers,
     });
-    expect(delivery.headers['cache-tag']).toContain(`gridstory:entry:${created.id}`);
-    expect(delivery.headers['cache-tag']).toContain(`gridstory:type:page`);
+    expect(delivery.headers['cache-tag']).toContain(`:entry:${created.id}`);
+    expect(delivery.headers['cache-tag']).toContain(':type:page');
 
     const removed = await server.inject({
       method: 'DELETE',

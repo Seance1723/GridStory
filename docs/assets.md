@@ -26,6 +26,8 @@ Upload-session coordination is process-local in the built-in service. A horizont
 
 `SqliteAssetRepository` stores scoped asset metadata in the local GridStory database and survives API restarts. `AssetRepository` is the portable durability contract; deployments using a Postgres content database should inject a durable asset repository through `buildServer({ assetRepository })`. Without that injection, the database-URL configuration uses the in-memory metadata repository.
 
+Asset repository results are checked against the complete requested scope before they are returned or parsed, so a faulty adapter cannot substitute another tenant's record. In-memory keys use the canonical collision-safe scope tuple, and S3-compatible object paths encode every scope component independently before the generated object ID and safe filename. Private reads and completed uploads can emit the bounded canonical tenant telemetry envelope without asset bytes, credentials, or content metadata.
+
 `S3AssetStorageAdapter` maps the storage lifecycle to a small `S3MultipartClient` interface:
 
 - create multipart upload;

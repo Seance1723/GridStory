@@ -8,6 +8,8 @@ The canonical query supports bounded text, perspective, content-type, taxonomy-t
 
 An adapter implements `search`, `upsert`, `rebuild`, and `status`. Indexed documents contain explicit full scope, entry/content type, perspective, exact revision ID, update time, flattened searchable text, and canonical taxonomy term IDs. Adapter implementations must treat that scope plus perspective as part of every key and query.
 
+Search adapters are untrusted tenant boundaries. Every search result and status response echoes the complete requested scope, and results also echo perspective. GridStory rejects mismatches, reloads every hit through scoped authoritative storage, and scope-checks the returned entry. Adapter-provided totals and facets are not exposed: the response total and taxonomy facets are derived only from accepted scoped hits and code-owned taxonomy definitions. Backlink, related-content, rebuild, index, and status repository reads use the same fail-closed record checks.
+
 ## Taxonomies
 
 Taxonomies are declared on a content schema and referenced by taxonomy fields. Definitions have stable IDs, display names, optional hierarchy, and stable term IDs/slugs/labels. Parent IDs must resolve inside the same taxonomy and cycles are rejected by schema validation. The example page schema exposes a hierarchical `topics` taxonomy and an optional multi-value `topics` field.

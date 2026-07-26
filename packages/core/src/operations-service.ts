@@ -1,11 +1,15 @@
 import { createHmac, randomUUID } from 'node:crypto';
 import { isIP } from 'node:net';
-import {
-  workflowActionDefinitionSchema,
-  type ContentEntry,
-  type ContentScope,
-} from '@gridstory/schema';
+import { workflowActionDefinitionSchema, type ContentScope } from '@gridstory/schema';
 import { verifyAuditEvents, type AuditVerification } from './audit-service.js';
+import {
+  assertSameContentScope,
+  assertValidContentScope,
+  cacheTagBelongsToScope,
+  emitTenantTelemetry,
+  scopedCustomCacheTags,
+  type TenantTelemetrySink,
+} from './tenant-scope.js';
 import { GridStoryError, NotFoundError } from './errors.js';
 import type {
   ContentEventType,
@@ -23,6 +27,7 @@ export const contentEventTypes: ContentEventType[] = [
 ];
 
 export interface WebhookTransportInput {
+  scope: ContentScope;
   url: string;
   body: string;
   headers: Record<string, string>;
@@ -30,7 +35,7 @@ export interface WebhookTransportInput {
 
 export type WebhookTransport = (input: WebhookTransportInput) => Promise<{ status: number }>;
 
-export type CacheInvalidator = (tags: string[]) => Promise<void>;
+export type CacheInvalidator = (input: { scope: ContentScope; tags: string[] }) => Promise<void>;
 
 export interface OperationsServiceOptions {
   repository: ContentRepository;
@@ -49,6 +54,7 @@ export interface OperationsServiceOptions {
     payload: Record<string, unknown>;
   }) => Promise<Record<string, unknown>>;
   allowedWebhookHosts?: string[];
+  telemetry?: TenantTelemetrySink;
   now?: () => Date;
   createId?: () => string;
 }
@@ -153,18 +159,6 @@ export function signWebhookPayload(secret: string, timestamp: string, body: stri
   return `v1=${createHmac('sha256', secret).update(`${timestamp}.${body}`).digest('hex')}`;
 }
 
-export function contentCacheTags(entry: ContentEntry): string[] {
-  return [
-    `gridstory:tenant:${entry.tenantId}`,
-    `gridstory:site:${entry.siteId}`,
-    `gridstory:environment:${entry.environmentId}`,
-    `gridstory:locale:${entry.locale}`,
-    `gridstory:type:${entry.contentType}`,
-    `gridstory:entry:${entry.id}`,
-    `gridstory:revision:${entry.publishedRevisionId ?? entry.draftRevisionId}`,
-  ];
-}
-
 export class OperationsService {
   readonly #repository: ContentRepository;
   readonly #webhookSigningSecret: string;
@@ -173,6 +167,7 @@ export class OperationsService {
   readonly #workflowActionNotifier: NonNullable<OperationsServiceOptions['workflowActionNotifier']>;
   readonly #searchJobRunner: NonNullable<OperationsServiceOptions['searchJobRunner']>;
   readonly #allowedWebhookHosts?: ReadonlySet<string>;
+  readonly #telemetry: TenantTelemetrySink | undefined;
   readonly #now: () => Date;
   readonly #createId: () => string;
 
@@ -186,6 +181,7 @@ export class OperationsService {
       throw new Error('Search job runner is not configured.');
     },
     allowedWebhookHosts,
+    telemetry,
     now = () => new Date(),
     createId = randomUUID,
   }: OperationsServiceOptions) {
@@ -202,6 +198,7 @@ export class OperationsService {
     this.#cacheInvalidator = cacheInvalidator;
     this.#workflowActionNotifier = workflowActionNotifier;
     this.#searchJobRunner = searchJobRunner;
+    this.#telemetry = telemetry;
     if (allowedWebhookHosts) {
       this.#allowedWebhookHosts = new Set(
         allowedWebhookHosts.map((host) => host.toLocaleLowerCase('en-US')),
@@ -229,31 +226,46 @@ export class OperationsService {
         400,
       );
     }
-    return this.#repository.saveWebhookSubscription({
+    const saved = await this.#repository.saveWebhookSubscription({
       scope: input.scope,
       ...(input.id ? { id: input.id } : {}),
       url: validateWebhookUrl(input.url, this.#allowedWebhookHosts),
       eventTypes,
       ...(input.active !== undefined ? { active: input.active } : {}),
     });
+    assertSameContentScope(input.scope, saved, 'webhook repository save');
+    return saved;
   }
 
-  listWebhooks(scope: ContentScope): Promise<WebhookSubscription[]> {
-    return Promise.resolve(this.#repository.listWebhookSubscriptions({ scope }));
+  async listWebhooks(scope: ContentScope): Promise<WebhookSubscription[]> {
+    const webhooks = await this.#repository.listWebhookSubscriptions({ scope });
+    webhooks.forEach((webhook) => {
+      assertSameContentScope(scope, webhook, 'webhook repository list');
+    });
+    return webhooks;
   }
 
   deleteWebhook(scope: ContentScope, id: string): Promise<boolean> {
     return Promise.resolve(this.#repository.deleteWebhookSubscription({ scope, id }));
   }
 
-  listOutbox(scope: ContentScope, limit?: number): Promise<OutboxEvent[]> {
-    return Promise.resolve(
-      this.#repository.listOutboxEvents({ scope, ...(limit ? { limit } : {}) }),
-    );
+  async listOutbox(scope: ContentScope, limit?: number): Promise<OutboxEvent[]> {
+    const events = await this.#repository.listOutboxEvents({
+      scope,
+      ...(limit ? { limit } : {}),
+    });
+    events.forEach((event) => {
+      assertSameContentScope(scope, event, 'outbox repository list');
+    });
+    return events;
   }
 
-  listJobs(scope: ContentScope, limit?: number): Promise<DurableJob[]> {
-    return Promise.resolve(this.#repository.listJobs({ scope, ...(limit ? { limit } : {}) }));
+  async listJobs(scope: ContentScope, limit?: number): Promise<DurableJob[]> {
+    const jobs = await this.#repository.listJobs({ scope, ...(limit ? { limit } : {}) });
+    jobs.forEach((job) => {
+      assertSameContentScope(scope, job, 'job repository list');
+    });
+    return jobs;
   }
 
   async listWorkflowActions(scope: ContentScope, limit = 100): Promise<DurableJob[]> {
@@ -262,8 +274,10 @@ export class OperationsService {
       .slice(0, Math.max(1, Math.min(limit, 1000)));
   }
 
-  listOperationalScopes(limit?: number): Promise<ContentScope[]> {
-    return Promise.resolve(this.#repository.listOperationalScopes({ ...(limit ? { limit } : {}) }));
+  async listOperationalScopes(limit?: number): Promise<ContentScope[]> {
+    const scopes = await this.#repository.listOperationalScopes({ ...(limit ? { limit } : {}) });
+    scopes.forEach(assertValidContentScope);
+    return scopes;
   }
 
   async dashboard(scope: ContentScope): Promise<OperationsDashboard> {
@@ -274,6 +288,21 @@ export class OperationsService {
       this.#repository.listWebhookSubscriptions({ scope }),
       this.#repository.listScopeAuditEvents({ scope }),
     ]);
+    entries.forEach((entry) => {
+      assertSameContentScope(scope, entry, 'operations content repository list');
+    });
+    outbox.forEach((event) => {
+      assertSameContentScope(scope, event, 'operations outbox repository list');
+    });
+    jobs.forEach((job) => {
+      assertSameContentScope(scope, job, 'operations job repository list');
+    });
+    webhooks.forEach((webhook) => {
+      assertSameContentScope(scope, webhook, 'operations webhook repository list');
+    });
+    auditEvents.forEach((event) => {
+      assertSameContentScope(scope, event, 'operations audit repository list');
+    });
     const content = { total: entries.length, draft: 0, changed: 0, published: 0 };
     for (const entry of entries) content[entry.status] += 1;
     const outboxCounts = { total: outbox.length, pending: 0, processing: 0, succeeded: 0, dead: 0 };
@@ -304,10 +333,11 @@ export class OperationsService {
   async replayJob(scope: ContentScope, id: string): Promise<DurableJob> {
     const job = await this.#repository.getJob({ scope, id });
     if (!job) throw new NotFoundError('Durable job was not found.');
+    assertSameContentScope(scope, job, 'job repository get');
     if (job.state === 'processing') {
       throw new GridStoryError('A processing job cannot be replayed.', 'job_processing', 409);
     }
-    return this.#repository.enqueueJob({
+    const replay = await this.#repository.enqueueJob({
       scope,
       type: job.type,
       idempotencyKey: `replay:${job.id}:${this.#createId()}`,
@@ -315,6 +345,8 @@ export class OperationsService {
       runAt: iso(this.#now()),
       maxAttempts: job.maxAttempts,
     });
+    assertSameContentScope(scope, replay, 'replayed job enqueue');
+    return replay;
   }
 
   async replayWorkflowAction(scope: ContentScope, id: string): Promise<DurableJob> {
@@ -326,8 +358,9 @@ export class OperationsService {
   }
 
   async #expandOutbox(scope: ContentScope, workerId: string, event: OutboxEvent): Promise<number> {
+    assertSameContentScope(scope, event, 'claimed outbox event');
     let enqueued = 0;
-    await this.#repository.enqueueJob({
+    const cacheJob = await this.#repository.enqueueJob({
       scope,
       type: 'cache.invalidate',
       idempotencyKey: `outbox:${event.id}:cache`,
@@ -335,8 +368,9 @@ export class OperationsService {
       runAt: iso(this.#now()),
       maxAttempts: 8,
     });
+    assertSameContentScope(scope, cacheJob, 'cache job enqueue');
     enqueued += 1;
-    await this.#repository.enqueueJob({
+    const searchJob = await this.#repository.enqueueJob({
       scope,
       type: 'search.index',
       idempotencyKey: `outbox:${event.id}:search`,
@@ -349,11 +383,15 @@ export class OperationsService {
       runAt: iso(this.#now()),
       maxAttempts: 8,
     });
+    assertSameContentScope(scope, searchJob, 'search job enqueue');
     enqueued += 1;
     const subscriptions = await this.#repository.listWebhookSubscriptions({ scope });
+    subscriptions.forEach((subscription) => {
+      assertSameContentScope(scope, subscription, 'outbox webhook subscription');
+    });
     for (const subscription of subscriptions) {
       if (!subscription.active || !subscription.eventTypes.includes(event.type)) continue;
-      await this.#repository.enqueueJob({
+      const webhookJob = await this.#repository.enqueueJob({
         scope,
         type: 'webhook.deliver',
         idempotencyKey: `outbox:${event.id}:webhook:${subscription.id}`,
@@ -365,6 +403,7 @@ export class OperationsService {
         runAt: iso(this.#now()),
         maxAttempts: 8,
       });
+      assertSameContentScope(scope, webhookJob, 'webhook job enqueue');
       enqueued += 1;
     }
     await this.#repository.completeOutboxEvent({
@@ -377,6 +416,7 @@ export class OperationsService {
   }
 
   async #runJob(scope: ContentScope, workerId: string, job: DurableJob): Promise<void> {
+    assertSameContentScope(scope, job, 'claimed durable job');
     if (job.type === 'search.index' || job.type === 'search.rebuild') {
       const result = await this.#searchJobRunner({ scope, type: job.type, payload: job.payload });
       await this.#repository.completeJob({
@@ -392,7 +432,10 @@ export class OperationsService {
       const tags = Array.isArray(job.payload.tags)
         ? job.payload.tags.filter((tag): tag is string => typeof tag === 'string')
         : [];
-      await this.#cacheInvalidator(tags);
+      if (tags.length === 0 || tags.some((tag) => !cacheTagBelongsToScope(scope, tag))) {
+        throw new Error('Cache invalidation job contains tags outside its tenant scope.');
+      }
+      await this.#cacheInvalidator({ scope, tags });
       await this.#repository.completeJob({
         scope,
         id: job.id,
@@ -416,10 +459,12 @@ export class OperationsService {
         });
         result = { delivered: true, audienceRoles: action.audienceRoles.length };
       } else if (action.type === 'cache-invalidate') {
-        await this.#cacheInvalidator(action.tags);
-        result = { invalidatedTags: action.tags.length };
+        const tags = scopedCustomCacheTags(scope, action.tags);
+        await this.#cacheInvalidator({ scope, tags });
+        result = { invalidatedTags: tags.length };
       } else {
         const body = JSON.stringify({
+          scope,
           deliveryId: job.id,
           idempotencyKey: job.idempotencyKey,
           eventId: job.payload.eventId,
@@ -432,6 +477,7 @@ export class OperationsService {
         });
         const timestamp = String(Math.floor(this.#now().getTime() / 1000));
         const response = await this.#webhookTransport({
+          scope,
           url: validateWebhookUrl(action.url, this.#allowedWebhookHosts),
           body,
           headers: {
@@ -464,9 +510,15 @@ export class OperationsService {
       throw new Error('Webhook job event payload is invalid.');
     }
     const eventRecord = event as Record<string, unknown>;
+    assertSameContentScope(
+      scope,
+      eventRecord as unknown as ContentScope,
+      'webhook job event payload',
+    );
     const body = JSON.stringify(eventRecord);
     const timestamp = String(Math.floor(this.#now().getTime() / 1000));
     const response = await this.#webhookTransport({
+      scope,
       url: validateWebhookUrl(url, this.#allowedWebhookHosts),
       body,
       headers: {
@@ -502,6 +554,9 @@ export class OperationsService {
       now: iso(now),
       leaseExpiresAt: plusSeconds(now, 60),
     });
+    outbox.forEach((event) => {
+      assertSameContentScope(input.scope, event, 'claimed outbox batch');
+    });
     let completedOutbox = 0;
     let enqueuedJobs = 0;
     for (const event of outbox) {
@@ -528,6 +583,9 @@ export class OperationsService {
       now: iso(this.#now()),
       leaseExpiresAt: plusSeconds(this.#now(), 60),
     });
+    jobs.forEach((job) => {
+      assertSameContentScope(input.scope, job, 'claimed job batch');
+    });
     let completedJobs = 0;
     let retriedJobs = 0;
     let deadJobs = 0;
@@ -549,7 +607,7 @@ export class OperationsService {
         else retriedJobs += 1;
       }
     }
-    return {
+    const result = {
       claimedOutbox: outbox.length,
       completedOutbox,
       enqueuedJobs,
@@ -558,5 +616,13 @@ export class OperationsService {
       retriedJobs,
       deadJobs,
     };
+    await emitTenantTelemetry(this.#telemetry, {
+      scope: input.scope,
+      name: 'operations.drain.completed',
+      outcome: deadJobs > 0 ? 'error' : 'success',
+      operationId: workerId,
+      metadata: result,
+    });
+    return result;
   }
 }

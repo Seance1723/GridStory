@@ -31,6 +31,7 @@ describe('IdentityService', () => {
       verify: async () => identity,
     });
     expect(result.principal.roles).toEqual(['author']);
+    expect(result.principal.roleAssignments).toEqual([{ roleId: 'author', tenantId: 'tenant-a' }]);
     expect(identities.getSession(result.session.id).tenantId).toBe('tenant-a');
     identities.revokeSession(result.session.id);
     expect(() => identities.getSession(result.session.id)).toThrow(GridStoryError);
@@ -42,6 +43,23 @@ describe('IdentityService', () => {
         verify: async () => ({ ...identity, issuer: 'https://attacker.example' }),
       }),
     ).rejects.toMatchObject({ code: 'invalid_identity', statusCode: 401 });
+  });
+
+  it('requires every service-account grant to be explicitly bound to its tenant', () => {
+    expect(() =>
+      service().createServiceAccount({
+        tenantId: 'tenant-a',
+        name: 'Unscoped bot',
+        grants: [{ actions: [GridStoryActions.contentRead] }],
+      }),
+    ).toThrow(expect.objectContaining({ code: 'invalid_scope', statusCode: 400 }));
+    expect(() =>
+      service().createServiceAccount({
+        tenantId: 'tenant-a',
+        name: 'Cross-tenant bot',
+        grants: [{ actions: [GridStoryActions.contentRead], tenantId: 'tenant-b' }],
+      }),
+    ).toThrow(expect.objectContaining({ code: 'invalid_scope', statusCode: 400 }));
   });
 
   it('issues hashed opaque service tokens and supports authentication and revocation', () => {

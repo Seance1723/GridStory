@@ -1,20 +1,10 @@
 import { DatabaseSync } from 'node:sqlite';
+import { contentScopeKey } from './tenant-scope.js';
 import { assetRecordSchema, type AssetRecord, type ContentScope } from '@gridstory/schema';
 import type { AssetRepository } from './asset-service.js';
 
 export interface SqliteAssetRepositoryOptions {
   filename: string;
-}
-
-function scopeKey(scope: ContentScope): string {
-  return [
-    scope.organizationId,
-    scope.tenantId,
-    scope.workspaceId,
-    scope.siteId,
-    scope.environmentId,
-    scope.locale,
-  ].join('\u001f');
 }
 
 interface AssetRow {
@@ -46,14 +36,14 @@ export class SqliteAssetRepository implements AssetRepository {
          WHERE scope_key = ?
          ORDER BY updated_at DESC, id ASC`,
       )
-      .all(scopeKey(scope)) as unknown as AssetRow[];
+      .all(contentScopeKey(scope)) as unknown as AssetRow[];
     return rows.map((row) => assetRecordSchema.parse(JSON.parse(row.payload)));
   }
 
   get(scope: ContentScope, id: string): AssetRecord | null {
     const row = this.#database
       .prepare('SELECT payload FROM gridstory_assets WHERE scope_key = ? AND id = ?')
-      .get(scopeKey(scope), id) as unknown as AssetRow | undefined;
+      .get(contentScopeKey(scope), id) as unknown as AssetRow | undefined;
     return row ? assetRecordSchema.parse(JSON.parse(row.payload)) : null;
   }
 
@@ -67,7 +57,7 @@ export class SqliteAssetRepository implements AssetRepository {
            updated_at = excluded.updated_at,
            payload = excluded.payload`,
       )
-      .run(scopeKey(parsed), parsed.id, parsed.updatedAt, JSON.stringify(parsed));
+      .run(contentScopeKey(parsed), parsed.id, parsed.updatedAt, JSON.stringify(parsed));
   }
 
   close(): void {

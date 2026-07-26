@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { contentScopeKey } from './tenant-scope.js';
 import type {
   CollaborationSnapshot,
   CollaborationTarget,
@@ -10,17 +11,6 @@ import type {
 import { GridStoryError } from './errors.js';
 
 const PRESENCE_TTL_MS = 30_000;
-
-function scopeKey(scope: ContentScope): string {
-  return [
-    scope.organizationId,
-    scope.tenantId,
-    scope.workspaceId,
-    scope.siteId,
-    scope.environmentId,
-    scope.locale,
-  ].join('\u001f');
-}
 
 function mentionIds(body: string, explicit: string[] = []): string[] {
   const parsed = [...body.matchAll(/@([a-zA-Z0-9](?:[a-zA-Z0-9._-]*[a-zA-Z0-9_-])?)/g)].map(
@@ -61,7 +51,7 @@ export class CollaborationService {
   readonly #presence = new Map<string, Map<string, PresenceParticipant>>();
 
   snapshot(scope: ContentScope, entryId: string, now = new Date()): CollaborationSnapshot {
-    const key = `${scopeKey(scope)}\u001e${entryId}`;
+    const key = `${contentScopeKey(scope)}\u001e${entryId}`;
     const participants = this.#presence.get(key);
     if (participants) {
       const cutoff = now.getTime() - PRESENCE_TTL_MS;
@@ -98,7 +88,7 @@ export class CollaborationService {
       createdAt: now.toISOString(),
       updatedAt: now.toISOString(),
     };
-    const key = `${scopeKey(input.scope)}\u001e${input.target.entryId}`;
+    const key = `${contentScopeKey(input.scope)}\u001e${input.target.entryId}`;
     const threads = this.#threads.get(key) ?? [];
     threads.push(thread);
     this.#threads.set(key, threads);
@@ -157,7 +147,7 @@ export class CollaborationService {
     nodeId?: string;
     now?: Date;
   }): PresenceParticipant[] {
-    const key = `${scopeKey(input.scope)}\u001e${input.entryId}`;
+    const key = `${contentScopeKey(input.scope)}\u001e${input.entryId}`;
     const participants = this.#presence.get(key) ?? new Map<string, PresenceParticipant>();
     const now = input.now ?? new Date();
     participants.set(input.actorId, {
@@ -172,14 +162,14 @@ export class CollaborationService {
   }
 
   leave(scope: ContentScope, entryId: string, actorId: string): void {
-    const key = `${scopeKey(scope)}\u001e${entryId}`;
+    const key = `${contentScopeKey(scope)}\u001e${entryId}`;
     const participants = this.#presence.get(key);
     participants?.delete(actorId);
     if (participants?.size === 0) this.#presence.delete(key);
   }
 
   #thread(scope: ContentScope, entryId: string, threadId: string): CommentThread {
-    const key = `${scopeKey(scope)}\u001e${entryId}`;
+    const key = `${contentScopeKey(scope)}\u001e${entryId}`;
     const thread = this.#threads.get(key)?.find((candidate) => candidate.id === threadId);
     if (!thread) {
       throw new GridStoryError('Comment thread was not found.', 'comment_not_found', 404);

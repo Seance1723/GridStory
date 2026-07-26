@@ -35,9 +35,11 @@ Completed workflow transitions enqueue `workflow.action` jobs into the same leas
 
 ## Cache tags
 
-Every event and public REST delivery includes tags for tenant, site, environment, locale, content type, entry, and exact revision. REST uses the `Cache-Tag` response header and also retains the full scope `Vary` header. Query connections return the union of their page nodes' tags.
+Every event and public REST delivery uses a collision-safe cache prefix containing organization, tenant, workspace, site, environment, and locale, followed by content type, entry, and exact revision tags. REST uses the `Cache-Tag` response header and also retains the full scope `Vary` header. Query connections return the union of their page nodes' tags. Workflow-authored cache tags are deduplicated and namespaced beneath the same prefix; raw global tags are never passed through.
 
-The default cache invalidator acknowledges tags without contacting a provider. Production deployments inject a provider adapter into `OperationsService`; durable retry semantics remain provider-neutral.
+The default cache invalidator acknowledges tags without contacting a provider. Production deployments inject a provider adapter into `OperationsService`; the adapter receives `{ scope, tags }`, and execution rejects an empty set or any tag outside that scope before the provider is called. Durable retry semantics remain provider-neutral.
+
+Repository output is treated as an isolation boundary. Listed, claimed, enqueued, and replayed outbox/job records and webhook subscriptions are checked against the requested six-field scope. Webhook transports receive the explicit scope and the signed raw body contains the scope; a mismatched embedded event is rejected before network delivery. The worker emits a bounded `operations.drain.completed` telemetry event with the same canonical scope.
 
 ## Signed webhooks
 

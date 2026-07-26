@@ -15,6 +15,12 @@ import {
   type SearchResponse,
   type TaxonomyDefinition,
 } from '@gridstory/schema';
+import {
+  assertSameContentScope,
+  contentScopeKey,
+  emitTenantTelemetry,
+  type TenantTelemetrySink,
+} from './tenant-scope.js';
 import { NotFoundError } from './errors.js';
 import type { Awaitable, ContentRepository, DurableJob } from './types.js';
 
@@ -26,12 +32,15 @@ export interface SearchAdapterHit {
 }
 
 export interface SearchAdapterResult {
+  scope: ContentScope;
+  perspective: ContentPerspective;
   hits: SearchAdapterHit[];
   facets: SearchFacet[];
   total: number;
 }
 
 export interface SearchAdapterStatus {
+  scope: ContentScope;
   state: 'ready' | 'rebuilding' | 'degraded';
   draftDocuments: number;
   publishedDocuments: number;
@@ -52,17 +61,6 @@ export interface SearchAdapter {
     documents: SearchDocument[];
   }): Awaitable<void>;
   status(scope: ContentScope): Awaitable<SearchAdapterStatus>;
-}
-
-function scopeKey(scope: ContentScope): string {
-  return [
-    scope.organizationId,
-    scope.tenantId,
-    scope.workspaceId,
-    scope.siteId,
-    scope.environmentId,
-    scope.locale,
-  ].join(':');
 }
 
 function valueAt(data: Record<string, unknown>, path: string): unknown {
@@ -187,6 +185,23 @@ function matchesTaxonomies(document: SearchDocument, selected: Record<string, st
     terms.some((term) => document.taxonomies[taxonomyId]?.includes(term)),
   );
 }
+function safeAdapterFacets(
+  hits: SearchResponse['hits'],
+  taxonomies: TaxonomyDefinition[],
+): SearchFacet[] {
+  return taxonomies.flatMap((taxonomy) => {
+    const counts = new Map<string, number>();
+    hits.forEach((hit) => {
+      hit.taxonomies[taxonomy.id]?.forEach((term) => {
+        counts.set(term, (counts.get(term) ?? 0) + 1);
+      });
+    });
+    const terms = taxonomy.terms
+      .map((term) => ({ ...term, count: counts.get(term.id) ?? 0 }))
+      .filter((term) => term.count > 0);
+    return terms.length ? [{ taxonomyId: taxonomy.id, label: taxonomy.name, terms }] : [];
+  });
+}
 
 export class RepositorySearchAdapter implements SearchAdapter {
   readonly name = 'repository-scan';
@@ -273,6 +288,8 @@ export class RepositorySearchAdapter implements SearchAdapter {
       };
     });
     return {
+      scope: input.scope,
+      perspective: input.query.perspective,
       hits: rows.slice(0, input.query.first).map((row) => row.hit),
       facets,
       total: rows.length,
@@ -283,7 +300,7 @@ export class RepositorySearchAdapter implements SearchAdapter {
 
   rebuild(input: { scope: ContentScope; perspective: ContentPerspective }): void {
     this.#lastRebuiltAt.set(
-      `${scopeKey(input.scope)}:${input.perspective}`,
+      `${contentScopeKey(input.scope)}:${input.perspective}`,
       new Date().toISOString(),
     );
   }
@@ -294,11 +311,12 @@ export class RepositorySearchAdapter implements SearchAdapter {
       this.#repository.list({ scope, perspective: 'published' }),
     ]);
     const rebuilt = ['draft', 'published']
-      .map((perspective) => this.#lastRebuiltAt.get(`${scopeKey(scope)}:${perspective}`))
+      .map((perspective) => this.#lastRebuiltAt.get(`${contentScopeKey(scope)}:${perspective}`))
       .filter((value): value is string => Boolean(value))
       .sort()
       .at(-1);
     return {
+      scope,
       state: 'ready',
       draftDocuments: draft.length,
       publishedDocuments: published.length,
@@ -314,6 +332,7 @@ export interface SearchServiceOptions {
   taxonomies?: TaxonomyDefinition[];
   now?: () => Date;
   createId?: () => string;
+  telemetry?: TenantTelemetrySink;
 }
 
 export class SearchService {
@@ -324,6 +343,7 @@ export class SearchService {
   readonly #taxonomyBindings: TaxonomyBinding[];
   readonly #now: () => Date;
   readonly #createId: () => string;
+  readonly #telemetry: TenantTelemetrySink | undefined;
 
   constructor(input: SearchServiceOptions) {
     this.#repository = input.repository;
@@ -338,6 +358,7 @@ export class SearchService {
       });
     this.#now = input.now ?? (() => new Date());
     this.#createId = input.createId ?? (() => crypto.randomUUID());
+    this.#telemetry = input.telemetry;
   }
 
   listTaxonomies(): TaxonomyDefinition[] {
@@ -351,16 +372,64 @@ export class SearchService {
       query: parsed,
       taxonomies: this.#taxonomies,
     });
-    const hits = [];
+    assertSameContentScope(scope, result.scope, 'search adapter result');
+    if (result.perspective !== parsed.perspective) {
+      throw new Error('Search adapter returned a different content perspective.');
+    }
+    if (
+      !Number.isSafeInteger(result.total) ||
+      result.total < 0 ||
+      result.hits.length > parsed.first ||
+      result.total < result.hits.length
+    ) {
+      throw new Error('Search adapter returned invalid bounded result metadata.');
+    }
+    const hits: SearchResponse['hits'] = [];
+    const seenEntryIds = new Set<string>();
+    const highlightTerms = normalize(parsed.text).split(/\s+/).filter(Boolean).slice(0, 20);
     for (const hit of result.hits) {
+      if (!hit.entryId || !Number.isFinite(hit.score)) {
+        throw new Error('Search adapter returned an invalid hit.');
+      }
+      if (seenEntryIds.has(hit.entryId)) continue;
+      seenEntryIds.add(hit.entryId);
       const entry = await this.#repository.getById({
         scope,
         id: hit.entryId,
         perspective: parsed.perspective,
       });
-      if (entry) hits.push({ entry, ...hit });
+      if (!entry) continue;
+      assertSameContentScope(scope, entry, 'search result repository lookup');
+      const document = buildSearchDocument({
+        entry,
+        perspective: parsed.perspective,
+        taxonomies: this.#taxonomies,
+        taxonomyBindings: this.#taxonomyBindings,
+      });
+      const normalizedText = normalize(document.text);
+      hits.push({
+        entry,
+        score: hit.score,
+        highlights: highlightTerms.filter((term) => normalizedText.includes(term)).slice(0, 5),
+        taxonomies: document.taxonomies,
+      });
     }
-    return { hits, facets: result.facets, total: result.total };
+    const response = {
+      hits,
+      facets: safeAdapterFacets(hits, this.#taxonomies),
+      total: hits.length,
+    };
+    await emitTenantTelemetry(this.#telemetry, {
+      scope,
+      name: 'search.query.completed',
+      outcome: 'success',
+      metadata: {
+        perspective: parsed.perspective,
+        returnedHits: hits.length,
+        totalHits: response.total,
+      },
+    });
+    return response;
   }
 
   async backlinks(
@@ -369,6 +438,9 @@ export class SearchService {
     perspective: ContentPerspective = 'published',
   ): Promise<BacklinkRecord[]> {
     const entries = await this.#repository.list({ scope, perspective });
+    entries.forEach((entry) => {
+      assertSameContentScope(scope, entry, 'search backlinks repository list');
+    });
     return entries.flatMap((entry) => {
       const schema = this.#schemas.get(entry.contentType);
       if (!schema) return [];
@@ -387,7 +459,11 @@ export class SearchService {
   ): Promise<RelatedContentRecord[]> {
     const target = await this.#repository.getById({ scope, id: entryId, perspective });
     if (!target) throw new NotFoundError('Content entry was not found.');
+    assertSameContentScope(scope, target, 'search related repository get');
     const entries = await this.#repository.list({ scope, perspective });
+    entries.forEach((entry) => {
+      assertSameContentScope(scope, entry, 'search related repository list');
+    });
     const targetSchema = this.#schemas.get(target.contentType);
     const outgoing = new Set(
       targetSchema
@@ -449,7 +525,7 @@ export class SearchService {
     scope: ContentScope,
     perspective: ContentPerspective = 'published',
   ): Promise<DurableJob> {
-    return await this.#repository.enqueueJob({
+    const job = await this.#repository.enqueueJob({
       scope,
       type: 'search.rebuild',
       idempotencyKey: `search:rebuild:${perspective}:${this.#createId()}`,
@@ -457,6 +533,8 @@ export class SearchService {
       runAt: this.#now().toISOString(),
       maxAttempts: 5,
     });
+    assertSameContentScope(scope, job, 'search rebuild job enqueue');
+    return job;
   }
 
   async processJob(input: {
@@ -467,6 +545,9 @@ export class SearchService {
     if (input.type === 'search.rebuild') {
       const perspective = input.payload.perspective === 'draft' ? 'draft' : 'published';
       const entries = await this.#repository.list({ scope: input.scope, perspective });
+      entries.forEach((entry) => {
+        assertSameContentScope(input.scope, entry, 'search rebuild repository list');
+      });
       const documents = entries.map((entry) =>
         buildSearchDocument({
           entry,
@@ -490,6 +571,7 @@ export class SearchService {
         perspective,
       });
       if (!entry) continue;
+      assertSameContentScope(input.scope, entry, 'search index repository get');
       await this.#adapter.upsert(
         buildSearchDocument({
           entry,
@@ -508,13 +590,23 @@ export class SearchService {
       this.#adapter.status(scope),
       this.#repository.listJobs({ scope, limit: 1000 }),
     ]);
+    assertSameContentScope(scope, adapter.scope, 'search adapter status');
+    jobs.forEach((job) => {
+      assertSameContentScope(scope, job, 'search status job list');
+    });
+    const adapterStatus: Omit<SearchAdapterStatus, 'scope'> = {
+      state: adapter.state,
+      draftDocuments: adapter.draftDocuments,
+      publishedDocuments: adapter.publishedDocuments,
+      ...(adapter.lastRebuiltAt ? { lastRebuiltAt: adapter.lastRebuiltAt } : {}),
+    };
     const searchJobs = jobs.filter(
       (job) => job.type === 'search.index' || job.type === 'search.rebuild',
     );
     return {
       ...scope,
       adapter: this.#adapter.name,
-      ...adapter,
+      ...adapterStatus,
       state: searchJobs.some((job) => job.state === 'dead') ? 'degraded' : adapter.state,
       pendingJobs: searchJobs.filter((job) => job.state === 'pending' || job.state === 'processing')
         .length,

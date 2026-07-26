@@ -275,7 +275,7 @@
         "docs/workflow-actions.md"
       ],
       "verification": ["packages/core/test/operations-service.test.ts", "Deployment egress review"],
-      "taskIds": ["M5-002", "M5-004"]
+      "taskIds": ["M5-004"]
     },
     {
       "id": "GS-SEC-006",
@@ -348,7 +348,7 @@
       "threatRefs": ["THREAT-0002", "THREAT-0021"],
       "evidence": ["apps/api/src/server.ts", "README.md"],
       "verification": ["Production proxy and identity conformance test"],
-      "taskIds": ["M5-002"]
+      "taskIds": ["M5-008", "M6-002"]
     },
     {
       "id": "GS-SEC-011",
@@ -403,7 +403,7 @@
       "threatRefs": ["THREAT-0002", "THREAT-0016"],
       "evidence": ["packages/core/src/identity.ts", "README.md"],
       "verification": ["Production OIDC adapter conformance suite"],
-      "taskIds": ["M5-002", "M6-002"]
+      "taskIds": ["M6-002"]
     },
     {
       "id": "GS-SEC-014",
@@ -415,7 +415,7 @@
       "threatRefs": ["THREAT-0002", "THREAT-0016"],
       "evidence": ["packages/core/src/identity.ts"],
       "verification": ["Persistent session adapter conformance suite"],
-      "taskIds": ["M5-002", "M6-002"]
+      "taskIds": ["M6-002"]
     },
     {
       "id": "GS-SEC-015",
@@ -425,10 +425,19 @@
       "statement": "Every non-public operation SHALL authorize its function and object at a trusted layer; unmatched roles/grants SHALL be denied and the complete organization/tenant/workspace/site/environment/locale scope SHALL be non-bypassable.",
       "asvsRefs": ["v5.0.0-8.1.1", "v5.0.0-8.2.1", "v5.0.0-8.2.2", "v5.0.0-8.3.1", "v5.0.0-8.4.1"],
       "threatRefs": ["THREAT-0001", "THREAT-0014"],
-      "evidence": ["packages/core/src/authorization.ts", "apps/api/src/server.ts"],
+      "evidence": [
+        "packages/core/src/authorization.ts",
+        "packages/core/src/identity.ts",
+        "packages/core/src/tenant-scope.ts",
+        "apps/api/src/server.ts"
+      ],
       "verification": [
         "packages/core/test/authorization.test.ts",
-        "apps/api/test/authorization.test.ts"
+        "packages/core/test/security-context.test.ts",
+        "packages/core/test/identity.test.ts",
+        "packages/core/test/tenant-isolation.test.ts",
+        "apps/api/test/authorization.test.ts",
+        "scripts/check-tenant-scope.mjs"
       ],
       "taskIds": ["M2-002", "M5-002"]
     },
@@ -462,7 +471,7 @@
       "threatRefs": ["THREAT-0002", "THREAT-0016"],
       "evidence": ["packages/core/src/identity.ts"],
       "verification": ["Production OIDC browser-flow conformance suite"],
-      "taskIds": ["M5-002", "M6-002"]
+      "taskIds": ["M6-002"]
     },
     {
       "id": "GS-SEC-018",
@@ -533,7 +542,7 @@
       "threatRefs": ["THREAT-0002", "THREAT-0016", "THREAT-0021", "THREAT-0022"],
       "evidence": [".env.example", "README.md"],
       "verification": ["Production configuration conformance test"],
-      "taskIds": ["M5-002", "M5-004", "M5-008"]
+      "taskIds": ["M5-004", "M5-008"]
     },
     {
       "id": "GS-SEC-023",
@@ -554,16 +563,24 @@
     {
       "id": "GS-SEC-024",
       "title": "Credential and cache containment",
-      "status": "partial",
+      "status": "verified",
       "owner": "Delivery owner",
       "statement": "Credentials, preview grants, service tokens, and sensitive draft/private responses SHALL not enter public URLs or shared caches; sensitive responses SHALL use private, no-store and published caches SHALL contain published data only.",
       "asvsRefs": ["v5.0.0-14.2.1", "v5.0.0-14.2.2", "v5.0.0-14.3.2"],
       "threatRefs": ["THREAT-0003", "THREAT-0004", "THREAT-0008"],
-      "evidence": ["apps/api/src/server.ts", "docs/content-queries.md", "docs/assets.md"],
+      "evidence": [
+        "apps/api/src/server.ts",
+        "packages/core/src/tenant-scope.ts",
+        "packages/core/src/operations-service.ts",
+        "docs/content-queries.md",
+        "docs/assets.md",
+        "docs/operations.md"
+      ],
       "verification": [
         "apps/api/test/server.test.ts",
         "apps/api/test/assets.test.ts",
-        "M5-002 cache review"
+        "packages/core/test/tenant-isolation.test.ts",
+        "scripts/check-tenant-scope.mjs"
       ],
       "taskIds": ["M5-002"]
     },
@@ -605,7 +622,7 @@
         "packages/core/src/content-query.ts"
       ],
       "verification": ["pnpm test:run", "Field-level authorization review"],
-      "taskIds": ["M5-002"]
+      "taskIds": ["M5-008"]
     },
     {
       "id": "GS-SEC-028",
@@ -615,10 +632,15 @@
       "statement": "GridStory SHALL inventory logs and record correlatable authentication, authorization failure, privileged mutation, publication, workflow/release, import/export, credential, adapter, and security-control events without recording secrets or unnecessary content.",
       "asvsRefs": ["v5.0.0-16.1.1", "v5.0.0-16.2.1", "v5.0.0-16.2.5", "v5.0.0-16.3.2"],
       "threatRefs": ["THREAT-0015", "THREAT-0016", "THREAT-0022"],
-      "evidence": ["packages/core/src/audit-service.ts", "docs/audit-and-administration.md"],
+      "evidence": [
+        "packages/core/src/audit-service.ts",
+        "packages/core/src/tenant-scope.ts",
+        "docs/audit-and-administration.md"
+      ],
       "verification": [
         "packages/core/test/audit-service.test.ts",
-        "Telemetry and redaction conformance test"
+        "packages/core/test/tenant-isolation.test.ts",
+        "Telemetry inventory and sink conformance test"
       ],
       "taskIds": ["M5-004"]
     },

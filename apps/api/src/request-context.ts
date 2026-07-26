@@ -1,4 +1,9 @@
-import type { AuthorizationPolicy, AuthorizationResource, GridStoryAction } from '@gridstory/core';
+import {
+  assertValidContentScope,
+  type AuthorizationPolicy,
+  type AuthorizationResource,
+  type GridStoryAction,
+} from '@gridstory/core';
 import type {
   ContentPerspective,
   ContentScope,
@@ -41,13 +46,16 @@ export function requestContext(
   perspective: ContentPerspective,
   publicRequest = false,
 ): RequestContext {
-  return {
+  const scope = assertValidContentScope({
     organizationId: header(request, 'x-gridstory-organization') ?? 'local',
     tenantId: header(request, 'x-gridstory-tenant') ?? 'default',
     workspaceId: header(request, 'x-gridstory-workspace') ?? 'default',
     siteId: header(request, 'x-gridstory-site') ?? 'default',
     environmentId: header(request, 'x-gridstory-environment') ?? 'development',
     locale: header(request, 'x-gridstory-locale') ?? 'en',
+  });
+  return {
+    ...scope,
     perspective,
     principal: principal(request, publicRequest),
   };

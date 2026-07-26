@@ -308,7 +308,7 @@
     "Development identity headers and default secrets are never exposed on a production listener.",
     "Applications validate and safely render application-owned components; GridStory never executes editor-authored JavaScript.",
     "External adapters implement the documented timeouts, redirect, egress, credential, and tenant-scope contracts.",
-    "A full M5-002 isolation review must verify every persistence, cache, search, asset, job, event, and telemetry path before v1 GA."
+    "The M5-002 application isolation review verifies canonical scope keys and fail-closed boundaries across persistence, cache, search, assets, jobs, events, audit, and telemetry; production infrastructure policies remain deployment evidence."
   ],
   "threats": [
     {
@@ -327,12 +327,13 @@
       "mitigations": [
         "Require complete scope in request, storage, cache, event, job, audit, and adapter contracts.",
         "Deny by default and authorize the resource action before access.",
-        "Run cross-scope conformance tests and database-policy review in M5-002."
+        "Run cross-scope conformance tests continuously; production deployments separately verify database and object-store policies."
       ],
       "verification": [
         "packages/core/test/authorization.test.ts",
         "packages/core/test/repository-conformance.test.ts",
-        "M5-002"
+        "packages/core/test/tenant-isolation.test.ts",
+        "scripts/check-tenant-scope.mjs"
       ]
     },
     {
@@ -353,7 +354,7 @@
         "Require deployed OIDC or service-token middleware and trusted-proxy configuration before production.",
         "Fail startup when production mode lacks identity configuration."
       ],
-      "verification": ["README.md", "packages/core/src/identity.ts", "M5-002"]
+      "verification": ["README.md", "packages/core/src/identity.ts", "M6-002"]
     },
     {
       "id": "THREAT-0003",
@@ -400,6 +401,8 @@
       "verification": [
         "apps/api/test/server.test.ts",
         "apps/api/test/content-query.test.ts",
+        "packages/core/test/tenant-isolation.test.ts",
+        "scripts/check-tenant-scope.mjs",
         "docs/content-queries.md"
       ]
     },
@@ -576,12 +579,13 @@
       "mitigations": [
         "Make full scope and perspective mandatory adapter keys.",
         "Put identifiers, not content, in incremental jobs and reload under scope.",
-        "Expose scoped rebuild/status and run cross-adapter isolation tests in M5-002."
+        "Expose scoped rebuild/status and reject mismatched adapter scope, perspective, totals, facets, and repository records."
       ],
       "verification": [
         "packages/core/test/search-service.test.ts",
-        "docs/search-and-taxonomies.md",
-        "M5-002"
+        "packages/core/test/tenant-isolation.test.ts",
+        "scripts/check-tenant-scope.mjs",
+        "docs/search-and-taxonomies.md"
       ]
     },
     {
@@ -605,6 +609,8 @@
       "verification": [
         "packages/core/test/operations-service.test.ts",
         "packages/core/test/repository-conformance.test.ts",
+        "packages/core/test/tenant-isolation.test.ts",
+        "scripts/check-tenant-scope.mjs",
         "docs/operations.md"
       ]
     },
@@ -652,6 +658,7 @@
       ],
       "verification": [
         "packages/core/test/audit-service.test.ts",
+        "packages/core/test/tenant-isolation.test.ts",
         "docs/audit-and-administration.md",
         "M5-004"
       ]
@@ -724,6 +731,8 @@
         "Set bounded timeouts, retries, circuit breaking, least-privilege credentials, and health telemetry."
       ],
       "verification": [
+        "packages/core/test/tenant-isolation.test.ts",
+        "scripts/check-tenant-scope.mjs",
         "docs/operations.md",
         "docs/assets.md",
         "docs/search-and-taxonomies.md",
@@ -788,7 +797,7 @@
         "Terminate modern TLS and configure trusted proxies explicitly.",
         "Add production configuration validation and deployment conformance checks."
       ],
-      "verification": ["apps/api/src/server.ts", "docs/troubleshooting.md", "M5-002"]
+      "verification": ["apps/api/src/server.ts", "docs/troubleshooting.md", "M5-008", "M6-002"]
     },
     {
       "id": "THREAT-0022",

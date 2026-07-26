@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { ContentSchemaDefinition, ContentScope } from '@gridstory/schema';
 import {
   ContentService,
+  contentScopeCachePrefix,
   OperationsService,
   SqliteContentRepository,
   signWebhookPayload,
@@ -53,7 +54,7 @@ describe('OperationsService', () => {
         if (failDelivery) throw new Error('temporary endpoint failure');
         return { status: 204 };
       },
-      cacheInvalidator: async (tags) => {
+      cacheInvalidator: async ({ tags }) => {
         invalidated.push(tags);
       },
       searchJobRunner: async () => ({ indexedDocuments: 1 }),
@@ -89,7 +90,7 @@ describe('OperationsService', () => {
       completedJobs: 2,
       retriedJobs: 1,
     });
-    expect(invalidated[0]).toContain(`gridstory:entry:${entry.id}`);
+    expect(invalidated[0]).toContain(`${contentScopeCachePrefix(scope)}:entry:${entry.id}`);
     const attempted = deliveries[0];
     expect(attempted?.headers['x-gridstory-signature']).toBe(
       signWebhookPayload(

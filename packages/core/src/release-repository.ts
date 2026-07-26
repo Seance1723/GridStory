@@ -1,4 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
+import { contentScopeKey } from './tenant-scope.js';
 import { Pool } from 'pg';
 import { releaseSchema, type ContentScope, type Release } from '@gridstory/schema';
 import type { Awaitable } from './types.js';
@@ -10,22 +11,11 @@ export interface ReleaseRepository {
   close(): Awaitable<void>;
 }
 
-function scopeKey(scope: ContentScope): string {
-  return [
-    scope.organizationId,
-    scope.tenantId,
-    scope.workspaceId,
-    scope.siteId,
-    scope.environmentId,
-    scope.locale,
-  ].join('\u001f');
-}
-
 export class InMemoryReleaseRepository implements ReleaseRepository {
   readonly #releases = new Map<string, Release>();
 
   list(scope: ContentScope): Release[] {
-    const prefix = `${scopeKey(scope)}\u001f`;
+    const prefix = `${contentScopeKey(scope)}\u001f`;
     return [...this.#releases.entries()]
       .filter(([key]) => key.startsWith(prefix))
       .map(([, release]) => structuredClone(release))
@@ -33,13 +23,13 @@ export class InMemoryReleaseRepository implements ReleaseRepository {
   }
 
   get(scope: ContentScope, id: string): Release | null {
-    const release = this.#releases.get(`${scopeKey(scope)}\u001f${id}`);
+    const release = this.#releases.get(`${contentScopeKey(scope)}\u001f${id}`);
     return release ? structuredClone(release) : null;
   }
 
   save(release: Release): Release {
     const parsed = releaseSchema.parse(release);
-    this.#releases.set(`${scopeKey(parsed)}\u001f${parsed.id}`, structuredClone(parsed));
+    this.#releases.set(`${contentScopeKey(parsed)}\u001f${parsed.id}`, structuredClone(parsed));
     return structuredClone(parsed);
   }
 
@@ -83,14 +73,14 @@ export class SqliteReleaseRepository implements ReleaseRepository {
       .prepare(
         'SELECT payload FROM gridstory_releases WHERE scope_key = ? ORDER BY updated_at DESC',
       )
-      .all(scopeKey(scope)) as unknown as PayloadRow[];
+      .all(contentScopeKey(scope)) as unknown as PayloadRow[];
     return rows.map((row) => releaseSchema.parse(JSON.parse(row.payload)));
   }
 
   get(scope: ContentScope, id: string): Release | null {
     const row = this.#database
       .prepare('SELECT payload FROM gridstory_releases WHERE scope_key = ? AND id = ?')
-      .get(scopeKey(scope), id) as unknown as PayloadRow | undefined;
+      .get(contentScopeKey(scope), id) as unknown as PayloadRow | undefined;
     return row ? releaseSchema.parse(JSON.parse(row.payload)) : null;
   }
 
@@ -109,7 +99,7 @@ export class SqliteReleaseRepository implements ReleaseRepository {
            payload = excluded.payload`,
       )
       .run(
-        scopeKey(parsed),
+        contentScopeKey(parsed),
         parsed.organizationId,
         parsed.tenantId,
         parsed.workspaceId,
@@ -163,7 +153,7 @@ export class PostgresReleaseRepository implements ReleaseRepository {
     await this.#ready;
     const result = await this.#pool.query<{ payload: unknown }>(
       'SELECT payload FROM gridstory_releases WHERE scope_key = $1 ORDER BY updated_at DESC',
-      [scopeKey(scope)],
+      [contentScopeKey(scope)],
     );
     return result.rows.map((row) => releaseSchema.parse(row.payload));
   }
@@ -172,7 +162,7 @@ export class PostgresReleaseRepository implements ReleaseRepository {
     await this.#ready;
     const result = await this.#pool.query<{ payload: unknown }>(
       'SELECT payload FROM gridstory_releases WHERE scope_key = $1 AND id = $2',
-      [scopeKey(scope), id],
+      [contentScopeKey(scope), id],
     );
     return result.rows[0] ? releaseSchema.parse(result.rows[0].payload) : null;
   }
@@ -191,7 +181,7 @@ export class PostgresReleaseRepository implements ReleaseRepository {
          updated_at = excluded.updated_at,
          payload = excluded.payload`,
       [
-        scopeKey(parsed),
+        contentScopeKey(parsed),
         parsed.organizationId,
         parsed.tenantId,
         parsed.workspaceId,

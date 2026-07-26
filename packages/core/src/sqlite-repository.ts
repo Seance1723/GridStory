@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { schemaIrDocumentSchema } from '@gridstory/schema';
 import { auditEventHash } from './audit-service.js';
+import { contentEventCacheTags } from './tenant-scope.js';
 import { ConflictError, NotFoundError } from './errors.js';
 import type {
   Actor,
@@ -333,23 +334,6 @@ function toWebhook(row: WebhookRow): WebhookSubscription {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
-}
-
-function eventCacheTags(
-  scope: ContentScope,
-  contentType: string,
-  entryId: string,
-  revisionId: string,
-): string[] {
-  return [
-    `gridstory:tenant:${scope.tenantId}`,
-    `gridstory:site:${scope.siteId}`,
-    `gridstory:environment:${scope.environmentId}`,
-    `gridstory:locale:${scope.locale}`,
-    `gridstory:type:${contentType}`,
-    `gridstory:entry:${entryId}`,
-    `gridstory:revision:${revisionId}`,
-  ];
 }
 
 export class SqliteContentRepository implements ContentRepository {
@@ -730,7 +714,7 @@ export class SqliteContentRepository implements ContentRepository {
         entryId,
         revisionId,
         JSON.stringify({ contentType, data }),
-        JSON.stringify(eventCacheTags(scope, contentType, entryId, revisionId)),
+        JSON.stringify(contentEventCacheTags(scope, contentType, entryId, revisionId)),
         occurredAt,
         occurredAt,
       );

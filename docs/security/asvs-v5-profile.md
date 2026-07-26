@@ -26,7 +26,7 @@ A `verified` project requirement can cover only the selected ASVS reference and 
 | V5 File Handling | Applicable | Multipart integrity, byte/type inspection, private keys, quarantine, safe delivery; deployment quotas/scanner remain. |
 | V6 Authentication | Conditional | OIDC/service-token foundations exist; production IdP middleware, pathway policy, and abuse controls remain. |
 | V7 Session Management | Conditional | In-memory lifecycle foundation exists; production persistent browser-session controls remain. |
-| V8 Authorization | Applicable | Deny-by-default RBAC/ABAC and complete scope exist; M5-002 performs exhaustive isolation proof. |
+| V8 Authorization | Applicable | Deny-by-default RBAC/ABAC, tenant-bound role assignments, and fail-closed complete-scope boundary tests are verified. |
 | V9 Self-contained Tokens | Applicable | Preview, cursor, and asset grants use purpose/scope/time-bound HMAC verification. |
 | V10 OAuth and OIDC | Conditional | Applies to the production relying-party adapter; no OAuth authorization server is in scope. |
 | V11 Cryptography | Applicable | Platform crypto and approved hashes/CSPRNG exist; formal inventory/lifecycle remains. |
@@ -43,19 +43,23 @@ Every ASVS chapter is explicitly represented so an omitted area cannot be mistak
 
 The machine profile contains 29 stable `GS-SEC-###` requirements:
 
-- Verified controls cover trusted-layer validation, parameterized persistence, SVG sanitization, atomic operations, exact origin messaging, deny-by-default authorization, signed token validation, approved platform cryptography, and fail-closed generic errors.
-- Partial controls cover structured rendering, SSRF/egress, browser headers, GraphQL cost/introspection, upload limits/scanning, external adapter configuration, sensitive-data policy, cache containment, minimal API fields, and security-event logging.
+- Verified controls cover trusted-layer validation, parameterized persistence, SVG sanitization, atomic operations, exact origin messaging, tenant-bound deny-by-default authorization, credential/cache containment, signed token validation, approved platform cryptography, and fail-closed generic errors.
+- Partial controls cover structured rendering, SSRF/egress, browser headers, GraphQL cost/introspection, upload limits/scanning, external adapter configuration, sensitive-data policy, minimal API fields, and the complete security-event inventory/sink lifecycle.
 - Planned controls cover anti-automation, trusted production intermediary/identity configuration, cryptographic inventory/secret lifecycle, production fail-safe configuration, vulnerability/SBOM policy, and published resource limits.
 - Conditional controls cover production OIDC, persistent sessions, OIDC browser-flow binding, and deployed TLS/service communication.
 
 Evidence paths point to repository code, tests, or documentation. Operational verification names are intentional future evidence and are linked to tasks. `pnpm security:check` rejects verified requirements without local evidence, malformed or duplicate IDs, unknown threat references, missing chapter coverage, invalid ASVS references, and unresolved partial/planned/conditional controls without stable task ownership.
 
+## M5-002 evidence update
+
+The profile now treats `GS-SEC-024` credential/cache containment as verified and extends `GS-SEC-015` evidence with tenant-bound OIDC role assignments, tenant-bound service grants, canonical scope serialization, hostile-adapter checks, and cross-scope queue/repository tests. `GS-SEC-028` remains partial: the canonical telemetry envelope and sensitive-metadata rejection exist, but M5-004 still owns the full event inventory, production sinks, retention, alerting, and health signals. Production identity/session and trusted-proxy requirements remain conditional or planned under M6-002/M5-008.
+
 ## Highest-priority gaps
 
 | Gap | ASVS areas | Owner task |
 |---|---|---|
-| Exhaustive tenant isolation across persistence, caches, search, assets, jobs, events, and telemetry | V8, V14, V15, V16 | M5-002 |
-| Production identity/session and trusted-proxy boundary | V4, V6, V7, V10, V13 | M5-002; enterprise extensions M6-002 |
+| Production database/object-store tenant-policy conformance | V8, V14, V15 | M5-008 deployment evidence |
+| Production identity/session and trusted-proxy boundary | V4, V6, V7, V10, V13 | M6-002; deployment proof M5-008 |
 | Plugin capability, isolation, signature, and lifecycle boundary | V8, V11, V13, V15 | M5-003 |
 | Security logging inventory, redaction, alerting, adapter health, and secret operations | V11, V13, V14, V16 | M5-004 |
 | Restore, graceful shutdown, rotation, and rolling-upgrade proof | V13, V15, V16 | M5-005 |

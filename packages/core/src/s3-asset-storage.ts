@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { AssetObject, AssetUploadPart, ContentScope } from '@gridstory/schema';
 import { NotFoundError } from './errors.js';
 import type { AssetStorageAdapter } from './asset-service.js';
+import { contentScopeKey, contentScopePath } from './tenant-scope.js';
 import type { Awaitable } from './types.js';
 
 export interface S3MultipartClient {
@@ -40,17 +41,6 @@ interface UploadDescriptor {
   objectKey: string;
 }
 
-function serializedScope(scope: ContentScope): string {
-  return [
-    scope.organizationId,
-    scope.tenantId,
-    scope.workspaceId,
-    scope.siteId,
-    scope.environmentId,
-    scope.locale,
-  ].join('/');
-}
-
 function safeFilename(filename: string): string {
   return filename.trim().replace(/[^a-zA-Z0-9._-]+/g, '-') || 'asset.bin';
 }
@@ -76,14 +66,14 @@ export class S3AssetStorageAdapter implements AssetStorageAdapter {
     filename: string;
     mediaType: string;
   }): Promise<{ uploadId: string; partSize: number }> {
-    const objectKey = `${this.#keyPrefix}/${serializedScope(input.scope)}/${randomUUID()}/${safeFilename(input.filename)}`;
+    const objectKey = `${this.#keyPrefix}/${contentScopePath(input.scope)}/${randomUUID()}/${safeFilename(input.filename)}`;
     const started = await this.#client.createMultipartUpload({
       bucket: this.#bucket,
       key: objectKey,
       contentType: input.mediaType,
     });
     this.#uploads.set(started.uploadId, {
-      scopeKey: serializedScope(input.scope),
+      scopeKey: contentScopeKey(input.scope),
       objectKey,
     });
     return { uploadId: started.uploadId, partSize: this.#partSize };
@@ -138,7 +128,7 @@ export class S3AssetStorageAdapter implements AssetStorageAdapter {
   }
 
   async readObject(input: { scope: ContentScope; object: AssetObject }): Promise<Uint8Array> {
-    const expectedPrefix = `${this.#keyPrefix}/${serializedScope(input.scope)}/`;
+    const expectedPrefix = `${this.#keyPrefix}/${contentScopePath(input.scope)}/`;
     if (!input.object.objectKey.startsWith(expectedPrefix)) {
       throw new NotFoundError('Asset object was not found.');
     }
@@ -162,7 +152,7 @@ export class S3AssetStorageAdapter implements AssetStorageAdapter {
 
   #descriptor(scope: ContentScope, uploadId: string): UploadDescriptor {
     const descriptor = this.#uploads.get(uploadId);
-    if (!descriptor || descriptor.scopeKey !== serializedScope(scope)) {
+    if (!descriptor || descriptor.scopeKey !== contentScopeKey(scope)) {
       throw new NotFoundError('Upload session was not found.');
     }
     return descriptor;

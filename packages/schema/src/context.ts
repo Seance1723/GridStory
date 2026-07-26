@@ -60,10 +60,15 @@ export interface AuthorizationGrant {
   contentTypes?: string[];
 }
 
+export interface RoleAssignment extends Omit<AuthorizationGrant, 'actions'> {
+  roleId: string;
+}
+
 export interface Principal {
   id: string;
   type: PrincipalType;
   roles: string[];
+  roleAssignments?: RoleAssignment[];
   grants?: AuthorizationGrant[];
   attributes?: Record<string, string | string[] | boolean | number>;
   authenticationMethod?: 'oidc' | 'session' | 'service-token' | 'development' | 'anonymous';

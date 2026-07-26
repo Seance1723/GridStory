@@ -55,6 +55,7 @@ import {
   type DueWorkflowExecution,
   type ReleaseRepository,
   type SearchAdapter,
+  type TenantTelemetrySink,
 } from '@gridstory/core';
 import {
   generatedTypesFingerprint,
@@ -114,6 +115,7 @@ export interface BuildServerOptions {
   assetContentInspector?: AssetContentInspector;
   assetMalwareScanner?: AssetMalwareScanner;
   assetDeliverySigningSecret?: string;
+  tenantTelemetry?: TenantTelemetrySink;
 }
 
 interface RequestBody {
@@ -300,6 +302,7 @@ export async function buildServer({
   assetContentInspector,
   assetMalwareScanner,
   assetDeliverySigningSecret = 'gridstory-local-asset-delivery-secret-change-me',
+  tenantTelemetry,
 }: BuildServerOptions): Promise<FastifyInstance> {
   if (!databaseUrl && databasePath !== ':memory:') {
     mkdirSync(dirname(resolve(databasePath)), { recursive: true });
@@ -386,6 +389,7 @@ export async function buildServer({
     ...(assetRenditionAdapter ? { renditionAdapter: assetRenditionAdapter } : {}),
     ...(assetContentInspector ? { contentInspector: assetContentInspector } : {}),
     ...(assetMalwareScanner ? { malwareScanner: assetMalwareScanner } : {}),
+    ...(tenantTelemetry ? { telemetry: tenantTelemetry } : {}),
   });
   const assetDeliveries = new AssetDeliveryService({
     signingSecret: assetDeliverySigningSecret,
@@ -398,6 +402,7 @@ export async function buildServer({
     repository,
     schemas: [pageSchema],
     ...(searchAdapter ? { adapter: searchAdapter } : {}),
+    ...(tenantTelemetry ? { telemetry: tenantTelemetry } : {}),
   });
   const localization = new LocalizationService({
     repository,
@@ -411,6 +416,7 @@ export async function buildServer({
     ...(cacheInvalidator ? { cacheInvalidator } : {}),
     searchJobRunner: (job) => search.processJob(job),
     ...(allowedWebhookHosts ? { allowedWebhookHosts } : {}),
+    ...(tenantTelemetry ? { telemetry: tenantTelemetry } : {}),
   });
   const portability = new PortabilityService({ repository });
   const audit = new AuditService({ repository });

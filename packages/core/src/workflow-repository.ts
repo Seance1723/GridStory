@@ -1,4 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
+import { contentScopeKey } from './tenant-scope.js';
 import { Pool } from 'pg';
 import {
   workflowDefinitionSchema,
@@ -19,46 +20,35 @@ export interface WorkflowRepository {
   close(): Awaitable<void>;
 }
 
-function scopeKey(scope: ContentScope): string {
-  return [
-    scope.organizationId,
-    scope.tenantId,
-    scope.workspaceId,
-    scope.siteId,
-    scope.environmentId,
-    scope.locale,
-  ].join('\u001f');
-}
-
 export class InMemoryWorkflowRepository implements WorkflowRepository {
   readonly #definitions = new Map<string, WorkflowDefinition>();
   readonly #instances = new Map<string, WorkflowInstance>();
 
   listDefinitions(scope: ContentScope): WorkflowDefinition[] {
-    const prefix = `${scopeKey(scope)}\u001f`;
+    const prefix = `${contentScopeKey(scope)}\u001f`;
     return [...this.#definitions.entries()]
       .filter(([key]) => key.startsWith(prefix))
       .map(([, definition]) => structuredClone(definition));
   }
 
   getDefinition(scope: ContentScope, id: string): WorkflowDefinition | null {
-    const definition = this.#definitions.get(`${scopeKey(scope)}\u001f${id}`);
+    const definition = this.#definitions.get(`${contentScopeKey(scope)}\u001f${id}`);
     return definition ? structuredClone(definition) : null;
   }
 
   saveDefinition(definition: WorkflowDefinition): WorkflowDefinition {
     const parsed = workflowDefinitionSchema.parse(definition);
-    this.#definitions.set(`${scopeKey(parsed)}\u001f${parsed.id}`, structuredClone(parsed));
+    this.#definitions.set(`${contentScopeKey(parsed)}\u001f${parsed.id}`, structuredClone(parsed));
     return structuredClone(parsed);
   }
 
   getInstance(scope: ContentScope, entryId: string): WorkflowInstance | null {
-    const instance = this.#instances.get(`${scopeKey(scope)}\u001f${entryId}`);
+    const instance = this.#instances.get(`${contentScopeKey(scope)}\u001f${entryId}`);
     return instance ? structuredClone(instance) : null;
   }
 
   listInstances(scope: ContentScope): WorkflowInstance[] {
-    const prefix = `${scopeKey(scope)}\u001f`;
+    const prefix = `${contentScopeKey(scope)}\u001f`;
     return [...this.#instances.entries()]
       .filter(([key]) => key.startsWith(prefix))
       .map(([, instance]) => structuredClone(instance));
@@ -66,7 +56,10 @@ export class InMemoryWorkflowRepository implements WorkflowRepository {
 
   saveInstance(instance: WorkflowInstance): WorkflowInstance {
     const parsed = workflowInstanceSchema.parse(instance);
-    this.#instances.set(`${scopeKey(parsed)}\u001f${parsed.entryId}`, structuredClone(parsed));
+    this.#instances.set(
+      `${contentScopeKey(parsed)}\u001f${parsed.entryId}`,
+      structuredClone(parsed),
+    );
     return structuredClone(parsed);
   }
 
@@ -120,14 +113,14 @@ export class SqliteWorkflowRepository implements WorkflowRepository {
   listDefinitions(scope: ContentScope): WorkflowDefinition[] {
     const rows = this.#database
       .prepare('SELECT payload FROM gridstory_workflow_definitions WHERE scope_key = ? ORDER BY id')
-      .all(scopeKey(scope)) as unknown as PayloadRow[];
+      .all(contentScopeKey(scope)) as unknown as PayloadRow[];
     return rows.map((row) => workflowDefinitionSchema.parse(JSON.parse(row.payload)));
   }
 
   getDefinition(scope: ContentScope, id: string): WorkflowDefinition | null {
     const row = this.#database
       .prepare('SELECT payload FROM gridstory_workflow_definitions WHERE scope_key = ? AND id = ?')
-      .get(scopeKey(scope), id) as unknown as PayloadRow | undefined;
+      .get(contentScopeKey(scope), id) as unknown as PayloadRow | undefined;
     return row ? workflowDefinitionSchema.parse(JSON.parse(row.payload)) : null;
   }
 
@@ -145,7 +138,7 @@ export class SqliteWorkflowRepository implements WorkflowRepository {
            payload = excluded.payload`,
       )
       .run(
-        scopeKey(parsed),
+        contentScopeKey(parsed),
         parsed.organizationId,
         parsed.tenantId,
         parsed.workspaceId,
@@ -165,7 +158,7 @@ export class SqliteWorkflowRepository implements WorkflowRepository {
       .prepare(
         'SELECT payload FROM gridstory_workflow_instances WHERE scope_key = ? AND entry_id = ?',
       )
-      .get(scopeKey(scope), entryId) as unknown as PayloadRow | undefined;
+      .get(contentScopeKey(scope), entryId) as unknown as PayloadRow | undefined;
     return row ? workflowInstanceSchema.parse(JSON.parse(row.payload)) : null;
   }
 
@@ -174,7 +167,7 @@ export class SqliteWorkflowRepository implements WorkflowRepository {
       .prepare(
         'SELECT payload FROM gridstory_workflow_instances WHERE scope_key = ? ORDER BY updated_at DESC',
       )
-      .all(scopeKey(scope)) as unknown as PayloadRow[];
+      .all(contentScopeKey(scope)) as unknown as PayloadRow[];
     return rows.map((row) => workflowInstanceSchema.parse(JSON.parse(row.payload)));
   }
 
@@ -191,7 +184,7 @@ export class SqliteWorkflowRepository implements WorkflowRepository {
            payload = excluded.payload`,
       )
       .run(
-        scopeKey(parsed),
+        contentScopeKey(parsed),
         parsed.organizationId,
         parsed.tenantId,
         parsed.workspaceId,
@@ -254,7 +247,7 @@ export class PostgresWorkflowRepository implements WorkflowRepository {
     await this.#ready;
     const result = await this.#pool.query<{ payload: unknown }>(
       'SELECT payload FROM gridstory_workflow_definitions WHERE scope_key = $1 ORDER BY id',
-      [scopeKey(scope)],
+      [contentScopeKey(scope)],
     );
     return result.rows.map((row) => workflowDefinitionSchema.parse(row.payload));
   }
@@ -263,7 +256,7 @@ export class PostgresWorkflowRepository implements WorkflowRepository {
     await this.#ready;
     const result = await this.#pool.query<{ payload: unknown }>(
       'SELECT payload FROM gridstory_workflow_definitions WHERE scope_key = $1 AND id = $2',
-      [scopeKey(scope), id],
+      [contentScopeKey(scope), id],
     );
     return result.rows[0] ? workflowDefinitionSchema.parse(result.rows[0].payload) : null;
   }
@@ -281,7 +274,7 @@ export class PostgresWorkflowRepository implements WorkflowRepository {
          updated_at = excluded.updated_at,
          payload = excluded.payload`,
       [
-        scopeKey(parsed),
+        contentScopeKey(parsed),
         parsed.organizationId,
         parsed.tenantId,
         parsed.workspaceId,
@@ -301,7 +294,7 @@ export class PostgresWorkflowRepository implements WorkflowRepository {
     await this.#ready;
     const result = await this.#pool.query<{ payload: unknown }>(
       'SELECT payload FROM gridstory_workflow_instances WHERE scope_key = $1 AND entry_id = $2',
-      [scopeKey(scope), entryId],
+      [contentScopeKey(scope), entryId],
     );
     return result.rows[0] ? workflowInstanceSchema.parse(result.rows[0].payload) : null;
   }
@@ -310,7 +303,7 @@ export class PostgresWorkflowRepository implements WorkflowRepository {
     await this.#ready;
     const result = await this.#pool.query<{ payload: unknown }>(
       'SELECT payload FROM gridstory_workflow_instances WHERE scope_key = $1 ORDER BY updated_at DESC',
-      [scopeKey(scope)],
+      [contentScopeKey(scope)],
     );
     return result.rows.map((row) => workflowInstanceSchema.parse(row.payload));
   }
@@ -327,7 +320,7 @@ export class PostgresWorkflowRepository implements WorkflowRepository {
          updated_at = excluded.updated_at,
          payload = excluded.payload`,
       [
-        scopeKey(parsed),
+        contentScopeKey(parsed),
         parsed.organizationId,
         parsed.tenantId,
         parsed.workspaceId,

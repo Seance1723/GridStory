@@ -111,6 +111,7 @@ export class IdentityService {
       id: `${identity.issuer}|${identity.subject}`,
       type: 'user',
       roles,
+      roleAssignments: roles.map((roleId) => ({ roleId, tenantId })),
       authenticationMethod: 'oidc',
       attributes: {
         ...(identity.email ? { email: identity.email } : {}),
@@ -152,6 +153,13 @@ export class IdentityService {
     name: string;
     grants: AuthorizationGrant[];
   }): ServiceAccount {
+    if (input.grants.some((grant) => grant.tenantId !== input.tenantId)) {
+      throw new GridStoryError(
+        'Every service-account grant must be explicitly bound to the account tenant.',
+        'invalid_scope',
+        400,
+      );
+    }
     const account: ServiceAccount = {
       id: this.#createId(),
       tenantId: input.tenantId,

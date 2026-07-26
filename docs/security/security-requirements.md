@@ -97,11 +97,19 @@ Current `IdentityService` is a framework-neutral foundation with in-memory sessi
 - Security fixes SHALL include focused regression tests where mechanically testable. Critical/high defects SHALL be entered in `BUGS.md` before fixing and linked to their task/changelog entry.
 - `pnpm security:check` SHALL pass in the root validation path. Passing shape validation is necessary but does not replace code review, abuse testing, dependency analysis, deployment verification, or penetration testing.
 
+## M5-002 tenant-isolation baseline
+
+The application now has one canonical six-dimensional scope contract for validation, collision-safe keys and paths, cache prefixes, adapter checks, and telemetry envelopes. Storage and repository records, assets, audit events, search results/status, outbox claims, durable jobs, webhook deliveries, cache invalidations, and emitted telemetry fail closed when their returned or embedded scope differs from the request. OIDC roles are materialized as tenant-bound assignments, and service-account grants must name the account tenant.
+
+Search adapter totals and facets are treated as untrusted: entries are reloaded under the requested scope and perspective, totals and facets are derived only from accepted hits, and mismatched adapter scope/status is rejected. Cache invalidation adapters receive both the explicit scope and full-scope-prefixed tags; workflow-provided tags are namespaced rather than accepted globally. `pnpm tenant:check` prevents ad hoc scope serializers and incomplete cache tags from returning.
+
+This baseline does not turn the development header identity into a production authentication system. Production OIDC/session middleware, trusted-proxy enforcement, infrastructure row/object policies, complete telemetry sinks/retention/alerts, and deployment conformance remain owned by M6-002, M5-004, and M5-008.
+
 ## Verification ownership
 
 | Area | Primary owner | Required evidence before v1 GA |
 |---|---|---|
-| Cross-tenant authorization and data paths | Authorization/control-plane owner | M5-002 exhaustive storage/cache/search/asset/job/event/telemetry isolation suite. |
+| Cross-tenant authorization and data paths | Authorization/control-plane owner | `packages/core/test/tenant-isolation.test.ts`, repository conformance, and `pnpm tenant:check`; deployment database/object policies remain environment evidence. |
 | Production identity/session/proxy | Identity/API/deployment owner | OIDC and persistent-session conformance, dev-header rejection, trusted-proxy tests. |
 | Browser/rendering | Studio/application owners | M5-006 CSP/header/rendering/browser review. |
 | Operations, secrets, and telemetry | Platform/security operations owner | M5-004 inventory, redaction, alerting, secret lifecycle, adapter health evidence. |

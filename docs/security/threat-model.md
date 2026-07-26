@@ -74,20 +74,20 @@ Every modeled threat has a response, owner, concrete mitigations, and verificati
 
 | ID | Threat | STRIDE | Inherent risk | Current position / residual work |
 |---|---|---|---:|---|
-| THREAT-0001 | Cross-tenant object access or mutation | S/I/E | 20 Critical | Explicit scope and deny-by-default controls exist; M5-002 owns exhaustive cross-adapter and telemetry proof. |
+| THREAT-0001 | Cross-tenant object access or mutation | S/I/E | 20 Critical | M5-002 established canonical collision-safe scope contracts and fail-closed repository/adapter/queue/telemetry checks; production database and object-store policy conformance remains deployment evidence. |
 | THREAT-0007 | Malicious or mislabeled asset upload | T/D/E | 16 High | Descriptor matching, byte inspection, SVG sanitization, quarantine, and verified-only delivery exist; deployment quotas and scanner conformance remain. |
 | THREAT-0010 | GraphQL/query complexity exhaustion | D | 16 High | Depth and data-shape bounds exist; cost, alias, rate, and benchmark-backed limits remain in M5-007. |
 | THREAT-0017 | Stored content script/markup execution | T/E | 16 High | Structured manifests and code-owned components constrain execution; every application renderer remains responsible for contextual encoding. |
 | THREAT-0019 | Resource exhaustion and unbounded retention | D | 16 High | Several local bounds exist; published limits, quotas, capacity telemetry, and retention remain in M5-004/M5-007. |
-| THREAT-0002 | Development identity exposed in production | S/E | 15 High | Explicitly unsupported; production identity middleware and fail-safe configuration are M5-002 requirements. |
-| THREAT-0004 | Draft content enters public cache | I/T | 15 High | Perspective separation and private/no-store management responses exist; M5-002 verifies every cache/search path. |
+| THREAT-0002 | Development identity exposed in production | S/E | 15 High | Explicitly unsupported; M5-002 tenant-binds OIDC roles and service grants, while deployed identity/session middleware and trusted-proxy enforcement remain M6-002/M5-008 requirements. |
+| THREAT-0004 | Draft content enters public cache | I/T | 15 High | Public delivery remains published-only; full-scope cache prefixes, scoped invalidator inputs, namespaced workflow tags, and cross-scope regressions are verified. |
 | THREAT-0005 | Webhook SSRF or DNS rebinding | I/E | 15 High | HTTPS/public-host/no-redirect validation exists; production egress, allow-list, and DNS controls are required. |
 | THREAT-0009 | Archive tampering or cross-scope import | T/E/D | 15 High | Checksums, versions, dry-run, scope checks, and rollback exist; archive limits remain in M5-007. |
-| THREAT-0012 | Search perspective or tenant bleed | I/T | 15 High | Scope/perspective adapter contracts and identifier-only jobs exist; M5-002 owns adapter isolation proof. |
-| THREAT-0013 | Job scope confusion or duplicate effect | T/R/I | 15 High | Scoped leases, idempotency, retries, and immutable replay history exist; external effects still require receiver idempotency. |
+| THREAT-0012 | Search perspective or tenant bleed | I/T | 15 High | Adapter scope/perspective is checked, hits reload through scoped storage, hostile totals/facets are discarded, and identifier-only jobs remain enforced. |
+| THREAT-0013 | Job scope confusion or duplicate effect | T/R/I | 15 High | Claimed/enqueued/replayed records and embedded webhook/cache inputs fail closed on scope mismatch; external receivers still require delivery-ID idempotency. |
 | THREAT-0014 | Workflow/release policy bypass | T/R/E | 15 High | Distinct permissions, separation of duties, revision checks, atomic validation, and audit exist. |
 | THREAT-0016 | Secret or service credential compromise | S/I/E | 15 High | Separate configurable secrets, hashing, expiry, and revocation exist; vault-backed lifecycle and rotation evidence remain. |
-| THREAT-0018 | External adapter failure or compromise | T/I/D | 15 High | Explicit interfaces contain the boundary; timeout, least-privilege, telemetry, and conformance evidence remain deployment obligations. |
+| THREAT-0018 | External adapter failure or compromise | T/I/D | 15 High | Search, asset, audit, cache, webhook, job, and telemetry interfaces carry explicit scope and validate returned data; timeout, least privilege, health, and sink conformance remain deployment obligations. |
 | THREAT-0020 | Dependency/build compromise | T/E | 15 High | Lockfile exists; SBOM, vulnerability SLA, provenance, and signatures are M5-007. |
 | THREAT-0021 | Transport/proxy misconfiguration | S/I | 15 High | Explicit origin policy exists; TLS/proxy/deployment conformance is required before GA. |
 

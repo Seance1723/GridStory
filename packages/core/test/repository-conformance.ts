@@ -253,7 +253,9 @@ export function repositoryConformance(name: string, createFixture: RepositoryFix
         state: 'pending',
         attempts: 0,
       });
-      expect(events[0]?.cacheTags).toContain(`gridstory:entry:${created.id}`);
+      expect(events[0]?.cacheTags).toEqual(
+        expect.arrayContaining([expect.stringContaining(`:entry:${created.id}`)]),
+      );
       expect(await fixture.repository.listOperationalScopes()).toContainEqual(scope());
 
       const claimed = await fixture.repository.claimOutboxEvents({

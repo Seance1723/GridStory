@@ -11,7 +11,7 @@ This repository is in active foundation development. The current vertical slice 
 - Advanced content modeling for reusable objects, typed arrays, discriminated unions, scoped relations, hierarchical taxonomies, routes, slugs, and redirects.
 - Canonical schema-as-code/visual-model round-trip, stable-ID diffing, risk-aware migration plans, scoped deployment state, and four-way drift detection.
 - SQLite development persistence and pooled PostgreSQL production persistence with immutable revisions and sequence-stable, tamper-evident audit chains.
-- Explicit organization/tenant/workspace/site/environment/locale storage scope.
+- Canonical collision-safe organization/tenant/workspace/site/environment/locale scope across storage, cache, search, assets, jobs, events, audit, and telemetry.
 - Deny-by-default RBAC/ABAC, OIDC verifier/session foundations, and scoped service credentials.
 - OWASP ASVS 5.0.0 Level 2-oriented security requirements, a STRIDE threat register, explicit chapter applicability, evidence links, and automated model validation.
 - Draft, changed, and published content states.
@@ -51,7 +51,7 @@ The default local services are:
 | GridStory Studio | `http://localhost:5173` | Author, preview, revision, and publish content. |
 | Vite React example | `http://localhost:5174` | Render the published `welcome` page in a normal React application. |
 
-The first start creates `.gridstory/gridstory.db`, initializes the schema, and idempotently publishes the welcome page. The current identity headers are development-only; production OIDC/session middleware and exhaustive authorization isolation are tracked in M5-002, with enterprise identity extensions in M6-002.
+The first start creates `.gridstory/gridstory.db`, initializes the schema, and idempotently publishes the welcome page. The current identity headers are development-only. M5-002 tenant-binds OIDC role assignments and service grants and verifies application-level isolation; deployed OIDC/session middleware and trusted-proxy enforcement remain M6-002/M5-008 work.
 
 Optional environment settings are documented in `.env.example`. The applications also have safe local defaults, so copying the file is not required for the first run.
 
@@ -152,7 +152,7 @@ Management and GraphQL responses use `Cache-Control: private, no-store`. REST de
 
 ## Current limitations
 
-This is an advanced verified foundation, not the v1 production release. It does not yet include a deployed OIDC adapter or persistent session store, database-level pushdown for the adapter-neutral query engine, built-in execution of application-specific data backfill hooks, plugin capability isolation, complete security telemetry and secret operations, restore/rolling-upgrade proof, published benchmark limits and signed supply-chain artifacts, or real-time CRDT collaboration. Those tasks are sequenced in `TASKS.md` rather than hidden behind placeholder claims.
+This is an advanced verified foundation, not the v1 production release. It does not yet include a deployed OIDC adapter or persistent session store, production database/object-store policy conformance, database-level pushdown for the adapter-neutral query engine, built-in execution of application-specific data backfill hooks, plugin capability isolation, complete security telemetry sinks/retention/alerting and secret operations, restore/rolling-upgrade proof, published benchmark limits and signed supply-chain artifacts, or real-time CRDT collaboration. Those tasks are sequenced in `TASKS.md` rather than hidden behind placeholder claims.
 
 ## License
 

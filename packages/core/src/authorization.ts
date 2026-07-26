@@ -1,4 +1,9 @@
-import type { AuthorizationGrant, Principal, RequestContext } from '@gridstory/schema';
+import type {
+  AuthorizationGrant,
+  Principal,
+  RequestContext,
+  RoleAssignment,
+} from '@gridstory/schema';
 import { GridStoryError } from './errors.js';
 
 export const GridStoryActions = {
@@ -155,22 +160,42 @@ function includesAction(actions: string[], action: GridStoryAction): boolean {
   return actions.includes('*') || actions.includes(action);
 }
 
+function assignmentScopeMatches(
+  assignment: Omit<AuthorizationGrant, 'actions'>,
+  context: RequestContext,
+  resource: AuthorizationResource,
+): boolean {
+  if (assignment.organizationId && assignment.organizationId !== context.organizationId)
+    return false;
+  if (assignment.tenantId && assignment.tenantId !== context.tenantId) return false;
+  if (assignment.workspaceId && assignment.workspaceId !== context.workspaceId) return false;
+  if (assignment.siteId && assignment.siteId !== context.siteId) return false;
+  if (assignment.environmentIds && !assignment.environmentIds.includes(context.environmentId)) {
+    return false;
+  }
+  if (assignment.locales && !assignment.locales.includes(context.locale)) return false;
+  if (assignment.contentTypes && !resource.contentType) return false;
+  if (assignment.contentTypes && !assignment.contentTypes.includes(resource.contentType ?? '')) {
+    return false;
+  }
+  return true;
+}
+
 function grantMatches(
   grant: AuthorizationGrant,
   context: RequestContext,
   action: GridStoryAction,
   resource: AuthorizationResource,
 ): boolean {
-  if (!includesAction(grant.actions, action)) return false;
-  if (grant.organizationId && grant.organizationId !== context.organizationId) return false;
-  if (grant.tenantId && grant.tenantId !== context.tenantId) return false;
-  if (grant.workspaceId && grant.workspaceId !== context.workspaceId) return false;
-  if (grant.siteId && grant.siteId !== context.siteId) return false;
-  if (grant.environmentIds && !grant.environmentIds.includes(context.environmentId)) return false;
-  if (grant.locales && !grant.locales.includes(context.locale)) return false;
-  if (grant.contentTypes && !resource.contentType) return false;
-  if (grant.contentTypes && !grant.contentTypes.includes(resource.contentType ?? '')) return false;
-  return true;
+  return includesAction(grant.actions, action) && assignmentScopeMatches(grant, context, resource);
+}
+
+function roleAssignmentMatches(
+  assignment: RoleAssignment,
+  context: RequestContext,
+  resource: AuthorizationResource,
+): boolean {
+  return assignmentScopeMatches(assignment, context, resource);
 }
 
 export class AuthorizationPolicy {
@@ -185,10 +210,29 @@ export class AuthorizationPolicy {
     action: GridStoryAction,
     resource: AuthorizationResource,
   ): AuthorizationDecision {
-    for (const roleId of context.principal.roles) {
-      const role = this.#roles.get(roleId);
-      if (role && includesAction(role.actions, action)) {
-        return { allowed: true, reason: `Allowed by role ${roleId}.`, matchedRole: roleId };
+    for (const assignment of context.principal.roleAssignments ?? []) {
+      const role = this.#roles.get(assignment.roleId);
+      if (
+        role &&
+        includesAction(role.actions, action) &&
+        roleAssignmentMatches(assignment, context, resource)
+      ) {
+        return {
+          allowed: true,
+          reason: `Allowed by scoped role ${assignment.roleId}.`,
+          matchedRole: assignment.roleId,
+        };
+      }
+    }
+    const acceptsLegacyRoles =
+      context.principal.authenticationMethod === 'development' ||
+      context.principal.authenticationMethod === 'anonymous';
+    if (acceptsLegacyRoles) {
+      for (const roleId of context.principal.roles) {
+        const role = this.#roles.get(roleId);
+        if (role && includesAction(role.actions, action)) {
+          return { allowed: true, reason: `Allowed by role ${roleId}.`, matchedRole: roleId };
+        }
       }
     }
     for (const grant of context.principal.grants ?? []) {

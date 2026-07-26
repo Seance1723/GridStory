@@ -1,5 +1,6 @@
 import type { ContentScope } from '@gridstory/schema';
 import { canonicalJson, logicalChecksum } from './portability-service.js';
+import { assertSameContentScope, contentScopeKey } from './tenant-scope.js';
 import type { AuditEvent, ContentRepository } from './types.js';
 
 export interface AuditVerificationFailure {
@@ -53,9 +54,10 @@ export function verifyAuditEvents(events: AuditEvent[]): AuditVerification {
   const failures: AuditVerificationFailure[] = [];
   const grouped = new Map<string, AuditEvent[]>();
   for (const event of events) {
-    const current = grouped.get(event.entryId) ?? [];
+    const key = `${contentScopeKey(event)}\u001f${event.entryId}`;
+    const current = grouped.get(key) ?? [];
     current.push(event);
-    grouped.set(event.entryId, current);
+    grouped.set(key, current);
   }
   for (const entryEvents of grouped.values()) {
     entryEvents.sort((left, right) => left.sequence - right.sequence);
@@ -117,11 +119,18 @@ export class AuditService {
   }
 
   async verify(scope: ContentScope): Promise<AuditVerification> {
-    return verifyAuditEvents(await this.#repository.listScopeAuditEvents({ scope }));
+    const events = await this.#repository.listScopeAuditEvents({ scope });
+    events.forEach((event) => {
+      assertSameContentScope(scope, event, 'audit repository list');
+    });
+    return verifyAuditEvents(events);
   }
 
   async export(scope: ContentScope): Promise<AuditExport> {
     const events = await this.#repository.listScopeAuditEvents({ scope });
+    events.forEach((event) => {
+      assertSameContentScope(scope, event, 'audit repository export');
+    });
     const verification = verifyAuditEvents(events);
     return {
       manifest: {

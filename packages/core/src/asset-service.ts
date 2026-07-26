@@ -1,4 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto';
+import {
+  assertSameContentScope,
+  contentScopeKey,
+  contentScopePath,
+  emitTenantTelemetry,
+  type TenantTelemetrySink,
+} from './tenant-scope.js';
 import type {
   AssetObject,
   AssetRevision,
@@ -31,19 +38,8 @@ import type { Actor, Awaitable } from './types.js';
 const DEFAULT_PART_SIZE = 5 * 1024 * 1024;
 const UPLOAD_TTL_MS = 24 * 60 * 60 * 1000;
 
-function scopeKey(scope: ContentScope): string {
-  return [
-    scope.organizationId,
-    scope.tenantId,
-    scope.workspaceId,
-    scope.siteId,
-    scope.environmentId,
-    scope.locale,
-  ].join('\u001f');
-}
-
 function assertScope(left: ContentScope, right: ContentScope): void {
-  if (scopeKey(left) !== scopeKey(right)) {
+  if (contentScopeKey(left) !== contentScopeKey(right)) {
     throw new NotFoundError('Asset was not found in the requested scope.');
   }
 }
@@ -65,17 +61,17 @@ export class InMemoryAssetRepository implements AssetRepository {
 
   list(scope: ContentScope): AssetRecord[] {
     return [...this.#assets.values()]
-      .filter((asset) => scopeKey(asset) === scopeKey(scope))
+      .filter((asset) => contentScopeKey(asset) === contentScopeKey(scope))
       .map((asset) => structuredClone(asset));
   }
 
   get(scope: ContentScope, id: string): AssetRecord | null {
-    const asset = this.#assets.get(`${scopeKey(scope)}\u001e${id}`);
+    const asset = this.#assets.get(`${contentScopeKey(scope)}\u001e${id}`);
     return asset ? structuredClone(asset) : null;
   }
 
   save(asset: AssetRecord): void {
-    this.#assets.set(`${scopeKey(asset)}\u001e${asset.id}`, structuredClone(asset));
+    this.#assets.set(`${contentScopeKey(asset)}\u001e${asset.id}`, structuredClone(asset));
   }
 }
 
@@ -176,7 +172,7 @@ export class InMemoryAssetStorageAdapter implements AssetStorageAdapter {
         return body;
       });
     const body = Buffer.concat(buffers);
-    const objectKey = `${scopeKey(input.scope).replaceAll('\u001f', '/')}/${randomUUID()}/${safeFilename(input.filename)}`;
+    const objectKey = `${contentScopePath(input.scope)}/${randomUUID()}/${safeFilename(input.filename)}`;
     const object = {
       objectKey,
       url: `${this.#baseUrl}/${objectKey.split('/').map(encodeURIComponent).join('/')}`,
@@ -254,6 +250,7 @@ export class AssetService {
   readonly #inspector: AssetContentInspector;
   readonly #malwareScanner: AssetMalwareScanner | undefined;
   readonly #uploads = new Map<string, PendingUpload>();
+  readonly #telemetry: TenantTelemetrySink | undefined;
 
   constructor(input: {
     repository?: AssetRepository;
@@ -262,6 +259,7 @@ export class AssetService {
     contentService?: ContentService;
     contentInspector?: AssetContentInspector;
     malwareScanner?: AssetMalwareScanner;
+    telemetry?: TenantTelemetrySink;
   }) {
     this.#repository = input.repository ?? new InMemoryAssetRepository();
     this.#storage = input.storage;
@@ -269,16 +267,21 @@ export class AssetService {
     this.#content = input.contentService;
     this.#inspector = input.contentInspector ?? new BuiltInAssetContentInspector();
     this.#malwareScanner = input.malwareScanner;
+    this.#telemetry = input.telemetry;
   }
 
   async list(scope: ContentScope): Promise<AssetRecord[]> {
     const assets = await this.#repository.list(scope);
+    assets.forEach((asset) => {
+      assertSameContentScope(scope, asset, 'asset repository list');
+    });
     return assets.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
   }
 
   async get(scope: ContentScope, id: string): Promise<AssetRecord> {
     const asset = await this.#repository.get(scope, id);
     if (!asset) throw new NotFoundError(`Asset ${id} was not found.`);
+    assertSameContentScope(scope, asset, 'asset repository get');
     return assetRecordSchema.parse(asset);
   }
 
@@ -308,6 +311,13 @@ export class AssetService {
   ): Promise<{ asset: AssetRecord; revision: AssetRevision; body: Uint8Array }> {
     const { asset, revision } = await this.getDeliverableRevision(scope, id, revisionId);
     const body = await this.#storage.readObject({ scope, object: revision.original });
+    await emitTenantTelemetry(this.#telemetry, {
+      scope,
+      name: 'asset.private.read',
+      outcome: 'success',
+      subjectId: asset.id,
+      metadata: { revisionId: revision.id, byteSize: body.byteLength },
+    });
     return { asset, revision, body };
   }
 
@@ -551,6 +561,17 @@ export class AssetService {
     pending.session.state = 'completed';
     this.#uploads.delete(input.uploadId);
     await this.#repository.save(asset);
+    await emitTenantTelemetry(this.#telemetry, {
+      scope: input.scope,
+      name: 'asset.upload.completed',
+      outcome: status === 'verified' ? 'success' : 'denied',
+      subjectId: asset.id,
+      metadata: {
+        revisionId,
+        byteSize: object.size,
+        verified: status === 'verified',
+      },
+    });
     return asset;
   }
 
