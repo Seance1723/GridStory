@@ -11,7 +11,7 @@ pnpm --filter @gridstory/api start
 pnpm worker
 ```
 
-During development, `pnpm dev:worker` runs the TypeScript worker. `GRIDSTORY_WORKER_INTERVAL_MS` controls polling from 100 to 60000 milliseconds. The worker discovers scopes with pending work, processes due workflow schedules and approval escalations, claims up to 100 outbox/job records per scope, and exits gracefully after `SIGINT` or `SIGTERM`. Workflow execution is documented in [Editorial workflows, approvals, and schedules](workflows.md).
+During development, `pnpm dev:worker` runs the TypeScript worker. `GRIDSTORY_WORKER_INTERVAL_MS` controls polling from 100 to 60000 milliseconds. The worker discovers scopes with pending work, processes due atomic releases before workflow schedules and approval escalations, claims up to 100 outbox/job records per scope, and exits gracefully after `SIGINT` or `SIGTERM`. Release execution is documented in [Atomic multi-entry releases](releases.md), and workflow execution is documented in [Editorial workflows, approvals, and schedules](workflows.md).
 
 SQLite is suitable for one local worker. PostgreSQL claims with row locks and `SKIP LOCKED`, allowing multiple worker replicas without duplicate ownership. Both adapters use expiring leases so another worker can recover abandoned work.
 

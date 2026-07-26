@@ -25,3 +25,6 @@ export * from './types.js';
 
 export * from './workflow-repository.js';
 export * from './workflow-service.js';
+
+export * from './release-repository.js';
+export * from './release-service.js';

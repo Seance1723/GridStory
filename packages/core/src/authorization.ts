@@ -22,6 +22,11 @@ export const GridStoryActions = {
   workflowTransition: 'workflow.transition',
   workflowApprove: 'workflow.approve',
   workflowSchedule: 'workflow.schedule',
+  releaseRead: 'release.read',
+  releaseManage: 'release.manage',
+  releaseExecute: 'release.execute',
+  releaseSchedule: 'release.schedule',
+  releaseRollback: 'release.rollback',
   deliveryRead: 'delivery.read',
   operationsRead: 'operations.read',
   operationsManage: 'operations.manage',
@@ -36,7 +41,15 @@ export const GridStoryActions = {
 export type GridStoryAction = (typeof GridStoryActions)[keyof typeof GridStoryActions];
 
 export interface AuthorizationResource {
-  kind: 'schema' | 'component' | 'asset' | 'content' | 'workflow' | 'delivery' | 'platform';
+  kind:
+    | 'schema'
+    | 'component'
+    | 'asset'
+    | 'content'
+    | 'workflow'
+    | 'release'
+    | 'delivery'
+    | 'platform';
   id?: string;
   contentType?: string;
   ownerId?: string;
@@ -73,6 +86,7 @@ export const defaultRoles: RoleDefinition[] = [
       GridStoryActions.contentRead,
       GridStoryActions.contentHistoryRead,
       GridStoryActions.workflowRead,
+      GridStoryActions.releaseRead,
       GridStoryActions.collaborationRead,
     ],
   },
@@ -90,6 +104,8 @@ export const defaultRoles: RoleDefinition[] = [
       GridStoryActions.contentDraftUpdate,
       GridStoryActions.workflowRead,
       GridStoryActions.workflowTransition,
+      GridStoryActions.releaseRead,
+      GridStoryActions.releaseManage,
       GridStoryActions.collaborationRead,
       GridStoryActions.collaborationWrite,
       GridStoryActions.presenceWrite,
@@ -112,6 +128,11 @@ export const defaultRoles: RoleDefinition[] = [
       GridStoryActions.workflowTransition,
       GridStoryActions.workflowApprove,
       GridStoryActions.workflowSchedule,
+      GridStoryActions.releaseRead,
+      GridStoryActions.releaseManage,
+      GridStoryActions.releaseExecute,
+      GridStoryActions.releaseSchedule,
+      GridStoryActions.releaseRollback,
       GridStoryActions.collaborationRead,
       GridStoryActions.collaborationWrite,
       GridStoryActions.presenceWrite,

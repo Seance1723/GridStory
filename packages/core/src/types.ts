@@ -154,6 +154,12 @@ export interface PortableImportResult {
   dryRun: boolean;
 }
 
+export interface AtomicPublication {
+  entryId: string;
+  targetRevisionId: string;
+  expectedDraftRevisionId?: string;
+  expectedPublishedRevisionId?: string | null;
+}
 export interface ContentRepository {
   list(input: {
     scope: ContentScope;
@@ -191,6 +197,16 @@ export interface ContentRepository {
     expectedRevisionId: string;
     actor: Actor;
   }): Awaitable<ContentEntry>;
+  publishMany(input: {
+    scope: ContentScope;
+    entries: AtomicPublication[];
+    actor: Actor;
+  }): Awaitable<ContentEntry[]>;
+  getRevision(input: {
+    scope: ContentScope;
+    id: string;
+    revisionId: string;
+  }): Awaitable<ContentRevision | null>;
   listRevisions(input: { scope: ContentScope; id: string }): Awaitable<ContentRevision[]>;
   listAuditEvents(input: { scope: ContentScope; id: string }): Awaitable<AuditEvent[]>;
   listScopeAuditEvents(input: { scope: ContentScope }): Awaitable<AuditEvent[]>;

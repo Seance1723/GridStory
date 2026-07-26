@@ -16,6 +16,8 @@ import {
   type PreviewSessionGrant,
   type WorkflowDefinition,
   type WorkflowInstance,
+  type Release,
+  type ReleasePreview,
 } from '@gridstory/client';
 import {
   createGridStoryPreviewController,
@@ -454,6 +456,16 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   const [workflowTimeZone, setWorkflowTimeZone] = useState(
     () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
   );
+  const [releasePanelOpen, setReleasePanelOpen] = useState(false);
+  const [releases, setReleases] = useState<Release[]>([]);
+  const [releaseName, setReleaseName] = useState('');
+  const [releaseEntryIds, setReleaseEntryIds] = useState<string[]>([]);
+  const [activeReleaseId, setActiveReleaseId] = useState<string | null>(null);
+  const [releasePreview, setReleasePreview] = useState<ReleasePreview | null>(null);
+  const [releaseScheduleAt, setReleaseScheduleAt] = useState('');
+  const [releaseTimeZone, setReleaseTimeZone] = useState(
+    () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+  );
 
   const selectEntry = useCallback(
     async (id: string, componentFieldName?: string) => {
@@ -518,6 +530,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
       client.getDesignSystem(controller.signal),
       client.listAssets(controller.signal).catch(() => []),
       client.listWorkflows(controller.signal),
+      client.listReleases(controller.signal).catch(() => []),
     ])
       .then(
         async ([
@@ -527,6 +540,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
           designSystemManifest,
           assetList,
           workflowList,
+          releaseList,
         ]) => {
           setEntries(entryList);
           setManifests(manifestList);
@@ -534,6 +548,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
           setDesignSystem(designSystemManifest);
           setAssets(assetList);
           setWorkflowDefinitions(workflowList);
+          setReleases(releaseList);
+          setActiveReleaseId(releaseList[0]?.id ?? null);
           if (entryList[0]) {
             const fieldName = schemaList
               .find((schema) => schema.id === entryList[0]?.contentType)
@@ -592,6 +608,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
     () => schemas.find((schema) => schema.id === selected?.contentType) ?? schemas[0],
     [schemas, selected?.contentType],
   );
+  const activeRelease = releases.find((release) => release.id === activeReleaseId) ?? releases[0];
   const activeWorkflow = workflowDefinitions.find(
     (definition) => definition.id === workflowInstance?.workflowId,
   );
@@ -1121,6 +1138,157 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
     }
   };
 
+  const storeRelease = (release: Release) => {
+    setReleases((current) => [
+      release,
+      ...current.filter((candidate) => candidate.id !== release.id),
+    ]);
+    setActiveReleaseId(release.id);
+  };
+
+  const createRelease = async () => {
+    if (!releaseName.trim() || releaseEntryIds.length < 2) {
+      setNotice({
+        tone: 'error',
+        message: 'Name the release and select at least two saved entries.',
+      });
+      return;
+    }
+    if (dirty && selected && releaseEntryIds.includes(selected.id)) {
+      setNotice({
+        tone: 'error',
+        message: 'Save the selected draft before adding it to a release.',
+      });
+      return;
+    }
+    setBusy(true);
+    try {
+      const release = await client.createRelease({
+        name: releaseName.trim(),
+        entries: releaseEntryIds.map((entryId) => {
+          const entry = entries.find((candidate) => candidate.id === entryId);
+          if (!entry) throw new Error('A selected release entry is no longer available.');
+          return { entryId, revisionId: entry.draftRevisionId };
+        }),
+        rollbackPolicy: { mode: 'manual' },
+      });
+      storeRelease(release);
+      setReleaseName('');
+      setReleaseEntryIds([]);
+      setReleasePreview(null);
+      setNotice({ tone: 'success', message: 'Release created from immutable draft revisions.' });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const validateActiveRelease = async () => {
+    if (!activeRelease) return;
+    setBusy(true);
+    try {
+      const release = await client.validateRelease(activeRelease.id);
+      storeRelease(release);
+      setNotice({
+        tone: release.validation?.valid ? 'success' : 'error',
+        message: release.validation?.valid
+          ? 'Every pinned revision is ready for atomic publication.'
+          : 'Release validation found blocking issues.',
+      });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const previewActiveRelease = async () => {
+    if (!activeRelease) return;
+    setBusy(true);
+    try {
+      const release = await client.validateRelease(activeRelease.id);
+      storeRelease(release);
+      setReleasePreview(await client.previewRelease(activeRelease.id));
+      setNotice({ tone: 'info', message: 'Future-state preview loaded from pinned revisions.' });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const scheduleActiveRelease = async () => {
+    if (!activeRelease || !releaseScheduleAt) return;
+    const instant = new Date(releaseScheduleAt);
+    if (!Number.isFinite(instant.getTime())) {
+      setNotice({ tone: 'error', message: 'Choose a valid release schedule date and time.' });
+      return;
+    }
+    setBusy(true);
+    try {
+      storeRelease(
+        await client.scheduleRelease(activeRelease.id, {
+          runAt: instant.toISOString(),
+          timeZone: releaseTimeZone,
+        }),
+      );
+      setReleaseScheduleAt('');
+      setNotice({ tone: 'success', message: 'Atomic release scheduled.' });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const cancelActiveReleaseSchedule = async () => {
+    if (!activeRelease) return;
+    setBusy(true);
+    try {
+      storeRelease(await client.cancelReleaseSchedule(activeRelease.id));
+      setNotice({ tone: 'info', message: 'Release schedule cancelled.' });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const executeActiveRelease = async () => {
+    if (!activeRelease) return;
+    setBusy(true);
+    try {
+      storeRelease(await client.executeRelease(activeRelease.id));
+      setReleasePreview(null);
+      await refreshList(selected?.id);
+      setNotice({ tone: 'success', message: 'All release revisions were published atomically.' });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const rollbackActiveRelease = async () => {
+    if (!activeRelease) return;
+    setBusy(true);
+    try {
+      storeRelease(
+        await client.rollbackRelease(activeRelease.id, 'Rollback requested from GridStory Studio.'),
+      );
+      setReleasePreview(null);
+      await refreshList(selected?.id);
+      setNotice({
+        tone: 'info',
+        message: 'Every release member was restored to its prior revision.',
+      });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    } finally {
+      setBusy(false);
+    }
+  };
   const toggleOperations = async () => {
     if (operationsDashboard) {
       setOperationsDashboard(null);
@@ -1338,6 +1506,14 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
           <button
             type="button"
             className="button button--secondary"
+            onClick={() => setReleasePanelOpen((current) => !current)}
+            aria-expanded={releasePanelOpen}
+          >
+            Releases
+          </button>{' '}
+          <button
+            type="button"
+            className="button button--secondary"
             onClick={() => void toggleOperations()}
             aria-expanded={operationsDashboard !== null}
           >
@@ -1386,6 +1562,247 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
           </button>
         </div>
       </header>
+      {releasePanelOpen ? (
+        <section className="release-panel" aria-label="Release manager">
+          <div className="section-heading">
+            <div>
+              <span className="kicker">Coordinated delivery</span>
+              <h2>Atomic releases</h2>
+              <p>
+                Pin saved drafts, validate their future state, then publish every entry together.
+              </p>
+            </div>
+            <span className={`release-state release-state--${activeRelease?.state ?? 'draft'}`}>
+              {activeRelease?.state ?? 'No release selected'}
+            </span>
+          </div>
+
+          <div className="release-layout">
+            <div className="release-builder">
+              <h3>Compose release</h3>
+              <label className="gs-field">
+                <span>Release name</span>
+                <input
+                  value={releaseName}
+                  placeholder="Campaign launch"
+                  onChange={(event) => setReleaseName(event.target.value)}
+                />
+              </label>
+              <fieldset className="release-entry-picker">
+                <legend>Saved entries</legend>
+                {entries.map((entry) => (
+                  <label key={entry.id}>
+                    <input
+                      type="checkbox"
+                      checked={releaseEntryIds.includes(entry.id)}
+                      onChange={(event) =>
+                        setReleaseEntryIds((current) =>
+                          event.target.checked
+                            ? [...current, entry.id]
+                            : current.filter((id) => id !== entry.id),
+                        )
+                      }
+                    />
+                    <span>
+                      {String(entry.data.title ?? entry.data.headline ?? entry.id)}
+                      <small>{entry.draftRevisionId}</small>
+                    </span>
+                  </label>
+                ))}
+              </fieldset>
+              <button
+                type="button"
+                className="button button--primary"
+                disabled={busy || !releaseName.trim() || releaseEntryIds.length < 2}
+                onClick={() => void createRelease()}
+              >
+                Create release
+              </button>
+            </div>
+
+            <div className="release-workbench">
+              <h3>Release workbench</h3>
+              {releases.length ? (
+                <ul className="release-selector" aria-label="Scoped releases">
+                  {releases.map((release) => (
+                    <li key={release.id}>
+                      <button
+                        type="button"
+                        className={release.id === activeRelease?.id ? 'active' : ''}
+                        onClick={() => {
+                          setActiveReleaseId(release.id);
+                          setReleasePreview(null);
+                        }}
+                      >
+                        <strong>{release.name}</strong>
+                        <small>{release.state}</small>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="empty-copy">No releases in this tenant scope yet.</p>
+              )}
+
+              {activeRelease ? (
+                <article className="release-card">
+                  <div className="release-card-heading">
+                    <div>
+                      <strong>{activeRelease.name}</strong>
+                      <small>
+                        {activeRelease.entries.length} pinned revisions ·{' '}
+                        {activeRelease.rollbackPolicy.mode} rollback
+                      </small>
+                    </div>
+                    <code>{activeRelease.id}</code>
+                  </div>
+                  <ul className="release-member-list">
+                    {activeRelease.entries.map((member) => (
+                      <li key={member.entryId}>
+                        <span>
+                          {String(
+                            entries.find((entry) => entry.id === member.entryId)?.data.title ??
+                              entries.find((entry) => entry.id === member.entryId)?.data.headline ??
+                              member.entryId,
+                          )}
+                        </span>
+                        <code>{member.revisionId}</code>
+                      </li>
+                    ))}
+                  </ul>
+                  {activeRelease.validation ? (
+                    <div
+                      className={`release-validation ${activeRelease.validation.valid ? 'release-validation--valid' : ''}`}
+                    >
+                      <strong>
+                        {activeRelease.validation.valid
+                          ? 'Validation passed'
+                          : 'Validation blocked'}
+                      </strong>
+                      <span>{activeRelease.validation.issues.length} issue(s)</span>
+                      {activeRelease.validation.issues.length ? (
+                        <ul>
+                          {activeRelease.validation.issues.map((issue) => (
+                            <li
+                              key={`${issue.code}-${issue.entryId ?? 'release'}-${issue.path?.join('.') ?? 'root'}-${issue.message}`}
+                            >
+                              {issue.severity}: {issue.message}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  <div className="release-actions">
+                    <button
+                      type="button"
+                      className="button button--secondary"
+                      disabled={
+                        busy ||
+                        ['executing', 'published', 'rolled-back'].includes(activeRelease.state)
+                      }
+                      onClick={() => void validateActiveRelease()}
+                    >
+                      Validate release
+                    </button>
+                    <button
+                      type="button"
+                      className="button button--secondary"
+                      disabled={busy}
+                      onClick={() => void previewActiveRelease()}
+                    >
+                      Preview future state
+                    </button>
+                    <button
+                      type="button"
+                      className="button button--primary"
+                      disabled={
+                        busy ||
+                        !activeRelease.validation?.valid ||
+                        ['executing', 'published', 'rolled-back'].includes(activeRelease.state)
+                      }
+                      onClick={() => void executeActiveRelease()}
+                    >
+                      Publish release
+                    </button>
+                    {activeRelease.state === 'published' ? (
+                      <button
+                        type="button"
+                        className="button button--secondary"
+                        disabled={
+                          busy ||
+                          activeRelease.rollbackPolicy.mode === 'disabled' ||
+                          activeRelease.entries.some(
+                            (entry) => entry.previousPublishedRevisionId === null,
+                          )
+                        }
+                        onClick={() => void rollbackActiveRelease()}
+                      >
+                        Roll back release
+                      </button>
+                    ) : null}
+                  </div>
+
+                  {activeRelease.state === 'validated' || activeRelease.state === 'scheduled' ? (
+                    <div className="release-scheduler">
+                      <label className="gs-field">
+                        <span>Date and time</span>
+                        <input
+                          type="datetime-local"
+                          value={releaseScheduleAt}
+                          onChange={(event) => setReleaseScheduleAt(event.target.value)}
+                        />
+                      </label>
+                      <label className="gs-field">
+                        <span>IANA time zone</span>
+                        <input
+                          value={releaseTimeZone}
+                          onChange={(event) => setReleaseTimeZone(event.target.value)}
+                        />
+                      </label>
+                      {activeRelease.schedule?.state === 'pending' ? (
+                        <button
+                          type="button"
+                          className="button button--secondary"
+                          disabled={busy}
+                          onClick={() => void cancelActiveReleaseSchedule()}
+                        >
+                          Cancel release schedule
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="button button--secondary"
+                          disabled={busy || !releaseScheduleAt}
+                          onClick={() => void scheduleActiveRelease()}
+                        >
+                          Schedule release
+                        </button>
+                      )}
+                    </div>
+                  ) : null}
+
+                  {releasePreview?.releaseId === activeRelease.id ? (
+                    <div className="release-preview">
+                      <h3>Future state</h3>
+                      <ul>
+                        {releasePreview.entries.map((entry) => (
+                          <li key={entry.entryId}>
+                            <strong>
+                              {String(entry.data.title ?? entry.data.headline ?? entry.entryId)}
+                            </strong>
+                            <span>{entry.route ?? 'No canonical route'}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                </article>
+              ) : null}
+            </div>
+          </div>
+        </section>
+      ) : null}{' '}
       {assetLibraryOpen ? (
         <section className="asset-library-panel" aria-label="Asset library">
           <div className="section-heading">

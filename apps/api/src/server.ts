@@ -35,6 +35,9 @@ import {
   PostgresWorkflowRepository,
   SqliteWorkflowRepository,
   WorkflowService,
+  ReleaseService,
+  PostgresReleaseRepository,
+  SqliteReleaseRepository,
   type ContentPerspective,
   type ContentRepository,
   type AssetRepository,
@@ -49,6 +52,7 @@ import {
   type ImportConflictPolicy,
   type WorkflowRepository,
   type DueWorkflowExecution,
+  type ReleaseRepository,
 } from '@gridstory/core';
 import {
   generatedTypesFingerprint,
@@ -70,6 +74,8 @@ import {
   previewMessageSchema,
   collaborationTargetSchema,
   workflowDefinitionInputSchema,
+  releaseInputSchema,
+  type ReleaseInput,
 } from '@gridstory/schema';
 import { componentManifests, pageSchema, welcomePage } from '@gridstory/example-kit/manifests';
 import { exampleDesignSystem } from '@gridstory/example-kit/design-system';
@@ -97,6 +103,7 @@ export interface BuildServerOptions {
   externalLinkChecker?: ExternalLinkChecker;
   assetRepository?: AssetRepository;
   workflowRepository?: WorkflowRepository;
+  releaseRepository?: ReleaseRepository;
   assetStorage?: AssetStorageAdapter;
   assetRenditionAdapter?: AssetRenditionAdapter;
   assetContentInspector?: AssetContentInspector;
@@ -137,6 +144,10 @@ interface RequestBody {
   comment?: unknown;
   runAt?: unknown;
   timeZone?: unknown;
+  name?: unknown;
+  entries?: unknown;
+  rollbackPolicy?: unknown;
+  reason?: unknown;
 }
 
 function perspective(value: unknown): ContentPerspective {
@@ -230,6 +241,13 @@ function workflowDefinition(value: unknown): WorkflowDefinitionInput {
   });
 }
 
+function releaseDefinition(value: unknown): ReleaseInput {
+  const parsed = releaseInputSchema.safeParse(value);
+  if (parsed.success) return parsed.data;
+  throw new GridStoryError('Release definition is invalid.', 'invalid_release', 400, {
+    issues: parsed.error.issues,
+  });
+}
 export async function buildServer({
   databasePath = '.gridstory/gridstory.db',
   databaseUrl,
@@ -260,6 +278,7 @@ export async function buildServer({
   externalLinkChecker,
   assetRepository,
   workflowRepository,
+  releaseRepository,
   assetStorage = new InMemoryAssetStorageAdapter(),
   assetRenditionAdapter,
   assetContentInspector,
@@ -282,6 +301,11 @@ export async function buildServer({
     (databaseUrl
       ? new PostgresWorkflowRepository({ connectionString: databaseUrl })
       : new SqliteWorkflowRepository({ filename: databasePath }));
+  const resolvedReleaseRepository: ReleaseRepository =
+    releaseRepository ??
+    (databaseUrl
+      ? new PostgresReleaseRepository({ connectionString: databaseUrl })
+      : new SqliteReleaseRepository({ filename: databasePath }));
   const workflows = new WorkflowService({
     repository: resolvedWorkflowRepository,
     defaultDefinitions: defaultWorkflowDefinitions,
@@ -298,6 +322,10 @@ export async function buildServer({
     componentManifests,
     qualityGate: quality,
     workflowGate: workflows,
+  });
+  const releases = new ReleaseService({
+    repository: resolvedReleaseRepository,
+    contentService: service,
   });
   const executeWorkflowSchedule = async ({
     scope,
@@ -418,6 +446,7 @@ export async function buildServer({
     await repository.close();
     await resolvedAssetRepository.close?.();
     await resolvedWorkflowRepository.close();
+    await resolvedReleaseRepository.close();
   });
   server.addHook('onSend', async (request, reply, payload) => {
     if (request.url.startsWith('/api/v1/delivery/')) {
@@ -1074,6 +1103,119 @@ export async function buildServer({
     });
   });
 
+  server.get('/api/v1/releases', async (request) => {
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.releaseRead, { kind: 'release' });
+    return releases.list(contentScope(context));
+  });
+
+  server.post('/api/v1/releases', async (request, reply) => {
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.releaseManage, { kind: 'release' });
+    const release = await releases.create({
+      scope: contentScope(context),
+      release: releaseDefinition(request.body),
+      actor: { id: context.principal.id, roles: context.principal.roles },
+    });
+    return reply.status(201).send(release);
+  });
+
+  server.get('/api/v1/releases/:id', async (request) => {
+    const params = request.params as { id: string };
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.releaseRead, { kind: 'release', id: params.id });
+    return releases.get(contentScope(context), params.id);
+  });
+
+  server.post('/api/v1/releases/:id/validate', async (request) => {
+    const params = request.params as { id: string };
+    const body = bodyOf(request);
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.releaseManage, { kind: 'release', id: params.id });
+    return releases.validate({
+      scope: contentScope(context),
+      id: params.id,
+      actor: { id: context.principal.id, roles: context.principal.roles },
+      ...(typeof body.channel === 'string' && body.channel ? { channel: body.channel } : {}),
+    });
+  });
+
+  server.get('/api/v1/releases/:id/preview', async (request) => {
+    const params = request.params as { id: string };
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.releaseRead, { kind: 'release', id: params.id });
+    return releases.preview(contentScope(context), params.id);
+  });
+
+  server.post('/api/v1/releases/:id/schedule', async (request, reply) => {
+    const params = request.params as { id: string };
+    const body = bodyOf(request);
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.releaseSchedule, {
+      kind: 'release',
+      id: params.id,
+    });
+    const release = await releases.schedule({
+      scope: contentScope(context),
+      id: params.id,
+      runAt: requiredString(body.runAt, 'runAt'),
+      timeZone: requiredString(body.timeZone, 'timeZone'),
+      actor: { id: context.principal.id, roles: context.principal.roles },
+    });
+    return reply.status(201).send(release);
+  });
+
+  server.delete('/api/v1/releases/:id/schedule', async (request) => {
+    const params = request.params as { id: string };
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.releaseSchedule, {
+      kind: 'release',
+      id: params.id,
+    });
+    return releases.cancelSchedule({
+      scope: contentScope(context),
+      id: params.id,
+      actor: { id: context.principal.id, roles: context.principal.roles },
+    });
+  });
+
+  server.post('/api/v1/releases/:id/execute', async (request) => {
+    const params = request.params as { id: string };
+    const body = bodyOf(request);
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.releaseExecute, {
+      kind: 'release',
+      id: params.id,
+    });
+    return releases.execute({
+      scope: contentScope(context),
+      id: params.id,
+      actor: { id: context.principal.id, roles: context.principal.roles },
+      ...(typeof body.channel === 'string' && body.channel ? { channel: body.channel } : {}),
+    });
+  });
+
+  server.post('/api/v1/releases/:id/rollback', async (request) => {
+    const params = request.params as { id: string };
+    const body = bodyOf(request);
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.releaseRollback, {
+      kind: 'release',
+      id: params.id,
+    });
+    return releases.rollback({
+      scope: contentScope(context),
+      id: params.id,
+      reason: requiredString(body.reason, 'reason'),
+      actor: { id: context.principal.id, roles: context.principal.roles },
+    });
+  });
+
+  server.post('/api/v1/releases/process-due', async (request) => {
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.operationsRun, { kind: 'platform' });
+    return releases.processDue(contentScope(context));
+  });
   server.get('/api/v1/content', async (request) => {
     const query = request.query as { contentType?: string; perspective?: string };
     const selectedPerspective = perspective(query.perspective);

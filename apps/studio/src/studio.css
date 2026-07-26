@@ -1446,3 +1446,226 @@ button:disabled {
     grid-column: auto;
   }
 }
+
+.release-panel {
+  border-bottom: 1px solid #d1d5db;
+  background: color-mix(in srgb, #fff 95%, #4f46e5);
+  padding: 24px clamp(20px, 3vw, 44px);
+}
+
+.release-layout {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.75fr) minmax(360px, 1.5fr);
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.release-builder,
+.release-workbench,
+.release-card {
+  min-width: 0;
+  border: 1px solid #d1d5db;
+  border-radius: 16px;
+  background: #fff;
+  padding: 16px;
+}
+
+.release-builder h3,
+.release-workbench h3,
+.release-preview h3 {
+  margin: 0 0 12px;
+}
+
+.release-entry-picker {
+  display: grid;
+  gap: 8px;
+  max-height: 260px;
+  margin: 14px 0;
+  overflow: auto;
+  border: 0;
+  padding: 0;
+}
+
+.release-entry-picker legend {
+  margin-bottom: 8px;
+  color: #6b7280;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.release-entry-picker label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.release-entry-picker span,
+.release-selector button,
+.release-card-heading > div {
+  display: grid;
+  gap: 3px;
+}
+
+.release-entry-picker small,
+.release-selector small,
+.release-card small {
+  color: #6b7280;
+  overflow-wrap: anywhere;
+}
+
+.release-selector {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 12px;
+  overflow-x: auto;
+  padding: 0 0 4px;
+  list-style: none;
+}
+
+.release-selector button {
+  min-width: 150px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  background: #fff;
+  color: inherit;
+  padding: 10px;
+  text-align: left;
+}
+
+.release-selector button.active {
+  border-color: #4f46e5;
+  box-shadow: inset 0 0 0 1px #4f46e5;
+}
+
+.release-state {
+  align-self: flex-start;
+  border-radius: 999px;
+  background: #111827;
+  color: #fff;
+  padding: 7px 11px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.release-state--validated,
+.release-state--published {
+  background: #166534;
+}
+
+.release-state--scheduled,
+.release-state--executing {
+  background: #4f46e5;
+}
+
+.release-state--failed,
+.release-state--rolled-back {
+  background: #b91c1c;
+}
+
+.release-card-heading,
+.release-member-list li,
+.release-preview li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.release-card-heading code,
+.release-member-list code {
+  max-width: 45%;
+  overflow-wrap: anywhere;
+  color: #6b7280;
+  font-size: 0.72rem;
+}
+
+.release-member-list,
+.release-preview ul,
+.release-validation ul {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.release-member-list li,
+.release-preview li {
+  border-bottom: 1px solid #d1d5db;
+  padding-bottom: 8px;
+}
+
+.release-validation {
+  border: 1px solid color-mix(in srgb, #b91c1c 45%, #d1d5db);
+  border-radius: 12px;
+  background: color-mix(in srgb, #b91c1c 8%, #fff);
+  padding: 12px;
+}
+
+.release-validation--valid {
+  border-color: color-mix(in srgb, #166534 45%, #d1d5db);
+  background: color-mix(in srgb, #166534 8%, #fff);
+}
+
+.release-validation > span {
+  margin-left: 8px;
+  color: #6b7280;
+}
+
+.release-actions,
+.release-scheduler {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.release-scheduler .gs-field {
+  flex: 1 1 190px;
+}
+
+.release-preview {
+  margin-top: 16px;
+  border-top: 1px solid #d1d5db;
+  padding-top: 14px;
+}
+
+.release-preview span {
+  color: #6b7280;
+}
+
+@media (max-width: 980px) {
+  .release-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+  .release-panel {
+    padding: 18px 16px;
+  }
+
+  .release-card-heading,
+  .release-member-list li,
+  .release-preview li {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .release-card-heading code,
+  .release-member-list code {
+    max-width: 100%;
+  }
+
+  .release-actions,
+  .release-scheduler {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

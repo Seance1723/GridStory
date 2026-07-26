@@ -9,6 +9,7 @@ export * from './design-system.js';
 export * from './lifecycle.js';
 export * from './localization.js';
 export * from './preview.js';
+export * from './release.js';
 export * from './quality.js';
 export * from './query.js';
 export * from './references.js';

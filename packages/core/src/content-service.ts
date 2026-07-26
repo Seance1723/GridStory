@@ -5,9 +5,13 @@ import {
   collectContentReferences,
   type ComponentManifest,
   type ContentSchemaDefinition,
+  type ReleaseMember,
+  type ReleasePreviewEntry,
+  type ReleaseValidationIssue,
 } from '@gridstory/schema';
 import {
   ConflictError,
+  GridStoryError,
   ContentValidationError,
   NotFoundError,
   PublishQualityGateError,
@@ -231,6 +235,244 @@ export class ContentService {
     return published;
   }
 
+  async getRevision(input: {
+    scope: ContentScope;
+    id: string;
+    revisionId: string;
+  }): Promise<ContentRevision> {
+    const revision = await this.#repository.getRevision(input);
+    if (!revision) throw new NotFoundError('Content revision was not found.');
+    return revision;
+  }
+
+  async assessRelease(input: {
+    scope: ContentScope;
+    entries: ReleaseMember[];
+    actor: Actor;
+    channel?: string;
+  }): Promise<ReleaseValidationIssue[]> {
+    const issues: ReleaseValidationIssue[] = [];
+    const candidates: ContentEntry[] = [];
+    for (const member of input.entries) {
+      const current = await this.#repository.getById({
+        scope: input.scope,
+        id: member.entryId,
+        perspective: 'draft',
+      });
+      const revision = await this.#repository.getRevision({
+        scope: input.scope,
+        id: member.entryId,
+        revisionId: member.revisionId,
+      });
+      if (!current || !revision) {
+        issues.push({
+          code: 'entry-not-found',
+          severity: 'error',
+          entryId: member.entryId,
+          message: 'The pinned release entry or revision was not found in the active scope.',
+        });
+        continue;
+      }
+      const candidate: ContentEntry = {
+        ...current,
+        draftRevisionId: revision.id,
+        data: revision.data,
+      };
+      candidates.push(candidate);
+      if (current.draftRevisionId !== revision.id) {
+        issues.push({
+          code: 'stale-revision',
+          severity: 'error',
+          entryId: member.entryId,
+          message: 'The draft changed after this revision was added to the release.',
+          details: {
+            pinnedRevisionId: revision.id,
+            currentDraftRevisionId: current.draftRevisionId,
+          },
+        });
+        continue;
+      }
+      try {
+        this.#validate(candidate.contentType, candidate.data);
+      } catch (error) {
+        if (error instanceof ContentValidationError) {
+          for (const issue of error.issues) {
+            issues.push({
+              code: 'content-invalid',
+              severity: 'error',
+              entryId: member.entryId,
+              message: issue.message,
+              path: issue.path,
+            });
+          }
+          continue;
+        }
+        throw error;
+      }
+      try {
+        await this.#workflowGate?.assertCanPublish({
+          scope: input.scope,
+          entry: candidate,
+          actor: input.actor,
+        });
+      } catch (error) {
+        const known = error instanceof GridStoryError;
+        issues.push({
+          code: 'workflow-blocked',
+          severity: 'error',
+          entryId: member.entryId,
+          message: known ? error.message : 'The workflow gate rejected this release entry.',
+          ...(known ? { details: { code: error.code } } : {}),
+        });
+      }
+      if (this.#qualityGate) {
+        const report = await this.#qualityGate.assess({
+          scope: input.scope,
+          entry: candidate,
+          channel: input.channel ?? 'web',
+          roles: input.actor.roles ?? [],
+        });
+        if (!report.passed) {
+          issues.push({
+            code: 'quality-blocked',
+            severity: 'error',
+            entryId: member.entryId,
+            message: `Content quality score ${report.score} did not pass the publication policy.`,
+            details: { score: report.score, findingCount: report.findings.length },
+          });
+        }
+      }
+    }
+
+    const futureEntries = new Map<string, ContentEntry>();
+    for (const published of await this.#repository.list({
+      scope: input.scope,
+      perspective: 'published',
+    })) {
+      futureEntries.set(published.id, published);
+    }
+    candidates.forEach((candidate) => {
+      futureEntries.set(candidate.id, candidate);
+    });
+
+    const routes = new Map<string, ContentEntry[]>();
+    for (const entry of futureEntries.values()) {
+      const schema = this.#schema(entry.contentType);
+      if (!schema.route) continue;
+      const route = buildContentRoute(schema, entry.data);
+      routes.set(route, [...(routes.get(route) ?? []), entry]);
+    }
+    for (const [route, entries] of routes) {
+      if (entries.length < 2) continue;
+      for (const entry of entries.filter((candidate) =>
+        input.entries.some((member) => member.entryId === candidate.id),
+      )) {
+        issues.push({
+          code: 'route-collision',
+          severity: 'error',
+          entryId: entry.id,
+          message: `Future canonical route ${route} belongs to more than one entry.`,
+          details: { route, entryIds: entries.map((candidate) => candidate.id) },
+        });
+      }
+    }
+
+    for (const entry of candidates) {
+      for (const located of collectContentReferences(this.#schema(entry.contentType), entry.data)) {
+        const target = futureEntries.get(located.reference.id);
+        if (!target || target.contentType !== located.reference.contentType) {
+          issues.push({
+            code: 'reference-unpublished',
+            severity: 'error',
+            entryId: entry.id,
+            path: located.path,
+            message: `Referenced ${located.reference.contentType} content ${located.reference.id} is absent from the future published state.`,
+          });
+        }
+      }
+    }
+    return issues;
+  }
+
+  async previewRelease(input: {
+    scope: ContentScope;
+    entries: ReleaseMember[];
+  }): Promise<ReleasePreviewEntry[]> {
+    const preview: ReleasePreviewEntry[] = [];
+    for (const member of input.entries) {
+      const current = await this.get({
+        scope: input.scope,
+        id: member.entryId,
+        perspective: 'draft',
+      });
+      const revision = await this.getRevision({
+        scope: input.scope,
+        id: member.entryId,
+        revisionId: member.revisionId,
+      });
+      const schema = this.#schema(current.contentType);
+      preview.push({
+        ...member,
+        data: revision.data,
+        ...(schema.route ? { route: buildContentRoute(schema, revision.data) } : {}),
+      });
+    }
+    return preview;
+  }
+
+  async publishRelease(input: {
+    scope: ContentScope;
+    entries: ReleaseMember[];
+    actor: Actor;
+    channel?: string;
+  }): Promise<ContentEntry[]> {
+    const issues = await this.assessRelease(input);
+    if (issues.some((issue) => issue.severity === 'error')) {
+      throw new GridStoryError(
+        'Release validation failed before atomic publication.',
+        'release_validation_failed',
+        409,
+        { issues },
+      );
+    }
+    const published = await this.#repository.publishMany({
+      scope: input.scope,
+      entries: input.entries.map((entry) => ({
+        entryId: entry.entryId,
+        targetRevisionId: entry.revisionId,
+        expectedDraftRevisionId: entry.revisionId,
+        expectedPublishedRevisionId: entry.previousPublishedRevisionId,
+      })),
+      actor: input.actor,
+    });
+    for (const entry of published) {
+      await this.#workflowGate?.contentPublished({ scope: input.scope, entry, actor: input.actor });
+    }
+    return published;
+  }
+
+  async rollbackRelease(input: {
+    scope: ContentScope;
+    entries: ReleaseMember[];
+    actor: Actor;
+  }): Promise<ContentEntry[]> {
+    if (input.entries.some((entry) => entry.previousPublishedRevisionId === null)) {
+      throw new GridStoryError(
+        'A release containing a first publication cannot be rolled back atomically.',
+        'release_rollback_unavailable',
+        409,
+      );
+    }
+    return await this.#repository.publishMany({
+      scope: input.scope,
+      entries: input.entries.map((entry) => ({
+        entryId: entry.entryId,
+        targetRevisionId: entry.previousPublishedRevisionId ?? '',
+        expectedPublishedRevisionId: entry.revisionId,
+      })),
+      actor: input.actor,
+    });
+  }
   async listRevisions(input: { scope: ContentScope; id: string }): Promise<ContentRevision[]> {
     await this.get({ scope: input.scope, id: input.id, perspective: 'draft' });
     return await this.#repository.listRevisions(input);

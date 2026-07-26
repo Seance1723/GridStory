@@ -7,9 +7,13 @@ import {
   SqliteContentRepository,
   SqliteWorkflowRepository,
   WorkflowService,
+  ReleaseService,
+  PostgresReleaseRepository,
+  SqliteReleaseRepository,
   type ContentRepository,
   type DueWorkflowExecution,
   type WorkflowRepository,
+  type ReleaseRepository,
 } from '@gridstory/core';
 import { componentManifests, pageSchema } from '@gridstory/example-kit/manifests';
 import { loadConfig } from './config.js';
@@ -22,6 +26,9 @@ const repository: ContentRepository = config.databaseUrl
 const workflowRepository: WorkflowRepository = config.databaseUrl
   ? new PostgresWorkflowRepository({ connectionString: config.databaseUrl })
   : new SqliteWorkflowRepository({ filename: config.databasePath });
+const releaseRepository: ReleaseRepository = config.databaseUrl
+  ? new PostgresReleaseRepository({ connectionString: config.databaseUrl })
+  : new SqliteReleaseRepository({ filename: config.databasePath });
 const workflows = new WorkflowService({
   repository: workflowRepository,
   defaultDefinitions: defaultWorkflowDefinitions,
@@ -37,6 +44,10 @@ const content = new ContentService({
   componentManifests,
   qualityGate: quality,
   workflowGate: workflows,
+});
+const releases = new ReleaseService({
+  repository: releaseRepository,
+  contentService: content,
 });
 const operations = new OperationsService({
   repository,
@@ -86,6 +97,7 @@ try {
     const scopes = await operations.listOperationalScopes(1000);
     for (const scope of scopes) {
       if (stopping) break;
+      const dueReleases = await releases.processDue(scope);
       const due = await workflows.processDue({ scope, execute: executeWorkflowSchedule });
       const result = await operations.drain({
         scope,
@@ -93,10 +105,18 @@ try {
         limit: 100,
       });
       if (
-        due.escalated + due.executed + due.failed + result.claimedOutbox + result.claimedJobs >
+        dueReleases.executed +
+          dueReleases.failed +
+          due.escalated +
+          due.executed +
+          due.failed +
+          result.claimedOutbox +
+          result.claimedJobs >
         0
       ) {
-        console.log(JSON.stringify({ scope, workflow: due, operations: result }));
+        console.log(
+          JSON.stringify({ scope, releases: dueReleases, workflow: due, operations: result }),
+        );
       }
     }
     if (!stopping) {
@@ -109,4 +129,5 @@ try {
 } finally {
   await repository.close();
   await workflowRepository.close();
+  await releaseRepository.close();
 }

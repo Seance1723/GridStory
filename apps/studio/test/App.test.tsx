@@ -8,6 +8,7 @@ import {
   type AssetRecord,
   type AssetUploadSession,
   type ContentEntry,
+  type Release,
 } from '@gridstory/client';
 import { componentManifests } from '@gridstory/example-kit/manifests';
 import { exampleDesignSystem } from '@gridstory/example-kit/design-system';
@@ -194,6 +195,7 @@ function createTestClient(
     createdAt: now,
     updatedAt: now,
   };
+  const releaseRecords: Release[] = [];
   const workflowInstances = new Map(
     testEntries.map((candidate) => [
       candidate.id,
@@ -224,6 +226,82 @@ function createTestClient(
     if (url.pathname === '/api/v1/components') return json(componentManifests);
     if (url.pathname === '/api/v1/design-system') return json(exampleDesignSystem);
     if (url.pathname === '/api/v1/workflows') return json([workflowDefinition]);
+    if (url.pathname === '/api/v1/releases' && init?.method !== 'POST') {
+      return json(releaseRecords);
+    }
+    if (url.pathname === '/api/v1/releases' && init?.method === 'POST') {
+      const body = JSON.parse(String(init.body)) as {
+        name: string;
+        entries: Array<{ entryId: string; revisionId: string }>;
+        rollbackPolicy: { mode: 'manual' };
+      };
+      const release: Release = {
+        organizationId: 'local',
+        tenantId: 'default',
+        workspaceId: 'default',
+        siteId: 'default',
+        environmentId: 'development',
+        locale: 'en',
+        id: `release-${releaseRecords.length + 1}`,
+        name: body.name,
+        state: 'draft',
+        entries: body.entries.map((entry) => ({
+          ...entry,
+          contentType: 'page',
+          previousPublishedRevisionId: null,
+        })),
+        rollbackPolicy: body.rollbackPolicy,
+        createdBy: 'local-admin',
+        createdAt: now,
+        updatedAt: now,
+      };
+      releaseRecords.unshift(release);
+      return json(release, 201);
+    }
+    const releaseActionMatch = url.pathname.match(
+      /^\/api\/v1\/releases\/([^/]+)\/(validate|preview|schedule|execute|rollback)$/,
+    );
+    if (releaseActionMatch) {
+      const release = releaseRecords.find((candidate) => candidate.id === releaseActionMatch[1]);
+      if (!release) return json({ error: { message: 'Not found.' } }, 404);
+      const action = releaseActionMatch[2];
+      if (action === 'preview') {
+        return json({
+          releaseId: release.id,
+          generatedAt: now,
+          validation: release.validation,
+          entries: release.entries.map((member) => ({
+            ...member,
+            data: testEntries.find((entry) => entry.id === member.entryId)?.data ?? {},
+            route: `/${String(testEntries.find((entry) => entry.id === member.entryId)?.data.path ?? member.entryId)}`,
+          })),
+        });
+      }
+      if (action === 'validate') {
+        Object.assign(release, {
+          state: 'validated',
+          validation: { valid: true, checkedAt: now, issues: [] },
+          updatedAt: now,
+        });
+      }
+      if (action === 'execute') Object.assign(release, { state: 'published', executedAt: now });
+      if (action === 'rollback')
+        Object.assign(release, { state: 'rolled-back', rolledBackAt: now });
+      if (action === 'schedule') {
+        const body = JSON.parse(String(init?.body)) as { runAt: string; timeZone: string };
+        Object.assign(release, {
+          state: 'scheduled',
+          schedule: {
+            ...body,
+            requestedBy: 'local-admin',
+            requestedByRoles: ['admin'],
+            state: 'pending',
+            createdAt: now,
+          },
+        });
+      }
+      return json(release);
+    }
     const workflowMatch = url.pathname.match(/^\/api\/v1\/content\/([^/]+)\/workflow$/);
     if (workflowMatch) return json(workflowInstances.get(workflowMatch[1] ?? '') ?? {});
     const workflowTransitionMatch = url.pathname.match(
@@ -814,5 +892,26 @@ describe('GridStory Studio', () => {
     expect((screen.getByRole('button', { name: 'Publish' }) as HTMLButtonElement).disabled).toBe(
       true,
     );
+  });
+  it('composes, validates, and previews a scoped multi-entry release', async () => {
+    const user = userEvent.setup();
+    render(<App client={createTestClient()} />);
+
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Releases' }));
+    const panel = await screen.findByRole('region', { name: 'Release manager' });
+    await user.type(within(panel).getByLabelText('Release name'), 'Studio launch');
+    await user.click(within(panel).getByRole('checkbox', { name: /First page/ }));
+    await user.click(within(panel).getByRole('checkbox', { name: /Second page/ }));
+    await user.click(within(panel).getByRole('button', { name: 'Create release' }));
+
+    await waitFor(() => expect(panel.textContent).toContain('Studio launch'));
+    await user.click(within(panel).getByRole('button', { name: 'Validate release' }));
+    await waitFor(() => expect(panel.textContent).toContain('Validation passed'));
+    await user.click(within(panel).getByRole('button', { name: 'Preview future state' }));
+    await waitFor(() => expect(panel.textContent).toContain('Future state'));
+    expect(panel.textContent).toContain('/first');
+    expect(panel.textContent).toContain('/second');
+    expect(within(panel).getByRole('button', { name: 'Publish release' })).toBeTruthy();
   });
 });

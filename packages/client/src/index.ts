@@ -41,6 +41,9 @@ import type {
   WorkflowDefinition,
   WorkflowDefinitionInput,
   WorkflowInstance,
+  Release,
+  ReleaseInput,
+  ReleasePreview,
 } from '@gridstory/schema';
 
 export interface SchemaDeploymentRecord {
@@ -792,6 +795,78 @@ export class GridStoryClient {
     });
   }
 
+  listReleases(signal?: AbortSignal): Promise<Release[]> {
+    return this.#request('/api/v1/releases', signal ? { signal } : {});
+  }
+
+  createRelease(input: ReleaseInput, signal?: AbortSignal): Promise<Release> {
+    return this.#request('/api/v1/releases', {
+      method: 'POST',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  getRelease(id: string, signal?: AbortSignal): Promise<Release> {
+    return this.#request(`/api/v1/releases/${encodeURIComponent(id)}`, signal ? { signal } : {});
+  }
+
+  validateRelease(id: string, channel?: string, signal?: AbortSignal): Promise<Release> {
+    return this.#request(`/api/v1/releases/${encodeURIComponent(id)}/validate`, {
+      method: 'POST',
+      body: JSON.stringify({ ...(channel ? { channel } : {}) }),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  previewRelease(id: string, signal?: AbortSignal): Promise<ReleasePreview> {
+    return this.#request(
+      `/api/v1/releases/${encodeURIComponent(id)}/preview`,
+      signal ? { signal } : {},
+    );
+  }
+
+  scheduleRelease(
+    id: string,
+    input: { runAt: string; timeZone: string; signal?: AbortSignal },
+  ): Promise<Release> {
+    return this.#request(`/api/v1/releases/${encodeURIComponent(id)}/schedule`, {
+      method: 'POST',
+      body: JSON.stringify({ runAt: input.runAt, timeZone: input.timeZone }),
+      ...(input.signal ? { signal: input.signal } : {}),
+    });
+  }
+
+  cancelReleaseSchedule(id: string, signal?: AbortSignal): Promise<Release> {
+    return this.#request(`/api/v1/releases/${encodeURIComponent(id)}/schedule`, {
+      method: 'DELETE',
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  executeRelease(id: string, channel?: string, signal?: AbortSignal): Promise<Release> {
+    return this.#request(`/api/v1/releases/${encodeURIComponent(id)}/execute`, {
+      method: 'POST',
+      body: JSON.stringify({ ...(channel ? { channel } : {}) }),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  rollbackRelease(id: string, reason: string, signal?: AbortSignal): Promise<Release> {
+    return this.#request(`/api/v1/releases/${encodeURIComponent(id)}/rollback`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  processDueReleases(signal?: AbortSignal): Promise<{ executed: number; failed: number }> {
+    return this.#request('/api/v1/releases/process-due', {
+      method: 'POST',
+      body: JSON.stringify({}),
+      ...(signal ? { signal } : {}),
+    });
+  }
   listContent(
     options: { contentType?: string; perspective?: ContentPerspective; signal?: AbortSignal } = {},
   ): Promise<ContentEntry[]> {
@@ -1200,4 +1275,7 @@ export type {
   WorkflowDefinition,
   WorkflowDefinitionInput,
   WorkflowInstance,
+  Release,
+  ReleaseInput,
+  ReleasePreview,
 };

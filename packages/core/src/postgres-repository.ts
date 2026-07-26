@@ -933,6 +933,103 @@ export class PostgresContentRepository implements ContentRepository {
     });
   }
 
+  async publishMany({
+    scope,
+    entries,
+    actor,
+  }: Parameters<ContentRepository['publishMany']>[0]): Promise<ContentEntry[]> {
+    if (entries.length === 0) return [];
+    if (new Set(entries.map((entry) => entry.entryId)).size !== entries.length) {
+      throw new ConflictError('An atomic publication cannot contain duplicate entries.');
+    }
+    return this.#transaction(async (client) => {
+      const prepared = [];
+      for (const entry of entries) {
+        const current = await this.#entryRow(client, scope, entry.entryId, 'draft', true);
+        if (!current) throw new NotFoundError('Content entry was not found.');
+        if (
+          entry.expectedDraftRevisionId !== undefined &&
+          current.current_draft_revision_id !== entry.expectedDraftRevisionId
+        ) {
+          throw new ConflictError('A release draft changed before atomic publication.', {
+            entryId: entry.entryId,
+            expectedRevisionId: entry.expectedDraftRevisionId,
+            currentRevisionId: current.current_draft_revision_id,
+          });
+        }
+        if (
+          entry.expectedPublishedRevisionId !== undefined &&
+          current.published_revision_id !== entry.expectedPublishedRevisionId
+        ) {
+          throw new ConflictError('Published content changed after the release was prepared.', {
+            entryId: entry.entryId,
+            expectedPublishedRevisionId: entry.expectedPublishedRevisionId,
+            currentPublishedRevisionId: current.published_revision_id,
+          });
+        }
+        const target = await client.query<{ data_json: unknown }>(
+          `SELECT r.data_json
+           FROM ${this.#revisions} r JOIN ${this.#entries} e ON e.id = r.entry_id
+           WHERE e.organization_id = $1 AND e.tenant_id = $2 AND e.workspace_id = $3
+             AND e.site_id = $4 AND e.environment_id = $5 AND e.locale = $6
+             AND e.id = $7 AND r.id = $8`,
+          [...scopeValues(scope), entry.entryId, entry.targetRevisionId],
+        );
+        if (!target.rows[0]) throw new NotFoundError('The target release revision was not found.');
+        prepared.push({ entry, current, data: parseData(target.rows[0].data_json) });
+      }
+      const now = this.#now();
+      for (const candidate of prepared) {
+        await client.query(
+          `UPDATE ${this.#entries} SET published_revision_id = $1, updated_at = $2 WHERE id = $3`,
+          [candidate.entry.targetRevisionId, now, candidate.entry.entryId],
+        );
+        await this.#audit(
+          client,
+          scope,
+          candidate.entry.entryId,
+          actor,
+          'content.published',
+          candidate.entry.targetRevisionId,
+          now,
+        );
+        await this.#emitOutbox(
+          client,
+          scope,
+          'content.published',
+          candidate.current.content_type,
+          candidate.entry.entryId,
+          candidate.entry.targetRevisionId,
+          candidate.data,
+          now,
+        );
+      }
+      const published = [];
+      for (const candidate of prepared) {
+        const row = await this.#entryRow(client, scope, candidate.entry.entryId, 'published');
+        if (!row) throw new Error('Atomically published entry could not be read back.');
+        published.push(toEntry(row));
+      }
+      return published;
+    });
+  }
+
+  async getRevision({
+    scope,
+    id,
+    revisionId,
+  }: Parameters<ContentRepository['getRevision']>[0]): Promise<ContentRevision | null> {
+    await this.#ready;
+    const result = await this.#pool.query<RevisionRow>(
+      `SELECT r.*, e.organization_id, e.workspace_id, e.site_id, e.environment_id, e.locale
+       FROM ${this.#revisions} r JOIN ${this.#entries} e ON e.id = r.entry_id
+       WHERE e.organization_id = $1 AND e.tenant_id = $2 AND e.workspace_id = $3
+         AND e.site_id = $4 AND e.environment_id = $5 AND e.locale = $6
+         AND r.entry_id = $7 AND r.id = $8`,
+      [...scopeValues(scope), id, revisionId],
+    );
+    return result.rows[0] ? toRevision(result.rows[0]) : null;
+  }
   async listRevisions({
     scope,
     id,

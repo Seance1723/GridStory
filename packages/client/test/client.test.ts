@@ -536,4 +536,58 @@ describe('GridStoryClient browser compatibility', () => {
       timeZone: 'Asia/Kolkata',
     });
   });
+  it('routes release creation, preview, scheduling, execution, and rollback with encoded IDs', async () => {
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    const client = createGridStoryClient({
+      baseUrl: 'http://gridstory.test',
+      tenantId: 'default',
+      fetch: async (input, init) => {
+        requests.push({ url: String(input), ...(init ? { init } : {}) });
+        return new Response(JSON.stringify({}), {
+          headers: { 'content-type': 'application/json' },
+        });
+      },
+    });
+
+    await client.listReleases();
+    await client.createRelease({
+      name: 'Launch',
+      entries: [
+        { entryId: 'entry/1', revisionId: 'revision-1' },
+        { entryId: 'entry/2', revisionId: 'revision-2' },
+      ],
+      rollbackPolicy: { mode: 'manual' },
+    });
+    await client.getRelease('release/1');
+    await client.validateRelease('release/1', 'web');
+    await client.previewRelease('release/1');
+    await client.scheduleRelease('release/1', {
+      runAt: '2026-07-27T00:00:00.000Z',
+      timeZone: 'Asia/Kolkata',
+    });
+    await client.cancelReleaseSchedule('release/1');
+    await client.executeRelease('release/1', 'web');
+    await client.rollbackRelease('release/1', 'Rollback drill');
+    await client.processDueReleases();
+
+    expect(requests.map((request) => [request.url, request.init?.method])).toEqual([
+      ['http://gridstory.test/api/v1/releases', undefined],
+      ['http://gridstory.test/api/v1/releases', 'POST'],
+      ['http://gridstory.test/api/v1/releases/release%2F1', undefined],
+      ['http://gridstory.test/api/v1/releases/release%2F1/validate', 'POST'],
+      ['http://gridstory.test/api/v1/releases/release%2F1/preview', undefined],
+      ['http://gridstory.test/api/v1/releases/release%2F1/schedule', 'POST'],
+      ['http://gridstory.test/api/v1/releases/release%2F1/schedule', 'DELETE'],
+      ['http://gridstory.test/api/v1/releases/release%2F1/execute', 'POST'],
+      ['http://gridstory.test/api/v1/releases/release%2F1/rollback', 'POST'],
+      ['http://gridstory.test/api/v1/releases/process-due', 'POST'],
+    ]);
+    expect(JSON.parse(String(requests[5]?.init?.body))).toEqual({
+      runAt: '2026-07-27T00:00:00.000Z',
+      timeZone: 'Asia/Kolkata',
+    });
+    expect(JSON.parse(String(requests[8]?.init?.body))).toEqual({
+      reason: 'Rollback drill',
+    });
+  });
 });

@@ -963,6 +963,111 @@ export class SqliteContentRepository implements ContentRepository {
     });
   }
 
+  publishMany({
+    scope,
+    entries,
+    actor,
+  }: Parameters<ContentRepository['publishMany']>[0]): ContentEntry[] {
+    if (entries.length === 0) return [];
+    if (new Set(entries.map((entry) => entry.entryId)).size !== entries.length) {
+      throw new ConflictError('An atomic publication cannot contain duplicate entries.');
+    }
+    return this.#transaction(() => {
+      const prepared = entries.map((entry) => {
+        const current = this.#entryRow(scope, entry.entryId, 'draft');
+        if (!current) throw new NotFoundError('Content entry was not found.');
+        if (
+          entry.expectedDraftRevisionId !== undefined &&
+          current.current_draft_revision_id !== entry.expectedDraftRevisionId
+        ) {
+          throw new ConflictError('A release draft changed before atomic publication.', {
+            entryId: entry.entryId,
+            expectedRevisionId: entry.expectedDraftRevisionId,
+            currentRevisionId: current.current_draft_revision_id,
+          });
+        }
+        if (
+          entry.expectedPublishedRevisionId !== undefined &&
+          current.published_revision_id !== entry.expectedPublishedRevisionId
+        ) {
+          throw new ConflictError('Published content changed after the release was prepared.', {
+            entryId: entry.entryId,
+            expectedPublishedRevisionId: entry.expectedPublishedRevisionId,
+            currentPublishedRevisionId: current.published_revision_id,
+          });
+        }
+        const target = this.#database
+          .prepare(`
+            SELECT r.data_json
+            FROM revisions r JOIN entries e ON e.id = r.entry_id
+            WHERE e.organization_id = ? AND e.tenant_id = ? AND e.workspace_id = ?
+              AND e.site_id = ? AND e.environment_id = ? AND e.locale = ?
+              AND e.id = ? AND r.id = ?
+          `)
+          .get(...scopeValues(scope), entry.entryId, entry.targetRevisionId) as
+          | { data_json: string }
+          | undefined;
+        if (!target) {
+          throw new NotFoundError('The target release revision was not found.');
+        }
+        return { entry, current, data: parseData(target.data_json) };
+      });
+      const now = this.#now();
+      for (const candidate of prepared) {
+        this.#database
+          .prepare(
+            `UPDATE entries SET published_revision_id = ?, updated_at = ?
+             WHERE organization_id = ? AND tenant_id = ? AND workspace_id = ?
+               AND site_id = ? AND environment_id = ? AND locale = ? AND id = ?`,
+          )
+          .run(
+            candidate.entry.targetRevisionId,
+            now,
+            ...scopeValues(scope),
+            candidate.entry.entryId,
+          );
+        this.#audit(
+          scope,
+          candidate.entry.entryId,
+          actor,
+          'content.published',
+          candidate.entry.targetRevisionId,
+          now,
+        );
+        this.#emitOutbox(
+          scope,
+          'content.published',
+          candidate.current.content_type,
+          candidate.entry.entryId,
+          candidate.entry.targetRevisionId,
+          candidate.data,
+          now,
+        );
+      }
+      return prepared.map((candidate) => {
+        const published = this.#entryRow(scope, candidate.entry.entryId, 'published');
+        if (!published) throw new Error('Atomically published entry could not be read back.');
+        return toEntry(published);
+      });
+    });
+  }
+
+  getRevision({
+    scope,
+    id,
+    revisionId,
+  }: Parameters<ContentRepository['getRevision']>[0]): ContentRevision | null {
+    const row = this.#database
+      .prepare(`
+        SELECT r.*, e.organization_id, e.workspace_id, e.site_id, e.environment_id, e.locale
+        FROM revisions r JOIN entries e ON e.id = r.entry_id
+        WHERE e.organization_id = ? AND e.tenant_id = ? AND e.workspace_id = ?
+          AND e.site_id = ? AND e.environment_id = ? AND e.locale = ?
+          AND r.entry_id = ? AND r.id = ?
+      `)
+      .get(...scopeValues(scope), id, revisionId) as unknown as RevisionRow | undefined;
+    return row ? toRevision(row) : null;
+  }
   listRevisions({ scope, id }: { scope: ContentScope; id: string }): ContentRevision[] {
     const rows = this.#database
       .prepare(`
