@@ -1,6 +1,6 @@
 # GridStory bug ledger
 
-**Last updated:** 2026-07-26
+**Last updated:** 2026-08-20
 
 Every defect discovered during automated or manual verification is recorded here before it is fixed or deferred. Bug records are permanent project history.
 
@@ -20,6 +20,8 @@ Every defect discovered during automated or manual verification is recorded here
 
 | ID | Found | Resolved | Severity | Area | Summary | Resolution and verification | Linked task/change |
 |---|---|---|---|---|---|---|---|---|
+| BUG-0204 | 2026-08-20 | 2026-08-20 | Low | Task ledger / whitespace | Refreshing the task-ledger date retained the prior Markdown hard-break spaces and made the final diff whitespace audit fail. | Removed the obsolete hard-break spaces from the refreshed date; `git diff --check`, ledger validation, and formatting pass. | FND-006; Fixed |
+| BUG-0203 | 2026-08-20 | 2026-08-20 | Medium | Windows repository checkout / verification | Git checked normalized text out as CRLF while Biome and generated contracts require LF, leaving the canonical delivery gate red on a clean clone. | Made the root text attribute require `eol=lf`, overriding host `core.autocrlf` for tracked text, and normalized the Biome-managed working files. Focused format/schema checks, `pnpm check`, eight PostgreSQL tests, and the canonical browser walkthrough pass. | FND-006; Fixed |
 | BUG-0202 | 2026-07-26 | 2026-07-26 | Low | Tenant regression test / Windows editing | Strengthening hostile-search assertions wrote literal PowerShell newline tokens into the TypeScript object literal. | Replaced the literal tokens with real line breaks, formatted the test, and passed the strengthened hostile-search regressions plus the full workspace and browser gates. | M5-002, TEST-001; Fixed |
 | BUG-0201 | 2026-07-26 | 2026-07-26 | Low | Tenant contract checker / Lint | The first checker used a placeholder-like literal and a value-returning `forEach` callback rejected by repository lint. | Split the audit tokens and used a void callback block; scoped and root lint plus `pnpm tenant:check` pass. | M5-002, TEST-001; Fixed |
 | BUG-0200 | 2026-07-26 | 2026-07-26 | Low | Package scripts / Windows editing | Adding the tenant contract checker wrote a literal PowerShell newline token into `package.json`, making the manifest invalid JSON. | Restored a real line break, parsed the manifest, and passed `pnpm tenant:check`, `pnpm check`, and `pnpm test:e2e`. | M5-002, FND-002; Fixed |

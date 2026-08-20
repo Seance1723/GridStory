@@ -8,6 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Required LF working-tree checkout for tracked text so Windows `core.autocrlf` cannot break Biome or generated-contract validation; restored the complete repository, PostgreSQL, browser, and final whitespace gates (BUG-0203, BUG-0204, FND-006).
 - Resolved tenant-isolation, hostile-adapter, collision-safe cache/key, scoped identity/grant, canonical telemetry, and Windows verification defects found during M5-002 (BUG-0194 through BUG-0202).
 - Corrected stale README capability/identity milestones and used the verified exact-formatter and unrestricted full-check paths for Windows validation (BUG-0191 through BUG-0193).
 

@@ -1,6 +1,6 @@
 # GridStory implementation task list
 
-**Last updated:** 2026-07-19  
+**Last updated:** 2026-08-20
 **Source plan:** `REACT_CMS_RESEARCH_AND_IMPLEMENTATION_PLAN.md`
 
 ## Working agreement
@@ -23,6 +23,14 @@
 - [x] **FND-003** Add environment templates, ignored runtime data, and reproducible local-development commands.
 - [x] **FND-004** Add CI workflows for type-check, unit/integration tests, builds, browser verification, and ledger validation.
 - [x] **FND-005** Add architecture decision records for the schema IR, revision model, tenant context, preview protocol, and plugin capabilities.
+- [x] **FND-006** Make LF checkout and validation reproducible on Windows.
+  - Tier: T1 operational bug fix. Owner: Codex. Linked defect: `BUG-0203`.
+  - Acceptance: with system `core.autocrlf=true`, Git resolves tracked text to `eol=lf`, generated contracts match the canonical IR byte-for-byte, and `pnpm check` passes.
+  - Scope fence: `.gitattributes`, `TASKS.md`, `CHANGELOG.md`, `BUGS.md`, plus mechanical LF-only normalization of Biome-managed tracked files.
+  - Out of scope: application behavior, dependency changes, platform-specific formatter output, and product milestone `M5-003`.
+  - Verification: `pnpm format:check` checks 169 files clean; `pnpm schema:check` matches the canonical IR; `pnpm check` passes lint, ledgers, boundaries, security, tenant scope, all typechecks, 171 tests with two intentional skips, and production builds.
+  - PostgreSQL/browser verification: `pnpm test:postgres` passes seven core conformance tests plus one live API integration; `pnpm test:e2e` passes the complete Edge/Chromium edit, govern, publish, and React delivery walkthrough.
+  - Final audit: `git diff --check` and the repository ledger validator pass after resolving `BUG-0204`.
 
 ## Milestone 1 — First end-to-end CMS vertical slice
 

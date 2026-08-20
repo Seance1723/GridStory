@@ -1,2 +1,2 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+# Normalize text in the index and require LF in every working tree
+* text=auto eol=lf
