@@ -1,6 +1,6 @@
 # GridStory threat model
 
-This document is the reviewable view of the canonical machine-readable model in [`security/threat-model.json`](../../security/threat-model.json). It follows OWASP's four threat-modeling questions: what are we building, what can go wrong, what will we do, and did we do enough. STRIDE is a discovery aid, not the risk score. This model covers GridStory's current control plane, authoring, preview, assets, delivery, background operations, search, and portability boundaries.
+This document is the reviewable view of the canonical machine-readable model in [`security/threat-model.json`](../../security/threat-model.json). It follows OWASP's four threat-modeling questions: what are we building, what can go wrong, what will we do, and did we do enough. STRIDE is a discovery aid, not the risk score. This model covers GridStory's current control plane, authoring, preview, assets, delivery, background operations, search, portability, and plugin-runtime boundaries.
 
 This is a living engineering model. It is not a penetration-test report or a claim that a deployment is secure without its identity provider, TLS edge, secret manager, databases, object stores, egress controls, logging, and application-owned renderers being configured and reviewed.
 
@@ -21,6 +21,8 @@ flowchart LR
   delivery["Published delivery + CDN"]
   app["Application-owned React renderer"]
   idp["OIDC provider"]
+  publisher["Plugin publisher"]
+  plugin["External plugin process / container"]
 
   editor --> studio
   internet --> delivery
@@ -35,6 +37,8 @@ flowchart LR
   preview -->|"origin/token-bound draft requests"| api
   core -->|"published revisions only"| delivery
   delivery --> app
+  publisher -->|"signed manifest + artifact digest"| api
+  core -->|"bounded scoped protocol"| plugin
 ```
 
 The numbered boundaries in the canonical model are:
@@ -48,12 +52,13 @@ The numbered boundaries in the canonical model are:
 7. Upload client to private object storage.
 8. Transactional write to asynchronous worker.
 9. Logical archive to repository.
+10. Control plane to signed plugin package and external runtime.
 
 A change that crosses or weakens one of these boundaries requires a threat-model review in the same change.
 
 ## Security assets
 
-The protected assets are draft history; published content and routes; complete tenant/locale scope; identities, roles, grants, and sessions; signing secrets and service credentials; private asset bytes and verdicts; workflow approvals and release intent; outbox/job state; audit history; search indexes and cache tags; logical archives; and service capacity.
+The protected assets are draft history; published content and routes; complete tenant/locale scope; identities, roles, grants, and sessions; signing secrets and service credentials; private asset bytes and verdicts; workflow approvals and release intent; outbox/job state; audit history; search indexes and cache tags; logical archives; service capacity; and plugin manifests, publisher trust, tenant grants, and lifecycle evidence.
 
 Draft content, identity attributes, credentials/tokens, private assets, and operational/audit data are sensitive. Published content is intentionally public, but its integrity, freshness, route correctness, and tenant separation remain security properties.
 
@@ -75,6 +80,7 @@ Every modeled threat has a response, owner, concrete mitigations, and verificati
 | ID | Threat | STRIDE | Inherent risk | Current position / residual work |
 |---|---|---|---:|---|
 | THREAT-0001 | Cross-tenant object access or mutation | S/I/E | 20 Critical | M5-002 established canonical collision-safe scope contracts and fail-closed repository/adapter/queue/telemetry checks; production database and object-store policy conformance remains deployment evidence. |
+| THREAT-0023 | Malicious, forged, over-granted, or escaped plugin | S/T/I/D/E | 20 Critical | M5-003 verifies signed digest-bound metadata, compatibility, constrained tenant grants, authorized lifecycle/revocation, and bounded external-runtime messages without importing plugin modules. OS/container hardening, marketplace review, dependency evidence, and publisher enrollment remain deployment/M5-007/M6-005 obligations. |
 | THREAT-0007 | Malicious or mislabeled asset upload | T/D/E | 16 High | Descriptor matching, byte inspection, SVG sanitization, quarantine, and verified-only delivery exist; deployment quotas and scanner conformance remain. |
 | THREAT-0010 | GraphQL/query complexity exhaustion | D | 16 High | Depth and data-shape bounds exist; cost, alias, rate, and benchmark-backed limits remain in M5-007. |
 | THREAT-0017 | Stored content script/markup execution | T/E | 16 High | Structured manifests and code-owned components constrain execution; every application renderer remains responsible for contextual encoding. |
@@ -99,7 +105,8 @@ The canonical register also covers preview and asset grant replay, forged webhoo
 - Development actor/role/scope headers and default local secrets must never be reachable from an untrusted network.
 - GridStory validates structured content but cannot make arbitrary application-owned React code safe. Consuming applications own contextual output encoding, dependency review, and CSP compatibility.
 - Provider adapters must preserve complete tenant scope and the documented timeout, redirect, credential, and failure behavior.
-- Plugin execution is excluded until M5-003 introduces capability manifests, grants, isolation, signatures, and lifecycle policy.
+- Server plugin packages remain outside the control-plane process and execute only in operator-provided external processes/containers. GridStory verifies and mediates the protocol; operators own OS identity, filesystem, network, CPU, memory, and process isolation.
+- Marketplace review, dependency analysis, SBOM/provenance, publisher enrollment, and the Studio sandbox loader are not supplied by M5-003.
 - No threat is accepted merely because it is listed. Any residual high or critical risk needs a task or explicit, named, expiring acceptance.
 
 ## Review workflow

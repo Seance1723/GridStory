@@ -3,8 +3,8 @@
   "model": {
     "id": "GRIDSTORY-TM-001",
     "title": "GridStory control plane and delivery threat model",
-    "version": "1.0.0",
-    "reviewedAt": "2026-07-26",
+    "version": "1.1.0",
+    "reviewedAt": "2026-08-21",
     "owners": ["GridStory security owner", "GridStory architecture owner"],
     "methodology": "OWASP four-question threat modeling with STRIDE categorization",
     "scope": [
@@ -16,13 +16,14 @@
       "preview applications and live-preview protocol",
       "workers, outbox, durable jobs, search, cache, and webhook adapters",
       "published REST delivery and application-owned React rendering",
-      "logical archive export and import"
+      "logical archive export and import",
+      "signed plugin manifests, tenant grants, lifecycle state, and external runtime protocol"
     ],
     "outOfScope": [
       "security of application-owned React components after validated data leaves GridStory",
       "identity-provider internals",
       "cloud, CDN, database, object-store, and network controls not configured by GridStory",
-      "plugin execution until M5-003 defines its capability and isolation boundary"
+      "marketplace review, publisher enrollment, dependency analysis, and operating-system/container isolation supplied outside GridStory"
     ],
     "riskModel": {
       "formula": "likelihood * impact",
@@ -78,6 +79,12 @@
       "name": "Malicious tenant or internet attacker",
       "trust": "hostile",
       "capabilities": ["send crafted requests, content, archives, assets, URLs, and tokens"]
+    },
+    {
+      "id": "ACTOR-009",
+      "name": "Plugin publisher or external runtime",
+      "trust": "signed but untrusted code boundary",
+      "capabilities": ["submit signed metadata and process mediated tenant-scoped plugin requests"]
     }
   ],
   "assets": [
@@ -140,6 +147,11 @@
       "id": "ASSET-012",
       "name": "Service availability and operational capacity",
       "securityProperties": ["availability", "recoverability"]
+    },
+    {
+      "id": "ASSET-013",
+      "name": "Plugin manifests, publisher trust, tenant grants, and lifecycle history",
+      "securityProperties": ["authenticity", "least privilege", "tenant isolation", "revocability"]
     }
   ],
   "trustBoundaries": [
@@ -214,6 +226,17 @@
         "dry-run",
         "scope checks",
         "atomic rollback"
+      ]
+    },
+    {
+      "id": "BOUNDARY-010",
+      "name": "Control plane to plugin package and external runtime",
+      "controls": [
+        "Ed25519 manifest and SHA-256 artifact verification",
+        "publisher-bound trust records and SDK compatibility",
+        "tenant-scoped constrained grants and deny-by-default lifecycle authorization",
+        "external process/container protocol with bounded rate, time, and JSON size",
+        "no imported plugin modules, ambient credentials, database handles, filesystem, or process authority"
       ]
     }
   ],
@@ -301,6 +324,13 @@
       "to": "ACTOR-003",
       "data": "audit verification and export",
       "assets": ["ASSET-009"]
+    },
+    {
+      "id": "FLOW-013",
+      "from": "ACTOR-009",
+      "to": "BOUNDARY-010",
+      "data": "signed manifest metadata, artifact digest, health result, and bounded invocation messages",
+      "assets": ["ASSET-003", "ASSET-005", "ASSET-012", "ASSET-013"]
     }
   ],
   "assumptions": [
@@ -308,7 +338,8 @@
     "Development identity headers and default secrets are never exposed on a production listener.",
     "Applications validate and safely render application-owned components; GridStory never executes editor-authored JavaScript.",
     "External adapters implement the documented timeouts, redirect, egress, credential, and tenant-scope contracts.",
-    "The M5-002 application isolation review verifies canonical scope keys and fail-closed boundaries across persistence, cache, search, assets, jobs, events, audit, and telemetry; production infrastructure policies remain deployment evidence."
+    "The M5-002 application isolation review verifies canonical scope keys and fail-closed boundaries across persistence, cache, search, assets, jobs, events, audit, and telemetry; production infrastructure policies remain deployment evidence.",
+    "Production plugin runtimes are separately operated processes or containers with least-privilege OS, filesystem, network, CPU, and memory policies; the GridStory adapter protocol does not itself provide OS isolation."
   ],
   "threats": [
     {
@@ -818,6 +849,39 @@
         "Add structured redaction tests and production debug-off validation in M5-004."
       ],
       "verification": ["apps/api/src/server.ts", "apps/api/test/server.test.ts", "M5-004"]
+    },
+    {
+      "id": "THREAT-0023",
+      "title": "Malicious, forged, over-granted, or escaped plugin",
+      "stride": [
+        "Spoofing",
+        "Tampering",
+        "Information Disclosure",
+        "Denial of Service",
+        "Elevation of Privilege"
+      ],
+      "scenario": "An attacker installs a forged or incompatible package, expands a tenant grant, invokes a revoked plugin, crosses tenant scope, or uses plugin code to reach ambient control-plane authority or exhaust the host.",
+      "actors": ["ACTOR-008", "ACTOR-009"],
+      "assets": ["ASSET-003", "ASSET-004", "ASSET-005", "ASSET-012", "ASSET-013"],
+      "boundaries": ["BOUNDARY-002", "BOUNDARY-003", "BOUNDARY-006", "BOUNDARY-010"],
+      "likelihood": 4,
+      "impact": 5,
+      "risk": 20,
+      "response": "mitigate",
+      "owner": "Plugin platform owner",
+      "mitigations": [
+        "Verify canonical Ed25519 manifests, exact SHA-256 artifact digests, publisher trust, and SDK/protocol compatibility before installation.",
+        "Authorize tenant-scoped lifecycle actions and require granted constrained capabilities to be a subset of the signed request.",
+        "Never import plugin modules; use an injected external runtime with bounded health/invocation messages, rate, time, input, and output limits, and fail closed when no runtime is configured.",
+        "Retain immutable lifecycle evidence and support immediate tenant disablement and revocation; separately harden the operating-system/container boundary."
+      ],
+      "verification": [
+        "packages/schema/test/plugins.test.ts",
+        "packages/core/test/plugin-service.test.ts",
+        "packages/core/test/postgres-conformance.test.ts",
+        "apps/api/test/plugins.test.ts",
+        "docs/plugins.md"
+      ]
     }
   ],
   "review": {

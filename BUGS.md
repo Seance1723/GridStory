@@ -1,6 +1,6 @@
 # GridStory bug ledger
 
-**Last updated:** 2026-08-20
+**Last updated:** 2026-08-21
 
 Every defect discovered during automated or manual verification is recorded here before it is fixed or deferred. Bug records are permanent project history.
 
@@ -20,6 +20,13 @@ Every defect discovered during automated or manual verification is recorded here
 
 | ID | Found | Resolved | Severity | Area | Summary | Resolution and verification | Linked task/change |
 |---|---|---|---|---|---|---|---|---|
+| BUG-0211 | 2026-08-21 | 2026-08-21 | Medium | PostgreSQL verification harness | The root PostgreSQL gate did not rebuild workspace packages, so API conformance could execute stale core output instead of the source under test. | Made `pnpm test:postgres` build public packages before starting the disposable database; the gate passes 8 core and 1 API tests against current output. | M5-003, FND-002; Fixed |
+| BUG-0210 | 2026-08-21 | 2026-08-21 | High | PostgreSQL plugin initialization | The plugin and content repositories concurrently created the shared default PostgreSQL schema, allowing a startup DDL race that broke ordinary content writes. | Followed the durable workflow/release pattern with a public namespaced plugin table in normal construction and retained explicit isolated schemas for conformance; the real PostgreSQL repository and API suites pass. | M5-003; Fixed |
+| BUG-0209 | 2026-08-21 | 2026-08-21 | Low | Plugin integration / Lint | New plugin imports/exports were not repository-sorted and the publisher-status guard duplicated an optional-chain check. | Organized the affected barrels/imports and used the explicit optional-chain guard; focused Biome check is clean. | M5-003; Fixed |
+| BUG-0208 | 2026-08-21 | 2026-08-21 | Low | Security evidence / Documentation | The verified plugin requirement referenced its integration guide before the guide existed. | Added the complete plugin boundary/integration guide before asserting verified evidence; `pnpm security:check` passes. | M5-003; Fixed |
+| BUG-0207 | 2026-08-21 | 2026-08-21 | Low | ASVS profile / Traceability | The initial plugin requirement referenced two ASVS controls not selected by their pinned profile chapters. | Mapped GS-SEC-030 to the already-selected pinned V13/V15 controls; the profile validator and negative self-tests pass. | M5-003; Fixed |
+| BUG-0206 | 2026-08-20 | 2026-08-20 | Low | Plugin schema / TypeScript | A shared duplicate-value loop widened capability literals to string and failed the enum-array type contract. | Used separately typed capability and operation duplicate checks; the schema typecheck passes. | M5-003; Fixed |
+| BUG-0205 | 2026-08-20 | 2026-08-20 | Low | Plugin schema / TypeScript | The initial plugin installation contract imported a file-local content-scope schema. | Defined the explicit six-field scope schema beside the plugin contracts; the schema typecheck passes. | M5-003; Fixed |
 | BUG-0204 | 2026-08-20 | 2026-08-20 | Low | Task ledger / whitespace | Refreshing the task-ledger date retained the prior Markdown hard-break spaces and made the final diff whitespace audit fail. | Removed the obsolete hard-break spaces from the refreshed date; `git diff --check`, ledger validation, and formatting pass. | FND-006; Fixed |
 | BUG-0203 | 2026-08-20 | 2026-08-20 | Medium | Windows repository checkout / verification | Git checked normalized text out as CRLF while Biome and generated contracts require LF, leaving the canonical delivery gate red on a clean clone. | Made the root text attribute require `eol=lf`, overriding host `core.autocrlf` for tracked text, and normalized the Biome-managed working files. Focused format/schema checks, `pnpm check`, eight PostgreSQL tests, and the canonical browser walkthrough pass. | FND-006; Fixed |
 | BUG-0202 | 2026-07-26 | 2026-07-26 | Low | Tenant regression test / Windows editing | Strengthening hostile-search assertions wrote literal PowerShell newline tokens into the TypeScript object literal. | Replaced the literal tokens with real line breaks, formatted the test, and passed the strengthened hostile-search regressions plus the full workspace and browser gates. | M5-002, TEST-001; Fixed |

@@ -18,7 +18,7 @@
     "worker": "pnpm --filter @gridstory/api worker",
     "test": "pnpm build:packages && pnpm -r --if-present run test",
     "test:run": "pnpm build:packages && pnpm -r --if-present run test:run",
-    "test:postgres": "node scripts/test-postgres.mjs",
+    "test:postgres": "pnpm build:packages && node scripts/test-postgres.mjs",
     "schema:generate": "pnpm build:packages && node scripts/generate-schema-types.mjs --write && pnpm --filter @gridstory/example-kit build",
     "schema:check": "node scripts/generate-schema-types.mjs --check",
     "typecheck": "pnpm build:packages && pnpm schema:check && pnpm -r --workspace-concurrency=1 --if-present run typecheck",

@@ -8,6 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Corrected plugin schema typing/traceability/lint issues and eliminated a PostgreSQL schema-initialization race; the PostgreSQL gate now rebuilds current packages before running core/API conformance (BUG-0205 through BUG-0211, M5-003).
 - Required LF working-tree checkout for tracked text so Windows `core.autocrlf` cannot break Biome or generated-contract validation; restored the complete repository, PostgreSQL, browser, and final whitespace gates (BUG-0203, BUG-0204, FND-006).
 - Resolved tenant-isolation, hostile-adapter, collision-safe cache/key, scoped identity/grant, canonical telemetry, and Windows verification defects found during M5-002 (BUG-0194 through BUG-0202).
 - Corrected stale README capability/identity milestones and used the verified exact-formatter and unrestricted full-check paths for Windows validation (BUG-0191 through BUG-0193).
@@ -62,6 +63,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Added Plugin SDK v1 signed capability manifests, constrained tenant grants, compatibility and artifact verification, durable in-memory/SQLite/PostgreSQL lifecycle state, explicit revoke/uninstall history, and a test-only harness behind a production external-runtime adapter.
+- Added admin-authorized private/no-store plugin lifecycle and bounded invocation REST routes, matching universal-client methods, cross-layer regressions, PostgreSQL conformance, and an operator/security integration guide.
 - Added the canonical validated six-field tenant-scope module, bounded secret-safe telemetry envelope, adversarial cross-scope regression suite, and `pnpm tenant:check` static contract gate.
 - Added a canonical STRIDE threat model covering actors, assets, nine trust boundaries, twelve data flows, 22 owned threats, risk scoring, mitigations, evidence, and review triggers.
 - Added an OWASP ASVS 5.0.0 Level 2-oriented profile with explicit applicability for all 17 chapters and 29 stable GridStory security requirements linked to threats, evidence, owners, and delivery tasks.
@@ -209,6 +212,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- Moved plugin execution into the current threat/ASVS scope with `THREAT-0023` and verified `GS-SEC-030`; documented the external process/container boundary, signed-digest trust decision, deferred Studio loader/marketplace work, and production runtime obligations.
 - Tenant-bound OIDC role assignments and service-account grants now replace globally reusable production roles; cache invalidators and webhook transports receive explicit scope, and search adapters echo scope/perspective while authoritative records determine returned metadata.
 - Corrected README capability status and linked the security model, requirements, ASVS profile, and validation command from the primary project guide.
 
@@ -292,6 +296,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Security
 
+- Plugins now fail closed on untrusted/revoked publisher keys, invalid Ed25519 signatures, artifact-digest or SDK/protocol mismatch, over-broad grants, cross-tenant state, disabled/revoked lifecycle, undeclared operations/capabilities, absent/unhealthy runtimes, rate limits, timeouts, and JSON size bounds; arbitrary plugin modules are never imported into the control plane.
 - Hardened storage, cache, search, asset, audit, outbox, durable-job, webhook, and telemetry boundaries to fail closed on scope mismatches; cache/object keys are collision safe and hostile search totals, facets, highlights, and taxonomy values cannot cross tenants.
 - Established normative tenant, authorization, preview/cache, input/rendering, API, file/archive, token, integration, cryptography, transport, data-protection, logging/error, and supply-chain requirements without claiming ASVS certification; unresolved production controls remain explicitly assigned to M5-002 through M5-008 and M6-002/M6-003.
 

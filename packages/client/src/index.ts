@@ -6,50 +6,56 @@ import type {
   AssetUploadPart,
   AssetUploadSession,
   AssetUsageReport,
-  CreateAssetDeliveryInput,
-  StartAssetUploadInput,
-  UpdateAssetInput,
+  BacklinkRecord,
   CollaborationSnapshot,
   CollaborationTarget,
   CommentThread,
-  PresenceParticipant,
   ComponentManifest,
-  ResolvedComponentManifest,
-  ContentEntry,
   ContentConnection,
+  ContentEntry,
   ContentFilter,
   ContentFilterOperator,
-  ContentQuery,
-  ContentSort,
-  LocaleConfiguration,
-  LocalizedContentResolution,
   ContentPerspective,
   ContentQualityReport,
+  ContentQuery,
   ContentRevision,
   ContentSchemaDefinition,
+  ContentSort,
+  CreateAssetDeliveryInput,
   DesignSystemManifest,
+  LocaleConfiguration,
+  LocalizedContentResolution,
+  PluginCapabilityGrant,
+  PluginCapabilityName,
+  PluginInstallation,
+  PluginInvocationResult,
+  PluginUninstallPreview,
+  PresenceParticipant,
   PreviewMessage,
   PreviewMode,
   PreviewSessionGrant,
+  RelatedContentRecord,
+  Release,
+  ReleaseInput,
+  ReleasePreview,
   RequestContext,
+  ResolvedComponentManifest,
   SchemaDriftReport,
   SchemaIrDocument,
   SchemaMigrationPlan,
+  SearchIndexStatus,
+  SearchQuery,
+  SearchResponse,
+  SignedPluginManifest,
+  StartAssetUploadInput,
+  TaxonomyDefinition,
   TranslationCompletenessReport,
+  UpdateAssetInput,
   ValidationIssue,
   VisualModelDocument,
   WorkflowDefinition,
   WorkflowDefinitionInput,
   WorkflowInstance,
-  Release,
-  ReleaseInput,
-  ReleasePreview,
-  BacklinkRecord,
-  RelatedContentRecord,
-  SearchIndexStatus,
-  SearchQuery,
-  SearchResponse,
-  TaxonomyDefinition,
 } from '@gridstory/schema';
 
 export interface SchemaDeploymentRecord {
@@ -343,6 +349,14 @@ export interface CreatePreviewSessionInput {
   mode: PreviewMode;
   entryId?: string;
   ttlSeconds?: number;
+  signal?: AbortSignal;
+}
+
+export interface InstallPluginInput {
+  manifest: SignedPluginManifest;
+  artifactDigest: string;
+  grantedCapabilities: PluginCapabilityGrant[];
+  reason: string;
   signal?: AbortSignal;
 }
 
@@ -827,6 +841,81 @@ export class GridStoryClient {
     return this.#request(`/api/v1/workflow-actions/${encodeURIComponent(id)}/replay`, {
       method: 'POST',
       body: JSON.stringify({}),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  listPlugins(signal?: AbortSignal): Promise<PluginInstallation[]> {
+    return this.#request('/api/v1/plugins', signal ? { signal } : {});
+  }
+
+  getPlugin(id: string, signal?: AbortSignal): Promise<PluginInstallation> {
+    return this.#request(`/api/v1/plugins/${encodeURIComponent(id)}`, signal ? { signal } : {});
+  }
+
+  installPlugin(input: InstallPluginInput): Promise<PluginInstallation> {
+    return this.#request('/api/v1/plugins/install', {
+      method: 'POST',
+      body: JSON.stringify({
+        manifest: input.manifest,
+        artifactDigest: input.artifactDigest,
+        grantedCapabilities: input.grantedCapabilities,
+        reason: input.reason,
+      }),
+      ...(input.signal ? { signal: input.signal } : {}),
+    });
+  }
+
+  enablePlugin(id: string, reason: string, signal?: AbortSignal): Promise<PluginInstallation> {
+    return this.#pluginLifecycle(id, 'enable', reason, signal);
+  }
+
+  disablePlugin(id: string, reason: string, signal?: AbortSignal): Promise<PluginInstallation> {
+    return this.#pluginLifecycle(id, 'disable', reason, signal);
+  }
+
+  revokePlugin(id: string, reason: string, signal?: AbortSignal): Promise<PluginInstallation> {
+    return this.#pluginLifecycle(id, 'revoke', reason, signal);
+  }
+
+  previewPluginUninstall(id: string, signal?: AbortSignal): Promise<PluginUninstallPreview> {
+    return this.#request(
+      `/api/v1/plugins/${encodeURIComponent(id)}/uninstall-preview`,
+      signal ? { signal } : {},
+    );
+  }
+
+  uninstallPlugin(id: string, reason: string, signal?: AbortSignal): Promise<PluginInstallation> {
+    return this.#request(`/api/v1/plugins/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      body: JSON.stringify({ reason }),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  invokePlugin(
+    id: string,
+    operation: string,
+    capability: PluginCapabilityName,
+    input: Record<string, unknown>,
+    signal?: AbortSignal,
+  ): Promise<PluginInvocationResult> {
+    return this.#request(`/api/v1/plugins/${encodeURIComponent(id)}/invoke`, {
+      method: 'POST',
+      body: JSON.stringify({ operation, capability, input }),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  #pluginLifecycle(
+    id: string,
+    action: 'enable' | 'disable' | 'revoke',
+    reason: string,
+    signal?: AbortSignal,
+  ): Promise<PluginInstallation> {
+    return this.#request(`/api/v1/plugins/${encodeURIComponent(id)}/${action}`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
       ...(signal ? { signal } : {}),
     });
   }
@@ -1331,45 +1420,45 @@ export type {
   AssetUploadPart,
   AssetUploadSession,
   AssetUsageReport,
-  CreateAssetDeliveryInput,
-  StartAssetUploadInput,
-  UpdateAssetInput,
+  BacklinkRecord,
   CollaborationSnapshot,
   CollaborationTarget,
   CommentThread,
-  PresenceParticipant,
-  ContentEntry,
+  ComponentManifest,
   ContentConnection,
+  ContentEntry,
   ContentFilter,
   ContentFilterOperator,
-  ContentQuery,
-  ContentSort,
-  LocaleConfiguration,
-  LocalizedContentResolution,
   ContentPerspective,
   ContentQualityReport,
+  ContentQuery,
+  ContentRevision,
+  ContentSchemaDefinition,
+  ContentSort,
+  CreateAssetDeliveryInput,
+  LocaleConfiguration,
+  LocalizedContentResolution,
+  PresenceParticipant,
   PreviewMessage,
   PreviewMode,
   PreviewSessionGrant,
-  ContentRevision,
-  ComponentManifest,
+  RelatedContentRecord,
+  Release,
+  ReleaseInput,
+  ReleasePreview,
   ResolvedComponentManifest,
-  ContentSchemaDefinition,
   SchemaDriftReport,
   SchemaIrDocument,
   SchemaMigrationPlan,
+  SearchIndexStatus,
+  SearchQuery,
+  SearchResponse,
+  StartAssetUploadInput,
+  TaxonomyDefinition,
   TranslationCompletenessReport,
+  UpdateAssetInput,
   VisualModelDocument,
   WorkflowDefinition,
   WorkflowDefinitionInput,
   WorkflowInstance,
-  Release,
-  ReleaseInput,
-  ReleasePreview,
-  BacklinkRecord,
-  RelatedContentRecord,
-  SearchIndexStatus,
-  SearchQuery,
-  SearchResponse,
-  TaxonomyDefinition,
 };

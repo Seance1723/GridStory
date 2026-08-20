@@ -6,7 +6,7 @@
     "standard": "OWASP Application Security Verification Standard",
     "standardVersion": "5.0.0",
     "targetLevel": "L2-oriented",
-    "reviewedAt": "2026-07-26",
+    "reviewedAt": "2026-08-21",
     "source": "https://github.com/OWASP/ASVS/tree/v5.0.0/5.0",
     "statement": "This is a project-specific selection and applicability record, not an ASVS certification or a claim that every ASVS L2 requirement has been independently verified.",
     "statusDefinitions": {
@@ -424,12 +424,13 @@
       "owner": "Authorization owner",
       "statement": "Every non-public operation SHALL authorize its function and object at a trusted layer; unmatched roles/grants SHALL be denied and the complete organization/tenant/workspace/site/environment/locale scope SHALL be non-bypassable.",
       "asvsRefs": ["v5.0.0-8.1.1", "v5.0.0-8.2.1", "v5.0.0-8.2.2", "v5.0.0-8.3.1", "v5.0.0-8.4.1"],
-      "threatRefs": ["THREAT-0001", "THREAT-0014"],
+      "threatRefs": ["THREAT-0001", "THREAT-0014", "THREAT-0023"],
       "evidence": [
         "packages/core/src/authorization.ts",
         "packages/core/src/identity.ts",
         "packages/core/src/tenant-scope.ts",
-        "apps/api/src/server.ts"
+        "apps/api/src/server.ts",
+        "packages/core/src/plugin-service.ts"
       ],
       "verification": [
         "packages/core/test/authorization.test.ts",
@@ -437,9 +438,10 @@
         "packages/core/test/identity.test.ts",
         "packages/core/test/tenant-isolation.test.ts",
         "apps/api/test/authorization.test.ts",
-        "scripts/check-tenant-scope.mjs"
+        "scripts/check-tenant-scope.mjs",
+        "apps/api/test/plugins.test.ts"
       ],
-      "taskIds": ["M2-002", "M5-002"]
+      "taskIds": ["M2-002", "M5-002", "M5-003"]
     },
     {
       "id": "GS-SEC-016",
@@ -448,7 +450,7 @@
       "owner": "Security architecture owner",
       "statement": "Self-contained grants SHALL use a fixed approved MAC algorithm, trusted key source, signature verification before claims, explicit purpose/audience, complete relevant scope, expiry, and constant-time comparison.",
       "asvsRefs": ["v5.0.0-9.1.1", "v5.0.0-9.1.2", "v5.0.0-9.2.1", "v5.0.0-9.2.2", "v5.0.0-9.2.3"],
-      "threatRefs": ["THREAT-0003", "THREAT-0008", "THREAT-0011", "THREAT-0016"],
+      "threatRefs": ["THREAT-0003", "THREAT-0008", "THREAT-0011", "THREAT-0016", "THREAT-0023"],
       "evidence": [
         "packages/core/src/preview-service.ts",
         "packages/core/src/content-query.ts",
@@ -498,10 +500,15 @@
         "packages/core/src/preview-service.ts",
         "packages/core/src/content-query.ts",
         "packages/core/src/asset-delivery-service.ts",
-        "packages/core/src/audit-service.ts"
+        "packages/core/src/audit-service.ts",
+        "packages/core/src/plugin-service.ts"
       ],
-      "verification": ["pnpm test:run", "Cryptographic inventory review"],
-      "taskIds": ["M5-001"]
+      "verification": [
+        "pnpm test:run",
+        "packages/core/test/plugin-service.test.ts",
+        "Cryptographic inventory review"
+      ],
+      "taskIds": ["M5-001", "M5-003"]
     },
     {
       "id": "GS-SEC-020",
@@ -631,18 +638,20 @@
       "owner": "Security operations owner",
       "statement": "GridStory SHALL inventory logs and record correlatable authentication, authorization failure, privileged mutation, publication, workflow/release, import/export, credential, adapter, and security-control events without recording secrets or unnecessary content.",
       "asvsRefs": ["v5.0.0-16.1.1", "v5.0.0-16.2.1", "v5.0.0-16.2.5", "v5.0.0-16.3.2"],
-      "threatRefs": ["THREAT-0015", "THREAT-0016", "THREAT-0022"],
+      "threatRefs": ["THREAT-0015", "THREAT-0016", "THREAT-0022", "THREAT-0023"],
       "evidence": [
         "packages/core/src/audit-service.ts",
         "packages/core/src/tenant-scope.ts",
-        "docs/audit-and-administration.md"
+        "docs/audit-and-administration.md",
+        "packages/core/src/plugin-service.ts"
       ],
       "verification": [
         "packages/core/test/audit-service.test.ts",
         "packages/core/test/tenant-isolation.test.ts",
+        "apps/api/test/plugins.test.ts",
         "Telemetry inventory and sink conformance test"
       ],
-      "taskIds": ["M5-004"]
+      "taskIds": ["M5-003", "M5-004"]
     },
     {
       "id": "GS-SEC-029",
@@ -655,6 +664,31 @@
       "evidence": ["apps/api/src/server.ts", "packages/core/src/asset-service.ts"],
       "verification": ["apps/api/test/server.test.ts", "packages/core/test/asset-service.test.ts"],
       "taskIds": ["M5-001"]
+    },
+    {
+      "id": "GS-SEC-030",
+      "title": "Capability-isolated plugin execution",
+      "status": "verified",
+      "owner": "Plugin platform owner",
+      "statement": "Plugin installation and execution SHALL verify publisher-bound signed metadata and artifact digest, enforce SDK compatibility and tenant-scoped least-privilege grants, keep arbitrary plugin modules outside the control-plane process, bound every mediated invocation, and fail closed on disabled, revoked, unhealthy, missing, or invalid runtime state.",
+      "asvsRefs": ["v5.0.0-8.1.1", "v5.0.0-11.2.1", "v5.0.0-13.2.4", "v5.0.0-15.3.2"],
+      "threatRefs": ["THREAT-0023"],
+      "evidence": [
+        "packages/schema/src/plugins.ts",
+        "packages/core/src/plugin-service.ts",
+        "packages/core/src/plugin-repository.ts",
+        "apps/api/src/server.ts",
+        "docs/plugins.md",
+        "docs/adr/0005-plugin-capabilities.md"
+      ],
+      "verification": [
+        "packages/schema/test/plugins.test.ts",
+        "packages/core/test/plugin-service.test.ts",
+        "packages/core/test/postgres-conformance.test.ts",
+        "apps/api/test/plugins.test.ts",
+        "packages/client/test/client.test.ts"
+      ],
+      "taskIds": ["M5-003"]
     }
   ]
 }

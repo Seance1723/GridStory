@@ -2,92 +2,104 @@ import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { Readable } from 'node:stream';
 import cors from '@fastify/cors';
-import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import {
+  type AssetContentInspector,
   AssetDeliveryService,
+  type AssetMalwareScanner,
+  type AssetRenditionAdapter,
+  type AssetRepository,
   AssetService,
+  type AssetStorageAdapter,
+  AuditService,
+  AuthorizationPolicy,
+  type CacheInvalidator,
+  CollaborationService,
+  ComponentLifecycleService,
+  type ContentEventType,
+  type ContentPerspective,
+  ContentQualityService,
+  ContentQueryService,
+  type ContentRepository,
+  ContentRoutingService,
+  ContentService,
+  contentCacheTags,
+  type DueWorkflowExecution,
+  type ExternalLinkChecker,
+  GridStoryActions,
+  GridStoryError,
+  type ImportConflictPolicy,
   InMemoryAssetRepository,
   InMemoryAssetStorageAdapter,
-  ContentService,
-  ContentQualityService,
-  ComponentLifecycleService,
-  CollaborationService,
-  AuditService,
-  ContentQueryService,
   LocaleRegistry,
   LocalizationService,
-  OperationsService,
-  PortabilityService,
-  PreviewSessionService,
   logicalArchiveFromUnknown,
-  parseLogicalArchive,
-  serializeLogicalArchive,
-  serializeAuditExport,
-  contentCacheTags,
-  ContentRoutingService,
-  SchemaLifecycleService,
-  SearchService,
-  GridStoryError,
-  AuthorizationPolicy,
-  GridStoryActions,
+  OperationsService,
+  type PluginRepository,
+  type PluginRuntimeAdapter,
+  PluginService,
+  PortabilityService,
   PostgresContentRepository,
+  PostgresPluginRepository,
+  PostgresReleaseRepository,
+  PostgresWorkflowRepository,
+  PreviewSessionService,
+  parseLogicalArchive,
+  type ReleaseRepository,
+  ReleaseService,
+  SchemaLifecycleService,
+  type SearchAdapter,
+  SearchService,
   SqliteAssetRepository,
   SqliteContentRepository,
-  PostgresWorkflowRepository,
-  SqliteWorkflowRepository,
-  WorkflowService,
-  ReleaseService,
-  PostgresReleaseRepository,
+  SqlitePluginRepository,
   SqliteReleaseRepository,
-  type ContentPerspective,
-  type ContentRepository,
-  type AssetRepository,
-  type AssetRenditionAdapter,
-  type AssetStorageAdapter,
-  type AssetContentInspector,
-  type AssetMalwareScanner,
-  type ExternalLinkChecker,
-  type CacheInvalidator,
-  type WebhookTransport,
-  type ContentEventType,
-  type ImportConflictPolicy,
-  type WorkflowRepository,
-  type DueWorkflowExecution,
-  type ReleaseRepository,
-  type SearchAdapter,
+  SqliteWorkflowRepository,
+  serializeAuditExport,
+  serializeLogicalArchive,
   type TenantTelemetrySink,
+  type TrustedPluginPublisher,
+  type WebhookTransport,
+  type WorkflowRepository,
+  WorkflowService,
 } from '@gridstory/core';
+import { exampleDesignSystem } from '@gridstory/example-kit/design-system';
+import { componentManifests, pageSchema, welcomePage } from '@gridstory/example-kit/manifests';
 import {
+  assetRenditionPresetSchema,
+  type ContentQualityPolicy,
+  collaborationTargetSchema,
+  completeAssetUploadSchema,
+  createAssetDeliverySchema,
   generatedTypesFingerprint,
+  type LocaleConfiguration,
+  type ParsedSearchQuery,
+  type PluginCapabilityGrant,
+  type PluginCapabilityName,
+  pluginCapabilityGrantSchema,
+  pluginCapabilityNameSchema,
+  previewMessageSchema,
+  type RedirectDefinition,
+  type ReleaseInput,
+  releaseInputSchema,
+  type SchemaIrDocument,
+  type SignedPluginManifest,
   schemaIrDocumentSchema,
   schemaIrFingerprint,
   schemaIrToVisualModel,
+  searchQuerySchema,
+  signedPluginManifestSchema,
+  startAssetUploadSchema,
+  updateAssetSchema,
   visualModelDocumentSchema,
   visualModelToSchemaIr,
-  type ContentQualityPolicy,
-  startAssetUploadSchema,
-  completeAssetUploadSchema,
-  createAssetDeliverySchema,
-  updateAssetSchema,
-  assetRenditionPresetSchema,
-  type RedirectDefinition,
-  type LocaleConfiguration,
-  type SchemaIrDocument,
   type WorkflowDefinitionInput,
-  previewMessageSchema,
-  collaborationTargetSchema,
   workflowDefinitionInputSchema,
-  releaseInputSchema,
-  searchQuerySchema,
-  type ParsedSearchQuery,
-  type ReleaseInput,
 } from '@gridstory/schema';
-import { componentManifests, pageSchema, welcomePage } from '@gridstory/example-kit/manifests';
-import { exampleDesignSystem } from '@gridstory/example-kit/design-system';
-import { authorize, contentScope, requestContext } from './request-context.js';
+import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import { parseContentQuery } from './content-query.js';
-import { registerGridStoryGraphql } from './graphql.js';
 import { defaultPageQualityPolicies, defaultWorkflowDefinitions } from './defaults.js';
+import { registerGridStoryGraphql } from './graphql.js';
+import { authorize, contentScope, requestContext } from './request-context.js';
 
 export interface BuildServerOptions {
   databasePath?: string;
@@ -109,6 +121,9 @@ export interface BuildServerOptions {
   assetRepository?: AssetRepository;
   workflowRepository?: WorkflowRepository;
   releaseRepository?: ReleaseRepository;
+  pluginRepository?: PluginRepository;
+  pluginRuntime?: PluginRuntimeAdapter;
+  trustedPluginPublishers?: TrustedPluginPublisher[];
   searchAdapter?: SearchAdapter;
   assetStorage?: AssetStorageAdapter;
   assetRenditionAdapter?: AssetRenditionAdapter;
@@ -156,6 +171,12 @@ interface RequestBody {
   rollbackPolicy?: unknown;
   reason?: unknown;
   perspective?: unknown;
+  manifest?: unknown;
+  artifactDigest?: unknown;
+  grantedCapabilities?: unknown;
+  operation?: unknown;
+  capability?: unknown;
+  input?: unknown;
 }
 
 function perspective(value: unknown): ContentPerspective {
@@ -265,6 +286,31 @@ function releaseDefinition(value: unknown): ReleaseInput {
     issues: parsed.error.issues,
   });
 }
+
+function pluginManifest(value: unknown): SignedPluginManifest {
+  const parsed = signedPluginManifestSchema.safeParse(value);
+  if (parsed.success) return parsed.data;
+  throw new GridStoryError('Plugin manifest is invalid.', 'invalid_plugin_manifest', 400, {
+    issues: parsed.error.issues,
+  });
+}
+
+function pluginGrants(value: unknown): PluginCapabilityGrant[] {
+  if (!Array.isArray(value)) {
+    throw new GridStoryError('grantedCapabilities must be an array.', 'invalid_plugin_grants', 400);
+  }
+  const parsed = pluginCapabilityGrantSchema.array().safeParse(value);
+  if (parsed.success) return parsed.data;
+  throw new GridStoryError('Plugin capability grants are invalid.', 'invalid_plugin_grants', 400, {
+    issues: parsed.error.issues,
+  });
+}
+
+function pluginCapability(value: unknown): PluginCapabilityName {
+  const parsed = pluginCapabilityNameSchema.safeParse(value);
+  if (parsed.success) return parsed.data;
+  throw new GridStoryError('Plugin capability is invalid.', 'invalid_plugin_capability', 400);
+}
 export async function buildServer({
   databasePath = '.gridstory/gridstory.db',
   databaseUrl,
@@ -296,6 +342,9 @@ export async function buildServer({
   assetRepository,
   workflowRepository,
   releaseRepository,
+  pluginRepository,
+  pluginRuntime,
+  trustedPluginPublishers = [],
   searchAdapter,
   assetStorage = new InMemoryAssetStorageAdapter(),
   assetRenditionAdapter,
@@ -325,6 +374,11 @@ export async function buildServer({
     (databaseUrl
       ? new PostgresReleaseRepository({ connectionString: databaseUrl })
       : new SqliteReleaseRepository({ filename: databasePath }));
+  const resolvedPluginRepository: PluginRepository =
+    pluginRepository ??
+    (databaseUrl
+      ? new PostgresPluginRepository({ connectionString: databaseUrl })
+      : new SqlitePluginRepository({ filename: databasePath }));
   const workflows = new WorkflowService({
     repository: resolvedWorkflowRepository,
     jobRepository: repository,
@@ -346,6 +400,11 @@ export async function buildServer({
   const releases = new ReleaseService({
     repository: resolvedReleaseRepository,
     contentService: service,
+  });
+  const plugins = new PluginService({
+    repository: resolvedPluginRepository,
+    trustedPublishers: trustedPluginPublishers,
+    ...(pluginRuntime ? { runtime: pluginRuntime } : {}),
   });
   const executeWorkflowSchedule = async ({
     scope,
@@ -476,6 +535,7 @@ export async function buildServer({
     await resolvedAssetRepository.close?.();
     await resolvedWorkflowRepository.close();
     await resolvedReleaseRepository.close();
+    await resolvedPluginRepository.close();
   });
   server.addHook('onSend', async (request, reply, payload) => {
     if (request.url.startsWith('/api/v1/delivery/')) {
@@ -1209,6 +1269,89 @@ export async function buildServer({
     return workflows.processDue({
       scope: contentScope(context),
       execute: executeWorkflowSchedule,
+    });
+  });
+
+  server.get('/api/v1/plugins', async (request) => {
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.pluginRead, { kind: 'plugin' });
+    return plugins.list(contentScope(context));
+  });
+
+  server.post('/api/v1/plugins/install', async (request, reply) => {
+    const body = bodyOf(request);
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.pluginManage, { kind: 'plugin' });
+    const installation = await plugins.install({
+      scope: contentScope(context),
+      manifest: pluginManifest(body.manifest),
+      artifactDigest: requiredString(body.artifactDigest, 'artifactDigest'),
+      grantedCapabilities: pluginGrants(body.grantedCapabilities),
+      actorId: context.principal.id,
+      reason: requiredString(body.reason, 'reason'),
+    });
+    return reply.status(201).send(installation);
+  });
+
+  server.get('/api/v1/plugins/:id', async (request) => {
+    const params = request.params as { id: string };
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.pluginRead, { kind: 'plugin', id: params.id });
+    return plugins.get(contentScope(context), params.id);
+  });
+
+  for (const action of ['enable', 'disable', 'revoke'] as const) {
+    server.post(`/api/v1/plugins/:id/${action}`, async (request) => {
+      const params = request.params as { id: string };
+      const body = bodyOf(request);
+      const context = requestContext(request, 'draft');
+      authorize(policy, context, GridStoryActions.pluginManage, {
+        kind: 'plugin',
+        id: params.id,
+      });
+      return plugins[action]({
+        scope: contentScope(context),
+        id: params.id,
+        actorId: context.principal.id,
+        reason: requiredString(body.reason, 'reason'),
+      });
+    });
+  }
+
+  server.get('/api/v1/plugins/:id/uninstall-preview', async (request) => {
+    const params = request.params as { id: string };
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.pluginManage, { kind: 'plugin', id: params.id });
+    return plugins.uninstallPreview(contentScope(context), params.id);
+  });
+
+  server.delete('/api/v1/plugins/:id', async (request) => {
+    const params = request.params as { id: string };
+    const body = bodyOf(request);
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.pluginManage, { kind: 'plugin', id: params.id });
+    return plugins.uninstall({
+      scope: contentScope(context),
+      id: params.id,
+      actorId: context.principal.id,
+      reason: requiredString(body.reason, 'reason'),
+    });
+  });
+
+  server.post('/api/v1/plugins/:id/invoke', async (request) => {
+    const params = request.params as { id: string };
+    const body = bodyOf(request);
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.pluginInvoke, { kind: 'plugin', id: params.id });
+    if (typeof body.input !== 'object' || body.input === null || Array.isArray(body.input)) {
+      throw new GridStoryError('Plugin input must be a JSON object.', 'invalid_plugin_input', 400);
+    }
+    return plugins.invoke({
+      scope: contentScope(context),
+      id: params.id,
+      operation: requiredString(body.operation, 'operation'),
+      capability: pluginCapability(body.capability),
+      payload: body.input as Record<string, unknown>,
     });
   });
 

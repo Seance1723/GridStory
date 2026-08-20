@@ -14,6 +14,7 @@ The profile is Level 2-oriented because GridStory handles authenticated authorin
 - GridStory SHALL store validated structured data and code-owned component identifiers; it SHALL never execute editor-authored JavaScript.
 - Security-critical verification SHALL fail closed. A scanner, identity verifier, signature check, authorization decision, import check, or release validation failure SHALL not silently permit the protected action.
 - Stable security identifiers (`GS-SEC-###` and `THREAT-####`) SHALL not be recycled.
+- Arbitrary plugin packages SHALL never be imported into the control-plane process; plugin authority SHALL cross a versioned, tenant-scoped, capability-mediated external-runtime boundary.
 
 ## Data classification
 
@@ -25,6 +26,8 @@ The profile is Level 2-oriented because GridStory handles authenticated authorin
 | Restricted secret | OIDC/session material, service tokens, preview/cursor/asset/webhook signing keys, database/object-store credentials | Approved secret manager, least privilege, never logged or placed in URLs/source/build artifacts, independent purpose, rotation and emergency revocation. |
 
 Published status does not remove integrity or tenant-isolation requirements. A customer's content classification may be stricter than this baseline.
+
+Publisher public keys are integrity trust configuration; private publisher keys remain outside GridStory and are restricted secrets. Plugin manifests, grants, configuration, and lifecycle history are confidential management records even when the plugin package is publicly distributed.
 
 ## Identity, sessions, and authorization
 
@@ -72,6 +75,18 @@ Current `IdentityService` is a framework-neutral foundation with in-memory sessi
 - Search/index adapters SHALL key by complete scope and perspective. Incremental jobs SHOULD carry identifiers instead of draft content and reload under the claimed scope.
 - Webhooks SHALL use TLS, HMAC over timestamp plus exact raw body, immutable delivery/event identifiers, bounded response time, and no redirects. Receiver documentation SHALL require freshness and delivery-ID deduplication.
 - Security-sensitive adapters SHALL fail closed; availability fallbacks SHALL not weaken authorization, tenant, integrity, or confidentiality decisions.
+
+## Plugin packages and runtimes
+
+- `GS-SEC-030`: installation SHALL verify a publisher-bound Ed25519 signature over canonical metadata and the exact SHA-256 artifact digest before using claims from the manifest.
+- Signed SDK/protocol compatibility SHALL be checked before installation; an unknown/revoked key, invalid signature, digest mismatch, or incompatible version SHALL fail closed.
+- A tenant grant SHALL be an explicit unique subset of requested capabilities. It SHALL NOT remove a signed constraint or broaden its content-type, network-host, secret-name, or event-type allow-list.
+- Plugin management and invocation SHALL authorize separate actions against complete tenant scope. Only an enabled, healthy server runtime may receive a declared operation under one granted capability.
+- The control plane SHALL NOT import or evaluate arbitrary plugin modules or expose database handles, ambient credentials, unrestricted filesystems, child-process authority, or internal service objects.
+- Server code SHALL execute in an operator-provided external process/container boundary. The protocol SHALL bound JSON input/output, rate, and time; the deployment SHALL separately bound OS identity, filesystem, network, CPU, memory, and processes.
+- `PluginTestHarness` SHALL be used only with trusted test fixtures and SHALL NOT be represented as a production sandbox.
+- Lifecycle install, enable, disable, revoke, and uninstall events SHALL retain actor, reason, and timestamp. Disabled/revoked/uninstalled plugins SHALL not accept new invocations.
+- A Studio loader, when delivered, SHALL use a sandboxed cross-origin frame/worker and validate every versioned message without exposing host DOM/session authority. M5-003 validates metadata only; it does not ship that loader.
 
 ## Cryptography, secrets, and transport
 

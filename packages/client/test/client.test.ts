@@ -1,3 +1,9 @@
+import {
+  PLUGIN_MANIFEST_FORMAT,
+  PLUGIN_MANIFEST_VERSION,
+  PLUGIN_PROTOCOL_VERSION,
+  type SignedPluginManifest,
+} from '@gridstory/schema';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createGridStoryClient, type LogicalContentArchive } from '../src/index.js';
 
@@ -6,6 +12,66 @@ afterEach(() => {
 });
 
 describe('GridStoryClient browser compatibility', () => {
+  it('sends the typed plugin lifecycle and invocation contracts', async () => {
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    const client = createGridStoryClient({
+      baseUrl: 'http://gridstory.test',
+      tenantId: 'default',
+      fetch: async (input, init) => {
+        requests.push({ url: String(input), ...(init ? { init } : {}) });
+        return new Response(JSON.stringify({ output: {}, warnings: [] }), {
+          headers: { 'content-type': 'application/json' },
+        });
+      },
+    });
+    const manifest: SignedPluginManifest = {
+      format: PLUGIN_MANIFEST_FORMAT,
+      manifestVersion: PLUGIN_MANIFEST_VERSION,
+      id: 'com.example.client',
+      name: 'Client plugin',
+      description: '',
+      version: '1.0.0',
+      publisher: { id: 'example', name: 'Example' },
+      sdk: { minVersion: '1.0.0', maxVersionExclusive: '2.0.0' },
+      package: { sha256: 'c'.repeat(64), sizeBytes: 100 },
+      runtimes: { server: { isolation: 'external', protocolVersion: PLUGIN_PROTOCOL_VERSION } },
+      requestedCapabilities: [{ capability: 'content.read' }],
+      operations: ['read'],
+      signature: { algorithm: 'ed25519', keyId: 'release-1', value: 'A'.repeat(88) },
+    };
+
+    await client.installPlugin({
+      manifest,
+      artifactDigest: manifest.package.sha256,
+      grantedCapabilities: [{ capability: 'content.read' }],
+      reason: 'Approved.',
+    });
+    await client.enablePlugin(manifest.id, 'Healthy.');
+    await client.invokePlugin(manifest.id, 'read', 'content.read', { id: 'entry-1' });
+    await client.previewPluginUninstall(manifest.id);
+    await client.uninstallPlugin(manifest.id, 'Finished.');
+
+    expect(requests.map(({ url }) => url)).toEqual([
+      'http://gridstory.test/api/v1/plugins/install',
+      'http://gridstory.test/api/v1/plugins/com.example.client/enable',
+      'http://gridstory.test/api/v1/plugins/com.example.client/invoke',
+      'http://gridstory.test/api/v1/plugins/com.example.client/uninstall-preview',
+      'http://gridstory.test/api/v1/plugins/com.example.client',
+    ]);
+    expect(requests.map(({ init }) => init?.method ?? 'GET')).toEqual([
+      'POST',
+      'POST',
+      'POST',
+      'GET',
+      'DELETE',
+    ]);
+    expect(JSON.parse(String(requests[2]?.init?.body))).toEqual({
+      operation: 'read',
+      capability: 'content.read',
+      input: { id: 'entry-1' },
+    });
+  });
+
   it('calls the default global fetch with the global receiver', async () => {
     const browserLikeFetch = vi.fn(function (
       this: unknown,

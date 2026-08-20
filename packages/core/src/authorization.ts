@@ -46,6 +46,9 @@ export const GridStoryActions = {
   portabilityImport: 'portability.import',
   auditRead: 'audit.read',
   auditExport: 'audit.export',
+  pluginRead: 'plugin.read',
+  pluginManage: 'plugin.manage',
+  pluginInvoke: 'plugin.invoke',
 } as const;
 
 export type GridStoryAction = (typeof GridStoryActions)[keyof typeof GridStoryActions];
@@ -59,6 +62,7 @@ export interface AuthorizationResource {
     | 'search'
     | 'workflow'
     | 'release'
+    | 'plugin'
     | 'delivery'
     | 'platform';
   id?: string;
