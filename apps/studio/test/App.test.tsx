@@ -603,6 +603,10 @@ describe('GridStory Studio', () => {
   it('derives content controls and composition storage from the active schema', async () => {
     render(<App client={createTestClient()} />);
 
+    expect(screen.getByRole('link', { name: 'Skip to page editor' }).getAttribute('href')).toBe(
+      '#studio-editor',
+    );
+    expect(document.querySelector('main')?.id).toBe('studio-editor');
     expect(((await screen.findByLabelText('Headline')) as HTMLInputElement).value).toBe(
       'First page',
     );

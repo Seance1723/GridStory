@@ -242,12 +242,20 @@
       "statement": "GridStory SHALL store validated structured content only; rich text, URLs, Markdown-like content, and application-owned rendering SHALL use context-appropriate encoding or sanitization and SHALL never execute editor-authored code.",
       "asvsRefs": ["v5.0.0-1.3.1"],
       "threatRefs": ["THREAT-0017"],
-      "evidence": ["packages/schema/src", "packages/react/src", "README.md"],
+      "evidence": [
+        "packages/schema/src",
+        "packages/react/src",
+        "docs/accessibility-and-compatibility.md",
+        "README.md"
+      ],
       "verification": [
         "packages/react/test/renderer.test.tsx",
+        "packages/react/test/hydration.test.tsx",
+        "tests/compatibility/react18-vite",
+        "tests/e2e/accessibility.spec.ts",
         "Application integration security review"
       ],
-      "taskIds": ["M5-006"]
+      "taskIds": ["M5-006", "M5-008"]
     },
     {
       "id": "GS-SEC-004",
@@ -334,9 +342,17 @@
       "statement": "Production HTML and sensitive file responses SHALL use a reviewed CSP, nosniff, anti-framing policy, referrer policy, and other browser headers appropriate to their embedding contract.",
       "asvsRefs": ["v5.0.0-3.4.3", "v5.0.0-3.4.4", "v5.0.0-3.4.6"],
       "threatRefs": ["THREAT-0008", "THREAT-0017", "THREAT-0021"],
-      "evidence": ["apps/api/src/server.ts", "docs/assets.md"],
-      "verification": ["apps/api/test/assets.test.ts", "Production header conformance test"],
-      "taskIds": ["M5-006"]
+      "evidence": [
+        "apps/api/src/server.ts",
+        "docs/assets.md",
+        "docs/accessibility-and-compatibility.md"
+      ],
+      "verification": [
+        "apps/api/test/assets.test.ts",
+        "tests/e2e/vertical-slice.spec.ts",
+        "Production HTML header conformance test"
+      ],
+      "taskIds": ["M5-006", "M5-008"]
     },
     {
       "id": "GS-SEC-010",

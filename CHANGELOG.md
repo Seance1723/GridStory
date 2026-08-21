@@ -8,6 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Corrected accessibility contrast, browser-native picker backgrounds, WebKit sequential bypass focus, forced-colors cascade ordering, cross-engine scenario timing, generated SSR source-gate scope, and Windows verification/install-path issues found during M5-006 (BUG-0225 through BUG-0231).
 - Corrected shutdown-state TypeScript narrowing, recovery/rollout/process-smoke fixtures, and restricted Windows process execution encountered during M5-005 verification (BUG-0219 through BUG-0224).
 - Corrected OpenTelemetry 0.221 log-processor construction, minimized public readiness failures, preserved handled authorization errors in correlated logs with correct HTTP span semantics, made the reference Collector persistent queue bootable, corrected README/lint drift, and restored frozen workspace links after the dependency update (BUG-0212 through BUG-0218, M5-004).
 - Corrected plugin schema typing/traceability/lint issues and eliminated a PostgreSQL schema-initialization race; the PostgreSQL gate now rebuilds current packages before running core/API conformance (BUG-0205 through BUG-0211, M5-003).
@@ -65,6 +66,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Added unsuppressed WCAG 2.2 A/AA-tagged axe audits for critical Studio and published states, plus executable keyboard bypass/movement, 24-by-24 target, 200% zoom/reflow, reduced-motion, and forced-colors checks.
+- Added pinned Chromium, Firefox, and WebKit release projects and CI installation, with the complete secure preview, governed authoring, publication, and React-delivery journey running independently on each engine.
+- Added isolated React 18.3.1 Vite SPA/SSR certification alongside current React 19.2.7 rendering, static/SSR, hydration, and Vite 8.1.5 production evidence, plus an exact public support matrix and ATAG-informed review.
 - Added checksummed native SQLite/PostgreSQL backup, verification, and isolated restore commands; live-WAL SQLite and disposable PostgreSQL dump/mutate/restore drills; and operator guidance separating logical restore from base-backup plus continuous-WAL PITR.
 - Added a shared bounded API/worker signal controller, interruptible worker polling with current-cycle drain, configurable shutdown deadline, exact current/candidate HTTP rollout preflight, and recovery/RPO/RTO/expand-contract/rollback guidance.
 - Added an opt-in Node OpenTelemetry runtime using official OTLP/HTTP log, metric, and trace exporters, explicit safe Fastify/worker instrumentation, validated tenant-event adaptation, shutdown flushing, and authorized private/no-store Collector health.
@@ -218,6 +222,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- Browser/framework support claims now fail closed against exact executable evidence; unshipped framework adapters, branded Safari/iOS, arbitrary consumer UI, live assistive technology, and deployment header proof remain explicitly outside the M5-006 claim.
 - API shutdown now rejects new work, drains in-flight Fastify requests, closes repositories, and flushes telemetry before natural exit; worker shutdown interrupts its wait, finishes only the active durable scope cycle, and uses the same timeout/second-signal force policy.
 - Recovery is now an explicit whole-database confidential boundary distinct from tenant-scoped portability; README, operations, schema-lifecycle, ASVS, and threat-model evidence now document native artifacts, deployment-owned protected storage/PITR, and rollout responsibilities.
 - API/worker configuration now validates opt-in telemetry state, bounded service resource values, export intervals, and credential-free Collector health URLs; public readiness returns only stable status/reason codes and telemetry remains independent from content-plane readiness and durable audit.
@@ -305,6 +310,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Security
 
+- Updated rendering-security evidence for explicit React SSR/hydration fixtures, unsuppressed three-engine browser audits, exact application-owned CSP/header responsibilities, and the remaining deployment/live-assistive-technology evidence assigned to M5-008.
 - Added `THREAT-0024`, a whole-database backup asset/storage boundary, credential-safe PostgreSQL tool invocation, minimal versioned SHA-256 manifests, fail-closed native integrity/table validation, and absent/empty restore targets with explicit PostgreSQL database confirmation; provider storage, keys, retention, and physical PITR remain deployment evidence.
 - Verified `GS-SEC-028` for current capabilities with bounded fixed-body telemetry, low-cardinality metrics, explicit tenant scope only in protected logs/traces, live secret/query exclusion, fail-closed Collector attribute allow-listing, minimal public health, protected degradation health, access/retention/correlation/alert inventory, and exposure/availability response procedures; production identity event sources remain conditional on M6-002.
 - Plugins now fail closed on untrusted/revoked publisher keys, invalid Ed25519 signatures, artifact-digest or SDK/protocol mismatch, over-broad grants, cross-tenant state, disabled/revoked lifecycle, undeclared operations/capabilities, absent/unhealthy runtimes, rate limits, timeouts, and JSON size bounds; arbitrary plugin modules are never imported into the control plane.

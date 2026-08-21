@@ -34,11 +34,13 @@
     "security:check": "node scripts/check-security-model.mjs --self-test",
     "check:ledgers": "node scripts/check-ledgers.mjs",
     "build:e2e": "pnpm --filter @gridstory/studio --filter @gridstory/example-vite run build:e2e",
-    "test:e2e": "pnpm build && pnpm build:e2e && playwright test",
+    "test:e2e": "pnpm build && pnpm build:e2e && playwright test --project=chromium && playwright test --project=firefox && playwright test --project=webkit",
+    "test:compatibility": "pnpm build:packages && pnpm --filter @gridstory/react test:run && pnpm --filter @gridstory/compat-react18-vite --filter @gridstory/example-vite run build",
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test:run && pnpm build",
     "check:all": "pnpm check && pnpm test:e2e"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
     "@biomejs/biome": "2.5.4",
     "@playwright/test": "1.61.1",
     "@types/node": "22.20.1",

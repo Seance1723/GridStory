@@ -4,6 +4,8 @@ test('edits, protects, governs, publishes, and delivers React content', async ({
   page,
   request,
 }) => {
+  test.setTimeout(90_000);
+
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Pages' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Welcome to GridStory' })).toBeVisible();

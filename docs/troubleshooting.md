@@ -33,4 +33,11 @@ Stop the local services, make a backup if you need the revisions, and remove onl
 
 ## Browser verification cannot launch
 
-Local Playwright uses installed Microsoft Edge. Confirm Edge is installed, or set `CI=1`, install Playwright Chromium, and rerun the test. Failure traces and screenshots are written under ignored `test-results/`.
+GridStory's browser gate uses the Playwright-pinned Chromium, Firefox, and WebKit engines. Install all three for the current lockfile, then rerun the gate:
+
+```bash
+pnpm exec playwright install chromium firefox webkit
+pnpm test:e2e
+```
+
+Linux CI also needs Playwright's documented system packages, installed with `--with-deps`. Failure traces, screenshots, and axe attachments are written under ignored `test-results/`; exact tested versions and claim boundaries are in [Accessibility and compatibility](accessibility-and-compatibility.md).

@@ -9,6 +9,7 @@
     "includes": [
       "**",
       "!!**/dist",
+      "!!**/dist-ssr",
       "!!**/coverage",
       "!!REACT_CMS_RESEARCH_AND_IMPLEMENTATION_PLAN.md"
     ]

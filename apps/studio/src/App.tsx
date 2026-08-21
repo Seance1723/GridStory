@@ -1731,6 +1731,9 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
 
   return (
     <div className="studio-shell">
+      <a className="skip-link" href="#studio-editor" tabIndex={0}>
+        Skip to page editor
+      </a>
       <header className="studio-header">
         <div className="brand-mark" aria-hidden="true">
           <span />
@@ -2744,7 +2747,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
           ) : null}
         </aside>
 
-        <main className="editor-panel">
+        <main className="editor-panel" id="studio-editor" tabIndex={-1}>
           {notice ? (
             <div className={`notice notice--${notice.tone}`} role="status">
               {notice.message}

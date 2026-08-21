@@ -21,7 +21,7 @@ A `verified` project requirement can cover only the selected ASVS reference and 
 |---|---|---|
 | V1 Encoding and Sanitization | Applicable | Parameterized persistence, structured rendering rules, SVG sanitization, and outbound URL/SSRF policy. |
 | V2 Validation and Business Logic | Applicable | Trusted-layer schemas, revision/order checks, atomic publication/import, and pre-GA anti-automation. |
-| V3 Web Frontend Security | Applicable | Exact CORS/postMessage origins and private asset headers exist; full production CSP/header policy remains. |
+| V3 Web Frontend Security | Applicable | Exact CORS/postMessage origins, private asset headers, a three-engine browser review, and application-header guidance exist; deployed HTML CSP/header conformance remains. |
 | V4 API and Web Service | Applicable | REST/GraphQL boundaries, trusted intermediary requirements, bounded queries, and introspection policy. |
 | V5 File Handling | Applicable | Multipart integrity, byte/type inspection, private keys, quarantine, safe delivery; deployment quotas/scanner remain. |
 | V6 Authentication | Conditional | OIDC/service-token foundations exist; production IdP middleware, pathway policy, and abuse controls remain. |
@@ -72,6 +72,12 @@ Production authentication, credential lifecycle, and break-glass event types are
 
 Repository evidence does not certify backup storage encryption/retention/access logging, secret rotation, a managed database's physical PITR chain, object-store recovery, or an orchestrator's traffic/termination/rollback behavior. Those remain deployment and GA evidence.
 
+## M5-006 evidence update
+
+`GS-SEC-003` now links the structured renderer to isolated React 18.3 and current React 19 SPA/SSR/static/hydration evidence, unsuppressed rendered WCAG checks, and a documented boundary that leaves arbitrary component encoding, semantics, styles, and CSP with the consuming application. Chromium, Firefox, and WebKit execute the complete origin-bound iframe/standalone preview plus edit/review/publish/delivery journey.
+
+`GS-SEC-009` remains partial by design. The repository verifies exact origins and private asset headers and publishes intentional Studio-versus-preview `frame-ancestors`, CSP, nosniff, referrer, permissions, TLS, and cache guidance. GridStory does not serve a consumer's production HTML, so the target deployment must prove its actual headers and Apple/branded-browser behavior during M5-008 readiness.
+
 ## Highest-priority gaps
 
 | Gap | ASVS areas | Owner task |
@@ -81,7 +87,7 @@ Repository evidence does not certify backup storage encryption/retention/access 
 | Plugin runtime OS/container hardening, package review, dependency evidence, and publisher enrollment | V8, V11, V13, V15 | M5-007; M6-005; deployment evidence |
 | Telemetry backend access/deletion, Collector deployment conformance, and production identity/credential event sources | V11, V13, V14, V16 | M5-008; event sources M6-002 |
 | Backup storage/physical PITR, secret rotation, and orchestrator rollout proof | V13, V14, V15, V16 | M5-008 deployment evidence; secret lifecycle M5-008/M6-002 |
-| Browser CSP/header and application-rendering certification | V1, V3, V14 | M5-006 |
+| Deployed HTML CSP/header conformance, arbitrary application rendering, and branded-browser/assistive-technology acceptance | V1, V3, V14 | M5-008 deployment/readiness evidence |
 | Abuse limits, benchmarks, SBOM, vulnerability SLA, provenance, and signatures | V2, V4, V5, V15 | M5-007 |
 | Independent readiness/risk acceptance | All applicable chapters | M5-008 |
 

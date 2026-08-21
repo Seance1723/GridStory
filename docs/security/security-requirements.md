@@ -48,7 +48,7 @@ Current `IdentityService` is a framework-neutral foundation with in-memory sessi
 - Mutation handlers SHALL select allowed fields explicitly; arbitrary object binding and prototype-sensitive path segments are prohibited.
 - `GS-SEC-008`: CORS and preview messaging SHALL enforce exact configured origins; postMessage SHALL enforce source, origin, and message schema.
 - `GS-SEC-009`: production HTML and sensitive files SHALL use reviewed CSP, nosniff, anti-framing, referrer, and resource policies appropriate to intentional preview embedding.
-- The project SHALL document supported browser security features and verify them with M5-006's browser/accessibility certification.
+- The project SHALL keep the supported browser/security matrix and repository evidence in `docs/accessibility-and-compatibility.md`; each production application SHALL separately verify its exact components, CSP/headers, target browsers, operating systems, and assistive technologies.
 
 ## API, query, file, and archive safety
 
@@ -141,7 +141,7 @@ Production PostgreSQL PITR remains a database/platform control using physical ba
 |---|---|---|
 | Cross-tenant authorization and data paths | Authorization/control-plane owner | `packages/core/test/tenant-isolation.test.ts`, repository conformance, and `pnpm tenant:check`; deployment database/object policies remain environment evidence. |
 | Production identity/session/proxy | Identity/API/deployment owner | OIDC and persistent-session conformance, dev-header rejection, trusted-proxy tests. |
-| Browser/rendering | Studio/application owners | M5-006 CSP/header/rendering/browser review. |
+| Browser/rendering | Studio/application owners | M5-006 repository CSP/header/rendering/browser review plus M5-008 deployed-header and independent assistive-technology acceptance. |
 | Operations, secrets, and telemetry | Platform/security operations owner | M5-004 inventory, redaction, alerts, retention, and telemetry health; M5-005/M5-008 secret lifecycle and deployment evidence. |
 | Recovery and deployment | Reliability/deployment owner | M5-005 restore, graceful shutdown, rolling upgrade, and secret rotation exercises. |
 | Limits and supply chain | Release engineering owner | M5-007 benchmarks, SBOM, vulnerability SLA, provenance, and signatures. |
