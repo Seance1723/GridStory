@@ -73,15 +73,19 @@ pnpm release:verify -- --output release-artifacts
 
 The prepare command requires an empty child directory, uses pnpm's reviewed `files` inventories, and fails if a tarball contains anything outside `dist`, package metadata/license/readme, or the example kit stylesheet. The manifest covers every regular evidence file except itself and fails on missing, extra, resized, or rehashed bytes.
 
-After an authorized hosted workflow run, download the artifact and verify each package against this repository identity:
+The current private `0.0.0` archives do not include per-package README or license metadata. `BUG-0243` and M5-009 own making those artifacts publication-ready and making the validator require that metadata. Until then, successful packing/checksum verification is local integrity evidence only and cannot satisfy readiness criterion `RC-003`.
+
+After an authorized hosted workflow run for a future accepted release candidate, download the artifact and verify each package against this repository identity:
 
 ```powershell
 gh attestation verify release-artifacts/gridstory-schema-0.0.0.tgz --repo Seance1723/GridStory
 gh attestation verify release-artifacts/gridstory-core-0.0.0.tgz --repo Seance1723/GridStory
 ```
 
-Repeat for every archive and compare `release-manifest.json`. Hosted attestations do not exist merely because the workflow file is present; M5-008 owns executing the staged release, verifying its hosted attestations/SBOM, and accepting deployment evidence. Npm trusted publishing and container/registry signing remain deferred until GridStory approves a public package or image channel.
+Repeat for every archive and compare `release-manifest.json`. Hosted attestations do not exist merely because the workflow file is present. The [M5-008 staged-readiness review](release-readiness.md) therefore records RC criterion `RC-004` as unmet and RC/GA as no-go; no hosted artifact or deployment evidence was inferred. Npm trusted publishing and container/registry signing remain deferred until GridStory approves a public package or image channel.
 
 ## Vulnerabilities and support
 
 [SECURITY.md](../SECURITY.md) defines private reporting, severity, remediation targets, coordinated disclosure, OSV lockfile scans, and Dependabot review. [SUPPORT.md](../SUPPORT.md) defines the maintained pre-v1 line, exact platform matrix, issue boundary, and deployment ownership.
+
+The staged go/no-go rules, evidence classes, current decisions, and non-sensitive blocker ownership are in [Staged release readiness](release-readiness.md).

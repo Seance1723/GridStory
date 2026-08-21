@@ -52,13 +52,13 @@ Evidence paths point to repository code, tests, or documentation. Operational ve
 
 ## M5-002 evidence update
 
-The profile treats `GS-SEC-024` credential/cache containment as verified and extends `GS-SEC-015` evidence with tenant-bound OIDC role assignments, tenant-bound service grants, canonical scope serialization, hostile-adapter checks, and cross-scope queue/repository tests. Production identity/session and trusted-proxy requirements remain conditional or planned under M6-002/M5-008.
+The profile treats `GS-SEC-024` credential/cache containment as verified and extends `GS-SEC-015` evidence with tenant-bound OIDC role assignments, tenant-bound service grants, canonical scope serialization, hostile-adapter checks, and cross-scope queue/repository tests. Production identity/session and trusted-proxy requirements remain conditional or planned under M6-002 and are an explicit M5-008 beta blocker.
 
 ## M5-003 evidence update
 
 `GS-SEC-030` and `THREAT-0023` now cover publisher-bound Ed25519 manifest verification, exact SHA-256 artifact binding, SDK/protocol compatibility, tenant-scoped constrained grants, explicit lifecycle authorization/revocation, durable SQLite/PostgreSQL state, and bounded invocation through an injected external-runtime adapter. `GS-SEC-015` and `GS-SEC-019` include the plugin authorization and platform-crypto evidence. Arbitrary packages are never imported into the control-plane process, and the in-process harness is test-only.
 
-This repository evidence does not certify the operator-provided OS/container sandbox or establish marketplace package safety. M5-007 supplies the repository dependency/SBOM/provenance process; hosted execution and runtime hardening remain M5-008 deployment evidence, while publisher/marketplace review remains M6-005.
+This repository evidence does not certify the operator-provided OS/container sandbox or establish marketplace package safety. M5-007 supplies the repository dependency/SBOM/provenance process; the M5-008 review records hosted execution and runtime hardening as absent release/deployment evidence, while publisher/marketplace review remains M6-005.
 
 ## M5-004 evidence update
 
@@ -76,26 +76,32 @@ Repository evidence does not certify backup storage encryption/retention/access 
 
 `GS-SEC-003` now links the structured renderer to isolated React 18.3 and current React 19 SPA/SSR/static/hydration evidence, unsuppressed rendered WCAG checks, and a documented boundary that leaves arbitrary component encoding, semantics, styles, and CSP with the consuming application. Chromium, Firefox, and WebKit execute the complete origin-bound iframe/standalone preview plus edit/review/publish/delivery journey.
 
-`GS-SEC-009` remains partial by design. The repository verifies exact origins and private asset headers and publishes intentional Studio-versus-preview `frame-ancestors`, CSP, nosniff, referrer, permissions, TLS, and cache guidance. GridStory does not serve a consumer's production HTML, so the target deployment must prove its actual headers and Apple/branded-browser behavior during M5-008 readiness.
+`GS-SEC-009` remains partial by design. The repository verifies exact origins and private asset headers and publishes intentional Studio-versus-preview `frame-ancestors`, CSP, nosniff, referrer, permissions, TLS, and cache guidance. GridStory does not serve a consumer's production HTML, so the target deployment must prove its actual headers and Apple/branded-browser behavior before clearing `BETA-003`/`RC-006`.
 
 ## M5-007 evidence update
 
 `GS-SEC-007`, `GS-SEC-011`, `GS-SEC-012`, `GS-SEC-025`, and `GS-SEC-026` now link one machine-readable resource profile to explicit API/asset/archive/GraphQL guards, boundary tests, schema-validated SQLite/PostgreSQL benchmark reports, private vulnerability reporting and remediation targets, scheduled/PR OSV scanning, bounded dependency updates, reviewed private package inventories, SHA-256 verification, pinned SPDX generation, and GitHub/Sigstore provenance/SBOM attestation workflows.
 
-Those requirements remain partial by design: Fastify injection is not a network/deployment saturation test, the plugin limiter is process-local, production asset scanners/quotas and GraphQL introspection/edge controls are operator evidence, content/audit retention awaits M6-003, and workflow configuration does not prove that a hosted attestation exists. M5-008 must run the staged release, verify hosted evidence, and accept exact proxy/database/object-store/worker limits.
+Those requirements remain partial by design: Fastify injection is not a network/deployment saturation test, the plugin limiter is process-local, production asset scanners/quotas and GraphQL introspection/edge controls are operator evidence, content/audit retention awaits M6-003, and workflow configuration does not prove that a hosted attestation exists. M5-008 records those absences as release-blocking no-go criteria instead of treating configured workflows or documentation as executed proof.
+
+## M5-008 evidence update
+
+The dated machine-validated review of candidate `b31193a` derives `alpha=go`, `beta=no-go`, `rc=no-go`, and `ga=no-go`. Private technical alpha is supported only inside the published local/pre-v1 boundary. The review does not downgrade any residual requirement to not applicable and does not treat repository automation as partner, deployment, hosted-artifact, independent-assessor, or production-operations evidence.
+
+Stable criteria now expose the unresolved security acceptance directly: production identity/proxy/provider controls are `BETA-003`; disabled-author and assistive-technology evidence is `BETA-005`; hosted SBOM/provenance is `RC-004`; independent security/accessibility acceptance is `RC-005`; production-shaped capacity/recovery/rollout is `RC-006`; and operating/security/privacy ownership is `GA-003`. `pnpm readiness:check` rejects external-only proof marked met, missing evidence paths, required not-applicable decisions, and any beta/RC/GA prerequisite bypass.
 
 ## Highest-priority gaps
 
 | Gap | ASVS areas | Owner task |
 |---|---|---|
-| Production database/object-store tenant-policy conformance | V8, V14, V15 | M5-008 deployment evidence |
-| Production identity/session and trusted-proxy boundary | V4, V6, V7, V10, V13 | M6-002; deployment proof M5-008 |
+| Production database/object-store tenant-policy conformance | V8, V14, V15 | `BETA-003`, `RC-006` |
+| Production identity/session and trusted-proxy boundary | V4, V6, V7, V10, V13 | M6-002; acceptance under `BETA-003` |
 | Plugin runtime OS/container hardening, package review, and publisher enrollment | V8, V11, V13, V15 | M6-005; deployment evidence |
-| Telemetry backend access/deletion, Collector deployment conformance, and production identity/credential event sources | V11, V13, V14, V16 | M5-008; event sources M6-002 |
-| Backup storage/physical PITR, secret rotation, and orchestrator rollout proof | V13, V14, V15, V16 | M5-008 deployment evidence; secret lifecycle M5-008/M6-002 |
-| Deployed HTML CSP/header conformance, arbitrary application rendering, and branded-browser/assistive-technology acceptance | V1, V3, V14 | M5-008 deployment/readiness evidence |
-| Hosted release attestation/SBOM verification plus deployment rate, concurrency, saturation, quota, and retention evidence | V2, V4, V5, V15 | M5-008; retention M6-003 |
-| Independent readiness/risk acceptance | All applicable chapters | M5-008 |
+| Telemetry backend access/deletion, Collector deployment conformance, and production identity/credential event sources | V11, V13, V14, V16 | `BETA-003`, `GA-003`; event sources M6-002 |
+| Backup storage/physical PITR, secret rotation, and orchestrator rollout proof | V13, V14, V15, V16 | `RC-006`, `GA-003`; identity lifecycle M6-002 |
+| Deployed HTML CSP/header conformance, arbitrary application rendering, and branded-browser/assistive-technology acceptance | V1, V3, V14 | `BETA-003`, `BETA-005`, `RC-005` |
+| Hosted release attestation/SBOM verification plus deployment rate, concurrency, saturation, quota, and retention evidence | V2, V4, V5, V15 | `RC-004`, `RC-006`; retention M6-003 |
+| Independent readiness/risk acceptance | All applicable chapters | `RC-005`, `GA-001` |
 
 ## How to update the profile
 

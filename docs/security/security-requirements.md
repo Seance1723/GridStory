@@ -119,7 +119,7 @@ The application now has one canonical six-dimensional scope contract for validat
 
 Search adapter totals and facets are treated as untrusted: entries are reloaded under the requested scope and perspective, totals and facets are derived only from accepted hits, and mismatched adapter scope/status is rejected. Cache invalidation adapters receive both the explicit scope and full-scope-prefixed tags; workflow-provided tags are namespaced rather than accepted globally. `pnpm tenant:check` prevents ad hoc scope serializers and incomplete cache tags from returning.
 
-This baseline does not turn the development header identity into a production authentication system. Production OIDC/session middleware, trusted-proxy enforcement, infrastructure row/object policies, and deployment conformance remain owned by M6-002 and M5-008; M5-004 supplies the application telemetry boundary and reference operations pack described below.
+This baseline does not turn the development header identity into a production authentication system. Production OIDC/session middleware remains M6-002 work; trusted-proxy enforcement, infrastructure row/object policies, and deployment conformance are explicit unmet `BETA-003`/`RC-006` evidence. M5-004 supplies the application telemetry boundary and reference operations pack described below.
 
 ## M5-004 observability baseline
 
@@ -127,7 +127,7 @@ The Node API and worker now adapt the canonical bounded tenant envelope to opt-i
 
 Public liveness/readiness expose only stable minimal codes. Authorized private/no-store operations health reports bounded SDK/Collector state without endpoints, topology, versions, credentials, customer data, or failure text; Collector degradation does not weaken or acknowledge content operations. The reference contrib Collector adds memory bounds, batching, retry, a persistent queue, a fail-closed attribute allow-list, and private health/internal metrics. Dashboard, alert rules, event inventory, access, correlation, default retention targets, and exporter/data-exposure incident procedures are maintained in `docs/observability.md` and `deploy/observability`.
 
-`GS-SEC-028` is verified for current product capabilities. Authentication, credential-lifecycle, and break-glass event sources become applicable with the production identity/session work in M6-002 and must join the same inventory before that capability is complete. Backend deletion enforcement, append-only security-log storage, TLS/network policy, secret-manager lifecycle, and Collector deployment conformance remain operator evidence; M5-005 retains recovery guidance, M5-007 publishes the repository capacity/supply-chain process, and M5-008 retains hosted/deployment verification.
+`GS-SEC-028` is verified for current product capabilities. Authentication, credential-lifecycle, and break-glass event sources become applicable with the production identity/session work in M6-002 and must join the same inventory before that capability is complete. Backend deletion enforcement, append-only security-log storage, TLS/network policy, secret-manager lifecycle, and Collector deployment conformance remain operator evidence; M5-005 retains recovery guidance, M5-007 publishes the repository capacity/supply-chain process, and the M5-008 no-go review records the missing hosted/deployment verification.
 
 ## M5-005 recovery and rollout baseline
 
@@ -141,8 +141,8 @@ Production PostgreSQL PITR remains a database/platform control using physical ba
 |---|---|---|
 | Cross-tenant authorization and data paths | Authorization/control-plane owner | `packages/core/test/tenant-isolation.test.ts`, repository conformance, and `pnpm tenant:check`; deployment database/object policies remain environment evidence. |
 | Production identity/session/proxy | Identity/API/deployment owner | OIDC and persistent-session conformance, dev-header rejection, trusted-proxy tests. |
-| Browser/rendering | Studio/application owners | M5-006 repository CSP/header/rendering/browser review plus M5-008 deployed-header and independent assistive-technology acceptance. |
-| Operations, secrets, and telemetry | Platform/security operations owner | M5-004 inventory, redaction, alerts, retention, and telemetry health; M5-005/M5-008 secret lifecycle and deployment evidence. |
+| Browser/rendering | Studio/application owners | M5-006 repository CSP/header/rendering/browser review; deployed-header and independent assistive-technology acceptance remain `BETA-003`, `BETA-005`, and `RC-005`. |
+| Operations, secrets, and telemetry | Platform/security operations owner | M5-004 inventory, redaction, alerts, retention, and telemetry health; secret lifecycle and deployment evidence remain `BETA-003`, `RC-006`, and `GA-003`. |
 | Recovery and deployment | Reliability/deployment owner | M5-005 restore, graceful shutdown, rolling upgrade, and secret rotation exercises. |
-| Limits and supply chain | Release engineering owner | Maintain M5-007 limits/benchmarks/SBOM/vulnerability/provenance workflows; M5-008 verifies hosted and deployment evidence. |
-| GA risk acceptance | Security owner and release owner | M5-008 current model/profile, resolved critical risks, explicit expiring high-risk acceptances. |
+| Limits and supply chain | Release engineering owner | Maintain M5-007 limits/benchmarks/SBOM/vulnerability/provenance workflows; hosted and deployment evidence remain unmet `RC-004`/`RC-006`. |
+| GA risk acceptance | Security owner and release owner | Resolve `RC-005`/`GA-001`, retain the current model/profile, close critical risks, and explicitly time-bound any accepted high risk. |

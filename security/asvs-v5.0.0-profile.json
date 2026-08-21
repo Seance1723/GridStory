@@ -645,10 +645,12 @@
         "scripts/release-evidence.mjs",
         ".github/workflows/vulnerability.yml",
         ".github/workflows/release-evidence.yml",
-        ".github/dependabot.yml"
+        ".github/dependabot.yml",
+        "release/readiness/review-2026-08-21-b31193a.json"
       ],
       "verification": [
         "pnpm release:verify",
+        "pnpm readiness:check",
         "Hosted OSV, SBOM, provenance, and attestation verification during staged release"
       ],
       "taskIds": ["M5-007", "M5-008"]

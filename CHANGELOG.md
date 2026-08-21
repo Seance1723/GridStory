@@ -8,6 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Corrected the staged-readiness validator's formatter wrapping found during M5-008 verification (BUG-0242); the publication-metadata overclaim discovered as BUG-0243 remains open under M5-009/RC-003.
 - Aligned the API's binary multipart route with its advertised 5 MiB part size and corrected M5-007 type, benchmark-concurrency/output/memory, archive-layout/inventory, checksum-callback, lint, and restricted Windows verification defects (BUG-0232 through BUG-0241).
 - Corrected accessibility contrast, browser-native picker backgrounds, WebKit sequential bypass focus, forced-colors cascade ordering, cross-engine scenario timing, generated SSR source-gate scope, and Windows verification/install-path issues found during M5-006 (BUG-0225 through BUG-0231).
 - Corrected shutdown-state TypeScript narrowing, recovery/rollout/process-smoke fixtures, and restricted Windows process execution encountered during M5-005 verification (BUG-0219 through BUG-0224).
@@ -67,6 +68,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Added a dated evidence-linked alpha/beta/RC/GA review, fail-closed stage/outcome/path validator with nine negative overclaim tests, staged-readiness guide, ADR 0010, and a root `pnpm readiness:check` gate.
 - Added one exported machine resource profile, Zod-validated SQLite/PostgreSQL application-pipeline benchmarks, explicit asset/archive/GraphQL boundary regressions, and a public tested-limit/retention/deployment claim boundary.
 - Added pre-v1 support and private vulnerability-reporting/remediation policies, weekly/PR OSV lockfile scans, grouped Dependabot updates, reviewed private package packing, SHA-256 manifests, pinned SPDX SBOM generation, and GitHub/Sigstore provenance plus SBOM attestation workflows.
 - Added unsuppressed WCAG 2.2 A/AA-tagged axe audits for critical Studio and published states, plus executable keyboard bypass/movement, 24-by-24 target, 200% zoom/reflow, reduced-motion, and forced-colors checks.
@@ -225,6 +227,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- Declared candidate `b31193a` ready only for a controlled private technical alpha; design-partner beta, RC, and GA are explicit no-go decisions with stable unmet criteria, accountable roles, next actions, and no inferred partner/deployment/hosted/independent evidence. Added M5-009 for the archive metadata defect found by the RC review.
 - Centralized request, asset, archive, query/search, workflow, and plugin resource values in the exported release profile; support claims now distinguish hard admission bounds, regression budgets, reference-dataset evidence, retention gaps, and deployment-owned saturation/quotas.
 - Browser/framework support claims now fail closed against exact executable evidence; unshipped framework adapters, branded Safari/iOS, arbitrary consumer UI, live assistive technology, and deployment header proof remain explicitly outside the M5-006 claim.
 - API shutdown now rejects new work, drains in-flight Fastify requests, closes repositories, and flushes telemetry before natural exit; worker shutdown interrupts its wait, finishes only the active durable scope cycle, and uses the same timeout/second-signal force policy.
@@ -314,6 +317,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Security
 
+- Preserved planned/partial security controls as release-blocking readiness evidence: production identity/proxy/provider controls, live assistive-technology acceptance, hosted SBOM/provenance, independent assessment, production-shaped capacity/recovery, and operating-risk acceptance cannot be changed to met from repository or external-only claims.
 - Bounded ordinary, multipart, portability, and GraphQL work before service execution; added archive-history and declared asset limits, private disclosure/remediation targets, lockfile scanning, dependency review automation, reviewed archive inventories, checksums, SBOMs, and keyless hosted attestations while retaining deployment/hosted-release residual evidence under M5-008.
 - Updated rendering-security evidence for explicit React SSR/hydration fixtures, unsuppressed three-engine browser audits, exact application-owned CSP/header responsibilities, and the remaining deployment/live-assistive-technology evidence assigned to M5-008.
 - Added `THREAT-0024`, a whole-database backup asset/storage boundary, credential-safe PostgreSQL tool invocation, minimal versioned SHA-256 manifests, fail-closed native integrity/table validation, and absent/empty restore targets with explicit PostgreSQL database confirmation; provider storage, keys, retention, and physical PITR remain deployment evidence.

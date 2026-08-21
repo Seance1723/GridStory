@@ -600,7 +600,7 @@
         "apps/api/test/graphql.test.ts",
         "scripts/benchmark-release.mjs",
         "docs/content-queries.md",
-        "M5-008"
+        "release/readiness/review-2026-08-21-b31193a.json"
       ]
     },
     {
@@ -827,7 +827,7 @@
         "docs/observability.md",
         "deploy/observability/prometheus-alerts.yaml",
         "docs/release-and-support.md",
-        "M5-008",
+        "release/readiness/review-2026-08-21-b31193a.json",
         "M6-003"
       ]
     },
@@ -854,7 +854,7 @@
         "SECURITY.md",
         ".github/workflows/vulnerability.yml",
         ".github/workflows/release-evidence.yml",
-        "M5-008"
+        "release/readiness/review-2026-08-21-b31193a.json"
       ]
     },
     {
@@ -875,7 +875,12 @@
         "Terminate modern TLS and configure trusted proxies explicitly.",
         "Add production configuration validation and deployment conformance checks."
       ],
-      "verification": ["apps/api/src/server.ts", "docs/troubleshooting.md", "M5-008", "M6-002"]
+      "verification": [
+        "apps/api/src/server.ts",
+        "docs/troubleshooting.md",
+        "release/readiness/review-2026-08-21-b31193a.json",
+        "M6-002"
+      ]
     },
     {
       "id": "THREAT-0022",

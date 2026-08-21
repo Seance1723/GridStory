@@ -10,7 +10,7 @@ This document is GridStory's repository-owned M5-006 review and tested-support s
 - The declared React peer range is exercised on isolated React 18.3.1 plus current React 19.2.7 rendering. Current React also has SSR/static and hydration-without-recoverable-errors tests; the React 18 fixture builds a Vite SPA and executes a server-rendered artifact.
 - Vite 8.1.5 production builds use its `baseline-widely-available` target. For Vite 8 that compile target is Chrome/Edge 111, Firefox 114, Safari/iOS 16.4 or newer; it is a syntax/output floor, not proof for every browser release in that range.
 
-Complete WCAG 2.2 AA conformance cannot be concluded from this evidence. W3C calls for experienced human evaluation alongside tools, and axe explicitly covers only mechanically detectable rules. Live assistive-technology sessions, testing with disabled authors, branded Safari/iOS on Apple hardware, RTL Studio localization, and an independent audit remain named readiness evidence for M5-008.
+Complete WCAG 2.2 AA conformance cannot be concluded from this evidence. W3C calls for experienced human evaluation alongside tools, and axe explicitly covers only mechanically detectable rules. The M5-008 review records live assistive-technology/disabled-author sessions as unmet `BETA-005` and independent accessibility assessment as unmet `RC-005`; branded Safari/iOS on Apple hardware and RTL Studio localization also remain outside the support claim.
 
 ## Executable browser and framework matrix
 
@@ -71,7 +71,7 @@ The application deployer must send HTML response headers. A reviewed baseline is
 - An explicit `frame-ancestors` policy. Studio can normally use `'none'`; an application preview route must allow only the exact Studio origin and therefore must not use an incompatible blanket `X-Frame-Options: DENY`.
 - A least-privilege `Permissions-Policy`, HTTPS/HSTS at the deployment boundary, and cache rules that never mix preview/draft credentials with published responses.
 
-`frame-ancestors` cannot be established by an HTML meta tag. Production header conformance remains deployment evidence under M5-008, so `GS-SEC-009` stays partial even though the repository browser/rendering review is complete.
+`frame-ancestors` cannot be established by an HTML meta tag. Production header conformance remains absent deployment evidence under `BETA-003`/`RC-006`, so `GS-SEC-009` stays partial even though the repository browser/rendering review is complete.
 
 ## Commands and maintenance
 

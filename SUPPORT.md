@@ -6,6 +6,8 @@ GridStory is currently a pre-v1, self-hosted project. There is no hosted service
 
 Until a reviewed prerelease exists, the current `main` branch is the only maintained line. After prereleases begin, only the latest reviewed prerelease and current `main` receive fixes; users must reproduce issues on that line. Private `0.0.0` archives created by the release-evidence workflow are verification artifacts, not public registry releases.
 
+The [current staged-readiness review](docs/release-readiness.md) authorizes only a controlled private technical alpha. Design-partner beta, release candidate, and v1 GA are explicit no-go decisions until the named partner, deployment, independent-assessment, distribution, and hosted-release evidence exists.
+
 ## Tested platform matrix
 
 | Surface | Tested support |

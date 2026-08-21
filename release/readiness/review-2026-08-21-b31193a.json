@@ -1,0 +1,531 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "GRIDSTORY-READINESS-2026-08-21-b31193a",
+  "reviewedAt": "2026-08-21T16:05:56+05:30",
+  "reviewedCommit": "b31193a783bf594e41afd510683445a044a30f6e",
+  "candidate": {
+    "version": "0.0.0-private",
+    "distribution": "Reviewed local workspace archives only; no public registry package or deployment image exists.",
+    "deployment": "No production or design-partner deployment was supplied to this repository review."
+  },
+  "reviewer": {
+    "name": "Codex",
+    "role": "Repository engineering and release-review facilitator",
+    "independence": "Repository self-review only; no independent security, accessibility, legal, operations, or design-partner assessor participated."
+  },
+  "stages": [
+    {
+      "id": "alpha",
+      "label": "Private technical alpha readiness",
+      "outcome": "go",
+      "summary": "The candidate is ready for a controlled private technical alpha using synthetic or explicitly approved non-customer data within the documented local support boundary.",
+      "criteria": [
+        {
+          "id": "ALPHA-001",
+          "required": true,
+          "status": "met",
+          "statement": "A runnable framework-neutral create, govern, preview, publish, and deliver vertical slice exists.",
+          "owner": "Engineering owner",
+          "nextAction": "Keep the canonical vertical-slice and full repository gates green for every alpha candidate.",
+          "evidence": [
+            {
+              "kind": "repository",
+              "location": "README.md",
+              "note": "Documents the runnable API, Studio, Vite consumer, public contracts, quick start, and current capability boundary."
+            },
+            {
+              "kind": "repository",
+              "location": "tests/e2e/vertical-slice.spec.ts",
+              "note": "Exercises the authoring, secure preview, governance, publication, and application-delivery path."
+            },
+            {
+              "kind": "executed",
+              "location": "pnpm test:e2e",
+              "note": "Observed 12 of 12 accessibility and vertical-slice checks pass across Chromium, Firefox, and WebKit."
+            }
+          ]
+        },
+        {
+          "id": "ALPHA-002",
+          "required": true,
+          "status": "met",
+          "statement": "Tenant isolation, security requirements, and vulnerability handling are explicitly documented and repository tested.",
+          "owner": "Security owner",
+          "nextAction": "Triage every new finding through BUGS.md and SECURITY.md before widening alpha access.",
+          "evidence": [
+            {
+              "kind": "repository",
+              "location": "security/asvs-v5.0.0-profile.json",
+              "note": "Records verified, partial, planned, and conditional security requirements without claiming certification."
+            },
+            {
+              "kind": "repository",
+              "location": "SECURITY.md",
+              "note": "Defines private reporting, severity, response targets, remediation, and supply-chain handling."
+            },
+            {
+              "kind": "repository",
+              "location": "BUGS.md",
+              "note": "Contains no open critical/high defect; the later-discovered medium BUG-0243 is an RC package-metadata blocker rather than a private-alpha safety claim."
+            },
+            {
+              "kind": "executed",
+              "location": "pnpm check",
+              "note": "Observed lint, format, boundaries, ledgers, security, tenant scope, readiness, generated schema, types, 200 tests with four intentional PostgreSQL-only skips, and all production builds pass."
+            }
+          ]
+        },
+        {
+          "id": "ALPHA-003",
+          "required": true,
+          "status": "met",
+          "statement": "Local persistence, PostgreSQL conformance, recovery, shutdown, and rollback procedures have repository evidence.",
+          "owner": "Reliability owner",
+          "nextAction": "Use disposable or explicitly non-production targets for alpha restore and rollout rehearsals.",
+          "evidence": [
+            {
+              "kind": "repository",
+              "location": "docs/recovery-and-rollouts.md",
+              "note": "Defines checksummed backup, isolated restore, PITR responsibility, shutdown, rollout, and rollback boundaries."
+            },
+            {
+              "kind": "repository",
+              "location": "scripts/test-postgres.mjs",
+              "note": "Runs PostgreSQL repository/API conformance plus native dump, mutation, and isolated recovery."
+            },
+            {
+              "kind": "executed",
+              "location": "pnpm test:recovery",
+              "note": "Observed 10 of 10 backup, restore, shutdown, worker-drain, and rollout tests pass."
+            },
+            {
+              "kind": "executed",
+              "location": "pnpm test:postgres",
+              "note": "Observed eight core plus two API PostgreSQL 17 tests pass and one published entry recover after native dump and deletion."
+            }
+          ]
+        },
+        {
+          "id": "ALPHA-004",
+          "required": true,
+          "status": "met",
+          "statement": "The repository publishes exact browser, React, accessibility, and application-pipeline capacity evidence with limitations.",
+          "owner": "Quality owner",
+          "nextAction": "Retain the three-engine, two-React-major, accessibility, and benchmark matrices for alpha changes.",
+          "evidence": [
+            {
+              "kind": "repository",
+              "location": "docs/accessibility-and-compatibility.md",
+              "note": "Records automated/manual repository checks, exact versions, and untested human/deployment boundaries."
+            },
+            {
+              "kind": "repository",
+              "location": "docs/release-and-support.md",
+              "note": "Publishes enforced limits, benchmark budgets, storage profiles, and non-production capacity claim boundaries."
+            },
+            {
+              "kind": "executed",
+              "location": "pnpm test:compatibility",
+              "note": "Observed five React 19 renderer/static/hydration tests pass plus React 18.3.1 Vite SPA and SSR certification and the React 19 Vite build."
+            },
+            {
+              "kind": "executed",
+              "location": "node scripts/benchmark-release.mjs --profile sqlite",
+              "note": "The 250-entry profile passed at 2.234/26.117/27.208/7.859 ms p95 for read/management/GraphQL/write, 6,219.518 reads/s, and 151 MiB peak RSS."
+            },
+            {
+              "kind": "executed",
+              "location": "node scripts/benchmark-release.mjs --profile postgres",
+              "note": "The disposable PostgreSQL 17 profile passed at 17.904/46.476/35.952/44.438 ms p95, 1,920.824 reads/s, and 141 MiB peak RSS."
+            }
+          ]
+        },
+        {
+          "id": "ALPHA-005",
+          "required": true,
+          "status": "met",
+          "statement": "Private alpha access is explicitly separated from a public package, hosted service, SLA, or production-support claim.",
+          "owner": "Product and support owner",
+          "nextAction": "Keep alpha access controlled and disclose the pre-v1 support boundary to every participant.",
+          "evidence": [
+            {
+              "kind": "repository",
+              "location": "SUPPORT.md",
+              "note": "Defines the maintained pre-v1 line, exact tested platform matrix, and operator responsibilities."
+            },
+            {
+              "kind": "repository",
+              "location": "README.md",
+              "note": "States that the repository is an advanced verified foundation rather than a v1 production release."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "beta",
+      "label": "Design-partner beta readiness",
+      "outcome": "no-go",
+      "summary": "Repository quality supports controlled evaluation, but no design-partner cohort, production-shaped deployment, consent-safe feedback, or human accessibility evidence was supplied.",
+      "criteria": [
+        {
+          "id": "BETA-001",
+          "required": true,
+          "status": "met",
+          "statement": "The private technical alpha readiness review is complete with a go decision.",
+          "owner": "Release owner",
+          "nextAction": "Preserve the alpha decision and rerun it for any materially changed beta candidate.",
+          "evidence": [
+            {
+              "kind": "repository",
+              "location": "release/readiness/review-2026-08-21-b31193a.json",
+              "note": "The first stage of this immutable dated review records alpha=go from repository evidence."
+            }
+          ]
+        },
+        {
+          "id": "BETA-002",
+          "required": true,
+          "status": "unmet",
+          "statement": "Named design partners have approved participation, representative use cases, success measures, and consent-safe research handling.",
+          "owner": "Product and user-research owner",
+          "nextAction": "Recruit representative design partners and store consent, identities, and research records only in an approved private system.",
+          "evidence": [
+            {
+              "kind": "external",
+              "location": "not-supplied",
+              "note": "No partner cohort, research plan, consent record, or agreed success metric was supplied to the repository review."
+            }
+          ]
+        },
+        {
+          "id": "BETA-003",
+          "required": true,
+          "status": "unmet",
+          "statement": "A production-shaped deployment proves identity/proxy trust, PostgreSQL/object storage, scanning, telemetry, backup, and rollback policy.",
+          "owner": "Deployment, identity, and security operations owners",
+          "nextAction": "Provision a non-public beta environment and complete the documented deployment conformance and secret-lifecycle exercises with M6-002 identity ownership.",
+          "evidence": [
+            {
+              "kind": "repository",
+              "location": "docs/security/asvs-v5-profile.md",
+              "note": "Lists trusted proxy, production configuration, storage, scanner, secret, telemetry, and deployment evidence as planned or partial."
+            },
+            {
+              "kind": "external",
+              "location": "not-supplied",
+              "note": "No deployed environment, provider configuration, or operator sign-off was supplied."
+            }
+          ]
+        },
+        {
+          "id": "BETA-004",
+          "required": true,
+          "status": "unmet",
+          "statement": "Design-partner task success, reliability, support, and product feedback are collected against agreed measures.",
+          "owner": "Product, research, and reliability owners",
+          "nextAction": "Run bounded partner journeys, capture sanitized aggregate measures, and record prioritized findings outside the source repository.",
+          "evidence": [
+            {
+              "kind": "external",
+              "location": "not-supplied",
+              "note": "No partner sessions, product analytics, support trend, satisfaction result, or beta reliability window exists."
+            }
+          ]
+        },
+        {
+          "id": "BETA-005",
+          "required": true,
+          "status": "unmet",
+          "statement": "Representative disabled authors and live assistive-technology users have completed critical journeys with findings triaged.",
+          "owner": "Accessibility and user-research owners",
+          "nextAction": "Conduct consented assistive-technology and disabled-author sessions on the beta deployment and close or explicitly accept findings.",
+          "evidence": [
+            {
+              "kind": "repository",
+              "location": "docs/accessibility-and-compatibility.md",
+              "note": "Explicitly limits current evidence to repository automation and manual engineering review without live assistive-technology acceptance."
+            },
+            {
+              "kind": "external",
+              "location": "not-supplied",
+              "note": "No independent or participant accessibility report was supplied."
+            }
+          ]
+        },
+        {
+          "id": "BETA-006",
+          "required": true,
+          "status": "met",
+          "statement": "Support, vulnerability, incident, backup, and rollback processes are documented before partner access.",
+          "owner": "Support and operations owners",
+          "nextAction": "Assign named beta responders and validate the documented procedures in the selected environment.",
+          "evidence": [
+            {
+              "kind": "repository",
+              "location": "SUPPORT.md",
+              "note": "Defines support scope, tested matrix, operator ownership, and sanitized reproduction requirements."
+            },
+            {
+              "kind": "repository",
+              "location": "SECURITY.md",
+              "note": "Defines vulnerability reporting and remediation handling."
+            },
+            {
+              "kind": "repository",
+              "location": "docs/operations.md",
+              "note": "Defines durable work, alert response, incident, replay, and operator procedures."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rc",
+      "label": "Release-candidate readiness",
+      "outcome": "no-go",
+      "summary": "The beta prerequisite is no-go, and versioned distribution, hosted provenance, independent assessment, full framework coverage, and production-shaped upgrade proof remain absent.",
+      "criteria": [
+        {
+          "id": "RC-001",
+          "required": true,
+          "status": "unmet",
+          "statement": "The design-partner beta review has a go decision with all required partner and deployment evidence.",
+          "owner": "Release and product owners",
+          "nextAction": "Resolve BETA-002 through BETA-005 and conduct a new beta review before nominating an RC.",
+          "evidence": [
+            {
+              "kind": "repository",
+              "location": "release/readiness/review-2026-08-21-b31193a.json",
+              "note": "This review records beta=no-go and therefore prevents RC advancement."
+            }
+          ]
+        },
+        {
+          "id": "RC-002",
+          "required": true,
+          "status": "met",
+          "statement": "The candidate has repeatable repository, browser, compatibility, PostgreSQL, recovery, benchmark, and package-integrity gates.",
+          "owner": "Engineering and quality owners",
+          "nextAction": "Run the complete gate matrix from the immutable RC commit and attach sanitized hosted results.",
+          "evidence": [
+            {
+              "kind": "repository",
+              "location": "TASKS.md",
+              "note": "M5-005 through M5-007 retain exact repository, browser, PostgreSQL, recovery, benchmark, and package evidence."
+            },
+            {
+              "kind": "repository",
+              "location": ".github/workflows/quality.yml",
+              "note": "Runs repository and three-engine browser quality gates in CI."
+            },
+            {
+              "kind": "executed",
+              "location": "pnpm release:prepare && pnpm release:manifest && pnpm release:verify",
+              "note": "Observed five private archives pack and all six local artifacts pass the SHA-256 inventory; BUG-0243 separately records missing public-release metadata."
+            }
+          ]
+        },
+        {
+          "id": "RC-003",
+          "required": true,
+          "status": "unmet",
+          "statement": "A versioned public release candidate and the promised Vite, Next.js, and React Router adapter matrix exist.",
+          "owner": "Framework integration and release owners",
+          "nextAction": "Implement and certify the missing framework adapters, choose a version, and prepare non-private publication metadata without publishing before approval.",
+          "evidence": [
+            {
+              "kind": "repository",
+              "location": "README.md",
+              "note": "Lists only Vite as implemented and public npm/container distribution as absent."
+            },
+            {
+              "kind": "repository",
+              "location": "SUPPORT.md",
+              "note": "States that 0.0.0 archives are private verification artifacts rather than releases."
+            },
+            {
+              "kind": "repository",
+              "location": "BUGS.md",
+              "note": "BUG-0243 records that current archives also lack required public-release README and license metadata."
+            }
+          ]
+        },
+        {
+          "id": "RC-004",
+          "required": true,
+          "status": "unmet",
+          "statement": "Hosted SPDX SBOM and provenance/SBOM attestations exist for the exact RC artifacts and verify independently.",
+          "owner": "Release engineering owner",
+          "nextAction": "Run the approved release-evidence workflow from the immutable RC commit and verify every subject digest and attestation before sign-off.",
+          "evidence": [
+            {
+              "kind": "repository",
+              "location": ".github/workflows/release-evidence.yml",
+              "note": "Configures the hosted evidence path but is not itself proof that an SBOM or attestation was issued."
+            },
+            {
+              "kind": "external",
+              "location": "not-supplied",
+              "note": "No hosted workflow run, SPDX artifact, attestation identifier, or independent verification result was supplied."
+            }
+          ]
+        },
+        {
+          "id": "RC-005",
+          "required": true,
+          "status": "unmet",
+          "statement": "Independent security and accessibility assessments are complete and release-blocking findings are closed or explicitly time-bound.",
+          "owner": "Security, accessibility, and release owners",
+          "nextAction": "Commission independent assessments against the production-shaped RC and privately track findings, fixes, retests, and expiring exceptions.",
+          "evidence": [
+            {
+              "kind": "repository",
+              "location": "docs/security/asvs-v5-profile.md",
+              "note": "The profile is project-specific and non-certifying, with several deployment requirements still partial or planned."
+            },
+            {
+              "kind": "repository",
+              "location": "docs/accessibility-and-compatibility.md",
+              "note": "The accessibility statement explicitly excludes independent conformance and live assistive-technology acceptance."
+            }
+          ]
+        },
+        {
+          "id": "RC-006",
+          "required": true,
+          "status": "unmet",
+          "statement": "A production-shaped immutable RC completes upgrade, rollback, restore, load, saturation, and incident-response rehearsals.",
+          "owner": "Deployment and reliability owners",
+          "nextAction": "Run the documented drills with the selected proxy, database, object store, scanner, telemetry backend, topology, and expected traffic mix.",
+          "evidence": [
+            {
+              "kind": "repository",
+              "location": "docs/recovery-and-rollouts.md",
+              "note": "Provides repository recovery and rollout procedures while assigning provider/orchestrator proof to deployment owners."
+            },
+            {
+              "kind": "repository",
+              "location": "docs/release-and-support.md",
+              "note": "Explicitly excludes network, edge, multi-node, provider, soak, and production capacity claims."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ga",
+      "label": "v1 general-availability readiness",
+      "outcome": "no-go",
+      "summary": "The RC prerequisite is no-go and there is no partner outcome history, production operating record, complete GA adapter/distribution surface, or independent acceptance for a v1 claim.",
+      "criteria": [
+        {
+          "id": "GA-001",
+          "required": true,
+          "status": "unmet",
+          "statement": "The release-candidate review has a go decision and the exact candidate is frozen for GA promotion.",
+          "owner": "Release owner",
+          "nextAction": "Resolve RC-001 and RC-003 through RC-006, then conduct an independent RC sign-off before GA promotion.",
+          "evidence": [
+            {
+              "kind": "repository",
+              "location": "release/readiness/review-2026-08-21-b31193a.json",
+              "note": "This review records rc=no-go and therefore prevents GA advancement."
+            }
+          ]
+        },
+        {
+          "id": "GA-002",
+          "required": true,
+          "status": "unmet",
+          "statement": "Alpha and beta evidence demonstrates representative user outcomes, adoption, supportability, and an acceptable unresolved-feedback inventory.",
+          "owner": "Product, research, support, and release owners",
+          "nextAction": "Complete the design-partner program, aggregate consent-safe outcome measures, and disposition every release-blocking finding.",
+          "evidence": [
+            {
+              "kind": "external",
+              "location": "not-supplied",
+              "note": "No partner outcome, adoption, support-volume, or feedback-closure record exists."
+            }
+          ]
+        },
+        {
+          "id": "GA-003",
+          "required": true,
+          "status": "unmet",
+          "statement": "Named operators have accepted production SLOs, capacity, on-call, incident, recovery, privacy, retention, and secret lifecycle obligations.",
+          "owner": "Operations, security, privacy, and deployment owners",
+          "nextAction": "Establish the production operating model and complete provider-specific acceptance, including M6-002 identity and M6-003 retention ownership where applicable.",
+          "evidence": [
+            {
+              "kind": "repository",
+              "location": "docs/observability.md",
+              "note": "Provides reference telemetry, dashboards, alerts, and retention targets but not a hosted operating record or staffed on-call acceptance."
+            },
+            {
+              "kind": "repository",
+              "location": "docs/security/security-requirements.md",
+              "note": "Retains deployment, identity, secret, storage, and privacy evidence as operator responsibilities."
+            }
+          ]
+        },
+        {
+          "id": "GA-004",
+          "required": true,
+          "status": "unmet",
+          "statement": "The complete promised v1 surface and migration path are implemented, supported, and versioned without roadmap-only claims.",
+          "owner": "Product and engineering owners",
+          "nextAction": "Close or explicitly descope the remaining GA catalog, including production identity and missing framework adapters, then publish migration and compatibility policy for the chosen v1 scope.",
+          "evidence": [
+            {
+              "kind": "repository",
+              "location": "REACT_CMS_RESEARCH_AND_IMPLEMENTATION_PLAN.md",
+              "note": "The GA scope includes production identity and Vite, Next.js, and React Router adapters."
+            },
+            {
+              "kind": "repository",
+              "location": "README.md",
+              "note": "Current limitations disclose those and other production surfaces as unimplemented or unverified."
+            }
+          ]
+        },
+        {
+          "id": "GA-005",
+          "required": true,
+          "status": "unmet",
+          "statement": "Versioned GA packages or images, verified release evidence, upgrade guidance, and a maintained support line are ready for publication.",
+          "owner": "Release and support owners",
+          "nextAction": "Choose the approved distribution/versioning model, execute the signed RC-to-GA promotion, verify consumer installation, and update the support lifecycle from pre-v1 to v1.",
+          "evidence": [
+            {
+              "kind": "repository",
+              "location": "SUPPORT.md",
+              "note": "The current policy supports main before v1 and explicitly says private 0.0.0 archives are not releases."
+            },
+            {
+              "kind": "external",
+              "location": "not-supplied",
+              "note": "No public package, image, GA tag, changelog release section, or hosted attestation verification exists."
+            }
+          ]
+        },
+        {
+          "id": "GA-006",
+          "required": true,
+          "status": "met",
+          "statement": "The repository defect ledger has no open critical or high defect at the reviewed baseline.",
+          "owner": "Engineering and security owners",
+          "nextAction": "Recheck the permanent defect ledger immediately before any future RC or GA sign-off.",
+          "evidence": [
+            {
+              "kind": "repository",
+              "location": "BUGS.md",
+              "note": "The open-bug table contains no record at the reviewed baseline; resolved findings remain permanent history."
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "claimBoundary": "This is a repository self-review of commit b31193a783bf594e41afd510683445a044a30f6e. It authorizes only a controlled private technical alpha within documented local limits. It is not partner consent, a production deployment approval, an independent security or accessibility assessment, a hosted SBOM or attestation, an RC, a package publication, or a v1 GA declaration."
+}

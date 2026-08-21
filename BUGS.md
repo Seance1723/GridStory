@@ -15,11 +15,13 @@ Every defect discovered during automated or manual verification is recorded here
 
 | ID | Found | Severity | Area | Summary | Reproduction/evidence | Linked task | Status |
 |---|---|---|---|---|---|---|---|
+| BUG-0243 | 2026-08-21 | Medium | Private package archive metadata / RC readiness | All five reviewed archives omit README and license metadata, while the inventory validator only allows those paths rather than requiring them; BUG-0239's resolution wording overstated the verified legal metadata. | `pnpm release:prepare -- --output .gridstory/m5-008-release-b31193a` lists only `package.json`, distributable code, and the example stylesheet; `rg --files -g 'LICENSE*' -g 'README*' packages` finds no package metadata file. | M5-008, M5-009, RC-003 | Open |
 
 ## Resolved bugs
 
 | ID | Found | Resolved | Severity | Area | Summary | Resolution and verification | Linked task/change |
 |---|---|---|---|---|---|---|---|---|
+| BUG-0242 | 2026-08-21 | 2026-08-21 | Low | Readiness validator / formatting | Three single-line validation throws did not match the repository formatter's wrapping rules. | Applied the formatter's exact multiline layout; `pnpm format:check`, `pnpm readiness:check`, and the full root gate pass. | M5-008, FND-002; Fixed |
 | BUG-0241 | 2026-08-21 | 2026-08-21 | Medium | Release benchmark / memory semantics | The first report labeled a post-run RSS snapshot as peak resident memory. | Reported the larger of the current RSS and Node's process-lifetime maximum RSS; the full SQLite and PostgreSQL profiles pass at 145 MiB and 141 MiB respectively against the 512 MiB ceiling. | M5-007, TEST-006; Fixed |
 | BUG-0240 | 2026-08-21 | 2026-08-21 | Medium | Release checksum verification / callback | The verifier passed Node's two-argument `basename` directly to `Array.map`, so the array index became an invalid suffix. | Wrapped `basename` in an explicit single-argument callback; all six release artifacts verify and an intentional checksum mutation is rejected. | M5-007, TEST-006; Fixed |
 | BUG-0239 | 2026-08-21 | 2026-08-21 | Medium | Release archive inventory / pnpm layout | The first archive validator assumed npm's optional `package/` tar prefix, while pnpm 10 emits reviewed paths at the archive root. | Normalized both tar layouts, required package identity plus legal metadata, and verified the reviewed inventory and byte-for-byte determinism of all five package archives. | M5-007, TEST-006; Fixed |
