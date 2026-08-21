@@ -493,7 +493,7 @@ export async function buildServer({
     componentManifests,
   });
   const policy = new AuthorizationPolicy();
-  const server = Fastify({ logger });
+  const server = Fastify({ logger, forceCloseConnections: 'idle' });
   observability?.registerFastify(server);
   server.addContentTypeParser(
     'application/x-ndjson',

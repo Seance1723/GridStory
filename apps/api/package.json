@@ -9,8 +9,11 @@
     "start": "node dist/index.js",
     "worker": "node dist/worker.js",
     "dev:worker": "tsx watch src/worker.ts",
+    "recovery": "node dist/recovery-cli.js",
+    "rollout:check": "node dist/rolling-upgrade-cli.js",
     "test": "vitest",
     "test:run": "vitest run",
+    "test:recovery": "vitest run test/database-recovery.test.ts test/graceful-shutdown.test.ts test/worker-loop.test.ts test/rolling-upgrade.test.ts",
     "test:postgres": "vitest run test/postgres-server.test.ts",
     "typecheck": "pnpm --filter @gridstory/schema build && pnpm --filter @gridstory/core build && pnpm --filter @gridstory/example-kit build && tsc -p tsconfig.json --noEmit"
   },

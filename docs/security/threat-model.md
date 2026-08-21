@@ -1,6 +1,6 @@
 # GridStory threat model
 
-This document is the reviewable view of the canonical machine-readable model in [`security/threat-model.json`](../../security/threat-model.json). It follows OWASP's four threat-modeling questions: what are we building, what can go wrong, what will we do, and did we do enough. STRIDE is a discovery aid, not the risk score. This model covers GridStory's current control plane, authoring, preview, assets, delivery, background operations, search, portability, and plugin-runtime boundaries.
+This document is the reviewable view of the canonical machine-readable model in [`security/threat-model.json`](../../security/threat-model.json). It follows OWASP's four threat-modeling questions: what are we building, what can go wrong, what will we do, and did we do enough. STRIDE is a discovery aid, not the risk score. This model covers GridStory's current control plane, authoring, preview, assets, delivery, background operations, search, portability, recovery, and plugin-runtime boundaries.
 
 This is a living engineering model. It is not a penetration-test report or a claim that a deployment is secure without its identity provider, TLS edge, secret manager, databases, object stores, egress controls, logging, and application-owned renderers being configured and reviewed.
 
@@ -23,6 +23,7 @@ flowchart LR
   idp["OIDC provider"]
   publisher["Plugin publisher"]
   plugin["External plugin process / container"]
+  backup[("Encrypted off-host backup storage")]
 
   editor --> studio
   internet --> delivery
@@ -39,6 +40,8 @@ flowchart LR
   delivery --> app
   publisher -->|"signed manifest + artifact digest"| api
   core -->|"bounded scoped protocol"| plugin
+  db -->|"native snapshot/dump + checksum manifest"| backup
+  backup -->|"verified isolated restore"| db
 ```
 
 The numbered boundaries in the canonical model are:
@@ -53,12 +56,13 @@ The numbered boundaries in the canonical model are:
 8. Transactional write to asynchronous worker.
 9. Logical archive to repository.
 10. Control plane to signed plugin package and external runtime.
+11. Database and recovery operator to protected backup storage.
 
 A change that crosses or weakens one of these boundaries requires a threat-model review in the same change.
 
 ## Security assets
 
-The protected assets are draft history; published content and routes; complete tenant/locale scope; identities, roles, grants, and sessions; signing secrets and service credentials; private asset bytes and verdicts; workflow approvals and release intent; outbox/job state; audit history; search indexes and cache tags; logical archives; service capacity; and plugin manifests, publisher trust, tenant grants, and lifecycle evidence.
+The protected assets are draft history; published content and routes; complete tenant/locale scope; identities, roles, grants, and sessions; signing secrets and service credentials; private asset bytes and verdicts; workflow approvals and release intent; outbox/job state; audit history; search indexes and cache tags; logical archives; service capacity; plugin manifests, publisher trust, tenant grants, and lifecycle evidence; and whole-database backups/recovery manifests.
 
 Draft content, identity attributes, credentials/tokens, private assets, and operational/audit data are sensitive. Published content is intentionally public, but its integrity, freshness, route correctness, and tenant separation remain security properties.
 
@@ -81,6 +85,7 @@ Every modeled threat has a response, owner, concrete mitigations, and verificati
 |---|---|---|---:|---|
 | THREAT-0001 | Cross-tenant object access or mutation | S/I/E | 20 Critical | M5-002 established canonical collision-safe scope contracts and fail-closed repository/adapter/queue/telemetry checks; production database and object-store policy conformance remains deployment evidence. |
 | THREAT-0023 | Malicious, forged, over-granted, or escaped plugin | S/T/I/D/E | 20 Critical | M5-003 verifies signed digest-bound metadata, compatibility, constrained tenant grants, authorized lifecycle/revocation, and bounded external-runtime messages without importing plugin modules. OS/container hardening, marketplace review, dependency evidence, and publisher enrollment remain deployment/M5-007/M6-005 obligations. |
+| THREAT-0024 | Database backup disclosure, tampering, or unsafe restore | T/I/D | 20 Critical | M5-005 adds native consistent backup formats, minimal SHA-256 manifests, integrity/table checks, credential-safe PostgreSQL invocation, absent/empty isolated restore targets, live SQLite and disposable PostgreSQL restore drills, and protected storage/PITR guidance. Provider storage, keys, retention, access logging, and physical PITR proof remain deployment evidence. |
 | THREAT-0007 | Malicious or mislabeled asset upload | T/D/E | 16 High | Descriptor matching, byte inspection, SVG sanitization, quarantine, and verified-only delivery exist; deployment quotas and scanner conformance remain. |
 | THREAT-0010 | GraphQL/query complexity exhaustion | D | 16 High | Depth and data-shape bounds exist; cost, alias, rate, and benchmark-backed limits remain in M5-007. |
 | THREAT-0017 | Stored content script/markup execution | T/E | 16 High | Structured manifests and code-owned components constrain execution; every application renderer remains responsible for contextual encoding. |
@@ -109,6 +114,7 @@ The canonical register also covers preview and asset grant replay, forged webhoo
 - Provider adapters must preserve complete tenant scope and the documented timeout, redirect, credential, and failure behavior.
 - Server plugin packages remain outside the control-plane process and execute only in operator-provided external processes/containers. GridStory verifies and mediates the protocol; operators own OS identity, filesystem, network, CPU, memory, and process isolation.
 - Marketplace review, dependency analysis, SBOM/provenance, publisher enrollment, and the Studio sandbox loader are not supplied by M5-003.
+- Whole-database backups contain every tenant and are never a tenant-scoped portability mechanism. Operators own encrypted off-host storage, key custody, retention/deletion, restore approvals, and provider-specific physical PITR evidence.
 - No threat is accepted merely because it is listed. Any residual high or critical risk needs a task or explicit, named, expiring acceptance.
 
 ## Review workflow

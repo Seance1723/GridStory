@@ -152,6 +152,11 @@
       "id": "ASSET-013",
       "name": "Plugin manifests, publisher trust, tenant grants, and lifecycle history",
       "securityProperties": ["authenticity", "least privilege", "tenant isolation", "revocability"]
+    },
+    {
+      "id": "ASSET-014",
+      "name": "Whole-database backups and recovery manifests",
+      "securityProperties": ["confidentiality", "integrity", "recoverability"]
     }
   ],
   "trustBoundaries": [
@@ -237,6 +242,17 @@
         "tenant-scoped constrained grants and deny-by-default lifecycle authorization",
         "external process/container protocol with bounded rate, time, and JSON size",
         "no imported plugin modules, ambient credentials, database handles, filesystem, or process authority"
+      ]
+    },
+    {
+      "id": "BOUNDARY-011",
+      "name": "Database and recovery operator to backup storage",
+      "controls": [
+        "database-native consistent snapshot or dump",
+        "SHA-256 manifest verification before restore",
+        "credentials passed through process environment rather than command arguments",
+        "restricted encrypted off-host storage with retention and access policy",
+        "isolated absent or empty restore target with explicit PostgreSQL database confirmation"
       ]
     }
   ],
@@ -331,6 +347,13 @@
       "to": "BOUNDARY-010",
       "data": "signed manifest metadata, artifact digest, health result, and bounded invocation messages",
       "assets": ["ASSET-003", "ASSET-005", "ASSET-012", "ASSET-013"]
+    },
+    {
+      "id": "FLOW-014",
+      "from": "ACTOR-003",
+      "to": "BOUNDARY-011",
+      "data": "whole-database snapshot or dump, bounded manifest, and isolated restore command",
+      "assets": ["ASSET-001", "ASSET-004", "ASSET-009", "ASSET-012", "ASSET-014"]
     }
   ],
   "assumptions": [
@@ -896,6 +919,32 @@
         "packages/core/test/postgres-conformance.test.ts",
         "apps/api/test/plugins.test.ts",
         "docs/plugins.md"
+      ]
+    },
+    {
+      "id": "THREAT-0024",
+      "title": "Database backup disclosure, tampering, or unsafe restore",
+      "stride": ["Tampering", "Information Disclosure", "Denial of Service"],
+      "scenario": "A whole-database artifact is exposed, corrupted, replaced, restored over a live target, or accepted without proving that the recovered database is complete and compatible.",
+      "actors": ["ACTOR-003", "ACTOR-008"],
+      "assets": ["ASSET-001", "ASSET-004", "ASSET-009", "ASSET-012", "ASSET-014"],
+      "boundaries": ["BOUNDARY-011"],
+      "likelihood": 4,
+      "impact": 5,
+      "risk": 20,
+      "response": "mitigate",
+      "owner": "Reliability and deployment owner",
+      "mitigations": [
+        "Use database-native consistent snapshots/dumps and verify archive format, byte length, SHA-256, database integrity, and required GridStory tables before restore.",
+        "Keep database URLs and passwords out of process arguments and manifests; encrypt artifacts off-host with least-privilege access, retention, and access logging.",
+        "Refuse an existing SQLite or non-empty PostgreSQL GridStory target and require exact target-database confirmation; perform production recovery through reviewed isolated restore, verification, and cutover.",
+        "Exercise logical restore regularly and provider-managed base-backup plus continuous-WAL PITR against stated RPO/RTO before production acceptance."
+      ],
+      "verification": [
+        "apps/api/test/database-recovery.test.ts",
+        "scripts/test-postgres.mjs",
+        "docs/recovery-and-rollouts.md",
+        "M5-005"
       ]
     }
   ],

@@ -19,7 +19,9 @@ import {
 import { componentManifests, pageSchema } from '@gridstory/example-kit/manifests';
 import { loadConfig } from './config.js';
 import { defaultPageQualityPolicies, defaultWorkflowDefinitions } from './defaults.js';
+import { createGracefulShutdownController, installShutdownSignals } from './graceful-shutdown.js';
 import { startObservability } from './observability.js';
+import { runWorkerLoop } from './worker-loop.js';
 
 const config = loadConfig();
 const observability = startObservability(config.observability);
@@ -96,18 +98,14 @@ async function executeWorkflowSchedule({
   });
 }
 
-let stopping = false;
-const stop = () => {
-  stopping = true;
-};
-process.on('SIGINT', stop);
-process.on('SIGTERM', stop);
-
-try {
-  while (!stopping) {
+const stopController = new AbortController();
+const workerRun = runWorkerLoop({
+  signal: stopController.signal,
+  intervalMs: config.workerIntervalMs,
+  cycle: async () => {
     const scopes = await operations.listOperationalScopes(1000);
     for (const scope of scopes) {
-      if (stopping) break;
+      if (stopController.signal.aborted) break;
       const { dueReleases, due, result } = await observability.runWorkerScope(scope, async () => ({
         dueReleases: await releases.processDue(scope),
         due: await workflows.processDue({ scope, execute: executeWorkflowSchedule }),
@@ -132,16 +130,56 @@ try {
         );
       }
     }
-    if (!stopping) {
-      await new Promise<void>((resolve) => setTimeout(resolve, config.workerIntervalMs));
+  },
+});
+let workerError: unknown;
+const workerSettled = workerRun.catch((error: unknown) => {
+  workerError = error;
+});
+let cleanup: Promise<void> | undefined;
+const closeWorker = () => {
+  stopController.abort();
+  cleanup ??= (async () => {
+    await workerSettled;
+    const failures: unknown[] = [];
+    for (const finalize of [
+      () => repository.close(),
+      () => workflowRepository.close(),
+      () => releaseRepository.close(),
+      () => observability.shutdown(),
+    ]) {
+      try {
+        await finalize();
+      } catch (error) {
+        failures.push(error);
+      }
     }
+    if (failures.length > 0) throw new AggregateError(failures, 'Worker finalization failed.');
+  })();
+  return cleanup;
+};
+const shutdown = createGracefulShutdownController({
+  timeoutMs: config.shutdownTimeoutMs,
+  onShutdown: closeWorker,
+  logger: {
+    info: (fields, message) => console.log(JSON.stringify({ level: 'info', ...fields, message })),
+    error: (fields, message) =>
+      console.error(JSON.stringify({ level: 'error', signal: fields.signal, message })),
+  },
+  forceExit: (code) => process.exit(code),
+  setExitCode: (code) => {
+    if (process.exitCode === undefined || code !== 0) process.exitCode = code;
+  },
+});
+const removeSignalHandlers = installShutdownSignals(process, shutdown);
+
+try {
+  await workerSettled;
+  if (workerError !== undefined) {
+    console.error(workerError);
+    process.exitCode = 1;
   }
-} catch (error) {
-  console.error(error);
-  process.exitCode = 1;
 } finally {
-  await repository.close();
-  await workflowRepository.close();
-  await releaseRepository.close();
-  await observability.shutdown();
+  await closeWorker();
+  removeSignalHandlers();
 }

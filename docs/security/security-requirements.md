@@ -58,6 +58,7 @@ Current `IdentityService` is a framework-neutral foundation with in-memory sessi
 - `GS-SEC-012`: uploads SHALL have documented permitted types and limits, exact multipart descriptor checks, byte/signature validation, internally generated keys, quarantine, malware policy, and safe download headers.
 - Production asset processing SHALL set byte, part, pixel, decompression, file-count, per-tenant storage, concurrency, and timeout limits. Missing mandatory malware scanning SHALL fail closed.
 - Logical archives SHALL verify format/schema versions, exact scope, per-record and aggregate checksums before mutation, support dry-run/conflict reporting, and roll back atomically. Archive bytes, records, nesting, and processing time SHALL be bounded.
+- Whole-database backups SHALL use a database-native consistent format, be classified as confidential across all tenants, exclude credentials from names/manifests/process arguments, carry a verified format/size/SHA-256 manifest, and be encrypted in protected off-host storage with explicit access, retention, and restore approval. Restore SHALL use an isolated absent/empty target and pass database integrity, required-table, readiness, audit, and representative content checks before cutover.
 
 ## Preview, tokens, caching, and delivery
 
@@ -127,6 +128,12 @@ The Node API and worker now adapt the canonical bounded tenant envelope to opt-i
 Public liveness/readiness expose only stable minimal codes. Authorized private/no-store operations health reports bounded SDK/Collector state without endpoints, topology, versions, credentials, customer data, or failure text; Collector degradation does not weaken or acknowledge content operations. The reference contrib Collector adds memory bounds, batching, retry, a persistent queue, a fail-closed attribute allow-list, and private health/internal metrics. Dashboard, alert rules, event inventory, access, correlation, default retention targets, and exporter/data-exposure incident procedures are maintained in `docs/observability.md` and `deploy/observability`.
 
 `GS-SEC-028` is verified for current product capabilities. Authentication, credential-lifecycle, and break-glass event sources become applicable with the production identity/session work in M6-002 and must join the same inventory before that capability is complete. Backend deletion enforcement, append-only security-log storage, TLS/network policy, secret-manager lifecycle, and Collector deployment conformance remain operator evidence; M5-005, M5-007, and M5-008 retain their recovery, capacity, and GA obligations.
+
+## M5-005 recovery and rollout baseline
+
+The Node operations boundary creates consistent SQLite `VACUUM INTO` snapshots or PostgreSQL custom-format logical dumps, verifies a minimal sidecar manifest plus SHA-256 and native format/integrity checks, keeps PostgreSQL credentials out of arguments and manifests, and restores only to an absent SQLite path or explicitly confirmed empty PostgreSQL GridStory target. Live-WAL SQLite and disposable PostgreSQL regressions prove backup-before-mutation restores the earlier application state. `THREAT-0024` models the whole-database artifact and protected-storage boundary.
+
+Production PostgreSQL PITR remains a database/platform control using physical base backups and an unbroken continuous-WAL archive; provider storage, keys, access logging, retention, and physical restore evidence are not certified by the repository. The application adds bounded first-signal drain, timeout/second-signal force behavior, interruptible worker polling, and an exact current/candidate health/readiness preflight. The deployment still owns traffic removal, termination grace, shared-database proof, expand/contract migration sequencing, canary observation, artifact rollback, and provider-specific recovery drills.
 
 ## Verification ownership
 

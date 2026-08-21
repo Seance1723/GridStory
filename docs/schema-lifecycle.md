@@ -14,6 +14,8 @@ GridStory uses one versioned, JSON-serializable IR for schema-as-code, the visua
 
 The deployment endpoint never accepts an alternate runtime schema. A visual change must round-trip into the code-owned IR first, preserving normal review and CI controls.
 
+For rolling deployment, use expand/contract sequencing: deploy additive compatibility first, keep current and candidate code tolerant of both representations, perform application-owned backfills separately, and contract only after the old generation is gone. Both generations must return exact successful `/ready` responses against the same PostgreSQL database before traffic shifts. The runnable preflight, backup prerequisite, shutdown contract, and rollback boundary are in [Database recovery, graceful shutdown, and rolling upgrades](recovery-and-rollouts.md).
+
 ## Risk model
 
 - `safe`: additive or metadata-only; no approval is required.

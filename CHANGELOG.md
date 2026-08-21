@@ -8,6 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Corrected shutdown-state TypeScript narrowing, recovery/rollout/process-smoke fixtures, and restricted Windows process execution encountered during M5-005 verification (BUG-0219 through BUG-0224).
 - Corrected OpenTelemetry 0.221 log-processor construction, minimized public readiness failures, preserved handled authorization errors in correlated logs with correct HTTP span semantics, made the reference Collector persistent queue bootable, corrected README/lint drift, and restored frozen workspace links after the dependency update (BUG-0212 through BUG-0218, M5-004).
 - Corrected plugin schema typing/traceability/lint issues and eliminated a PostgreSQL schema-initialization race; the PostgreSQL gate now rebuilds current packages before running core/API conformance (BUG-0205 through BUG-0211, M5-003).
 - Required LF working-tree checkout for tracked text so Windows `core.autocrlf` cannot break Biome or generated-contract validation; restored the complete repository, PostgreSQL, browser, and final whitespace gates (BUG-0203, BUG-0204, FND-006).
@@ -64,6 +65,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Added checksummed native SQLite/PostgreSQL backup, verification, and isolated restore commands; live-WAL SQLite and disposable PostgreSQL dump/mutate/restore drills; and operator guidance separating logical restore from base-backup plus continuous-WAL PITR.
+- Added a shared bounded API/worker signal controller, interruptible worker polling with current-cycle drain, configurable shutdown deadline, exact current/candidate HTTP rollout preflight, and recovery/RPO/RTO/expand-contract/rollback guidance.
 - Added an opt-in Node OpenTelemetry runtime using official OTLP/HTTP log, metric, and trace exporters, explicit safe Fastify/worker instrumentation, validated tenant-event adaptation, shutdown flushing, and authorized private/no-store Collector health.
 - Added a pinned contrib Collector template with memory/redaction/batch/retry/persistent-queue controls, a six-panel Grafana operations dashboard, five Prometheus alerts, live three-signal/leakage regressions, a complete signal inventory, retention targets, and operational/incident runbooks.
 - Added Plugin SDK v1 signed capability manifests, constrained tenant grants, compatibility and artifact verification, durable in-memory/SQLite/PostgreSQL lifecycle state, explicit revoke/uninstall history, and a test-only harness behind a production external-runtime adapter.
@@ -215,6 +218,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- API shutdown now rejects new work, drains in-flight Fastify requests, closes repositories, and flushes telemetry before natural exit; worker shutdown interrupts its wait, finishes only the active durable scope cycle, and uses the same timeout/second-signal force policy.
+- Recovery is now an explicit whole-database confidential boundary distinct from tenant-scoped portability; README, operations, schema-lifecycle, ASVS, and threat-model evidence now document native artifacts, deployment-owned protected storage/PITR, and rollout responsibilities.
 - API/worker configuration now validates opt-in telemetry state, bounded service resource values, export intervals, and credential-free Collector health URLs; public readiness returns only stable status/reason codes and telemetry remains independent from content-plane readiness and durable audit.
 - Moved plugin execution into the current threat/ASVS scope with `THREAT-0023` and verified `GS-SEC-030`; documented the external process/container boundary, signed-digest trust decision, deferred Studio loader/marketplace work, and production runtime obligations.
 - Tenant-bound OIDC role assignments and service-account grants now replace globally reusable production roles; cache invalidators and webhook transports receive explicit scope, and search adapters echo scope/perspective while authoritative records determine returned metadata.
@@ -300,6 +305,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Security
 
+- Added `THREAT-0024`, a whole-database backup asset/storage boundary, credential-safe PostgreSQL tool invocation, minimal versioned SHA-256 manifests, fail-closed native integrity/table validation, and absent/empty restore targets with explicit PostgreSQL database confirmation; provider storage, keys, retention, and physical PITR remain deployment evidence.
 - Verified `GS-SEC-028` for current capabilities with bounded fixed-body telemetry, low-cardinality metrics, explicit tenant scope only in protected logs/traces, live secret/query exclusion, fail-closed Collector attribute allow-listing, minimal public health, protected degradation health, access/retention/correlation/alert inventory, and exposure/availability response procedures; production identity event sources remain conditional on M6-002.
 - Plugins now fail closed on untrusted/revoked publisher keys, invalid Ed25519 signatures, artifact-digest or SDK/protocol mismatch, over-broad grants, cross-tenant state, disabled/revoked lifecycle, undeclared operations/capabilities, absent/unhealthy runtimes, rate limits, timeouts, and JSON size bounds; arbitrary plugin modules are never imported into the control plane.
 - Hardened storage, cache, search, asset, audit, outbox, durable-job, webhook, and telemetry boundaries to fail closed on scope mismatches; cache/object keys are collision safe and hostile search totals, facets, highlights, and taxonomy values cannot cross tenants.

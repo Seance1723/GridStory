@@ -35,6 +35,107 @@ function runPostgresTests(connectionString) {
   return coreStatus || apiStatus;
 }
 
+function runPostgresRecoveryDrill(containerName) {
+  const archive = `/tmp/gridstory-recovery-${process.pid}.dump`;
+  const targetDatabase = `gridstory_recovery_${process.pid}`;
+  try {
+    run('docker', [
+      'exec',
+      containerName,
+      'pg_dump',
+      '--format=custom',
+      '--no-owner',
+      '--no-privileges',
+      `--file=${archive}`,
+      '--username=gridstory',
+      '--dbname=gridstory',
+    ]);
+    run('docker', ['exec', containerName, 'pg_restore', '--list', archive]);
+    run('docker', [
+      'exec',
+      containerName,
+      'psql',
+      '--username=gridstory',
+      '--dbname=gridstory',
+      '--set=ON_ERROR_STOP=1',
+      '--command',
+      "DELETE FROM gridstory.entries WHERE tenant_id = 'postgres-tenant';",
+    ]);
+    const mutated = run(
+      'docker',
+      [
+        'exec',
+        containerName,
+        'psql',
+        '--username=gridstory',
+        '--dbname=gridstory',
+        '--tuples-only',
+        '--no-align',
+        '--command',
+        "SELECT count(*) FROM gridstory.entries WHERE tenant_id = 'postgres-tenant';",
+      ],
+      { capture: true },
+    );
+    if (mutated.stdout.trim() !== '0') {
+      throw new Error('PostgreSQL recovery drill could not isolate the post-backup mutation.');
+    }
+    run('docker', [
+      'exec',
+      containerName,
+      'createdb',
+      '--username=gridstory',
+      '--owner=gridstory',
+      targetDatabase,
+    ]);
+    run('docker', [
+      'exec',
+      containerName,
+      'pg_restore',
+      '--single-transaction',
+      '--exit-on-error',
+      '--no-owner',
+      '--no-privileges',
+      '--username=gridstory',
+      `--dbname=${targetDatabase}`,
+      archive,
+    ]);
+    const restored = run(
+      'docker',
+      [
+        'exec',
+        containerName,
+        'psql',
+        '--username=gridstory',
+        `--dbname=${targetDatabase}`,
+        '--tuples-only',
+        '--no-align',
+        '--command',
+        "SELECT count(*) FROM gridstory.entries WHERE tenant_id = 'postgres-tenant' AND published_revision_id IS NOT NULL;",
+      ],
+      { capture: true },
+    );
+    if (restored.stdout.trim() !== '1') {
+      throw new Error('PostgreSQL restore did not recover the published API fixture.');
+    }
+    console.log('PostgreSQL logical backup/restore drill passed (1 published entry recovered).');
+  } finally {
+    run(
+      'docker',
+      [
+        'exec',
+        containerName,
+        'dropdb',
+        '--if-exists',
+        '--force',
+        '--username=gridstory',
+        targetDatabase,
+      ],
+      { allowFailure: true },
+    );
+    run('docker', ['exec', containerName, 'rm', '-f', archive], { allowFailure: true });
+  }
+}
+
 if (process.env.GRIDSTORY_TEST_POSTGRES_URL) {
   process.exitCode = runPostgresTests(process.env.GRIDSTORY_TEST_POSTGRES_URL);
 } else {
@@ -79,9 +180,11 @@ if (process.env.GRIDSTORY_TEST_POSTGRES_URL) {
     if (!port)
       throw new Error(`Could not determine the PostgreSQL port: ${portResult.stdout.trim()}`);
 
-    process.exitCode = runPostgresTests(
+    const testStatus = runPostgresTests(
       `postgresql://gridstory:gridstory@127.0.0.1:${port}/gridstory`,
     );
+    if (testStatus === 0) runPostgresRecoveryDrill(containerName);
+    process.exitCode = testStatus;
   } finally {
     if (started) run('docker', ['stop', containerName], { allowFailure: true });
   }

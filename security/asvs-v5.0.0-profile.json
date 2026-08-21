@@ -529,14 +529,19 @@
       "owner": "Platform integration owner",
       "statement": "Every database, storage, search, cache, IdP, scanner, webhook, and notification connection SHALL document scope, authentication, least privilege, destinations, timeouts, connection/concurrency limits, retries, failure behavior, and health signals.",
       "asvsRefs": ["v5.0.0-13.1.1", "v5.0.0-13.1.3"],
-      "threatRefs": ["THREAT-0005", "THREAT-0018", "THREAT-0019"],
+      "threatRefs": ["THREAT-0005", "THREAT-0018", "THREAT-0019", "THREAT-0024"],
       "evidence": [
         "docs/operations.md",
         "docs/assets.md",
         "docs/search-and-taxonomies.md",
-        "docs/troubleshooting.md"
+        "docs/troubleshooting.md",
+        "docs/recovery-and-rollouts.md"
       ],
-      "verification": ["Adapter conformance and operations review"],
+      "verification": [
+        "Adapter conformance and operations review",
+        "apps/api/test/database-recovery.test.ts",
+        "scripts/test-postgres.mjs"
+      ],
       "taskIds": ["M5-004", "M5-005"]
     },
     {
@@ -558,14 +563,15 @@
       "owner": "Security and privacy owner",
       "statement": "GridStory SHALL classify draft/published content, identity attributes, credentials/tokens, private assets, audit/operational data, and telemetry, with explicit access, encryption, logging, caching, retention, export, and deletion rules.",
       "asvsRefs": ["v5.0.0-14.1.1", "v5.0.0-14.1.2"],
-      "threatRefs": ["THREAT-0001", "THREAT-0004", "THREAT-0015", "THREAT-0016"],
+      "threatRefs": ["THREAT-0001", "THREAT-0004", "THREAT-0015", "THREAT-0016", "THREAT-0024"],
       "evidence": [
         "docs/security/security-requirements.md",
         "docs/assets.md",
-        "docs/audit-and-administration.md"
+        "docs/audit-and-administration.md",
+        "docs/recovery-and-rollouts.md"
       ],
       "verification": ["Data-flow and retention review"],
-      "taskIds": ["M5-004", "M6-003"]
+      "taskIds": ["M5-004", "M5-005", "M6-003"]
     },
     {
       "id": "GS-SEC-024",

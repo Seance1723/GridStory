@@ -66,6 +66,14 @@ describe('API configuration', () => {
     );
   });
 
+  it('bounds graceful shutdown inside the deployment termination window', () => {
+    expect(loadConfig({}).shutdownTimeoutMs).toBe(25_000);
+    expect(loadConfig({ GRIDSTORY_SHUTDOWN_TIMEOUT_MS: '45000' }).shutdownTimeoutMs).toBe(45_000);
+    expect(() => loadConfig({ GRIDSTORY_SHUTDOWN_TIMEOUT_MS: '999' })).toThrow(
+      /GRIDSTORY_SHUTDOWN_TIMEOUT_MS/,
+    );
+  });
+
   it('keeps OpenTelemetry disabled by default and validates its bounded configuration', () => {
     expect(loadConfig({}).observability).toEqual({
       enabled: false,

@@ -1,4 +1,5 @@
 import { loadConfig } from './config.js';
+import { createGracefulShutdownController, installShutdownSignals } from './graceful-shutdown.js';
 import { startObservability } from './observability.js';
 import { buildServer } from './server.js';
 
@@ -20,20 +21,35 @@ const server = await buildServer({
   observability,
 });
 
-const shutdown = async (signal: string) => {
-  server.log.info({ signal }, 'Stopping GridStory API');
-  await server.close();
-  await observability.shutdown();
-  process.exit(0);
-};
-
-process.on('SIGINT', () => void shutdown('SIGINT'));
-process.on('SIGTERM', () => void shutdown('SIGTERM'));
+const shutdown = createGracefulShutdownController({
+  timeoutMs: config.shutdownTimeoutMs,
+  onShutdown: async () => {
+    const failures: unknown[] = [];
+    try {
+      await server.close();
+    } catch (error) {
+      failures.push(error);
+    }
+    try {
+      await observability.shutdown();
+    } catch (error) {
+      failures.push(error);
+    }
+    if (failures.length > 0) throw new AggregateError(failures, 'API finalization failed.');
+  },
+  logger: server.log,
+  forceExit: (code) => process.exit(code),
+  setExitCode: (code) => {
+    if (process.exitCode === undefined || code !== 0) process.exitCode = code;
+  },
+});
+const removeSignalHandlers = installShutdownSignals(process, shutdown);
 
 try {
   await server.listen({ host: config.host, port: config.port });
 } catch (error) {
   server.log.error(error);
-  await observability.shutdown();
-  process.exit(1);
+  removeSignalHandlers();
+  await Promise.allSettled([server.close(), observability.shutdown()]);
+  process.exitCode = 1;
 }

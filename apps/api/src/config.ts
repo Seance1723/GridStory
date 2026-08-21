@@ -14,6 +14,7 @@ export interface ApiConfig {
   webhookSigningSecret: string;
   allowedWebhookHosts?: string[];
   workerIntervalMs: number;
+  shutdownTimeoutMs: number;
   observability: ObservabilityConfig;
 }
 
@@ -178,6 +179,13 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiCon
         }
       : {}),
     workerIntervalMs: parseWorkerInterval(environment.GRIDSTORY_WORKER_INTERVAL_MS),
+    shutdownTimeoutMs: parseBoundedInteger(
+      environment.GRIDSTORY_SHUTDOWN_TIMEOUT_MS,
+      'GRIDSTORY_SHUTDOWN_TIMEOUT_MS',
+      25_000,
+      1_000,
+      300_000,
+    ),
     observability: {
       enabled: parseBoolean(environment.GRIDSTORY_OTEL_ENABLED, 'GRIDSTORY_OTEL_ENABLED'),
       serviceName: serviceName ?? 'gridstory-api',

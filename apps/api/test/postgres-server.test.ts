@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
+import { checkRollingUpgrade } from '../src/rolling-upgrade.js';
 import { buildServer } from '../src/server.js';
 import { approveForPublication } from './workflow-helpers.js';
 
@@ -115,5 +116,20 @@ describe.skipIf(!connectionString)('GridStory API with PostgreSQL', () => {
         },
       },
     });
+  });
+
+  it('keeps current and candidate instances ready against the same database', async () => {
+    if (!connectionString) throw new Error('GRIDSTORY_TEST_POSTGRES_URL is required.');
+    const current = await buildServer({ databaseUrl: connectionString });
+    const candidate = await buildServer({ databaseUrl: connectionString, seed: false });
+    try {
+      const currentUrl = await current.listen({ host: '127.0.0.1', port: 0 });
+      const candidateUrl = await candidate.listen({ host: '127.0.0.1', port: 0 });
+      await expect(
+        checkRollingUpgrade({ currentBaseUrl: currentUrl, candidateBaseUrl: candidateUrl }),
+      ).resolves.toMatchObject({ status: 'compatible' });
+    } finally {
+      await Promise.all([current.close(), candidate.close()]);
+    }
   });
 });

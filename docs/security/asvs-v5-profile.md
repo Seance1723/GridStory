@@ -66,6 +66,12 @@ This repository evidence does not certify the operator-provided OS/container san
 
 Production authentication, credential lifecycle, and break-glass event types are conditional on M6-002 and must extend this inventory when implemented. Backend access/deletion enforcement, append-only storage, TLS/network policy, secret-manager lifecycle, and deployed Collector conformance remain operator/GA evidence.
 
+## M5-005 evidence update
+
+`THREAT-0024`, `GS-SEC-021`, and `GS-SEC-023` now cover whole-database backup classification, credential-safe native tooling, minimal checksummed manifests, fail-closed format/integrity/table verification, isolated absent/empty restore targets, live SQLite restore, disposable PostgreSQL logical restore, bounded API/worker shutdown, and exact two-generation readiness preflight. The recovery and rollout runbook separates logical dumps from PostgreSQL base-backup plus continuous-WAL PITR and requires stated, measured deployment RPO/RTO.
+
+Repository evidence does not certify backup storage encryption/retention/access logging, secret rotation, a managed database's physical PITR chain, object-store recovery, or an orchestrator's traffic/termination/rollback behavior. Those remain deployment and GA evidence.
+
 ## Highest-priority gaps
 
 | Gap | ASVS areas | Owner task |
@@ -74,7 +80,7 @@ Production authentication, credential lifecycle, and break-glass event types are
 | Production identity/session and trusted-proxy boundary | V4, V6, V7, V10, V13 | M6-002; deployment proof M5-008 |
 | Plugin runtime OS/container hardening, package review, dependency evidence, and publisher enrollment | V8, V11, V13, V15 | M5-007; M6-005; deployment evidence |
 | Telemetry backend access/deletion, Collector deployment conformance, and production identity/credential event sources | V11, V13, V14, V16 | M5-008; event sources M6-002 |
-| Restore, graceful shutdown, rotation, and rolling-upgrade proof | V13, V15, V16 | M5-005 |
+| Backup storage/physical PITR, secret rotation, and orchestrator rollout proof | V13, V14, V15, V16 | M5-008 deployment evidence; secret lifecycle M5-008/M6-002 |
 | Browser CSP/header and application-rendering certification | V1, V3, V14 | M5-006 |
 | Abuse limits, benchmarks, SBOM, vulnerability SLA, provenance, and signatures | V2, V4, V5, V15 | M5-007 |
 | Independent readiness/risk acceptance | All applicable chapters | M5-008 |
