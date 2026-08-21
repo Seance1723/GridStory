@@ -520,13 +520,14 @@
       "mitigations": [
         "Match server-recorded multipart descriptors and inspect exact bytes.",
         "Verify signatures/type, sanitize SVG, inject malware scanning, and fail closed into immutable quarantine.",
-        "Enforce deployment-specific size, dimension, decompression, and processing limits."
+        "Enforce repository byte/declared-dimension limits plus deployment-specific decoded-pixel, decompression, processing, concurrency, and quota limits."
       ],
       "verification": [
         "packages/core/test/asset-security.test.ts",
         "packages/core/test/asset-service.test.ts",
+        "apps/api/test/assets.test.ts",
         "docs/assets.md",
-        "M5-007"
+        "docs/release-and-support.md"
       ]
     },
     {
@@ -569,12 +570,12 @@
       "mitigations": [
         "Verify canonical per-entry and aggregate checksums, format/schema versions, and exact target scope.",
         "Offer dry-run/conflict reporting and atomic rollback.",
-        "Set archive, record, depth, and execution limits before GA."
+        "Enforce import bytes, archive entries, per-entry revisions/audit events, and deployment execution limits."
       ],
       "verification": [
         "packages/core/test/portability-service.test.ts",
         "docs/portability.md",
-        "M5-007"
+        "docs/release-and-support.md"
       ]
     },
     {
@@ -593,9 +594,14 @@
       "mitigations": [
         "Limit GraphQL depth to 12; disable batching and subscriptions.",
         "Bound page, filter, sort, and projection inputs.",
-        "Add cost, alias, payload, concurrency, and rate limits with benchmark-backed thresholds before GA."
+        "Bound aliases, field selections, body size, and application-pipeline budgets; require deployment concurrency/rate and introspection policy before GA."
       ],
-      "verification": ["apps/api/test/graphql.test.ts", "docs/content-queries.md", "M5-007"]
+      "verification": [
+        "apps/api/test/graphql.test.ts",
+        "scripts/benchmark-release.mjs",
+        "docs/content-queries.md",
+        "M5-008"
+      ]
     },
     {
       "id": "THREAT-0011",
@@ -811,7 +817,8 @@
       "owner": "Reliability owner",
       "mitigations": [
         "Retain existing bounded query, action, retry, and worker-batch limits.",
-        "Define body/upload/archive/concurrency/rate/retention quotas and benchmark them before GA.",
+        "Enforce and benchmark repository body/upload/archive/query/job/plugin limits.",
+        "Require deployment concurrency/rate/quota/saturation evidence and product retention policy before GA.",
         "Monitor saturation and fail predictably."
       ],
       "verification": [
@@ -819,7 +826,9 @@
         "docs/operations.md",
         "docs/observability.md",
         "deploy/observability/prometheus-alerts.yaml",
-        "M5-007"
+        "docs/release-and-support.md",
+        "M5-008",
+        "M6-003"
       ]
     },
     {
@@ -837,10 +846,16 @@
       "owner": "Release engineering owner",
       "mitigations": [
         "Keep lockfile-pinned dependencies and protected CI credentials.",
-        "Add automated vulnerability handling, SBOM generation, provenance, signatures, and release verification in M5-007.",
+        "Run OSV/Dependabot review and create reviewed package inventories, checksums, SPDX SBOMs, and GitHub/Sigstore provenance/SBOM attestations.",
         "Document remediation service levels."
       ],
-      "verification": ["pnpm-lock.yaml", "M5-007"]
+      "verification": [
+        "pnpm-lock.yaml",
+        "SECURITY.md",
+        ".github/workflows/vulnerability.yml",
+        ".github/workflows/release-evidence.yml",
+        "M5-008"
+      ]
     },
     {
       "id": "THREAT-0021",

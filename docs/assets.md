@@ -22,6 +22,12 @@ Studio follows this lifecycle and chunks browser files by the returned part size
 
 Upload-session coordination is process-local in the built-in service. A horizontally scaled deployment should route a session consistently or supply a shared coordinator when distributed resumability is required.
 
+## Published limits
+
+The ordinary 1 MiB body limit does not truncate the binary part route: that route has an explicit 5 MiB bound matching the built-in negotiated part size. Declared assets are limited to 100,000,000 bytes, dimensions to 16,384 pixels on either axis, and a session to 1,000 numbered parts. The service also rejects a part larger than the negotiated size and requires the completed byte sum to equal the declared object size.
+
+These checks bound request memory and declared geometry; they do not decode an image to prove its pixel count or compression ratio. Production inspectors/rendition processors must set decoded-pixel, decompression, CPU, memory, timeout, concurrency, per-tenant storage, and malware-scanner limits. The complete capacity and support boundary is in [Release evidence, tested limits, and support](release-and-support.md).
+
 ## Persistence and S3-compatible storage
 
 `SqliteAssetRepository` stores scoped asset metadata in the local GridStory database and survives API restarts. `AssetRepository` is the portable durability contract; deployments using a Postgres content database should inject a durable asset repository through `buildServer({ assetRepository })`. Without that injection, the database-URL configuration uses the in-memory metadata repository.

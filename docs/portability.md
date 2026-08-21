@@ -8,6 +8,8 @@ The current format is `gridstory.logical-content` version `1`. JSON responses co
 
 The manifest records the source scope, export time, entry count, optional deployed-schema fingerprint, and an aggregate SHA-256 checksum. Every entry has its own SHA-256 checksum over canonical JSON. Import verifies the format, counts, checksums, stable IDs, revision references, publication pointers, audit references/actions, and duplicate IDs before storage is changed.
 
+The API import body is limited to 16 MiB. A logical archive is limited to 1,000 entries; each entry is limited to 100 revisions and 1,000 audit events. Export refuses to produce an archive beyond the supported entry count, and import validates all three shape limits before repository mutation. Split a larger migration into independently reviewed archives and re-run dry-run/conflict analysis for each scope.
+
 ## Export
 
 Administrators need `portability.export`.
@@ -42,7 +44,7 @@ An ID owned by another scope is always rejected, including with `replace`. Set `
 
 Each import request is one database transaction. Validation occurs before mutation. SQLite uses one immediate local transaction; PostgreSQL locks conflicting IDs and performs all deletes/inserts in one transaction. Any uniqueness, reference, or storage failure rolls the entire batch back. Replacement also removes obsolete outbox records for replaced entries so old deliveries cannot run against restored content.
 
-Large migrations should be split into independently reviewed archives when a smaller rollback boundary is operationally preferable. The API request-size limit still applies to imports; JSON Lines provides record-oriented transport and streamed export, not an unbounded upload channel.
+Large migrations should be split into independently reviewed archives when a smaller rollback boundary is operationally preferable. JSON Lines provides record-oriented transport and streamed export, not an unbounded upload channel. [Release evidence, tested limits, and support](release-and-support.md) is the canonical capacity inventory.
 
 ## Typed client
 

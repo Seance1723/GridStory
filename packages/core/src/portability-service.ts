@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { ContentScope } from '@gridstory/schema';
+import { type ContentScope, resourceLimits } from '@gridstory/schema';
 import { GridStoryError } from './errors.js';
 import type {
   ContentRepository,
@@ -91,8 +91,18 @@ function validatePortableRecord(record: PortableContentRecord, index: number): v
   if (!Array.isArray(record.revisions) || record.revisions.length === 0) {
     throw new PortabilityError(`${path}.revisions must contain at least one revision.`);
   }
+  if (record.revisions.length > resourceLimits.portability.maximumRevisionsPerEntry) {
+    throw new PortabilityError(
+      `${path}.revisions cannot exceed ${resourceLimits.portability.maximumRevisionsPerEntry} records.`,
+    );
+  }
   if (!Array.isArray(record.auditEvents)) {
     throw new PortabilityError(`${path}.auditEvents must be an array.`);
+  }
+  if (record.auditEvents.length > resourceLimits.portability.maximumAuditEventsPerEntry) {
+    throw new PortabilityError(
+      `${path}.auditEvents cannot exceed ${resourceLimits.portability.maximumAuditEventsPerEntry} records.`,
+    );
   }
   const revisionIds = new Set<string>();
   const sequences = new Set<number>();
@@ -193,6 +203,11 @@ export function validateLogicalArchive(archive: LogicalArchive): void {
   if (archive.manifest.entryCount !== archive.entries.length) {
     throw new PortabilityError('Archive entry count does not match its manifest.');
   }
+  if (archive.entries.length > resourceLimits.portability.maximumEntries) {
+    throw new PortabilityError(
+      `Archive cannot exceed ${resourceLimits.portability.maximumEntries} entries.`,
+    );
+  }
   const entryIds = new Set<string>();
   const revisionIds = new Set<string>();
   const auditIds = new Set<string>();
@@ -282,6 +297,11 @@ export class PortabilityService {
 
   async export(scope: ContentScope): Promise<LogicalArchive> {
     const records = await this.#repository.exportPortableContent({ scope });
+    if (records.length > resourceLimits.portability.maximumEntries) {
+      throw new PortabilityError(
+        `Archive cannot exceed ${resourceLimits.portability.maximumEntries} entries.`,
+      );
+    }
     const entries = records.map((record) => ({
       kind: 'entry' as const,
       checksum: logicalChecksum(record),

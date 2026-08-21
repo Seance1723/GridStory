@@ -14,6 +14,7 @@ export * from './quality.js';
 export * from './query.js';
 export * from './references.js';
 export * from './release.js';
+export * from './resource-limits.js';
 export * from './routing.js';
 export * from './search.js';
 export * from './validation.js';

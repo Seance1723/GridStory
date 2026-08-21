@@ -6,6 +6,8 @@ import {
   assetRecordSchema,
   assetRenditionPresetSchema,
   assetUploadSessionSchema,
+  resourceLimits,
+  startAssetUploadSchema,
 } from '../src/index.js';
 
 const scope = {
@@ -100,5 +102,30 @@ describe('asset contracts', () => {
     expect(createAssetDeliverySchema.parse({})).toEqual({ ttlSeconds: 300 });
     expect(createAssetDeliverySchema.safeParse({ ttlSeconds: 29 }).success).toBe(false);
     expect(createAssetDeliverySchema.safeParse({ ttlSeconds: 901 }).success).toBe(false);
+  });
+
+  it('rejects assets beyond the published byte and dimension envelope', () => {
+    const valid = {
+      filename: 'hero.jpg',
+      mediaType: 'image/jpeg',
+      size: resourceLimits.assets.maximumBytes,
+      kind: 'image',
+      width: resourceLimits.assets.maximumDimensionPixels,
+      height: 1,
+      metadata: { title: 'Hero' },
+    };
+    expect(startAssetUploadSchema.safeParse(valid).success).toBe(true);
+    expect(
+      startAssetUploadSchema.safeParse({
+        ...valid,
+        size: resourceLimits.assets.maximumBytes + 1,
+      }).success,
+    ).toBe(false);
+    expect(
+      startAssetUploadSchema.safeParse({
+        ...valid,
+        width: resourceLimits.assets.maximumDimensionPixels + 1,
+      }).success,
+    ).toBe(false);
   });
 });

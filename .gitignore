@@ -10,6 +10,7 @@ test-results/
 # GridStory local runtime data
 .gridstory/
 graphify-out/
+release-artifacts/
 *.db
 *.db-shm
 *.db-wal

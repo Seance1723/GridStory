@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { resourceLimits } from './resource-limits.js';
 
 const identifierSchema = z
   .string()
@@ -47,7 +48,12 @@ export const workflowActionDefinitionSchema = z.discriminatedUnion('type', [
     type: z.literal('notification'),
     message: z.string().min(1).max(500),
     audienceRoles: z.array(z.string().min(1)).min(1).max(20),
-    maxAttempts: z.number().int().min(1).max(20).default(5),
+    maxAttempts: z
+      .number()
+      .int()
+      .min(1)
+      .max(resourceLimits.operations.maximumJobAttempts)
+      .default(5),
   }),
   z.object({
     id: identifierSchema,
@@ -55,14 +61,24 @@ export const workflowActionDefinitionSchema = z.discriminatedUnion('type', [
     type: z.literal('webhook'),
     url: z.string().url().startsWith('https://'),
     eventName: identifierSchema,
-    maxAttempts: z.number().int().min(1).max(20).default(8),
+    maxAttempts: z
+      .number()
+      .int()
+      .min(1)
+      .max(resourceLimits.operations.maximumJobAttempts)
+      .default(8),
   }),
   z.object({
     id: identifierSchema,
     label: z.string().min(1).max(100),
     type: z.literal('cache-invalidate'),
     tags: z.array(z.string().min(1).max(200)).min(1).max(100),
-    maxAttempts: z.number().int().min(1).max(20).default(5),
+    maxAttempts: z
+      .number()
+      .int()
+      .min(1)
+      .max(resourceLimits.operations.maximumJobAttempts)
+      .default(5),
   }),
 ]);
 

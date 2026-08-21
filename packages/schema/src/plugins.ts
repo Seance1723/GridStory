@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { canonicalStringify } from './canonical.js';
+import { resourceLimits } from './resource-limits.js';
 
 export const PLUGIN_MANIFEST_FORMAT = 'gridstory.plugin' as const;
 export const PLUGIN_MANIFEST_VERSION = 1 as const;
@@ -110,7 +111,10 @@ const unsignedPluginManifestSchema = z
     publisher: z.object({ id: identifierSchema, name: z.string().min(1).max(120) }).strict(),
     sdk: z.object({ minVersion: semverSchema, maxVersionExclusive: semverSchema }).strict(),
     package: z
-      .object({ sha256: sha256Schema, sizeBytes: z.number().int().positive().max(100_000_000) })
+      .object({
+        sha256: sha256Schema,
+        sizeBytes: z.number().int().positive().max(resourceLimits.plugins.maximumArtifactBytes),
+      })
       .strict(),
     runtimes: z
       .object({ server: serverRuntimeSchema.optional(), studio: studioRuntimeSchema.optional() })

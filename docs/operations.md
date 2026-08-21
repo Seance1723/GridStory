@@ -2,6 +2,12 @@
 
 GridStory never calls a webhook or CDN from inside a content write. Create, draft update, and publish transactions append an outbox event in the same SQLite or PostgreSQL transaction as the immutable revision, entry pointer, and audit event. If the content commit rolls back, its event rolls back; if it commits, the event remains durable until expanded into idempotent jobs.
 
+## Published capacity boundary
+
+Operational list APIs accept at most 1,000 records, one drain pass claims at most 100 records, an outbox delivery becomes dead after 10 failed attempts, and configured durable jobs allow at most 20 attempts. Retry delay is exponentially backed off and capped at one hour. These are application execution bounds, not storage retention or fair-use quotas.
+
+Operators must set queue/database capacity, worker concurrency, drain frequency, per-tenant admission rates, dead-letter review/retention, and alerts against the exact deployment. GridStory does not automatically delete completed/dead jobs or audit history. See [Release evidence, tested limits, and support](release-and-support.md) for the consolidated inventory and benchmark claim boundary.
+
 ## Run the worker
 
 Run the API and operations worker as separate processes against the same database:

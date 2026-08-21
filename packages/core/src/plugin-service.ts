@@ -13,6 +13,7 @@ import {
   pluginInvocationResultSchema,
   pluginInvocationSchema,
   pluginManifestSigningPayload,
+  resourceLimits,
   type SignedPluginManifest,
   signedPluginManifestSchema,
 } from '@gridstory/schema';
@@ -137,10 +138,13 @@ export class PluginService {
     this.#sdkVersion = options.sdkVersion ?? GRIDSTORY_PLUGIN_SDK_VERSION;
     this.#now = options.now ?? (() => new Date());
     this.#createId = options.createId ?? randomUUID;
-    this.#invocationTimeoutMs = options.invocationTimeoutMs ?? 5_000;
-    this.#invocationLimitPerMinute = options.invocationLimitPerMinute ?? 60;
-    this.#maxInputBytes = options.maxInputBytes ?? 65_536;
-    this.#maxOutputBytes = options.maxOutputBytes ?? 262_144;
+    this.#invocationTimeoutMs =
+      options.invocationTimeoutMs ?? resourceLimits.plugins.defaultInvocationTimeoutMs;
+    this.#invocationLimitPerMinute =
+      options.invocationLimitPerMinute ??
+      resourceLimits.plugins.defaultInvocationsPerMinutePerScope;
+    this.#maxInputBytes = options.maxInputBytes ?? resourceLimits.plugins.defaultInputBytes;
+    this.#maxOutputBytes = options.maxOutputBytes ?? resourceLimits.plugins.defaultOutputBytes;
   }
 
   async list(scope: ContentScope): Promise<PluginInstallation[]> {

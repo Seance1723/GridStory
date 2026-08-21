@@ -1,27 +1,28 @@
 import {
-  collectContentReferences,
-  searchQuerySchema,
   type BacklinkRecord,
   type ContentEntry,
   type ContentPerspective,
   type ContentSchemaDefinition,
   type ContentScope,
+  collectContentReferences,
+  type ParsedSearchQuery,
   type RelatedContentRecord,
+  resourceLimits,
   type SearchDocument,
   type SearchFacet,
   type SearchIndexStatus,
-  type ParsedSearchQuery,
   type SearchQuery,
   type SearchResponse,
+  searchQuerySchema,
   type TaxonomyDefinition,
 } from '@gridstory/schema';
+import { NotFoundError } from './errors.js';
 import {
   assertSameContentScope,
   contentScopeKey,
   emitTenantTelemetry,
   type TenantTelemetrySink,
 } from './tenant-scope.js';
-import { NotFoundError } from './errors.js';
 import type { Awaitable, ContentRepository, DurableJob } from './types.js';
 
 export interface SearchAdapterHit {
@@ -81,7 +82,12 @@ function stringsAt(value: unknown): string[] {
 }
 
 function collectText(value: unknown, output: string[], depth = 0): void {
-  if (depth > 12 || output.length >= 5000) return;
+  if (
+    depth > resourceLimits.search.maximumTraversalDepth ||
+    output.length >= resourceLimits.search.maximumIndexedStringsPerEntry
+  ) {
+    return;
+  }
   if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
     output.push(String(value));
     return;
@@ -171,7 +177,7 @@ export function buildSearchDocument(input: {
         ? (input.entry.publishedRevisionId ?? input.entry.draftRevisionId)
         : input.entry.draftRevisionId,
     updatedAt: input.entry.updatedAt,
-    text: text.join(' ').slice(0, 100_000),
+    text: text.join(' ').slice(0, resourceLimits.search.maximumIndexedTextCharacters),
     taxonomies,
   };
 }
@@ -518,7 +524,7 @@ export class SearchService {
           right.entry.updatedAt.localeCompare(left.entry.updatedAt) ||
           left.entry.id.localeCompare(right.entry.id),
       )
-      .slice(0, Math.max(1, Math.min(first, 50)));
+      .slice(0, Math.max(1, Math.min(first, resourceLimits.search.maximumReturnedResults)));
   }
 
   async requestRebuild(

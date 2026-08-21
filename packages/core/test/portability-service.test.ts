@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  logicalChecksum,
   parseLogicalArchive,
   PortabilityError,
   PortabilityService,
@@ -7,6 +8,7 @@ import {
   SqliteContentRepository,
   validateLogicalArchive,
 } from '../src/index.js';
+import { resourceLimits } from '@gridstory/schema';
 
 const sourceScope = {
   organizationId: 'organization',
@@ -126,6 +128,52 @@ describe('logical content portability', () => {
       expect(
         repository.getById({ scope: targetScope, id: created.id, perspective: 'draft' }),
       ).toBeNull();
+    } finally {
+      repository.close();
+    }
+  });
+
+  it('rejects archives whose entry or history shapes exceed published limits', async () => {
+    const repository = new SqliteContentRepository({ filename: ':memory:' });
+    try {
+      repository.create({
+        scope: sourceScope,
+        contentType: 'page',
+        data: { title: 'Bounded' },
+        actor: { id: 'author' },
+      });
+      const service = new PortabilityService({ repository });
+      const archive = await service.export(sourceScope);
+      const first = archive.entries[0];
+      if (!first) throw new Error('Expected one exported entry.');
+
+      const excessiveHistory = structuredClone(archive);
+      const historyEntry = excessiveHistory.entries[0];
+      if (!historyEntry) throw new Error('Expected one exported entry.');
+      historyEntry.record.revisions = Array.from(
+        { length: resourceLimits.portability.maximumRevisionsPerEntry + 1 },
+        (_, index) => ({
+          ...first.record.revisions[0],
+          id: `revision-${index + 1}`,
+          sequence: index + 1,
+          baseRevisionId: index === 0 ? undefined : `revision-${index}`,
+        }),
+      );
+      historyEntry.record.currentDraftRevisionId =
+        historyEntry.record.revisions.at(-1)?.id ?? 'missing';
+      historyEntry.checksum = logicalChecksum(historyEntry.record);
+      excessiveHistory.manifest.archiveChecksum = logicalChecksum(
+        excessiveHistory.entries.map((entry) => entry.checksum),
+      );
+      expect(() => validateLogicalArchive(excessiveHistory)).toThrow(/revisions cannot exceed/u);
+
+      const excessiveEntries = structuredClone(archive);
+      excessiveEntries.entries = Array.from(
+        { length: resourceLimits.portability.maximumEntries + 1 },
+        () => first,
+      );
+      excessiveEntries.manifest.entryCount = excessiveEntries.entries.length;
+      expect(() => validateLogicalArchive(excessiveEntries)).toThrow(/Archive cannot exceed/u);
     } finally {
       repository.close();
     }

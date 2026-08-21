@@ -59,7 +59,7 @@ The application cannot enforce a vendor backend's deletion policy. Operators mus
 | Collector persistent queue | Outage buffer, target less than 24 hours | Delete after successful export | Size from measured volume; alert at 80%, encrypt the volume, and never treat it as an archive. |
 | Pino/container stdout | 14 days | 30 days | Apply equivalent redaction and backend access controls if shipped externally. |
 
-Capacity limits in the reference config are safe starting values, not benchmark claims. M5-007 owns tested throughput and sizing profiles. If the persistent queue approaches capacity, reduce nonessential sampling volume or add Collector capacity; never block content delivery on telemetry export.
+Capacity limits in the reference config are safe starting values, not application benchmark claims. The M5-007 application-pipeline profiles and their network/deployment exclusions are published in [Release evidence, tested limits, and support](release-and-support.md). If the persistent queue approaches capacity, reduce nonessential sampling volume or add Collector capacity; never block content delivery on telemetry export.
 
 ## Runbook
 

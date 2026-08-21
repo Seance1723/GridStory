@@ -6,7 +6,7 @@ import type {
   ContentQuery,
   ContentSort,
 } from '@gridstory/schema';
-import { contentFilterOperators } from '@gridstory/schema';
+import { contentFilterOperators, resourceLimits } from '@gridstory/schema';
 import { GridStoryError } from './errors.js';
 import type { ContentRepository } from './types.js';
 
@@ -52,7 +52,11 @@ function canonicalJson(value: unknown): string {
 }
 
 function pathSegments(path: string, projection = false): string[] {
-  if (!path || path.length > 200) invalidQuery('Query paths must contain 1 to 200 characters.');
+  if (!path || path.length > resourceLimits.contentQuery.maximumPathCharacters) {
+    invalidQuery(
+      `Query paths must contain 1 to ${resourceLimits.contentQuery.maximumPathCharacters} characters.`,
+    );
+  }
   const segments = path.split('.');
   if (
     segments.some(
@@ -143,11 +147,21 @@ function validateFilter(filter: ContentFilter, depth = 1, state = { predicates: 
   if (!filter || typeof filter !== 'object' || Array.isArray(filter)) {
     invalidQuery('Every filter must be an object.');
   }
-  if (depth > 8) invalidQuery('Filter nesting cannot exceed 8 levels.');
+  if (depth > resourceLimits.contentQuery.maximumFilterDepth) {
+    invalidQuery(
+      `Filter nesting cannot exceed ${resourceLimits.contentQuery.maximumFilterDepth} levels.`,
+    );
+  }
   if ('and' in filter || 'or' in filter) {
     const children = 'and' in filter ? filter.and : filter.or;
-    if (!Array.isArray(children) || children.length < 1 || children.length > 25) {
-      invalidQuery('Boolean filter groups must contain 1 to 25 filters.');
+    if (
+      !Array.isArray(children) ||
+      children.length < 1 ||
+      children.length > resourceLimits.contentQuery.maximumBooleanGroupSize
+    ) {
+      invalidQuery(
+        `Boolean filter groups must contain 1 to ${resourceLimits.contentQuery.maximumBooleanGroupSize} filters.`,
+      );
     }
     children.forEach((child) => {
       validateFilter(child, depth + 1, state);
@@ -159,16 +173,23 @@ function validateFilter(filter: ContentFilter, depth = 1, state = { predicates: 
     return;
   }
   state.predicates += 1;
-  if (state.predicates > 50) invalidQuery('A query cannot contain more than 50 predicates.');
+  if (state.predicates > resourceLimits.contentQuery.maximumPredicates) {
+    invalidQuery(
+      `A query cannot contain more than ${resourceLimits.contentQuery.maximumPredicates} predicates.`,
+    );
+  }
   if (typeof filter.path !== 'string') invalidQuery('Every predicate requires a string path.');
   pathSegments(filter.path);
   if (typeof filter.operator !== 'string' || !operatorSet.has(filter.operator))
     invalidQuery(`Filter operator ${String(filter.operator)} is invalid.`);
   if (
     (filter.operator === 'in' || filter.operator === 'notIn') &&
-    (!Array.isArray(filter.value) || filter.value.length > 100)
+    (!Array.isArray(filter.value) ||
+      filter.value.length > resourceLimits.contentQuery.maximumSetValues)
   ) {
-    invalidQuery(`${filter.operator} requires an array with at most 100 values.`);
+    invalidQuery(
+      `${filter.operator} requires an array with at most ${resourceLimits.contentQuery.maximumSetValues} values.`,
+    );
   }
 }
 
@@ -182,7 +203,11 @@ function matches(entry: ContentEntry, filter: ContentFilter): boolean {
 function normalizedSort(sort: ContentSort[] | undefined): Required<ContentSort>[] {
   const selected = sort?.length ? sort : defaultSort;
   if (!Array.isArray(selected)) invalidQuery('sort must be an array.');
-  if (selected.length > 5) invalidQuery('A query cannot contain more than 5 sort fields.');
+  if (selected.length > resourceLimits.contentQuery.maximumSortFields) {
+    invalidQuery(
+      `A query cannot contain more than ${resourceLimits.contentQuery.maximumSortFields} sort fields.`,
+    );
+  }
   const normalized: Required<ContentSort>[] = selected.map((item) => {
     if (!item || typeof item !== 'object' || Array.isArray(item) || typeof item.path !== 'string') {
       invalidQuery('Every sort rule requires a string path.');
@@ -250,7 +275,11 @@ function setProjected(target: Record<string, unknown>, segments: string[], value
 
 function project(entry: ContentEntry, projection: string[] | undefined): ContentEntry {
   if (!projection?.length) return entry;
-  if (projection.length > 50) invalidQuery('A projection cannot contain more than 50 fields.');
+  if (projection.length > resourceLimits.contentQuery.maximumProjectionFields) {
+    invalidQuery(
+      `A projection cannot contain more than ${resourceLimits.contentQuery.maximumProjectionFields} fields.`,
+    );
+  }
   const data: Record<string, unknown> = {};
   for (const path of projection) {
     const segments = pathSegments(path, true).slice(1);
@@ -324,8 +353,14 @@ export class ContentQueryService {
       invalidQuery('after must be a string cursor.');
     }
     const first = input.first ?? 20;
-    if (!Number.isInteger(first) || first < 1 || first > 100) {
-      invalidQuery('first must be an integer between 1 and 100.');
+    if (
+      !Number.isInteger(first) ||
+      first < 1 ||
+      first > resourceLimits.contentQuery.maximumPageSize
+    ) {
+      invalidQuery(
+        `first must be an integer between 1 and ${resourceLimits.contentQuery.maximumPageSize}.`,
+      );
     }
     if (input.filter) validateFilter(input.filter);
     const sort = normalizedSort(input.sort);

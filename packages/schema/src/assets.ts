@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { resourceLimits } from './resource-limits.js';
 
 const contentScopeSchema = z.object({
   organizationId: z.string().min(1),
@@ -51,17 +52,22 @@ export const assetObjectSchema = z.object({
   url: z.string().url(),
   filename: z.string().min(1),
   mediaType: z.string().min(1),
-  size: z.number().int().nonnegative(),
+  size: z.number().int().nonnegative().max(resourceLimits.assets.maximumBytes),
   checksum: z.string().min(1),
-  width: z.number().int().positive().optional(),
-  height: z.number().int().positive().optional(),
+  width: z.number().int().positive().max(resourceLimits.assets.maximumDimensionPixels).optional(),
+  height: z.number().int().positive().max(resourceLimits.assets.maximumDimensionPixels).optional(),
 });
 
 export const assetRenditionPresetSchema = z
   .object({
     id: z.string().min(1),
-    width: z.number().int().positive().optional(),
-    height: z.number().int().positive().optional(),
+    width: z.number().int().positive().max(resourceLimits.assets.maximumDimensionPixels).optional(),
+    height: z
+      .number()
+      .int()
+      .positive()
+      .max(resourceLimits.assets.maximumDimensionPixels)
+      .optional(),
     fit: z.enum(['cover', 'contain', 'crop']).default('cover'),
     format: z.enum(['original', 'jpeg', 'png', 'webp', 'avif']).default('original'),
     quality: z.number().int().min(1).max(100).default(80),
@@ -99,9 +105,9 @@ export const assetRecordSchema = contentScopeSchema.extend({
 });
 
 export const assetUploadPartSchema = z.object({
-  partNumber: z.number().int().positive(),
+  partNumber: z.number().int().positive().max(resourceLimits.assets.maximumParts),
   etag: z.string().min(1),
-  size: z.number().int().nonnegative(),
+  size: z.number().int().nonnegative().max(resourceLimits.api.assetPartBodyBytes),
 });
 
 export const assetUploadSessionSchema = contentScopeSchema.extend({
@@ -109,11 +115,11 @@ export const assetUploadSessionSchema = contentScopeSchema.extend({
   storageUploadId: z.string().min(1),
   filename: z.string().min(1),
   mediaType: z.string().min(1),
-  size: z.number().int().positive(),
+  size: z.number().int().positive().max(resourceLimits.assets.maximumBytes),
   kind: assetKindSchema,
   state: z.enum(['pending', 'uploading', 'completed', 'aborted']),
-  partSize: z.number().int().positive(),
-  parts: z.array(assetUploadPartSchema).default([]),
+  partSize: z.number().int().positive().max(resourceLimits.api.assetPartBodyBytes),
+  parts: z.array(assetUploadPartSchema).max(resourceLimits.assets.maximumParts).default([]),
   createdAt: z.string().datetime(),
   expiresAt: z.string().datetime(),
 });
@@ -121,15 +127,15 @@ export const assetUploadSessionSchema = contentScopeSchema.extend({
 export const startAssetUploadSchema = z.object({
   filename: z.string().min(1),
   mediaType: z.string().min(1),
-  size: z.number().int().positive(),
+  size: z.number().int().positive().max(resourceLimits.assets.maximumBytes),
   kind: assetKindSchema,
   metadata: assetMetadataSchema,
-  width: z.number().int().positive().optional(),
-  height: z.number().int().positive().optional(),
+  width: z.number().int().positive().max(resourceLimits.assets.maximumDimensionPixels).optional(),
+  height: z.number().int().positive().max(resourceLimits.assets.maximumDimensionPixels).optional(),
 });
 
 export const completeAssetUploadSchema = z.object({
-  parts: z.array(assetUploadPartSchema).min(1),
+  parts: z.array(assetUploadPartSchema).min(1).max(resourceLimits.assets.maximumParts),
 });
 
 export const createAssetDeliverySchema = z.object({

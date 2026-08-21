@@ -1,0 +1,81 @@
+name: Release evidence
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+  artifact-metadata: write
+
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: gridstory
+          POSTGRES_PASSWORD: gridstory
+          POSTGRES_DB: gridstory
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready --username gridstory --dbname gridstory"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.17.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.14.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - name: Prepare package archives and limits
+        run: pnpm release:prepare -- --output release-artifacts
+      - name: Benchmark SQLite application pipeline
+        run: node scripts/benchmark-release.mjs --profile sqlite --output release-artifacts/benchmark-sqlite.json
+      - name: Benchmark PostgreSQL application pipeline
+        run: node scripts/benchmark-release.mjs --profile postgres --output release-artifacts/benchmark-postgres.json
+        env:
+          GRIDSTORY_BENCHMARK_POSTGRES_URL: postgresql://gridstory:gridstory@127.0.0.1:5432/gridstory
+      - name: Generate SPDX JSON SBOM
+        uses: anchore/sbom-action@v0.24.0
+        with:
+          path: .
+          format: spdx-json
+          output-file: release-artifacts/gridstory.spdx.json
+          artifact-name: gridstory.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+          syft-version: v1.51.0
+      - name: Write and verify SHA-256 manifest
+        run: |
+          pnpm release:manifest -- --output release-artifacts
+          pnpm release:verify -- --output release-artifacts
+      - name: Attest package and evidence provenance
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            release-artifacts/*.tgz
+            release-artifacts/release-manifest.json
+            release-artifacts/resource-limits.json
+            release-artifacts/benchmark-*.json
+      - name: Attest package SBOM
+        uses: actions/attest@v4
+        with:
+          subject-path: release-artifacts/*.tgz
+          sbom-path: release-artifacts/gridstory.spdx.json
+      - name: Upload complete evidence set
+        uses: actions/upload-artifact@v4
+        with:
+          name: gridstory-release-evidence
+          path: release-artifacts
+          if-no-files-found: error
+          retention-days: 30

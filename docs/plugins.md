@@ -63,7 +63,7 @@ Only an enabled plugin with a declared server runtime, declared operation, and g
 - JSON-object input/output validation;
 - stable denial for missing runtime, state, operation, capability, or trust.
 
-The current limiter is process-local. Distributed rate enforcement and benchmark-backed limits remain M5-007 deployment work. The runtime transport must not put secret values or draft content in logs and should correlate operations with separately protected telemetry under M5-004.
+The current limiter is process-local. M5-007 publishes and centralizes these host defaults, but distributed rate/concurrency enforcement and OS/container CPU, memory, process, filesystem, and network limits remain deployment evidence. The runtime transport must not put secret values or draft content in logs and should correlate operations with separately protected telemetry under M5-004.
 
 ## API and client
 

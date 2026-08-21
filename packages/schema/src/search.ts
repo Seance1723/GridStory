@@ -1,15 +1,19 @@
 import { z } from 'zod';
 import type { ContentEntry, ContentPerspective } from './content.js';
 import type { ContentScope } from './context.js';
+import { resourceLimits } from './resource-limits.js';
 
 export const searchQuerySchema = z.object({
-  text: z.string().max(500).default(''),
+  text: z.string().max(resourceLimits.search.maximumTextCharacters).default(''),
   perspective: z.enum(['draft', 'published']).default('published'),
-  contentTypes: z.array(z.string().min(1).max(100)).max(50).default([]),
+  contentTypes: z
+    .array(z.string().min(1).max(100))
+    .max(resourceLimits.search.maximumContentTypes)
+    .default([]),
   taxonomies: z
     .record(z.string().min(1).max(100), z.array(z.string().min(1).max(100)).min(1).max(50))
     .default({}),
-  first: z.number().int().min(1).max(100).default(20),
+  first: z.number().int().min(1).max(resourceLimits.search.maximumRequestedResults).default(20),
 });
 
 export interface SearchHit {

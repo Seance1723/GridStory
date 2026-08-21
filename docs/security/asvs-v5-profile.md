@@ -33,7 +33,7 @@ A `verified` project requirement can cover only the selected ASVS reference and 
 | V12 Secure Communication | Applicable | HTTPS is required for risky outbound/preview paths; deployment TLS evidence remains. |
 | V13 Configuration | Applicable | Explicit origins/hosts/secrets/adapters exist; production fail-safe validation and vault evidence remain. |
 | V14 Data Protection | Applicable | Draft/private/public cache separation plus telemetry classification, minimization, access, and retention targets exist; product-wide deletion/legal-hold policy remains. |
-| V15 Secure Coding and Architecture | Applicable | Explicit boundaries and validation exist; SBOM, vulnerability SLA, provenance, signatures, and tested limits remain. |
+| V15 Secure Coding and Architecture | Applicable | Explicit boundaries, locked dependencies, vulnerability/support policy, resource profile, package inventory/checksums, SPDX generation, and provenance/SBOM attestation workflow exist; hosted run and deployment evidence remain. |
 | V16 Security Logging and Error Handling | Applicable | Hash-chain audit, generic API errors, bounded OTLP signals, live leakage regressions, event inventory, redaction, health, dashboards, alerts, retention, and response runbooks exist. |
 | V17 WebRTC | Not applicable | GridStory has no peer connection, signaling, media negotiation, or WebRTC data channel. Reassess if added. |
 
@@ -45,7 +45,7 @@ The machine profile contains 30 stable `GS-SEC-###` requirements:
 
 - Verified controls cover trusted-layer validation, parameterized persistence, SVG sanitization, atomic operations, exact origin messaging, tenant-bound deny-by-default authorization, credential/cache containment, signed token validation, approved platform cryptography, capability-isolated plugin execution, and fail-closed generic errors.
 - Partial controls cover structured rendering, SSRF/egress, browser headers, GraphQL cost/introspection, upload limits/scanning, external adapter configuration, sensitive-data policy, and minimal API fields.
-- Planned controls cover anti-automation, trusted production intermediary/identity configuration, cryptographic inventory/secret lifecycle, production fail-safe configuration, vulnerability/SBOM policy, and published resource limits.
+- Planned controls cover trusted production intermediary/identity configuration, cryptographic inventory/secret lifecycle, and production fail-safe configuration. Anti-automation, vulnerability/component lifecycle, GraphQL/upload bounds, and the resource-demand inventory are partial because distributed/deployment or hosted-release evidence remains.
 - Conditional controls cover production OIDC, persistent sessions, OIDC browser-flow binding, and deployed TLS/service communication.
 
 Evidence paths point to repository code, tests, or documentation. Operational verification names are intentional future evidence and are linked to tasks. `pnpm security:check` rejects verified requirements without local evidence, malformed or duplicate IDs, unknown threat references, missing chapter coverage, invalid ASVS references, and unresolved partial/planned/conditional controls without stable task ownership.
@@ -58,7 +58,7 @@ The profile treats `GS-SEC-024` credential/cache containment as verified and ext
 
 `GS-SEC-030` and `THREAT-0023` now cover publisher-bound Ed25519 manifest verification, exact SHA-256 artifact binding, SDK/protocol compatibility, tenant-scoped constrained grants, explicit lifecycle authorization/revocation, durable SQLite/PostgreSQL state, and bounded invocation through an injected external-runtime adapter. `GS-SEC-015` and `GS-SEC-019` include the plugin authorization and platform-crypto evidence. Arbitrary packages are never imported into the control-plane process, and the in-process harness is test-only.
 
-This repository evidence does not certify the operator-provided OS/container sandbox or establish marketplace package safety. Runtime hardening is deployment evidence; dependency/SBOM/provenance work remains M5-007 and publisher/marketplace review remains M6-005.
+This repository evidence does not certify the operator-provided OS/container sandbox or establish marketplace package safety. M5-007 supplies the repository dependency/SBOM/provenance process; hosted execution and runtime hardening remain M5-008 deployment evidence, while publisher/marketplace review remains M6-005.
 
 ## M5-004 evidence update
 
@@ -78,17 +78,23 @@ Repository evidence does not certify backup storage encryption/retention/access 
 
 `GS-SEC-009` remains partial by design. The repository verifies exact origins and private asset headers and publishes intentional Studio-versus-preview `frame-ancestors`, CSP, nosniff, referrer, permissions, TLS, and cache guidance. GridStory does not serve a consumer's production HTML, so the target deployment must prove its actual headers and Apple/branded-browser behavior during M5-008 readiness.
 
+## M5-007 evidence update
+
+`GS-SEC-007`, `GS-SEC-011`, `GS-SEC-012`, `GS-SEC-025`, and `GS-SEC-026` now link one machine-readable resource profile to explicit API/asset/archive/GraphQL guards, boundary tests, schema-validated SQLite/PostgreSQL benchmark reports, private vulnerability reporting and remediation targets, scheduled/PR OSV scanning, bounded dependency updates, reviewed private package inventories, SHA-256 verification, pinned SPDX generation, and GitHub/Sigstore provenance/SBOM attestation workflows.
+
+Those requirements remain partial by design: Fastify injection is not a network/deployment saturation test, the plugin limiter is process-local, production asset scanners/quotas and GraphQL introspection/edge controls are operator evidence, content/audit retention awaits M6-003, and workflow configuration does not prove that a hosted attestation exists. M5-008 must run the staged release, verify hosted evidence, and accept exact proxy/database/object-store/worker limits.
+
 ## Highest-priority gaps
 
 | Gap | ASVS areas | Owner task |
 |---|---|---|
 | Production database/object-store tenant-policy conformance | V8, V14, V15 | M5-008 deployment evidence |
 | Production identity/session and trusted-proxy boundary | V4, V6, V7, V10, V13 | M6-002; deployment proof M5-008 |
-| Plugin runtime OS/container hardening, package review, dependency evidence, and publisher enrollment | V8, V11, V13, V15 | M5-007; M6-005; deployment evidence |
+| Plugin runtime OS/container hardening, package review, and publisher enrollment | V8, V11, V13, V15 | M6-005; deployment evidence |
 | Telemetry backend access/deletion, Collector deployment conformance, and production identity/credential event sources | V11, V13, V14, V16 | M5-008; event sources M6-002 |
 | Backup storage/physical PITR, secret rotation, and orchestrator rollout proof | V13, V14, V15, V16 | M5-008 deployment evidence; secret lifecycle M5-008/M6-002 |
 | Deployed HTML CSP/header conformance, arbitrary application rendering, and branded-browser/assistive-technology acceptance | V1, V3, V14 | M5-008 deployment/readiness evidence |
-| Abuse limits, benchmarks, SBOM, vulnerability SLA, provenance, and signatures | V2, V4, V5, V15 | M5-007 |
+| Hosted release attestation/SBOM verification plus deployment rate, concurrency, saturation, quota, and retention evidence | V2, V4, V5, V15 | M5-008; retention M6-003 |
 | Independent readiness/risk acceptance | All applicable chapters | M5-008 |
 
 ## How to update the profile

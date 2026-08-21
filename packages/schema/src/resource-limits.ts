@@ -1,0 +1,128 @@
+import { z } from 'zod';
+
+/**
+ * Reviewed application limits and benchmark profile for the M5-007 support boundary.
+ * Keep this object JSON-serializable so release tooling can publish it verbatim.
+ */
+export const resourceLimits = {
+  version: 1,
+  api: {
+    ordinaryBodyBytes: 1_048_576,
+    assetPartBodyBytes: 5_242_880,
+    portabilityImportBodyBytes: 16_777_216,
+  },
+  assets: {
+    maximumBytes: 100_000_000,
+    maximumDimensionPixels: 16_384,
+    maximumParts: 1_000,
+  },
+  portability: {
+    maximumEntries: 1_000,
+    maximumRevisionsPerEntry: 100,
+    maximumAuditEventsPerEntry: 1_000,
+  },
+  graphql: {
+    maximumDepth: 12,
+    maximumAliases: 50,
+    maximumFieldSelections: 500,
+    batching: false,
+    subscriptions: false,
+  },
+  contentQuery: {
+    maximumPageSize: 100,
+    maximumFilterDepth: 8,
+    maximumBooleanGroupSize: 25,
+    maximumPredicates: 50,
+    maximumSetValues: 100,
+    maximumSortFields: 5,
+    maximumProjectionFields: 50,
+    maximumPathCharacters: 200,
+  },
+  search: {
+    maximumTextCharacters: 500,
+    maximumContentTypes: 50,
+    maximumRequestedResults: 100,
+    maximumReturnedResults: 50,
+    maximumTraversalDepth: 12,
+    maximumIndexedStringsPerEntry: 5_000,
+    maximumIndexedTextCharacters: 100_000,
+  },
+  operations: {
+    maximumListPageSize: 1_000,
+    maximumDrainBatch: 100,
+    outboxDeadAfterAttempts: 10,
+    maximumJobAttempts: 20,
+  },
+  plugins: {
+    maximumArtifactBytes: 100_000_000,
+    defaultInvocationsPerMinutePerScope: 60,
+    defaultInvocationTimeoutMs: 5_000,
+    defaultInputBytes: 65_536,
+    defaultOutputBytes: 262_144,
+  },
+  benchmark: {
+    datasetEntries: 250,
+    readSamples: 120,
+    writeSamples: 30,
+    concurrency: 8,
+    maximumPeakResidentMemoryBytes: 536_870_912,
+    sqlite: {
+      maximumReadP95Ms: 100,
+      maximumQueryP95Ms: 250,
+      maximumWriteP95Ms: 250,
+      minimumReadThroughputPerSecond: 25,
+    },
+    postgres: {
+      maximumReadP95Ms: 150,
+      maximumQueryP95Ms: 350,
+      maximumWriteP95Ms: 350,
+      minimumReadThroughputPerSecond: 20,
+    },
+  },
+} as const;
+
+export type GridStoryResourceLimits = typeof resourceLimits;
+
+const benchmarkMetricSchema = z.object({
+  samples: z.number().int().positive(),
+  p50Ms: z.number().nonnegative(),
+  p95Ms: z.number().nonnegative(),
+  p99Ms: z.number().nonnegative(),
+  throughputPerSecond: z.number().positive(),
+});
+
+export const benchmarkReportSchema = z.object({
+  schemaVersion: z.literal(1),
+  profile: z.enum(['sqlite', 'postgres']),
+  generatedAt: z.string().datetime(),
+  environment: z.object({
+    node: z.string().min(1),
+    platform: z.string().min(1),
+    architecture: z.string().min(1),
+    availableParallelism: z.number().int().positive(),
+    totalMemoryBytes: z.number().int().positive(),
+  }),
+  dataset: z.object({
+    entries: z.number().int().positive(),
+    tenantId: z.string().min(1),
+    transport: z.literal('fastify-inject'),
+  }),
+  scenarios: z
+    .array(
+      z.object({
+        name: z.string().min(1),
+        category: z.enum(['read', 'query', 'write']),
+        metrics: benchmarkMetricSchema,
+        maximumP95Ms: z.number().positive(),
+        minimumThroughputPerSecond: z.number().positive().optional(),
+        passed: z.boolean(),
+      }),
+    )
+    .min(4),
+  peakResidentMemoryBytes: z.number().int().positive(),
+  maximumPeakResidentMemoryBytes: z.number().int().positive(),
+  passed: z.boolean(),
+  claimBoundary: z.string().min(40),
+});
+
+export type BenchmarkReport = z.infer<typeof benchmarkReportSchema>;

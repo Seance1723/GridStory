@@ -309,14 +309,23 @@
     {
       "id": "GS-SEC-007",
       "title": "Anti-automation and abuse limits",
-      "status": "planned",
+      "status": "partial",
       "owner": "Reliability owner",
       "statement": "Production deployments SHALL enforce benchmark-backed request, identity, tenant, query, upload, import, job, and expensive-operation rate and concurrency limits.",
       "asvsRefs": ["v5.0.0-2.4.1"],
       "threatRefs": ["THREAT-0010", "THREAT-0019"],
-      "evidence": ["docs/content-queries.md"],
-      "verification": ["Load and abuse test profile"],
-      "taskIds": ["M5-007"]
+      "evidence": [
+        "packages/schema/src/resource-limits.ts",
+        "docs/release-and-support.md",
+        "scripts/benchmark-release.mjs"
+      ],
+      "verification": [
+        "apps/api/test/graphql.test.ts",
+        "apps/api/test/assets.test.ts",
+        ".github/workflows/release-evidence.yml",
+        "Production edge/distributed abuse and saturation profile"
+      ],
+      "taskIds": ["M5-007", "M5-008"]
     },
     {
       "id": "GS-SEC-008",
@@ -374,12 +383,18 @@
       "statement": "GraphQL SHALL bound depth, aliases, amount, input size, and execution cost; batching/subscriptions SHALL remain disabled unless separately threat-modeled; production introspection SHALL follow deployment policy.",
       "asvsRefs": ["v5.0.0-4.3.1", "v5.0.0-4.3.2"],
       "threatRefs": ["THREAT-0010"],
-      "evidence": ["apps/api/src/graphql.ts", "docs/content-queries.md"],
+      "evidence": [
+        "apps/api/src/graphql.ts",
+        "apps/api/test/graphql.test.ts",
+        "docs/content-queries.md",
+        "docs/release-and-support.md"
+      ],
       "verification": [
         "apps/api/test/graphql.test.ts",
-        "Benchmark-backed cost and introspection tests"
+        "scripts/benchmark-release.mjs",
+        "Production introspection and edge-concurrency policy review"
       ],
-      "taskIds": ["M5-007"]
+      "taskIds": ["M5-007", "M5-008"]
     },
     {
       "id": "GS-SEC-012",
@@ -390,6 +405,7 @@
       "asvsRefs": ["v5.0.0-5.1.1", "v5.0.0-5.2.1", "v5.0.0-5.2.2", "v5.0.0-5.3.2", "v5.0.0-5.4.3"],
       "threatRefs": ["THREAT-0007", "THREAT-0008", "THREAT-0019"],
       "evidence": [
+        "packages/schema/src/resource-limits.ts",
         "packages/core/src/asset-service.ts",
         "packages/core/src/asset-security.ts",
         "docs/assets.md"
@@ -397,9 +413,10 @@
       "verification": [
         "packages/core/test/asset-service.test.ts",
         "packages/core/test/asset-security.test.ts",
+        "apps/api/test/assets.test.ts",
         "Deployment quota and scanner conformance test"
       ],
-      "taskIds": ["M4-002", "M5-007"]
+      "taskIds": ["M4-002", "M5-007", "M5-008"]
     },
     {
       "id": "GS-SEC-013",
@@ -616,26 +633,46 @@
     {
       "id": "GS-SEC-025",
       "title": "Vulnerability and component lifecycle",
-      "status": "planned",
+      "status": "partial",
       "owner": "Release engineering owner",
       "statement": "The project SHALL maintain risk-based vulnerability remediation timeframes, a current SBOM from trusted locked dependencies, provenance/signatures, and a documented disclosure and support policy.",
       "asvsRefs": ["v5.0.0-15.1.1", "v5.0.0-15.1.2"],
       "threatRefs": ["THREAT-0020"],
-      "evidence": ["pnpm-lock.yaml", "TASKS.md"],
-      "verification": ["Release artifact and vulnerability-process review"],
-      "taskIds": ["M5-007"]
+      "evidence": [
+        "pnpm-lock.yaml",
+        "SECURITY.md",
+        "SUPPORT.md",
+        "scripts/release-evidence.mjs",
+        ".github/workflows/vulnerability.yml",
+        ".github/workflows/release-evidence.yml",
+        ".github/dependabot.yml"
+      ],
+      "verification": [
+        "pnpm release:verify",
+        "Hosted OSV, SBOM, provenance, and attestation verification during staged release"
+      ],
+      "taskIds": ["M5-007", "M5-008"]
     },
     {
       "id": "GS-SEC-026",
       "title": "Resource-demand inventory",
-      "status": "planned",
+      "status": "partial",
       "owner": "Reliability owner",
       "statement": "The project SHALL identify resource-demanding functions and publish tested limits for bodies, queries, uploads, archives, indexes, histories, queues, retries, concurrency, and retention.",
       "asvsRefs": ["v5.0.0-15.1.3"],
       "threatRefs": ["THREAT-0007", "THREAT-0009", "THREAT-0010", "THREAT-0019"],
-      "evidence": ["docs/content-queries.md", "docs/operations.md", "TASKS.md"],
-      "verification": ["Benchmark and saturation profile"],
-      "taskIds": ["M5-007"]
+      "evidence": [
+        "packages/schema/src/resource-limits.ts",
+        "docs/release-and-support.md",
+        "docs/content-queries.md",
+        "docs/operations.md"
+      ],
+      "verification": [
+        "scripts/benchmark-release.mjs",
+        ".github/workflows/release-evidence.yml",
+        "Deployment HTTP/load/soak/saturation and retention review"
+      ],
+      "taskIds": ["M5-007", "M5-008", "M6-003"]
     },
     {
       "id": "GS-SEC-027",

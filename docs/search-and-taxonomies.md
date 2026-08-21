@@ -2,6 +2,8 @@
 
 GridStory exposes search as a framework-neutral control-plane capability. Content remains authoritative in the configured repository; a `SearchAdapter` can project scoped draft and published revisions into any external engine without coupling the content service to that provider.
 
+The published search envelope accepts at most 500 query characters, 50 content types, and 100 requested results while the built-in adapter returns at most 50. Index extraction traverses at most 12 levels and retains at most 5,000 scalar strings/100,000 characters per entry. These values are centralized in `resourceLimits`; larger production collections require an injected adapter plus deployment benchmarks. See [Release evidence, tested limits, and support](release-and-support.md).
+
 ## Contracts and default adapter
 
 The canonical query supports bounded text, perspective, content-type, taxonomy-term, and result-count inputs. Responses include exact content entries, deterministic scores, short matched-term highlights, taxonomy facets, and a total. The bundled `repository-scan` adapter is a correct zero-configuration fallback for development and small installations. It scans only the requested organization, tenant, workspace, site, environment, and locale and resolves the requested perspective. Production deployments can inject a shared adapter into both API and worker processes.

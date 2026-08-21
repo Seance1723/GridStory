@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import type { AssetRenditionAdapter } from '@gridstory/core';
+import { resourceLimits } from '@gridstory/schema';
 import { buildServer } from '../src/server.js';
 
 const headers = {
@@ -205,6 +206,41 @@ describe('asset management API', () => {
       },
     });
     expect(denied.statusCode).toBe(403);
+  });
+
+  it('accepts the advertised multipart size and rejects bytes beyond it', async () => {
+    server = await buildServer({ databasePath: ':memory:', seed: false });
+    const acceptedBody = Buffer.alloc(resourceLimits.api.ordinaryBodyBytes + 1, 1);
+    const start = await server.inject({
+      method: 'POST',
+      url: '/api/v1/assets/uploads',
+      headers,
+      payload: {
+        filename: 'part.bin',
+        mediaType: 'application/octet-stream',
+        size: acceptedBody.byteLength,
+        kind: 'file',
+        metadata: { title: 'Multipart boundary' },
+      },
+    });
+    expect(start.statusCode).toBe(201);
+    const upload = start.json();
+    const accepted = await server.inject({
+      method: 'PUT',
+      url: `/api/v1/assets/uploads/${upload.id}/parts/1`,
+      headers: { ...headers, 'content-type': 'application/octet-stream' },
+      payload: acceptedBody,
+    });
+    expect(accepted.statusCode).toBe(200);
+
+    const rejected = await server.inject({
+      method: 'PUT',
+      url: `/api/v1/assets/uploads/${upload.id}/parts/2`,
+      headers: { ...headers, 'content-type': 'application/octet-stream' },
+      payload: Buffer.alloc(resourceLimits.api.assetPartBodyBytes + 1, 1),
+    });
+    expect(rejected.statusCode).toBe(413);
+    expect(rejected.json().error.code).toBe('invalid_request');
   });
 
   it('quarantines infected objects and refuses delivery grants', async () => {

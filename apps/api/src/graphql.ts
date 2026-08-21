@@ -1,23 +1,31 @@
-import mercurius, { type MercuriusContext } from 'mercurius';
-import { GraphQLScalarType, Kind, valueFromASTUntyped, type ValueNode } from 'graphql';
-import type { FastifyInstance, FastifyRequest } from 'fastify';
 import {
-  GridStoryActions,
   type AuthorizationPolicy,
   type ContentQueryService,
   type ContentService,
+  GridStoryActions,
   type LocalizationService,
   type SchemaLifecycleService,
 } from '@gridstory/core';
 import {
+  type ContentPerspective,
+  type ContentQuery,
+  type RequestContext,
+  resourceLimits,
+  type SchemaIrDocument,
   schemaIrDocumentSchema,
   visualModelDocumentSchema,
   visualModelToSchemaIr,
-  type ContentPerspective,
-  type ContentQuery,
-  type SchemaIrDocument,
-  type RequestContext,
 } from '@gridstory/schema';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
+import {
+  GraphQLError,
+  GraphQLScalarType,
+  Kind,
+  type ValidationRule,
+  type ValueNode,
+  valueFromASTUntyped,
+} from 'graphql';
+import mercurius, { type MercuriusContext } from 'mercurius';
 import { authorize, contentScope, requestContext } from './request-context.js';
 
 const schema = /* GraphQL */ `
@@ -168,6 +176,40 @@ const jsonScalar = new GraphQLScalarType({
   parseLiteral: jsonLiteral,
 });
 
+export const gridStoryGraphqlResourceRule: ValidationRule = (context) => {
+  let aliases = 0;
+  let fieldSelections = 0;
+  let aliasLimitReported = false;
+  let selectionLimitReported = false;
+  return {
+    Field(node) {
+      fieldSelections += 1;
+      if (node.alias) aliases += 1;
+      if (!aliasLimitReported && aliases > resourceLimits.graphql.maximumAliases) {
+        aliasLimitReported = true;
+        context.reportError(
+          new GraphQLError(
+            `GraphQL documents cannot contain more than ${resourceLimits.graphql.maximumAliases} aliases.`,
+            { nodes: node },
+          ),
+        );
+      }
+      if (
+        !selectionLimitReported &&
+        fieldSelections > resourceLimits.graphql.maximumFieldSelections
+      ) {
+        selectionLimitReported = true;
+        context.reportError(
+          new GraphQLError(
+            `GraphQL documents cannot contain more than ${resourceLimits.graphql.maximumFieldSelections} field selections.`,
+            { nodes: node },
+          ),
+        );
+      }
+    },
+  };
+};
+
 function selectedQuery(
   input: ContentQuery | undefined,
   perspective?: ContentPerspective,
@@ -205,7 +247,8 @@ export async function registerGridStoryGraphql(
     ide: false,
     subscription: false,
     allowBatchedQueries: false,
-    queryDepth: 12,
+    queryDepth: resourceLimits.graphql.maximumDepth,
+    validationRules: [gridStoryGraphqlResourceRule],
     context: (request) => ({ request }),
     resolvers: {
       JSON: jsonScalar,

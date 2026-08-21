@@ -6,20 +6,21 @@ import {
   emitTenantTelemetry,
   type TenantTelemetrySink,
 } from './tenant-scope.js';
-import type {
-  AssetObject,
-  AssetRevision,
-  AssetRecord,
-  AssetRendition,
-  AssetRenditionPreset,
-  AssetUploadPart,
-  AssetUploadSession,
-  AssetUsageLocation,
-  AssetUsageReport,
-  ContentPerspective,
-  ContentScope,
-  StartAssetUploadInput,
-  UpdateAssetInput,
+import {
+  resourceLimits,
+  type AssetObject,
+  type AssetRecord,
+  type AssetRendition,
+  type AssetRenditionPreset,
+  type AssetRevision,
+  type AssetUploadPart,
+  type AssetUploadSession,
+  type AssetUsageLocation,
+  type AssetUsageReport,
+  type ContentPerspective,
+  type ContentScope,
+  type StartAssetUploadInput,
+  type UpdateAssetInput,
 } from '@gridstory/schema';
 import {
   assetMetadataSchema,
@@ -370,6 +371,17 @@ export class AssetService {
     assertScope(pending.session, input.scope);
     if (Date.parse(pending.session.expiresAt) <= Date.now()) {
       throw new GridStoryError('Upload session has expired.', 'asset_upload_expired', 410);
+    }
+    if (
+      input.partNumber > resourceLimits.assets.maximumParts ||
+      input.body.byteLength > pending.session.partSize ||
+      input.body.byteLength > resourceLimits.api.assetPartBodyBytes
+    ) {
+      throw new GridStoryError(
+        'Upload part exceeds the negotiated size or part-count limit.',
+        'asset_upload_part_limit',
+        413,
+      );
     }
     const part = await this.#storage.uploadPart({
       scope: input.scope,

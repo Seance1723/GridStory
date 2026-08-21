@@ -81,6 +81,7 @@ import {
   type RedirectDefinition,
   type ReleaseInput,
   releaseInputSchema,
+  resourceLimits,
   type SchemaIrDocument,
   type SignedPluginManifest,
   schemaIrDocumentSchema,
@@ -206,9 +207,13 @@ function requiredString(value: unknown, name: string): string {
 function boundedLimit(value: unknown, fallback = 100): number {
   if (value === undefined) return fallback;
   const parsed = typeof value === 'string' ? Number(value) : value;
-  if (!Number.isInteger(parsed) || (parsed as number) < 1 || (parsed as number) > 1000) {
+  if (
+    !Number.isInteger(parsed) ||
+    (parsed as number) < 1 ||
+    (parsed as number) > resourceLimits.operations.maximumListPageSize
+  ) {
     throw new GridStoryError(
-      'limit must be an integer between 1 and 1000.',
+      `limit must be an integer between 1 and ${resourceLimits.operations.maximumListPageSize}.`,
       'invalid_request',
       400,
     );
@@ -493,7 +498,11 @@ export async function buildServer({
     componentManifests,
   });
   const policy = new AuthorizationPolicy();
-  const server = Fastify({ logger, forceCloseConnections: 'idle' });
+  const server = Fastify({
+    logger,
+    forceCloseConnections: 'idle',
+    bodyLimit: resourceLimits.api.ordinaryBodyBytes,
+  });
   observability?.registerFastify(server);
   server.addContentTypeParser(
     'application/x-ndjson',
@@ -682,25 +691,33 @@ export async function buildServer({
     authorize(policy, context, GridStoryActions.assetCreate, { kind: 'asset' });
     return assets.getUpload(contentScope(context), params.id);
   });
-  server.put('/api/v1/assets/uploads/:id/parts/:partNumber', async (request) => {
-    const params = request.params as { id: string; partNumber: string };
-    const context = requestContext(request, 'draft');
-    authorize(policy, context, GridStoryActions.assetCreate, { kind: 'asset' });
-    const partNumber = Number(params.partNumber);
-    if (!(request.body instanceof Uint8Array) || !Number.isInteger(partNumber) || partNumber < 1) {
-      throw new GridStoryError(
-        'A binary body and positive part number are required.',
-        'invalid_asset_upload_part',
-        400,
-      );
-    }
-    return assets.uploadPart({
-      scope: contentScope(context),
-      uploadId: params.id,
-      partNumber,
-      body: request.body,
-    });
-  });
+  server.put(
+    '/api/v1/assets/uploads/:id/parts/:partNumber',
+    { bodyLimit: resourceLimits.api.assetPartBodyBytes },
+    async (request) => {
+      const params = request.params as { id: string; partNumber: string };
+      const context = requestContext(request, 'draft');
+      authorize(policy, context, GridStoryActions.assetCreate, { kind: 'asset' });
+      const partNumber = Number(params.partNumber);
+      if (
+        !(request.body instanceof Uint8Array) ||
+        !Number.isInteger(partNumber) ||
+        partNumber < 1
+      ) {
+        throw new GridStoryError(
+          'A binary body and positive part number are required.',
+          'invalid_asset_upload_part',
+          400,
+        );
+      }
+      return assets.uploadPart({
+        scope: contentScope(context),
+        uploadId: params.id,
+        partNumber,
+        body: request.body,
+      });
+    },
+  );
   server.post('/api/v1/assets/uploads/:id/complete', async (request, reply) => {
     const params = request.params as { id: string };
     const context = requestContext(request, 'draft');
@@ -946,26 +963,30 @@ export async function buildServer({
     return reply.send(Readable.from(serializeLogicalArchive(archive)));
   });
 
-  server.post('/api/v1/portability/import', async (request) => {
-    const context = requestContext(request, 'draft');
-    authorize(policy, context, GridStoryActions.portabilityImport, { kind: 'platform' });
-    const query = request.query as {
-      dryRun?: unknown;
-      conflictPolicy?: unknown;
-      allowSchemaMismatch?: unknown;
-    };
-    const archive =
-      typeof request.body === 'string'
-        ? parseLogicalArchive(request.body)
-        : logicalArchiveFromUnknown(request.body);
-    return portability.import({
-      scope: contentScope(context),
-      archive,
-      dryRun: booleanQuery(query.dryRun, true),
-      conflictPolicy: conflictPolicy(query.conflictPolicy),
-      allowSchemaMismatch: booleanQuery(query.allowSchemaMismatch, false),
-    });
-  });
+  server.post(
+    '/api/v1/portability/import',
+    { bodyLimit: resourceLimits.api.portabilityImportBodyBytes },
+    async (request) => {
+      const context = requestContext(request, 'draft');
+      authorize(policy, context, GridStoryActions.portabilityImport, { kind: 'platform' });
+      const query = request.query as {
+        dryRun?: unknown;
+        conflictPolicy?: unknown;
+        allowSchemaMismatch?: unknown;
+      };
+      const archive =
+        typeof request.body === 'string'
+          ? parseLogicalArchive(request.body)
+          : logicalArchiveFromUnknown(request.body);
+      return portability.import({
+        scope: contentScope(context),
+        archive,
+        dryRun: booleanQuery(query.dryRun, true),
+        conflictPolicy: conflictPolicy(query.conflictPolicy),
+        allowSchemaMismatch: booleanQuery(query.allowSchemaMismatch, false),
+      });
+    },
+  );
 
   server.get('/api/v1/audit/verify', async (request) => {
     const context = requestContext(request, 'draft');

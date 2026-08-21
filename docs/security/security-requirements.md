@@ -127,7 +127,7 @@ The Node API and worker now adapt the canonical bounded tenant envelope to opt-i
 
 Public liveness/readiness expose only stable minimal codes. Authorized private/no-store operations health reports bounded SDK/Collector state without endpoints, topology, versions, credentials, customer data, or failure text; Collector degradation does not weaken or acknowledge content operations. The reference contrib Collector adds memory bounds, batching, retry, a persistent queue, a fail-closed attribute allow-list, and private health/internal metrics. Dashboard, alert rules, event inventory, access, correlation, default retention targets, and exporter/data-exposure incident procedures are maintained in `docs/observability.md` and `deploy/observability`.
 
-`GS-SEC-028` is verified for current product capabilities. Authentication, credential-lifecycle, and break-glass event sources become applicable with the production identity/session work in M6-002 and must join the same inventory before that capability is complete. Backend deletion enforcement, append-only security-log storage, TLS/network policy, secret-manager lifecycle, and Collector deployment conformance remain operator evidence; M5-005, M5-007, and M5-008 retain their recovery, capacity, and GA obligations.
+`GS-SEC-028` is verified for current product capabilities. Authentication, credential-lifecycle, and break-glass event sources become applicable with the production identity/session work in M6-002 and must join the same inventory before that capability is complete. Backend deletion enforcement, append-only security-log storage, TLS/network policy, secret-manager lifecycle, and Collector deployment conformance remain operator evidence; M5-005 retains recovery guidance, M5-007 publishes the repository capacity/supply-chain process, and M5-008 retains hosted/deployment verification.
 
 ## M5-005 recovery and rollout baseline
 
@@ -144,5 +144,5 @@ Production PostgreSQL PITR remains a database/platform control using physical ba
 | Browser/rendering | Studio/application owners | M5-006 repository CSP/header/rendering/browser review plus M5-008 deployed-header and independent assistive-technology acceptance. |
 | Operations, secrets, and telemetry | Platform/security operations owner | M5-004 inventory, redaction, alerts, retention, and telemetry health; M5-005/M5-008 secret lifecycle and deployment evidence. |
 | Recovery and deployment | Reliability/deployment owner | M5-005 restore, graceful shutdown, rolling upgrade, and secret rotation exercises. |
-| Limits and supply chain | Release engineering owner | M5-007 benchmarks, SBOM, vulnerability SLA, provenance, and signatures. |
+| Limits and supply chain | Release engineering owner | Maintain M5-007 limits/benchmarks/SBOM/vulnerability/provenance workflows; M5-008 verifies hosted and deployment evidence. |
 | GA risk acceptance | Security owner and release owner | M5-008 current model/profile, resolved critical risks, explicit expiring high-risk acceptances. |
