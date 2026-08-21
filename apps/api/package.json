@@ -37,6 +37,6 @@
     "mercurius": "16.10.0"
   },
   "devDependencies": {
-    "tsx": "4.23.1"
+    "tsx": "4.23.12"
   }
 }
