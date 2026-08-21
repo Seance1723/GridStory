@@ -685,13 +685,14 @@
       "mitigations": [
         "Hash-chain events within exact scope and checksum exports.",
         "Restrict audit read/export to administrators.",
-        "Define structured security-event logging, redaction, external retention, alerting, and append-only protection in M5-004."
+        "Export bounded structured logs/traces/metrics through an allow-listed Collector pipeline with explicit access, retention, alerting, and incident response; retain audit separately."
       ],
       "verification": [
         "packages/core/test/audit-service.test.ts",
         "packages/core/test/tenant-isolation.test.ts",
+        "apps/api/test/observability.test.ts",
         "docs/audit-and-administration.md",
-        "M5-004"
+        "docs/observability.md"
       ]
     },
     {
@@ -716,7 +717,8 @@
         "packages/core/src/identity.ts",
         "packages/core/src/preview-service.ts",
         "packages/core/src/asset-delivery-service.ts",
-        "M5-004"
+        "docs/observability.md",
+        "M5-005"
       ]
     },
     {
@@ -765,9 +767,10 @@
         "packages/core/test/tenant-isolation.test.ts",
         "scripts/check-tenant-scope.mjs",
         "docs/operations.md",
+        "docs/observability.md",
         "docs/assets.md",
         "docs/search-and-taxonomies.md",
-        "M5-004"
+        "M5-005"
       ]
     },
     {
@@ -788,7 +791,13 @@
         "Define body/upload/archive/concurrency/rate/retention quotas and benchmark them before GA.",
         "Monitor saturation and fail predictably."
       ],
-      "verification": ["docs/content-queries.md", "docs/operations.md", "M5-004", "M5-007"]
+      "verification": [
+        "docs/content-queries.md",
+        "docs/operations.md",
+        "docs/observability.md",
+        "deploy/observability/prometheus-alerts.yaml",
+        "M5-007"
+      ]
     },
     {
       "id": "THREAT-0020",
@@ -846,9 +855,15 @@
       "mitigations": [
         "Return stable generic envelopes for unexpected server errors.",
         "Treat known validation errors as bounded client errors.",
-        "Add structured redaction tests and production debug-off validation in M5-004."
+        "Export only bounded route/error attributes, omit raw requests and exception detail, and apply a fail-closed Collector allow-list."
       ],
-      "verification": ["apps/api/src/server.ts", "apps/api/test/server.test.ts", "M5-004"]
+      "verification": [
+        "apps/api/src/server.ts",
+        "apps/api/src/observability.ts",
+        "apps/api/test/server.test.ts",
+        "apps/api/test/observability.test.ts",
+        "deploy/observability/otel-collector.yaml"
+      ]
     },
     {
       "id": "THREAT-0023",

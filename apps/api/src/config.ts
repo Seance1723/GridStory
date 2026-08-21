@@ -14,6 +14,16 @@ export interface ApiConfig {
   webhookSigningSecret: string;
   allowedWebhookHosts?: string[];
   workerIntervalMs: number;
+  observability: ObservabilityConfig;
+}
+
+export interface ObservabilityConfig {
+  enabled: boolean;
+  serviceName: string;
+  serviceVersion?: string;
+  healthCheckUrl?: string;
+  healthTimeoutMs: number;
+  metricExportIntervalMs: number;
 }
 
 function parseLocales(value: string | undefined): LocaleConfiguration[] {
@@ -55,6 +65,63 @@ function parseWorkerInterval(value: string | undefined): number {
   return interval;
 }
 
+function parseBoolean(value: string | undefined, name: string): boolean {
+  if (value === undefined || value === '') return false;
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  throw new Error(`${name} must be true or false.`);
+}
+
+function parseBoundedInteger(
+  value: string | undefined,
+  name: string,
+  fallback: number,
+  minimum: number,
+  maximum: number,
+): number {
+  const parsed = Number(value ?? fallback);
+  if (!Number.isInteger(parsed) || parsed < minimum || parsed > maximum) {
+    throw new Error(`${name} must be an integer between ${minimum} and ${maximum}.`);
+  }
+  return parsed;
+}
+
+function parseHealthCheckUrl(value: string | undefined): string | undefined {
+  const candidate = value?.trim();
+  if (!candidate) return undefined;
+  let parsed: URL;
+  try {
+    parsed = new URL(candidate);
+  } catch {
+    throw new Error('GRIDSTORY_OTEL_HEALTHCHECK_URL must be an absolute HTTP(S) URL.');
+  }
+  if (
+    !['http:', 'https:'].includes(parsed.protocol) ||
+    parsed.username ||
+    parsed.password ||
+    parsed.search ||
+    parsed.hash
+  ) {
+    throw new Error(
+      'GRIDSTORY_OTEL_HEALTHCHECK_URL must be an HTTP(S) URL without credentials, query, or fragment.',
+    );
+  }
+  return parsed.href;
+}
+
+function parseResourceValue(
+  value: string | undefined,
+  name: string,
+  fallback?: string,
+): string | undefined {
+  const candidate = value?.trim() || fallback;
+  if (candidate === undefined) return undefined;
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9._/-]{0,127}$/.test(candidate)) {
+    throw new Error(`${name} must be a bounded OpenTelemetry resource token.`);
+  }
+  return candidate;
+}
+
 export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiConfig {
   const allowedOrigins = (
     environment.GRIDSTORY_ALLOWED_ORIGINS ?? 'http://localhost:5173,http://localhost:5174'
@@ -75,6 +142,16 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiCon
     throw new Error('GRIDSTORY_PREVIEW_ALLOWED_ORIGINS must contain at least one origin.');
   }
   const databaseUrl = environment.GRIDSTORY_DATABASE_URL?.trim();
+  const healthCheckUrl = parseHealthCheckUrl(environment.GRIDSTORY_OTEL_HEALTHCHECK_URL);
+  const serviceName = parseResourceValue(
+    environment.OTEL_SERVICE_NAME,
+    'OTEL_SERVICE_NAME',
+    'gridstory-api',
+  );
+  const serviceVersion = parseResourceValue(
+    environment.GRIDSTORY_SERVICE_VERSION,
+    'GRIDSTORY_SERVICE_VERSION',
+  );
   return {
     host: environment.GRIDSTORY_HOST ?? '127.0.0.1',
     port: parsePort(environment.GRIDSTORY_PORT),
@@ -101,5 +178,25 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiCon
         }
       : {}),
     workerIntervalMs: parseWorkerInterval(environment.GRIDSTORY_WORKER_INTERVAL_MS),
+    observability: {
+      enabled: parseBoolean(environment.GRIDSTORY_OTEL_ENABLED, 'GRIDSTORY_OTEL_ENABLED'),
+      serviceName: serviceName ?? 'gridstory-api',
+      ...(serviceVersion ? { serviceVersion } : {}),
+      ...(healthCheckUrl ? { healthCheckUrl } : {}),
+      healthTimeoutMs: parseBoundedInteger(
+        environment.GRIDSTORY_OTEL_HEALTH_TIMEOUT_MS,
+        'GRIDSTORY_OTEL_HEALTH_TIMEOUT_MS',
+        2_000,
+        100,
+        10_000,
+      ),
+      metricExportIntervalMs: parseBoundedInteger(
+        environment.OTEL_METRIC_EXPORT_INTERVAL,
+        'OTEL_METRIC_EXPORT_INTERVAL',
+        60_000,
+        1_000,
+        300_000,
+      ),
+    },
   };
 }

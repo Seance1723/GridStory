@@ -99,6 +99,7 @@ import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest }
 import { parseContentQuery } from './content-query.js';
 import { defaultPageQualityPolicies, defaultWorkflowDefinitions } from './defaults.js';
 import { registerGridStoryGraphql } from './graphql.js';
+import type { GridStoryObservability } from './observability.js';
 import { authorize, contentScope, requestContext } from './request-context.js';
 
 export interface BuildServerOptions {
@@ -131,6 +132,7 @@ export interface BuildServerOptions {
   assetMalwareScanner?: AssetMalwareScanner;
   assetDeliverySigningSecret?: string;
   tenantTelemetry?: TenantTelemetrySink;
+  observability?: GridStoryObservability;
 }
 
 interface RequestBody {
@@ -352,6 +354,7 @@ export async function buildServer({
   assetMalwareScanner,
   assetDeliverySigningSecret = 'gridstory-local-asset-delivery-secret-change-me',
   tenantTelemetry,
+  observability,
 }: BuildServerOptions): Promise<FastifyInstance> {
   if (!databaseUrl && databasePath !== ':memory:') {
     mkdirSync(dirname(resolve(databasePath)), { recursive: true });
@@ -379,6 +382,7 @@ export async function buildServer({
     (databaseUrl
       ? new PostgresPluginRepository({ connectionString: databaseUrl })
       : new SqlitePluginRepository({ filename: databasePath }));
+  const resolvedTenantTelemetry = tenantTelemetry ?? observability?.tenantTelemetry;
   const workflows = new WorkflowService({
     repository: resolvedWorkflowRepository,
     jobRepository: repository,
@@ -448,7 +452,7 @@ export async function buildServer({
     ...(assetRenditionAdapter ? { renditionAdapter: assetRenditionAdapter } : {}),
     ...(assetContentInspector ? { contentInspector: assetContentInspector } : {}),
     ...(assetMalwareScanner ? { malwareScanner: assetMalwareScanner } : {}),
-    ...(tenantTelemetry ? { telemetry: tenantTelemetry } : {}),
+    ...(resolvedTenantTelemetry ? { telemetry: resolvedTenantTelemetry } : {}),
   });
   const assetDeliveries = new AssetDeliveryService({
     signingSecret: assetDeliverySigningSecret,
@@ -461,7 +465,7 @@ export async function buildServer({
     repository,
     schemas: [pageSchema],
     ...(searchAdapter ? { adapter: searchAdapter } : {}),
-    ...(tenantTelemetry ? { telemetry: tenantTelemetry } : {}),
+    ...(resolvedTenantTelemetry ? { telemetry: resolvedTenantTelemetry } : {}),
   });
   const localization = new LocalizationService({
     repository,
@@ -475,7 +479,7 @@ export async function buildServer({
     ...(cacheInvalidator ? { cacheInvalidator } : {}),
     searchJobRunner: (job) => search.processJob(job),
     ...(allowedWebhookHosts ? { allowedWebhookHosts } : {}),
-    ...(tenantTelemetry ? { telemetry: tenantTelemetry } : {}),
+    ...(resolvedTenantTelemetry ? { telemetry: resolvedTenantTelemetry } : {}),
   });
   const portability = new PortabilityService({ repository });
   const audit = new AuditService({ repository });
@@ -490,6 +494,7 @@ export async function buildServer({
   });
   const policy = new AuthorizationPolicy();
   const server = Fastify({ logger });
+  observability?.registerFastify(server);
   server.addContentTypeParser(
     'application/x-ndjson',
     { parseAs: 'string' },
@@ -588,7 +593,7 @@ export async function buildServer({
     const drift = await lifecycle.drift(seedScope);
     return reply.status(drift.inSync ? 200 : 503).send({
       status: drift.inSync ? 'ready' : 'not_ready',
-      ...(drift.inSync ? {} : { reason: 'schema_drift', drift }),
+      ...(drift.inSync ? {} : { reason: 'schema_drift' }),
     });
   });
   server.get('/api/v1/context', async (request) => {
@@ -999,6 +1004,21 @@ export async function buildServer({
     const context = requestContext(request, 'draft');
     authorize(policy, context, GridStoryActions.operationsRead, { kind: 'platform' });
     return operations.dashboard(contentScope(context));
+  });
+
+  server.get('/api/v1/operations/observability', async (request, reply) => {
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.operationsRead, { kind: 'platform' });
+    reply.header('cache-control', 'private, no-store');
+    return (
+      observability?.health() ?? {
+        enabled: false,
+        status: 'disabled',
+        signals: { logs: 'disabled', metrics: 'disabled', traces: 'disabled' },
+        collector: { status: 'disabled' },
+        logSdk: 'development',
+      }
+    );
   });
 
   server.get('/api/v1/operations/webhooks', async (request) => {

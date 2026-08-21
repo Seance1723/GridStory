@@ -65,4 +65,40 @@ describe('API configuration', () => {
       /GRIDSTORY_WORKER_INTERVAL_MS/,
     );
   });
+
+  it('keeps OpenTelemetry disabled by default and validates its bounded configuration', () => {
+    expect(loadConfig({}).observability).toEqual({
+      enabled: false,
+      serviceName: 'gridstory-api',
+      healthTimeoutMs: 2_000,
+      metricExportIntervalMs: 60_000,
+    });
+    expect(
+      loadConfig({
+        GRIDSTORY_OTEL_ENABLED: 'true',
+        OTEL_SERVICE_NAME: 'gridstory-worker',
+        GRIDSTORY_SERVICE_VERSION: '1.2.3',
+        GRIDSTORY_OTEL_HEALTHCHECK_URL: 'http://collector:13133/',
+        GRIDSTORY_OTEL_HEALTH_TIMEOUT_MS: '500',
+        OTEL_METRIC_EXPORT_INTERVAL: '5000',
+      }).observability,
+    ).toEqual({
+      enabled: true,
+      serviceName: 'gridstory-worker',
+      serviceVersion: '1.2.3',
+      healthCheckUrl: 'http://collector:13133/',
+      healthTimeoutMs: 500,
+      metricExportIntervalMs: 5_000,
+    });
+    expect(() => loadConfig({ GRIDSTORY_OTEL_ENABLED: 'yes' })).toThrow(/GRIDSTORY_OTEL_ENABLED/);
+    expect(() =>
+      loadConfig({ GRIDSTORY_OTEL_HEALTHCHECK_URL: 'https://user:secret@collector/health' }),
+    ).toThrow(/without credentials/);
+    expect(() => loadConfig({ OTEL_METRIC_EXPORT_INTERVAL: '999' })).toThrow(
+      /OTEL_METRIC_EXPORT_INTERVAL/,
+    );
+    expect(() => loadConfig({ OTEL_SERVICE_NAME: 'service name with spaces' })).toThrow(
+      /OTEL_SERVICE_NAME/,
+    );
+  });
 });

@@ -60,3 +60,9 @@ Set a long random `GRIDSTORY_WEBHOOK_SIGNING_SECRET`. Each delivery sends:
 Receivers must compute the signature over the unmodified raw request body, compare it in constant time, reject stale timestamps, and deduplicate delivery IDs. GridStory does not follow redirects and requires a 2xx response within ten seconds.
 
 The universal client exposes typed outbox/job listing, webhook create/update/delete, manual drain, and replay methods. The manual drain endpoint is for operations and testing; normal deployments should keep the worker process running.
+
+## OpenTelemetry operations
+
+The API and worker can emit optional OTLP/HTTP logs, metrics, and traces through the Node-only adapter. It reuses the canonical tenant telemetry envelope and records bounded request and worker seams without moving telemetry concerns into the framework-neutral core. Configuration, dashboards, retention targets, health behavior, redaction, alerting, and incident procedures are documented in [Observability and operational response](observability.md).
+
+Telemetry is disabled by default. An exporter or Collector outage does not acknowledge durable work and does not make the content plane unready. Operators inspect the private/no-store `/api/v1/operations/observability` endpoint with `operations.read`; public `/health` and `/ready` intentionally reveal only minimal stable status.

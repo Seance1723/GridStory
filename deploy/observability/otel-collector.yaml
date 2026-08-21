@@ -1,0 +1,99 @@
+# Reference configuration for otel/opentelemetry-collector-contrib:0.158.0.
+# Keep ports 4317, 4318, 8888, and 13133 private or protect them at the network boundary.
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+  file_storage/queue:
+    directory: /var/lib/otelcol/queue
+    create_directory: true
+    timeout: 10s
+    compaction:
+      directory: /var/lib/otelcol/queue
+      on_rebound: true
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+    spike_limit_mib: 128
+  redaction/gridstory:
+    allow_all_keys: false
+    allowed_keys:
+      - error.type
+      - http.request.method
+      - http.response.status_code
+      - http.route
+      - service.name
+      - service.version
+      - telemetry.sdk.language
+      - telemetry.sdk.name
+      - telemetry.sdk.version
+      - gridstory.request.id
+      - gridstory.organization.id
+      - gridstory.tenant.id
+      - gridstory.workspace.id
+      - gridstory.site.id
+      - gridstory.environment.id
+      - gridstory.locale
+      - gridstory.event.name
+      - gridstory.event.outcome
+      - gridstory.operation.id
+      - gridstory.subject.id
+      - gridstory.worker.outcome
+    ignored_key_patterns:
+      - ^gridstory\.event\.metadata\.[a-zA-Z0-9]+$
+    blocked_values:
+      - (?i)(bearer|basic)\s+[a-z0-9._~+/=-]{8,}
+      - (?i)(password|passwd|secret|token|api[_-]?key)\s*[=:]\s*[^\s,;]{4,}
+    summary: silent
+  batch:
+    send_batch_size: 1024
+    send_batch_max_size: 2048
+    timeout: 5s
+
+exporters:
+  otlphttp/backend:
+    endpoint: ${env:GRIDSTORY_TELEMETRY_BACKEND_ENDPOINT}
+    headers:
+      authorization: ${env:GRIDSTORY_TELEMETRY_BACKEND_AUTHORIZATION}
+    sending_queue:
+      enabled: true
+      storage: file_storage/queue
+      queue_size: 10000
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+
+service:
+  extensions: [health_check, file_storage/queue]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, redaction/gridstory, batch]
+      exporters: [otlphttp/backend]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, redaction/gridstory, batch]
+      exporters: [otlphttp/backend]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, redaction/gridstory, batch]
+      exporters: [otlphttp/backend]
+  telemetry:
+    metrics:
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: 0.0.0.0
+                port: 8888

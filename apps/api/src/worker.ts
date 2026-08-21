@@ -19,8 +19,10 @@ import {
 import { componentManifests, pageSchema } from '@gridstory/example-kit/manifests';
 import { loadConfig } from './config.js';
 import { defaultPageQualityPolicies, defaultWorkflowDefinitions } from './defaults.js';
+import { startObservability } from './observability.js';
 
 const config = loadConfig();
+const observability = startObservability(config.observability);
 const repository: ContentRepository = config.databaseUrl
   ? new PostgresContentRepository({ connectionString: config.databaseUrl })
   : new SqliteContentRepository({ filename: config.databasePath });
@@ -51,12 +53,17 @@ const releases = new ReleaseService({
   repository: releaseRepository,
   contentService: content,
 });
-const search = new SearchService({ repository, schemas: [pageSchema] });
+const search = new SearchService({
+  repository,
+  schemas: [pageSchema],
+  telemetry: observability.tenantTelemetry,
+});
 const operations = new OperationsService({
   repository,
   searchJobRunner: (job) => search.processJob(job),
   webhookSigningSecret: config.webhookSigningSecret,
   ...(config.allowedWebhookHosts ? { allowedWebhookHosts: config.allowedWebhookHosts } : {}),
+  telemetry: observability.tenantTelemetry,
 });
 
 async function executeWorkflowSchedule({
@@ -101,13 +108,15 @@ try {
     const scopes = await operations.listOperationalScopes(1000);
     for (const scope of scopes) {
       if (stopping) break;
-      const dueReleases = await releases.processDue(scope);
-      const due = await workflows.processDue({ scope, execute: executeWorkflowSchedule });
-      const result = await operations.drain({
-        scope,
-        workerId: `operations-${process.pid}`,
-        limit: 100,
-      });
+      const { dueReleases, due, result } = await observability.runWorkerScope(scope, async () => ({
+        dueReleases: await releases.processDue(scope),
+        due: await workflows.processDue({ scope, execute: executeWorkflowSchedule }),
+        result: await operations.drain({
+          scope,
+          workerId: `operations-${process.pid}`,
+          limit: 100,
+        }),
+      }));
       if (
         dueReleases.executed +
           dueReleases.failed +
@@ -134,4 +143,5 @@ try {
   await repository.close();
   await workflowRepository.close();
   await releaseRepository.close();
+  await observability.shutdown();
 }

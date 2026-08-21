@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
+import type { GridStoryObservability } from '../src/observability.js';
 import { buildServer } from '../src/server.js';
 import { approveForPublication } from './workflow-helpers.js';
 
@@ -346,7 +347,9 @@ describe('GridStory API', () => {
 
   it('plans, deploys, inspects, and readiness-checks the scoped schema lifecycle', async () => {
     server = await buildServer({ databasePath: ':memory:', seed: false });
-    expect((await server.inject({ method: 'GET', url: '/ready' })).statusCode).toBe(503);
+    const notReady = await server.inject({ method: 'GET', url: '/ready' });
+    expect(notReady.statusCode).toBe(503);
+    expect(notReady.json()).toEqual({ status: 'not_ready', reason: 'schema_drift' });
 
     const lifecycleHeaders = {
       'content-type': 'application/json',
@@ -997,6 +1000,63 @@ describe('GridStory API', () => {
     });
     expect(summary.json().recentAudit[0]).toMatchObject({ action: 'content.published' });
   });
+
+  it('keeps observability health private, bounded, and out of readiness', async () => {
+    const observability: GridStoryObservability = {
+      tenantTelemetry: () => {},
+      registerFastify: () => {},
+      health: async () => ({
+        enabled: true,
+        status: 'degraded',
+        signals: { logs: 'healthy', metrics: 'healthy', traces: 'healthy' },
+        collector: {
+          status: 'degraded',
+          checkedAt: '2026-08-21T00:00:00.000Z',
+          reason: 'collector_unreachable',
+        },
+        logSdk: 'development',
+      }),
+      runWorkerScope: async (_scope, operation) => operation(),
+      shutdown: async () => {},
+    };
+    server = await buildServer({
+      databasePath: ':memory:',
+      seed: true,
+      observability,
+    });
+    const denied = await server.inject({
+      method: 'GET',
+      url: '/api/v1/operations/observability',
+      headers: { ...headers, 'x-gridstory-roles': 'viewer' },
+    });
+    expect(denied.statusCode).toBe(403);
+
+    const health = await server.inject({
+      method: 'GET',
+      url: '/api/v1/operations/observability',
+      headers,
+    });
+    expect(health.statusCode).toBe(200);
+    expect(health.headers['cache-control']).toBe('private, no-store');
+    expect(health.json()).toEqual({
+      enabled: true,
+      status: 'degraded',
+      signals: { logs: 'healthy', metrics: 'healthy', traces: 'healthy' },
+      collector: {
+        status: 'degraded',
+        checkedAt: '2026-08-21T00:00:00.000Z',
+        reason: 'collector_unreachable',
+      },
+      logSdk: 'development',
+    });
+    expect(await server.inject({ method: 'GET', url: '/health' })).toMatchObject({
+      statusCode: 200,
+    });
+    expect(await server.inject({ method: 'GET', url: '/ready' })).toMatchObject({
+      statusCode: 200,
+    });
+  });
+
   it('supports scoped collaboration, browser PATCH preflight, and stable due-date validation', async () => {
     server = await buildServer({ databasePath: ':memory:', seed: false });
     const create = await server.inject({

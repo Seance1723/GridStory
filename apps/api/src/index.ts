@@ -1,7 +1,9 @@
 import { loadConfig } from './config.js';
+import { startObservability } from './observability.js';
 import { buildServer } from './server.js';
 
 const config = loadConfig();
+const observability = startObservability(config.observability);
 const server = await buildServer({
   databasePath: config.databasePath,
   ...(config.databaseUrl ? { databaseUrl: config.databaseUrl } : {}),
@@ -15,11 +17,13 @@ const server = await buildServer({
   ...(config.allowedWebhookHosts ? { allowedWebhookHosts: config.allowedWebhookHosts } : {}),
   seed: true,
   logger: true,
+  observability,
 });
 
 const shutdown = async (signal: string) => {
   server.log.info({ signal }, 'Stopping GridStory API');
   await server.close();
+  await observability.shutdown();
   process.exit(0);
 };
 
@@ -30,5 +34,6 @@ try {
   await server.listen({ host: config.host, port: config.port });
 } catch (error) {
   server.log.error(error);
+  await observability.shutdown();
   process.exit(1);
 }

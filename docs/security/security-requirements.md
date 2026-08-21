@@ -118,7 +118,15 @@ The application now has one canonical six-dimensional scope contract for validat
 
 Search adapter totals and facets are treated as untrusted: entries are reloaded under the requested scope and perspective, totals and facets are derived only from accepted hits, and mismatched adapter scope/status is rejected. Cache invalidation adapters receive both the explicit scope and full-scope-prefixed tags; workflow-provided tags are namespaced rather than accepted globally. `pnpm tenant:check` prevents ad hoc scope serializers and incomplete cache tags from returning.
 
-This baseline does not turn the development header identity into a production authentication system. Production OIDC/session middleware, trusted-proxy enforcement, infrastructure row/object policies, complete telemetry sinks/retention/alerts, and deployment conformance remain owned by M6-002, M5-004, and M5-008.
+This baseline does not turn the development header identity into a production authentication system. Production OIDC/session middleware, trusted-proxy enforcement, infrastructure row/object policies, and deployment conformance remain owned by M6-002 and M5-008; M5-004 supplies the application telemetry boundary and reference operations pack described below.
+
+## M5-004 observability baseline
+
+The Node API and worker now adapt the canonical bounded tenant envelope to opt-in OpenTelemetry logs, metrics, and traces through the official OTLP/HTTP SDK/exporters. Explicit request and worker instrumentation records route templates, status, stable error types, request/trace correlation, and validated tenant event attributes without raw URLs/query strings, headers, bodies, exception messages, credentials, draft content, or tenant metric dimensions. Live exporter regressions verify all three signals and negative leakage cases.
+
+Public liveness/readiness expose only stable minimal codes. Authorized private/no-store operations health reports bounded SDK/Collector state without endpoints, topology, versions, credentials, customer data, or failure text; Collector degradation does not weaken or acknowledge content operations. The reference contrib Collector adds memory bounds, batching, retry, a persistent queue, a fail-closed attribute allow-list, and private health/internal metrics. Dashboard, alert rules, event inventory, access, correlation, default retention targets, and exporter/data-exposure incident procedures are maintained in `docs/observability.md` and `deploy/observability`.
+
+`GS-SEC-028` is verified for current product capabilities. Authentication, credential-lifecycle, and break-glass event sources become applicable with the production identity/session work in M6-002 and must join the same inventory before that capability is complete. Backend deletion enforcement, append-only security-log storage, TLS/network policy, secret-manager lifecycle, and Collector deployment conformance remain operator evidence; M5-005, M5-007, and M5-008 retain their recovery, capacity, and GA obligations.
 
 ## Verification ownership
 
@@ -127,7 +135,7 @@ This baseline does not turn the development header identity into a production au
 | Cross-tenant authorization and data paths | Authorization/control-plane owner | `packages/core/test/tenant-isolation.test.ts`, repository conformance, and `pnpm tenant:check`; deployment database/object policies remain environment evidence. |
 | Production identity/session/proxy | Identity/API/deployment owner | OIDC and persistent-session conformance, dev-header rejection, trusted-proxy tests. |
 | Browser/rendering | Studio/application owners | M5-006 CSP/header/rendering/browser review. |
-| Operations, secrets, and telemetry | Platform/security operations owner | M5-004 inventory, redaction, alerting, secret lifecycle, adapter health evidence. |
+| Operations, secrets, and telemetry | Platform/security operations owner | M5-004 inventory, redaction, alerts, retention, and telemetry health; M5-005/M5-008 secret lifecycle and deployment evidence. |
 | Recovery and deployment | Reliability/deployment owner | M5-005 restore, graceful shutdown, rolling upgrade, and secret rotation exercises. |
 | Limits and supply chain | Release engineering owner | M5-007 benchmarks, SBOM, vulnerability SLA, provenance, and signatures. |
 | GA risk acceptance | Security owner and release owner | M5-008 current model/profile, resolved critical risks, explicit expiring high-risk acceptances. |

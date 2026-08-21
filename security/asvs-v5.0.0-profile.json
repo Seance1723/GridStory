@@ -634,7 +634,7 @@
     {
       "id": "GS-SEC-028",
       "title": "Security-event logging and audit",
-      "status": "partial",
+      "status": "verified",
       "owner": "Security operations owner",
       "statement": "GridStory SHALL inventory logs and record correlatable authentication, authorization failure, privileged mutation, publication, workflow/release, import/export, credential, adapter, and security-control events without recording secrets or unnecessary content.",
       "asvsRefs": ["v5.0.0-16.1.1", "v5.0.0-16.2.1", "v5.0.0-16.2.5", "v5.0.0-16.3.2"],
@@ -642,16 +642,21 @@
       "evidence": [
         "packages/core/src/audit-service.ts",
         "packages/core/src/tenant-scope.ts",
+        "apps/api/src/observability.ts",
         "docs/audit-and-administration.md",
-        "packages/core/src/plugin-service.ts"
+        "packages/core/src/plugin-service.ts",
+        "docs/observability.md",
+        "deploy/observability/otel-collector.yaml",
+        "deploy/observability/prometheus-alerts.yaml"
       ],
       "verification": [
         "packages/core/test/audit-service.test.ts",
         "packages/core/test/tenant-isolation.test.ts",
         "apps/api/test/plugins.test.ts",
-        "Telemetry inventory and sink conformance test"
+        "apps/api/test/observability.test.ts",
+        "apps/api/test/server.test.ts"
       ],
-      "taskIds": ["M5-003", "M5-004"]
+      "taskIds": ["M5-003", "M5-004", "M6-002"]
     },
     {
       "id": "GS-SEC-029",

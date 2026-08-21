@@ -1,0 +1,65 @@
+groups:
+  - name: gridstory-application
+    rules:
+      - alert: GridStoryApiHighServerErrorRatio
+        expr: |
+          sum(rate(gridstory_api_request_errors_total[5m]))
+          /
+          clamp_min(sum(rate(http_server_request_duration_seconds_count[5m])), 1)
+          > 0.05
+        for: 10m
+        labels:
+          severity: page
+        annotations:
+          summary: GridStory API server-error ratio exceeds 5%
+          runbook: docs/observability.md#api-error-rate-or-latency
+      - alert: GridStoryApiLatencyP95
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(http_server_request_duration_seconds_bucket[5m]))
+          ) > 1
+        for: 15m
+        labels:
+          severity: ticket
+        annotations:
+          summary: GridStory API p95 duration exceeds one second
+          runbook: docs/observability.md#api-error-rate-or-latency
+      - alert: GridStoryWorkerCycleFailure
+        expr: |
+          increase(gridstory_tenant_event_total{
+            gridstory_event_name="operations.drain.completed",
+            gridstory_event_outcome="error"
+          }[10m]) > 0
+        for: 0m
+        labels:
+          severity: page
+        annotations:
+          summary: A GridStory worker drain cycle failed
+          runbook: docs/observability.md#worker-or-queue-failure
+  - name: gridstory-collector
+    rules:
+      - alert: GridStoryTelemetryExportFailure
+        expr: |
+          sum(increase(otelcol_exporter_send_failed_spans_total[10m]))
+          + sum(increase(otelcol_exporter_send_failed_metric_points_total[10m]))
+          + sum(increase(otelcol_exporter_send_failed_log_records_total[10m]))
+          > 0
+        for: 5m
+        labels:
+          severity: ticket
+        annotations:
+          summary: The OpenTelemetry Collector cannot export GridStory signals
+          runbook: docs/observability.md#collector-or-exporter-degradation
+      - alert: GridStoryTelemetryQueueNearCapacity
+        expr: |
+          max(otelcol_exporter_queue_size)
+          /
+          clamp_min(max(otelcol_exporter_queue_capacity), 1)
+          > 0.8
+        for: 10m
+        labels:
+          severity: page
+        annotations:
+          summary: The OpenTelemetry Collector queue exceeds 80% capacity
+          runbook: docs/observability.md#collector-or-exporter-degradation

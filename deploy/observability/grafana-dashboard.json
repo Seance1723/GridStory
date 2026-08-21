@@ -1,0 +1,121 @@
+{
+  "annotations": { "list": [] },
+  "editable": false,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
+      "id": 1,
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_request_duration_seconds_count[5m]))",
+          "legendFormat": "requests/s",
+          "refId": "A"
+        }
+      ],
+      "title": "API request rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": { "defaults": { "max": 1, "min": 0, "unit": "percentunit" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 },
+      "id": 2,
+      "targets": [
+        {
+          "expr": "sum(rate(gridstory_api_request_errors_total[5m])) / clamp_min(sum(rate(http_server_request_duration_seconds_count[5m])), 1)",
+          "legendFormat": "5xx ratio",
+          "refId": "A"
+        }
+      ],
+      "title": "API server-error ratio",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
+      "id": 3,
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "p95",
+          "refId": "A"
+        }
+      ],
+      "title": "API request duration",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
+      "id": 4,
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, gridstory_worker_outcome) (rate(gridstory_worker_scope_duration_seconds_bucket[5m])))",
+          "legendFormat": "{{gridstory_worker_outcome}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Worker scope-cycle duration",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
+      "id": 5,
+      "targets": [
+        {
+          "expr": "sum by (gridstory_event_name, gridstory_event_outcome) (rate(gridstory_tenant_event_total[5m]))",
+          "legendFormat": "{{gridstory_event_name}} / {{gridstory_event_outcome}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Bounded tenant events",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
+      "id": 6,
+      "targets": [
+        {
+          "expr": "sum(rate(otelcol_exporter_send_failed_spans_total[5m])) + sum(rate(otelcol_exporter_send_failed_metric_points_total[5m])) + sum(rate(otelcol_exporter_send_failed_log_records_total[5m]))",
+          "legendFormat": "failed exports/s",
+          "refId": "A"
+        },
+        {
+          "expr": "max(otelcol_exporter_queue_size) / clamp_min(max(otelcol_exporter_queue_capacity), 1)",
+          "legendFormat": "queue utilization",
+          "refId": "B"
+        }
+      ],
+      "title": "Collector export health",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 41,
+  "tags": ["gridstory", "opentelemetry"],
+  "templating": {
+    "list": [
+      {
+        "current": {},
+        "label": "Prometheus datasource",
+        "name": "datasource",
+        "query": "prometheus",
+        "type": "datasource"
+      }
+    ]
+  },
+  "time": { "from": "now-6h", "to": "now" },
+  "timezone": "browser",
+  "title": "GridStory operations",
+  "uid": "gridstory-operations",
+  "version": 1
+}
