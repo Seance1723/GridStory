@@ -7,7 +7,12 @@ import {
 } from '@gridstory/schema';
 import { Pool } from 'pg';
 import { describe, expect, it } from 'vitest';
-import { PostgresContentRepository, PostgresPluginRepository } from '../src/index.js';
+import {
+  CollaborationService,
+  PostgresCollaborationRepository,
+  PostgresContentRepository,
+  PostgresPluginRepository,
+} from '../src/index.js';
 import { repositoryConformance } from './repository-conformance.js';
 
 const connectionString = process.env.GRIDSTORY_TEST_POSTGRES_URL;
@@ -88,11 +93,48 @@ if (connectionString) {
       }
     });
   });
+  describe('PostgreSQL collaboration repository conformance', () => {
+    it('persists a causal document across repository instances', async () => {
+      const scope: ContentScope = {
+        organizationId: 'organization-a',
+        tenantId: `collaboration-${process.pid}`,
+        workspaceId: 'workspace-a',
+        siteId: 'site-a',
+        environmentId: 'development',
+        locale: 'en',
+      };
+      const first = new CollaborationService({
+        repository: new PostgresCollaborationRepository({ connectionString }),
+      });
+      await first.submitOperation({
+        scope,
+        entryId: 'entry-1',
+        actorId: 'author',
+        operation: { id: 'operation-1', target: { field: 'title' }, value: 'Persisted' },
+      });
+      await first.close();
+
+      const second = new CollaborationService({
+        repository: new PostgresCollaborationRepository({ connectionString }),
+      });
+      try {
+        await expect(second.snapshot(scope, 'entry-1')).resolves.toMatchObject({
+          version: 1,
+          operations: [{ id: 'operation-1', value: 'Persisted' }],
+        });
+      } finally {
+        await second.close();
+      }
+    });
+  });
 } else {
   describe.skip('PostgreSQL repository conformance', () => {
     it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
   });
   describe.skip('PostgreSQL plugin repository conformance', () => {
+    it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
+  });
+  describe.skip('PostgreSQL collaboration repository conformance', () => {
     it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
   });
 }

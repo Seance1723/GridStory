@@ -13,6 +13,7 @@ import {
   AuditService,
   AuthorizationPolicy,
   type CacheInvalidator,
+  type CollaborationRepository,
   CollaborationService,
   ComponentLifecycleService,
   type ContentEventType,
@@ -39,6 +40,7 @@ import {
   PluginService,
   PortabilityService,
   PostgresContentRepository,
+  PostgresCollaborationRepository,
   PostgresPluginRepository,
   PostgresReleaseRepository,
   PostgresWorkflowRepository,
@@ -50,6 +52,7 @@ import {
   type SearchAdapter,
   SearchService,
   SqliteAssetRepository,
+  SqliteCollaborationRepository,
   SqliteContentRepository,
   SqlitePluginRepository,
   SqliteReleaseRepository,
@@ -66,7 +69,9 @@ import { exampleDesignSystem } from '@gridstory/example-kit/design-system';
 import { componentManifests, pageSchema, welcomePage } from '@gridstory/example-kit/manifests';
 import {
   assetRenditionPresetSchema,
+  type CollaborationOperation,
   type ContentQualityPolicy,
+  collaborationOperationInputSchema,
   collaborationTargetSchema,
   completeAssetUploadSchema,
   createAssetDeliverySchema,
@@ -121,6 +126,7 @@ export interface BuildServerOptions {
   qualityPolicies?: ContentQualityPolicy[];
   externalLinkChecker?: ExternalLinkChecker;
   assetRepository?: AssetRepository;
+  collaborationRepository?: CollaborationRepository;
   workflowRepository?: WorkflowRepository;
   releaseRepository?: ReleaseRepository;
   pluginRepository?: PluginRepository;
@@ -137,6 +143,7 @@ export interface BuildServerOptions {
 }
 
 interface RequestBody {
+  id?: unknown;
   contentType?: unknown;
   expectedRevisionId?: unknown;
   data?: unknown;
@@ -162,6 +169,14 @@ interface RequestBody {
   field?: unknown;
   nodeId?: unknown;
   target?: unknown;
+  branchId?: unknown;
+  parentBranchId?: unknown;
+  sourceBranchId?: unknown;
+  targetBranchId?: unknown;
+  operationId?: unknown;
+  actorSequence?: unknown;
+  kind?: unknown;
+  value?: unknown;
   channel?: unknown;
   transitionId?: unknown;
   changedFields?: unknown;
@@ -347,6 +362,7 @@ export async function buildServer({
 
   externalLinkChecker,
   assetRepository,
+  collaborationRepository,
   workflowRepository,
   releaseRepository,
   pluginRepository,
@@ -372,6 +388,11 @@ export async function buildServer({
     (databaseUrl
       ? new InMemoryAssetRepository()
       : new SqliteAssetRepository({ filename: databasePath }));
+  const resolvedCollaborationRepository: CollaborationRepository =
+    collaborationRepository ??
+    (databaseUrl
+      ? new PostgresCollaborationRepository({ connectionString: databaseUrl })
+      : new SqliteCollaborationRepository({ filename: databasePath }));
   const resolvedWorkflowRepository: WorkflowRepository =
     workflowRepository ??
     (databaseUrl
@@ -463,7 +484,7 @@ export async function buildServer({
     signingSecret: assetDeliverySigningSecret,
   });
   const componentLifecycle = new ComponentLifecycleService({ contentService: service });
-  const collaboration = new CollaborationService();
+  const collaboration = new CollaborationService({ repository: resolvedCollaborationRepository });
   const routing = new ContentRoutingService({ contentService: service, redirects });
   const contentQueries = new ContentQueryService({ repository, cursorSecret });
   const search = new SearchService({
@@ -547,6 +568,7 @@ export async function buildServer({
   server.addHook('onClose', async () => {
     await repository.close();
     await resolvedAssetRepository.close?.();
+    await collaboration.close();
     await resolvedWorkflowRepository.close();
     await resolvedReleaseRepository.close();
     await resolvedPluginRepository.close();
@@ -1705,6 +1727,158 @@ export async function buildServer({
     return collaboration.snapshot(contentScope(context), params.id);
   });
 
+  server.post('/api/v1/content/:id/collaboration/operations', async (request, reply) => {
+    const params = request.params as { id: string };
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.collaborationWrite, {
+      kind: 'content',
+      id: params.id,
+    });
+    await service.get({ scope: contentScope(context), id: params.id });
+    const parsed = collaborationOperationInputSchema.safeParse(bodyOf(request));
+    if (!parsed.success) {
+      throw new GridStoryError(
+        'Collaboration operation is invalid.',
+        'invalid_collaboration_operation',
+        400,
+        parsed.error.flatten(),
+      );
+    }
+    const operation = await collaboration.submitOperation({
+      scope: contentScope(context),
+      entryId: params.id,
+      actorId: context.principal.id,
+      operation: parsed.data,
+    });
+    return reply.status(201).send(operation);
+  });
+
+  server.post('/api/v1/content/:id/collaboration/branches', async (request, reply) => {
+    const params = request.params as { id: string };
+    const body = bodyOf(request);
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.collaborationWrite, {
+      kind: 'content',
+      id: params.id,
+    });
+    await service.get({ scope: contentScope(context), id: params.id });
+    const created = await collaboration.createBranch({
+      scope: contentScope(context),
+      entryId: params.id,
+      actorId: context.principal.id,
+      name: requiredString(body.name, 'name'),
+      ...(typeof body.parentBranchId === 'string' ? { parentBranchId: body.parentBranchId } : {}),
+      ...(typeof body.id === 'string' ? { id: body.id } : {}),
+    });
+    return reply.status(201).send(created);
+  });
+
+  server.post('/api/v1/content/:id/collaboration/suggestions', async (request, reply) => {
+    const params = request.params as { id: string };
+    const body = bodyOf(request);
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.collaborationWrite, {
+      kind: 'content',
+      id: params.id,
+    });
+    await service.get({ scope: contentScope(context), id: params.id });
+    const parsed = collaborationOperationInputSchema.safeParse({
+      branchId: body.branchId,
+      target: body.target,
+      kind: body.kind,
+      value: body.value,
+    });
+    if (!parsed.success) {
+      throw new GridStoryError(
+        'Collaboration suggestion is invalid.',
+        'invalid_collaboration_suggestion',
+        400,
+        parsed.error.flatten(),
+      );
+    }
+    const suggestion = await collaboration.createSuggestion({
+      scope: contentScope(context),
+      entryId: params.id,
+      actorId: context.principal.id,
+      branchId: parsed.data.branchId,
+      target: parsed.data.target,
+      kind: parsed.data.kind,
+      ...(parsed.data.value !== undefined ? { value: parsed.data.value } : {}),
+      ...(typeof body.id === 'string' ? { id: body.id } : {}),
+    });
+    return reply.status(201).send(suggestion);
+  });
+
+  server.patch('/api/v1/content/:id/collaboration/suggestions/:suggestionId', async (request) => {
+    const params = request.params as { id: string; suggestionId: string };
+    const body = bodyOf(request);
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.collaborationWrite, {
+      kind: 'content',
+      id: params.id,
+    });
+    if (body.decision !== 'accept' && body.decision !== 'reject') {
+      throw new GridStoryError(
+        'Suggestion decision must be accept or reject.',
+        'invalid_suggestion_decision',
+        400,
+      );
+    }
+    return collaboration.reviewSuggestion({
+      scope: contentScope(context),
+      entryId: params.id,
+      suggestionId: params.suggestionId,
+      actorId: context.principal.id,
+      decision: body.decision,
+      ...(typeof body.actorSequence === 'number' ? { actorSequence: body.actorSequence } : {}),
+    });
+  });
+
+  server.post('/api/v1/content/:id/collaboration/merges', async (request, reply) => {
+    const params = request.params as { id: string };
+    const body = bodyOf(request);
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.collaborationWrite, {
+      kind: 'content',
+      id: params.id,
+    });
+    await service.get({ scope: contentScope(context), id: params.id });
+    const merge = await collaboration.mergeBranches({
+      scope: contentScope(context),
+      entryId: params.id,
+      actorId: context.principal.id,
+      sourceBranchId: requiredString(body.sourceBranchId, 'sourceBranchId'),
+      ...(typeof body.targetBranchId === 'string' ? { targetBranchId: body.targetBranchId } : {}),
+      ...(typeof body.id === 'string' ? { id: body.id } : {}),
+    });
+    return reply.status(201).send(merge);
+  });
+
+  server.patch('/api/v1/content/:id/collaboration/conflicts/:conflictId', async (request) => {
+    const params = request.params as { id: string; conflictId: string };
+    const body = bodyOf(request);
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.collaborationWrite, {
+      kind: 'content',
+      id: params.id,
+    });
+    return collaboration.resolveConflict({
+      scope: contentScope(context),
+      entryId: params.id,
+      conflictId: params.conflictId,
+      actorId: context.principal.id,
+      ...(typeof body.operationId === 'string' ? { operationId: body.operationId } : {}),
+      ...(body.value !== undefined ? { value: body.value as CollaborationOperation['value'] } : {}),
+      ...(body.kind === 'set' ||
+      body.kind === 'delete' ||
+      body.kind === 'insert' ||
+      body.kind === 'move'
+        ? { kind: body.kind }
+        : {}),
+      ...(typeof body.actorSequence === 'number' ? { actorSequence: body.actorSequence } : {}),
+    });
+  });
+
   server.post('/api/v1/content/:id/comments', async (request, reply) => {
     const params = request.params as { id: string };
     const body = bodyOf(request);
@@ -1721,7 +1895,7 @@ export async function buildServer({
     if (!parsedTarget.success) {
       throw new GridStoryError('Comment target is invalid.', 'invalid_comment_target', 400);
     }
-    const thread = collaboration.createThread({
+    const thread = await collaboration.createThread({
       scope: contentScope(context),
       target: parsedTarget.data,
       actorId: context.principal.id,
@@ -1743,7 +1917,7 @@ export async function buildServer({
       kind: 'content',
       id: params.id,
     });
-    const thread = collaboration.reply({
+    const thread = await collaboration.reply({
       scope: contentScope(context),
       entryId: params.id,
       threadId: params.threadId,

@@ -1,3 +1,4 @@
+import { PostgresCollaborationRepository } from '@gridstory/core';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
 import { checkRollingUpgrade } from '../src/rolling-upgrade.js';
@@ -48,6 +49,78 @@ describe.skipIf(!connectionString)('GridStory API with PostgreSQL', () => {
     });
     expect(createResponse.statusCode).toBe(201);
     const created = createResponse.json();
+
+    expect(
+      await server.inject({
+        method: 'POST',
+        url: `/api/v1/content/${created.id}/collaboration/operations`,
+        headers,
+        payload: {
+          id: 'postgres-title-operation',
+          target: { field: 'title' },
+          value: 'Collaborative PostgreSQL title',
+        },
+      }),
+    ).toMatchObject({ statusCode: 201 });
+    const beforeRestart = (
+      await server.inject({
+        method: 'GET',
+        url: `/api/v1/content/${created.id}/collaboration`,
+        headers,
+      })
+    ).json();
+    expect(beforeRestart).toMatchObject({
+      version: 1,
+      operations: [{ id: 'postgres-title-operation' }],
+    });
+    const liveInspection = new PostgresCollaborationRepository({ connectionString });
+    try {
+      await expect(
+        liveInspection.get(
+          {
+            organizationId: beforeRestart.organizationId,
+            tenantId: beforeRestart.tenantId,
+            workspaceId: beforeRestart.workspaceId,
+            siteId: beforeRestart.siteId,
+            environmentId: beforeRestart.environmentId,
+            locale: beforeRestart.locale,
+          },
+          created.id,
+        ),
+      ).resolves.toMatchObject({ version: 1 });
+    } finally {
+      await liveInspection.close();
+    }
+    await server.close();
+    const inspectionRepository = new PostgresCollaborationRepository({ connectionString });
+    try {
+      await expect(
+        inspectionRepository.get(
+          {
+            organizationId: beforeRestart.organizationId,
+            tenantId: beforeRestart.tenantId,
+            workspaceId: beforeRestart.workspaceId,
+            siteId: beforeRestart.siteId,
+            environmentId: beforeRestart.environmentId,
+            locale: beforeRestart.locale,
+          },
+          created.id,
+        ),
+      ).resolves.toMatchObject({ version: 1 });
+    } finally {
+      await inspectionRepository.close();
+    }
+    server = await buildServer({ databaseUrl: connectionString, seed: false });
+    const collaboration = await server.inject({
+      method: 'GET',
+      url: `/api/v1/content/${created.id}/collaboration`,
+      headers,
+    });
+    expect(collaboration.json()).toMatchObject({
+      version: 1,
+      operations: [{ id: 'postgres-title-operation', value: 'Collaborative PostgreSQL title' }],
+    });
+
     await approveForPublication(server, created, headers);
 
     const managementQuery = await server.inject({

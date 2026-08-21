@@ -415,6 +415,28 @@ describe('GridStoryClient browser compatibility', () => {
     });
 
     await client.getCollaboration('page-1');
+    await client.submitCollaborationOperation('page-1', {
+      id: 'operation-1',
+      branchId: 'main',
+      actorSequence: 4,
+      dependencies: ['operation-0'],
+      target: { field: 'story', nodeId: 'paragraph-1', property: 'text' },
+      value: 'Updated paragraph',
+    });
+    await client.createCollaborationBranch('page-1', {
+      name: 'Campaign',
+      parentBranchId: 'main',
+    });
+    await client.createCollaborationSuggestion('page-1', {
+      branchId: 'campaign',
+      target: { field: 'title' },
+      value: 'Suggested title',
+    });
+    await client.reviewCollaborationSuggestion('page-1', 'suggestion-1', 'accept');
+    await client.mergeCollaborationBranch('page-1', 'campaign');
+    await client.resolveCollaborationConflict('page-1', 'conflict-1', {
+      operationId: 'operation-1',
+    });
     await client.createCommentThread('page-1', {
       target: { field: 'story', nodeId: 'paragraph-1' },
       body: 'Review @editor',
@@ -436,23 +458,40 @@ describe('GridStoryClient browser compatibility', () => {
 
     expect(requests.map((request) => [request.url, request.init?.method])).toEqual([
       ['http://gridstory.test/api/v1/content/page-1/collaboration', undefined],
+      ['http://gridstory.test/api/v1/content/page-1/collaboration/operations', 'POST'],
+      ['http://gridstory.test/api/v1/content/page-1/collaboration/branches', 'POST'],
+      ['http://gridstory.test/api/v1/content/page-1/collaboration/suggestions', 'POST'],
+      [
+        'http://gridstory.test/api/v1/content/page-1/collaboration/suggestions/suggestion-1',
+        'PATCH',
+      ],
+      ['http://gridstory.test/api/v1/content/page-1/collaboration/merges', 'POST'],
+      ['http://gridstory.test/api/v1/content/page-1/collaboration/conflicts/conflict-1', 'PATCH'],
       ['http://gridstory.test/api/v1/content/page-1/comments', 'POST'],
       ['http://gridstory.test/api/v1/content/page-1/comments/thread-1/replies', 'POST'],
       ['http://gridstory.test/api/v1/content/page-1/comments/thread-1', 'PATCH'],
       ['http://gridstory.test/api/v1/content/page-1/presence', 'PUT'],
       ['http://gridstory.test/api/v1/content/page-1/presence', 'DELETE'],
     ]);
-    expect(JSON.parse(String(requests[1]?.init?.body))).toMatchObject({
+    expect(JSON.parse(String(requests[1]?.init?.body))).toEqual({
+      id: 'operation-1',
+      branchId: 'main',
+      actorSequence: 4,
+      dependencies: ['operation-0'],
+      target: { field: 'story', nodeId: 'paragraph-1', property: 'text' },
+      value: 'Updated paragraph',
+    });
+    expect(JSON.parse(String(requests[7]?.init?.body))).toMatchObject({
       target: { field: 'story', nodeId: 'paragraph-1' },
       body: 'Review @editor',
       assigneeId: 'editor',
     });
-    expect(JSON.parse(String(requests[3]?.init?.body))).toEqual({
+    expect(JSON.parse(String(requests[9]?.init?.body))).toEqual({
       assigneeId: null,
       dueAt: null,
       resolved: true,
     });
-    expect(new Headers(requests[4]?.init?.headers).get('x-gridstory-actor')).toBe('author');
+    expect(new Headers(requests[10]?.init?.headers).get('x-gridstory-actor')).toBe('author');
   });
 
   it('routes component lifecycle inspection and migration through typed management calls', async () => {

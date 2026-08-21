@@ -7,7 +7,13 @@ import type {
   AssetUploadSession,
   AssetUsageReport,
   BacklinkRecord,
+  CollaborationBranch,
+  CollaborationConflict,
+  CollaborationMerge,
+  CollaborationOperation,
+  CollaborationOperationInput,
   CollaborationSnapshot,
+  CollaborationSuggestion,
   CollaborationTarget,
   CommentThread,
   ComponentManifest,
@@ -341,6 +347,34 @@ export interface PresenceHeartbeatInput {
   displayName: string;
   field?: string;
   nodeId?: string;
+  signal?: AbortSignal;
+}
+
+export interface SubmitCollaborationOperationInput extends CollaborationOperationInput {
+  signal?: AbortSignal;
+}
+
+export interface CreateCollaborationBranchInput {
+  name: string;
+  parentBranchId?: string;
+  id?: string;
+  signal?: AbortSignal;
+}
+
+export interface CreateCollaborationSuggestionInput {
+  branchId?: string;
+  target: CollaborationOperationInput['target'];
+  kind?: CollaborationOperation['kind'];
+  value?: CollaborationOperation['value'];
+  id?: string;
+  signal?: AbortSignal;
+}
+
+export interface ResolveCollaborationConflictInput {
+  operationId?: string;
+  value?: CollaborationOperation['value'];
+  kind?: CollaborationOperation['kind'];
+  actorSequence?: number;
   signal?: AbortSignal;
 }
 export interface CreatePreviewSessionInput {
@@ -1335,6 +1369,112 @@ export class GridStoryClient {
     });
   }
 
+  submitCollaborationOperation(
+    entryId: string,
+    input: SubmitCollaborationOperationInput,
+  ): Promise<CollaborationOperation> {
+    return this.#request(
+      `/api/v1/content/${encodeURIComponent(entryId)}/collaboration/operations`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          ...(input.id ? { id: input.id } : {}),
+          ...(input.branchId ? { branchId: input.branchId } : {}),
+          ...(input.actorSequence ? { actorSequence: input.actorSequence } : {}),
+          ...(input.dependencies ? { dependencies: input.dependencies } : {}),
+          target: input.target,
+          ...(input.kind ? { kind: input.kind } : {}),
+          ...(input.value !== undefined ? { value: input.value } : {}),
+        }),
+        ...(input.signal ? { signal: input.signal } : {}),
+      },
+    );
+  }
+
+  createCollaborationBranch(
+    entryId: string,
+    input: CreateCollaborationBranchInput,
+  ): Promise<CollaborationBranch> {
+    return this.#request(`/api/v1/content/${encodeURIComponent(entryId)}/collaboration/branches`, {
+      method: 'POST',
+      body: JSON.stringify({
+        name: input.name,
+        ...(input.parentBranchId ? { parentBranchId: input.parentBranchId } : {}),
+        ...(input.id ? { id: input.id } : {}),
+      }),
+      ...(input.signal ? { signal: input.signal } : {}),
+    });
+  }
+
+  createCollaborationSuggestion(
+    entryId: string,
+    input: CreateCollaborationSuggestionInput,
+  ): Promise<CollaborationSuggestion> {
+    return this.#request(
+      `/api/v1/content/${encodeURIComponent(entryId)}/collaboration/suggestions`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          ...(input.branchId ? { branchId: input.branchId } : {}),
+          target: input.target,
+          ...(input.kind ? { kind: input.kind } : {}),
+          ...(input.value !== undefined ? { value: input.value } : {}),
+          ...(input.id ? { id: input.id } : {}),
+        }),
+        ...(input.signal ? { signal: input.signal } : {}),
+      },
+    );
+  }
+
+  reviewCollaborationSuggestion(
+    entryId: string,
+    suggestionId: string,
+    decision: 'accept' | 'reject',
+    signal?: AbortSignal,
+  ): Promise<CollaborationSuggestion> {
+    return this.#request(
+      `/api/v1/content/${encodeURIComponent(entryId)}/collaboration/suggestions/${encodeURIComponent(suggestionId)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ decision }),
+        ...(signal ? { signal } : {}),
+      },
+    );
+  }
+
+  mergeCollaborationBranch(
+    entryId: string,
+    sourceBranchId: string,
+    targetBranchId = 'main',
+    signal?: AbortSignal,
+  ): Promise<CollaborationMerge> {
+    return this.#request(`/api/v1/content/${encodeURIComponent(entryId)}/collaboration/merges`, {
+      method: 'POST',
+      body: JSON.stringify({ sourceBranchId, targetBranchId }),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  resolveCollaborationConflict(
+    entryId: string,
+    conflictId: string,
+    input: ResolveCollaborationConflictInput,
+  ): Promise<CollaborationConflict> {
+    return this.#request(
+      `/api/v1/content/${encodeURIComponent(entryId)}/collaboration/conflicts/${encodeURIComponent(conflictId)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({
+          ...(input.operationId ? { operationId: input.operationId } : {}),
+          ...(input.value !== undefined ? { value: input.value } : {}),
+          ...(input.kind ? { kind: input.kind } : {}),
+          ...(input.actorSequence ? { actorSequence: input.actorSequence } : {}),
+        }),
+        ...(input.signal ? { signal: input.signal } : {}),
+      },
+    );
+  }
+
   createCommentThread(id: string, input: CreateCommentThreadInput): Promise<CommentThread> {
     return this.#request(`/api/v1/content/${encodeURIComponent(id)}/comments`, {
       method: 'POST',
@@ -1421,7 +1561,13 @@ export type {
   AssetUploadSession,
   AssetUsageReport,
   BacklinkRecord,
+  CollaborationBranch,
+  CollaborationConflict,
+  CollaborationMerge,
+  CollaborationOperation,
+  CollaborationOperationInput,
   CollaborationSnapshot,
+  CollaborationSuggestion,
   CollaborationTarget,
   CommentThread,
   ComponentManifest,

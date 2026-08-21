@@ -27,6 +27,38 @@ plain-content editing, and mark controls. Asset and relation fields use searchab
 pickers. The preview canvas also exposes selected component props as inline controls; edits still
 flow through the immutable composition command/history model and the ordinary draft save boundary.
 
+## Causal field and block collaboration
+
+Each entry has a private, versioned collaboration document. Field and block changes use immutable
+JSON operations with a stable operation ID, actor sequence, branch, target, and causal dependency
+heads. A target always names a field and may narrow to a stable component node and property. Online
+clients can omit causal metadata and let the service use the current branch heads; offline or
+distributed adapters can preserve their own operation identity and dependencies.
+
+Duplicate stable operations are idempotent. Independent targets converge when histories are joined.
+Concurrent changes to the same target receive a deterministic visible winner, but every different
+live value remains in a conflict record until a resolution operation causally succeeds all variants.
+No wall-clock timestamp silently overwrites another author's value.
+
+Branches copy operation membership and head IDs rather than cloning draft content. A merge unions
+source history into the target, applies non-overlapping changes, and remains `conflicted` until every
+same-target variant is resolved. Suggestions remain outside branch state until accepted; accepting
+one creates an ordinary causal operation, while rejection records the review only.
+
+The private API adds:
+
+- `POST /api/v1/content/:id/collaboration/operations`
+- `POST /api/v1/content/:id/collaboration/branches`
+- `POST /api/v1/content/:id/collaboration/suggestions`
+- `PATCH /api/v1/content/:id/collaboration/suggestions/:suggestionId`
+- `POST /api/v1/content/:id/collaboration/merges`
+- `PATCH /api/v1/content/:id/collaboration/conflicts/:conflictId`
+
+Studio exposes a working-branch selector, current field/block sharing, suggestion review, merge, and
+variant-level conflict resolution. These operations do not save or publish a content revision;
+authors retain the ordinary validated draft-save boundary when promoting collaboration results into
+authoritative content.
+
 ## Comments and presence
 
 Collaboration is private control-plane state and never enters published content, delivery responses,
@@ -48,11 +80,15 @@ field, or a component node. Message bodies extract stable `@actor-id` mentions; 
 assignees, due dates, replies, resolution, and reopening. Invalid due dates return the stable
 `invalid_due_date` 400 response.
 
+Comments and causal collaboration documents are durable in the configured SQLite or PostgreSQL
+adapter. Repository writes use optimistic document versions, retry bounded races, and retain the
+complete tenant scope in both indexed columns and the validated payload.
+
 Presence is intentionally soft real-time. A heartbeat records the editor's display name and current
 field/node, expires after 30 seconds, and is removed explicitly when Studio changes entry or
-unmounts. The current reference collaboration adapter is process-local, so comment threads and
-presence are reset when the API process restarts. A durable/distributed adapter can implement the
-same framework-neutral service boundary without changing Studio or client contracts.
+unmounts. Presence remains process-local and resets when the API process restarts because stale
+awareness is not durable authoring history. Realtime push, browser offline queues, and
+character-level rich-text CRDT encoding remain separate transport/editor integrations.
 
 ## Cache and preview boundaries
 
@@ -68,7 +104,10 @@ same framework-neutral service boundary without changing Studio or client contra
 
 Schema tests cover semantic documents, marks, mentions, asset metadata, allowed blocks, accepted
 asset kinds, and required image alt text. Core tests cover scope isolation, mentions, assignments,
-replies, resolution, due-date errors, and presence expiry. API tests cover authorization, cross-
-tenant isolation, browser `PATCH` preflight, stable errors, and the collaboration lifecycle. Studio
-tests exercise rich-text blocks, asset/reference picking, inline props, presence, comments,
-mentions, and assignment through the typed client.
+replies, resolution, due-date errors, presence expiry, idempotency, arrival-order convergence,
+suggestions, branch merge, conflicts, resolution, SQLite restart persistence, and optimistic writes.
+API tests cover authorization, cross-tenant isolation, browser `PATCH` preflight, stable errors, and
+the complete collaboration lifecycle; PostgreSQL verification reopens the API before reading the
+same operation. Studio tests exercise rich-text blocks, asset/reference picking, inline props,
+presence, current-value sharing, suggestions, branches, merge conflicts, comments, mentions, and
+assignment through the typed client.

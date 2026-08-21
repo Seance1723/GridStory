@@ -35,6 +35,7 @@ import { exampleComponentRegistry } from '@gridstory/example-kit/react';
 import { GridStoryRenderer } from '@gridstory/react';
 import type {
   AssetReference,
+  CollaborationOperation,
   ComponentNode,
   ContentSchemaDefinition,
   DesignSystemManifest,
@@ -83,6 +84,50 @@ type ComponentGovernanceState = {
   migration: ComponentMigrationPlanResponse;
   visual: ComponentVisualRegressionPlan;
 };
+
+function emptyCollaborationSnapshot(entryId = ''): CollaborationSnapshot {
+  return {
+    organizationId: '',
+    tenantId: '',
+    workspaceId: '',
+    siteId: '',
+    environmentId: '',
+    locale: '',
+    entryId,
+    version: 0,
+    threads: [],
+    presence: [],
+    operations: [],
+    branches: [
+      {
+        id: 'main',
+        entryId,
+        name: 'Main',
+        status: 'open',
+        baseOperationIds: [],
+        operationIds: [],
+        headOperationIds: [],
+        createdBy: 'system',
+        createdAt: '1970-01-01T00:00:00.000Z',
+        updatedAt: '1970-01-01T00:00:00.000Z',
+      },
+    ],
+    branchStates: [],
+    suggestions: [],
+    merges: [],
+    conflicts: [],
+  };
+}
+
+function collaborationValueLabel(value: unknown): string {
+  const serialized = typeof value === 'string' ? value : JSON.stringify(value);
+  if (!serialized) return 'Deleted value';
+  return serialized.length > 180 ? `${serialized.slice(0, 177)}…` : serialized;
+}
+
+function collaborationJsonValue(value: unknown): CollaborationOperation['value'] {
+  return JSON.parse(JSON.stringify(value)) as CollaborationOperation['value'];
+}
 
 function asEditableContent(entry: ContentEntry): EditableContent {
   return entry.data;
@@ -456,10 +501,13 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   );
   const [compositionHistory, setCompositionHistory] = useState(() => createCompositionHistory([]));
   const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
-  const [collaboration, setCollaboration] = useState<CollaborationSnapshot>({
-    threads: [],
-    presence: [],
-  });
+  const [collaboration, setCollaboration] = useState<CollaborationSnapshot>(() =>
+    emptyCollaborationSnapshot(),
+  );
+  const [collaborationBranchId, setCollaborationBranchId] = useState('main');
+  const [collaborationBranchName, setCollaborationBranchName] = useState('');
+  const [collaborationTargetField, setCollaborationTargetField] = useState('');
+  const [collaborationSuggestionValue, setCollaborationSuggestionValue] = useState('');
   const [commentBody, setCommentBody] = useState('');
   const [commentAssignee, setCommentAssignee] = useState('');
   const [commentDueAt, setCommentDueAt] = useState('');
@@ -666,10 +714,17 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
     !commentTargetField || commentTargetField === componentField?.name
       ? selectedNode?.id
       : undefined;
+  const selectedCollaborationNodeId =
+    collaborationTargetField === componentField?.name ? selectedNode?.id : undefined;
+  const selectedCollaborationValue = selectedCollaborationNodeId
+    ? selectedNode
+    : collaborationTargetField
+      ? draft?.[collaborationTargetField]
+      : undefined;
 
   useEffect(() => {
     if (!selectedEntryId) {
-      setCollaboration({ threads: [], presence: [] });
+      setCollaboration(emptyCollaborationSnapshot());
       return;
     }
     const entryId = selectedEntryId;
@@ -806,6 +861,105 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
       replaceCollaborationThread(
         await client.updateCommentThread(selected.id, threadId, { resolved }),
       );
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
+
+  const refreshCollaboration = async () => {
+    if (!selected) return;
+    setCollaboration(await client.getCollaboration(selected.id));
+  };
+
+  const shareCollaborationValue = async () => {
+    if (!selected || !collaborationTargetField || selectedCollaborationValue === undefined) return;
+    try {
+      await client.submitCollaborationOperation(selected.id, {
+        branchId: collaborationBranchId,
+        target: {
+          field: collaborationTargetField,
+          ...(selectedCollaborationNodeId ? { nodeId: selectedCollaborationNodeId } : {}),
+        },
+        value: collaborationJsonValue(selectedCollaborationValue),
+      });
+      await refreshCollaboration();
+      setNotice({ tone: 'success', message: 'Current value shared with collaborators.' });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
+
+  const createCollaborationBranch = async () => {
+    if (!selected || !collaborationBranchName.trim()) return;
+    try {
+      const created = await client.createCollaborationBranch(selected.id, {
+        name: collaborationBranchName,
+        parentBranchId: collaborationBranchId,
+      });
+      setCollaborationBranchId(created.id);
+      setCollaborationBranchName('');
+      await refreshCollaboration();
+      setNotice({ tone: 'success', message: `${created.name} branch created.` });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
+
+  const createCollaborationSuggestion = async () => {
+    if (!selected || !collaborationTargetField || !collaborationSuggestionValue.trim()) return;
+    try {
+      await client.createCollaborationSuggestion(selected.id, {
+        branchId: collaborationBranchId,
+        target: {
+          field: collaborationTargetField,
+          ...(selectedCollaborationNodeId ? { nodeId: selectedCollaborationNodeId } : {}),
+        },
+        value: collaborationSuggestionValue,
+      });
+      setCollaborationSuggestionValue('');
+      await refreshCollaboration();
+      setNotice({ tone: 'success', message: 'Suggestion opened for review.' });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
+
+  const reviewCollaborationSuggestion = async (
+    suggestionId: string,
+    decision: 'accept' | 'reject',
+  ) => {
+    if (!selected) return;
+    try {
+      await client.reviewCollaborationSuggestion(selected.id, suggestionId, decision);
+      await refreshCollaboration();
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
+
+  const mergeCollaborationBranch = async () => {
+    if (!selected || collaborationBranchId === 'main') return;
+    try {
+      const merge = await client.mergeCollaborationBranch(selected.id, collaborationBranchId);
+      await refreshCollaboration();
+      setNotice({
+        tone: merge.status === 'merged' ? 'success' : 'info',
+        message:
+          merge.status === 'merged'
+            ? 'Branch merged into Main.'
+            : `${merge.conflictIds.length} conflict${merge.conflictIds.length === 1 ? '' : 's'} need resolution.`,
+      });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
+
+  const resolveCollaborationConflict = async (conflictId: string, operationId: string) => {
+    if (!selected) return;
+    try {
+      await client.resolveCollaborationConflict(selected.id, conflictId, { operationId });
+      await refreshCollaboration();
+      setNotice({ tone: 'success', message: 'Conflict resolved.' });
     } catch (error) {
       setNotice({ tone: 'error', message: messageFrom(error) });
     }
@@ -2970,11 +3124,11 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                 </div>
               </section>
 
-              <section className="collaboration-panel" aria-label="Comments and presence">
+              <section className="collaboration-panel" aria-label="Collaboration workspace">
                 <div className="section-heading">
                   <div>
                     <span className="kicker">Collaboration</span>
-                    <h2>Comments and presence</h2>
+                    <h2>Branches, suggestions, and comments</h2>
                   </div>
                   <ul className="presence-list" aria-label="Active editors">
                     {collaboration.presence.length > 0 ? (
@@ -2989,6 +3143,180 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                     )}
                   </ul>
                 </div>
+                <div className="collaboration-workbench">
+                  <div className="collaboration-controls">
+                    <label className="gs-field">
+                      <span>Working branch</span>
+                      <select
+                        value={collaborationBranchId}
+                        onChange={(event) => setCollaborationBranchId(event.target.value)}
+                      >
+                        {collaboration.branches.map((candidate) => (
+                          <option key={candidate.id} value={candidate.id}>
+                            {candidate.name} · {candidate.status}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="gs-field">
+                      <span>Shared field or block</span>
+                      <select
+                        value={collaborationTargetField}
+                        onChange={(event) => setCollaborationTargetField(event.target.value)}
+                      >
+                        <option value="">Choose a field</option>
+                        {activeSchema?.fields.map((field) => (
+                          <option key={field.id} value={field.name}>
+                            {field.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      className="button button--secondary"
+                      disabled={
+                        !collaborationTargetField || selectedCollaborationValue === undefined
+                      }
+                      onClick={() => void shareCollaborationValue()}
+                    >
+                      Share current value
+                    </button>
+                    <span className="collaboration-version">
+                      {collaboration.operations.length} operations · document v
+                      {collaboration.version}
+                    </span>
+                  </div>
+
+                  <div className="collaboration-create-row">
+                    <label className="gs-field">
+                      <span>New branch from current</span>
+                      <input
+                        placeholder="Campaign revision"
+                        value={collaborationBranchName}
+                        onChange={(event) => setCollaborationBranchName(event.target.value)}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="button button--secondary"
+                      disabled={!collaborationBranchName.trim()}
+                      onClick={() => void createCollaborationBranch()}
+                    >
+                      Create branch
+                    </button>
+                    <button
+                      type="button"
+                      className="button button--primary"
+                      disabled={
+                        collaborationBranchId === 'main' ||
+                        collaboration.branches.find(
+                          (candidate) => candidate.id === collaborationBranchId,
+                        )?.status !== 'open'
+                      }
+                      onClick={() => void mergeCollaborationBranch()}
+                    >
+                      Merge into Main
+                    </button>
+                  </div>
+
+                  <div className="collaboration-create-row collaboration-suggestion-composer">
+                    <label className="gs-field">
+                      <span>Proposed value</span>
+                      <textarea
+                        rows={2}
+                        placeholder="Suggest a replacement value for the selected field or block"
+                        value={collaborationSuggestionValue}
+                        onChange={(event) => setCollaborationSuggestionValue(event.target.value)}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="button button--secondary"
+                      disabled={!collaborationTargetField || !collaborationSuggestionValue.trim()}
+                      onClick={() => void createCollaborationSuggestion()}
+                    >
+                      Open suggestion
+                    </button>
+                  </div>
+
+                  {collaboration.suggestions.length > 0 ? (
+                    <section className="collaboration-review-list" aria-label="Suggestions">
+                      <h3>Suggestions</h3>
+                      {collaboration.suggestions.map((suggestion) => (
+                        <article key={suggestion.id} className="collaboration-review-card">
+                          <div>
+                            <strong>{suggestion.target.field}</strong>
+                            {suggestion.target.nodeId ? ` · ${suggestion.target.nodeId}` : ''}
+                            <p>{collaborationValueLabel(suggestion.value)}</p>
+                            <small>
+                              {suggestion.createdBy} · {suggestion.status}
+                            </small>
+                          </div>
+                          {suggestion.status === 'open' ? (
+                            <div className="collaboration-card-actions">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void reviewCollaborationSuggestion(suggestion.id, 'accept')
+                                }
+                              >
+                                Accept
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void reviewCollaborationSuggestion(suggestion.id, 'reject')
+                                }
+                              >
+                                Reject
+                              </button>
+                            </div>
+                          ) : null}
+                        </article>
+                      ))}
+                    </section>
+                  ) : null}
+
+                  {collaboration.conflicts.some((conflict) => conflict.status === 'open') ? (
+                    <section className="collaboration-review-list" aria-label="Merge conflicts">
+                      <h3>Merge conflicts</h3>
+                      {collaboration.conflicts
+                        .filter((conflict) => conflict.status === 'open')
+                        .map((conflict) => (
+                          <article
+                            key={conflict.id}
+                            className="collaboration-review-card collaboration-conflict-card"
+                          >
+                            <div>
+                              <strong>{conflict.target.field}</strong>
+                              {conflict.target.nodeId ? ` · ${conflict.target.nodeId}` : ''}
+                              <p>Choose the value that should become the causal successor.</p>
+                            </div>
+                            <div className="collaboration-conflict-variants">
+                              {conflict.variants.map((variant) => (
+                                <button
+                                  type="button"
+                                  key={variant.operationId}
+                                  onClick={() =>
+                                    void resolveCollaborationConflict(
+                                      conflict.id,
+                                      variant.operationId,
+                                    )
+                                  }
+                                >
+                                  <strong>{variant.branchId}</strong>
+                                  <span>{collaborationValueLabel(variant.value)}</span>
+                                  <small>{variant.actorId}</small>
+                                </button>
+                              ))}
+                            </div>
+                          </article>
+                        ))}
+                    </section>
+                  ) : null}
+                </div>
+                <h3 className="collaboration-comments-heading">Comments</h3>
                 <div className="comment-composer">
                   <label className="gs-field">
                     <span>Comment target</span>

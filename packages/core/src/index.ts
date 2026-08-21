@@ -4,6 +4,7 @@ export * from './asset-service.js';
 export * from './audit-service.js';
 export * from './authorization.js';
 export * from './collaboration-service.js';
+export * from './collaboration-repository.js';
 export * from './component-lifecycle-service.js';
 export * from './content-quality-service.js';
 export * from './content-query.js';

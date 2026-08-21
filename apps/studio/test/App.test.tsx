@@ -143,6 +143,48 @@ function createTestClient(
   const testAssets = options.assets ?? [];
   const threads: Array<Record<string, unknown>> = [];
   const presence = [{ actorId: 'local-admin', displayName: 'Studio editor', lastSeenAt: now }];
+  const operations: Array<Record<string, unknown>> = [];
+  const branches: Array<Record<string, unknown>> = [
+    {
+      id: 'main',
+      entryId: testEntries[0]?.id ?? 'entry-1',
+      name: 'Main',
+      status: 'open',
+      baseOperationIds: [],
+      operationIds: [],
+      headOperationIds: [],
+      createdBy: 'system',
+      createdAt: now,
+      updatedAt: now,
+    },
+  ];
+  const suggestions: Array<Record<string, unknown>> = [];
+  const merges: Array<Record<string, unknown>> = [];
+  const conflicts: Array<Record<string, unknown>> = [];
+  let collaborationVersion = 0;
+  const collaborationSnapshot = (entryId: string) => ({
+    organizationId: 'local',
+    tenantId: 'default',
+    workspaceId: 'default',
+    siteId: 'default',
+    environmentId: 'development',
+    locale: 'en',
+    entryId,
+    version: collaborationVersion,
+    threads,
+    presence,
+    operations,
+    branches,
+    branchStates: branches.map((candidate) => ({
+      branchId: candidate.id,
+      version: (candidate.operationIds as string[]).length,
+      headOperationIds: candidate.headOperationIds,
+      values: [],
+    })),
+    suggestions,
+    merges,
+    conflicts,
+  });
   let workflowDefinition = {
     organizationId: 'local',
     tenantId: 'default',
@@ -494,8 +536,206 @@ function createTestClient(
         recentAudit: [],
       });
     }
+    const collaborationOperationMatch = url.pathname.match(
+      /^\/api\/v1\/content\/([^/]+)\/collaboration\/operations$/,
+    );
+    if (collaborationOperationMatch && init?.method === 'POST') {
+      const body = JSON.parse(String(init.body)) as {
+        id?: string;
+        branchId?: string;
+        target: { field: string; nodeId?: string };
+        kind?: string;
+        value?: unknown;
+      };
+      const selectedBranch = branches.find(
+        (candidate) => candidate.id === (body.branchId ?? 'main'),
+      );
+      const id = body.id ?? `operation-${operations.length + 1}`;
+      const operation = {
+        id,
+        entryId: collaborationOperationMatch[1],
+        branchId: body.branchId ?? 'main',
+        actorId: 'local-admin',
+        actorSequence: operations.length + 1,
+        dependencies: selectedBranch?.headOperationIds ?? [],
+        target: { entryId: collaborationOperationMatch[1], ...body.target },
+        kind: body.kind ?? 'set',
+        ...(body.value !== undefined ? { value: body.value } : {}),
+        createdAt: now,
+      };
+      operations.push(operation);
+      if (selectedBranch) {
+        selectedBranch.operationIds = [...(selectedBranch.operationIds as string[]), operation.id];
+        selectedBranch.headOperationIds = [operation.id];
+        selectedBranch.updatedAt = now;
+      }
+      collaborationVersion += 1;
+      return json(operation, 201);
+    }
+    const collaborationBranchMatch = url.pathname.match(
+      /^\/api\/v1\/content\/([^/]+)\/collaboration\/branches$/,
+    );
+    if (collaborationBranchMatch && init?.method === 'POST') {
+      const body = JSON.parse(String(init.body)) as { name: string; parentBranchId?: string };
+      const parent = branches.find((candidate) => candidate.id === (body.parentBranchId ?? 'main'));
+      const created = {
+        id: `branch-${branches.length}`,
+        entryId: collaborationBranchMatch[1],
+        name: body.name,
+        status: 'open',
+        parentBranchId: parent?.id ?? 'main',
+        baseOperationIds: [...((parent?.operationIds as string[]) ?? [])],
+        operationIds: [...((parent?.operationIds as string[]) ?? [])],
+        headOperationIds: [...((parent?.headOperationIds as string[]) ?? [])],
+        createdBy: 'local-admin',
+        createdAt: now,
+        updatedAt: now,
+      };
+      branches.push(created);
+      collaborationVersion += 1;
+      return json(created, 201);
+    }
+    const collaborationSuggestionMatch = url.pathname.match(
+      /^\/api\/v1\/content\/([^/]+)\/collaboration\/suggestions$/,
+    );
+    if (collaborationSuggestionMatch && init?.method === 'POST') {
+      const body = JSON.parse(String(init.body)) as {
+        branchId?: string;
+        target: { field: string; nodeId?: string };
+        value?: unknown;
+      };
+      const suggestion = {
+        id: `suggestion-${suggestions.length + 1}`,
+        entryId: collaborationSuggestionMatch[1],
+        branchId: body.branchId ?? 'main',
+        target: { entryId: collaborationSuggestionMatch[1], ...body.target },
+        kind: 'set',
+        value: body.value,
+        status: 'open',
+        createdBy: 'local-admin',
+        createdAt: now,
+        updatedAt: now,
+      };
+      suggestions.push(suggestion);
+      collaborationVersion += 1;
+      return json(suggestion, 201);
+    }
+    const collaborationSuggestionReviewMatch = url.pathname.match(
+      /^\/api\/v1\/content\/([^/]+)\/collaboration\/suggestions\/([^/]+)$/,
+    );
+    if (collaborationSuggestionReviewMatch && init?.method === 'PATCH') {
+      const suggestion = suggestions.find(
+        (candidate) => candidate.id === collaborationSuggestionReviewMatch[2],
+      );
+      const body = JSON.parse(String(init.body)) as { decision: 'accept' | 'reject' };
+      if (!suggestion) return json({ error: { message: 'Not found.' } }, 404);
+      suggestion.status = body.decision === 'accept' ? 'accepted' : 'rejected';
+      suggestion.reviewedBy = 'local-admin';
+      suggestion.reviewedAt = now;
+      suggestion.updatedAt = now;
+      if (body.decision === 'accept') {
+        const selectedBranch = branches.find((candidate) => candidate.id === suggestion.branchId);
+        const operation = {
+          id: `operation-${operations.length + 1}`,
+          entryId: collaborationSuggestionReviewMatch[1],
+          branchId: suggestion.branchId,
+          actorId: 'local-admin',
+          actorSequence: operations.length + 1,
+          dependencies: selectedBranch?.headOperationIds ?? [],
+          target: suggestion.target,
+          kind: 'set',
+          value: suggestion.value,
+          createdAt: now,
+        };
+        operations.push(operation);
+        suggestion.operationId = operation.id;
+        if (selectedBranch) {
+          selectedBranch.operationIds = [
+            ...(selectedBranch.operationIds as string[]),
+            operation.id,
+          ];
+          selectedBranch.headOperationIds = [operation.id];
+        }
+      }
+      collaborationVersion += 1;
+      return json(suggestion);
+    }
+    const collaborationMergeMatch = url.pathname.match(
+      /^\/api\/v1\/content\/([^/]+)\/collaboration\/merges$/,
+    );
+    if (collaborationMergeMatch && init?.method === 'POST') {
+      const body = JSON.parse(String(init.body)) as {
+        sourceBranchId: string;
+        targetBranchId: string;
+      };
+      const source = branches.find((candidate) => candidate.id === body.sourceBranchId);
+      const target = branches.find((candidate) => candidate.id === body.targetBranchId);
+      const sourceOperation = [...operations]
+        .reverse()
+        .find((candidate) => candidate.branchId === source?.id);
+      const targetOperation = [...operations]
+        .reverse()
+        .find(
+          (candidate) =>
+            candidate.branchId === target?.id &&
+            (candidate.target as { field?: string }).field ===
+              (sourceOperation?.target as { field?: string } | undefined)?.field,
+        );
+      const conflict =
+        sourceOperation && targetOperation && sourceOperation.value !== targetOperation.value
+          ? {
+              id: `conflict-${conflicts.length + 1}`,
+              entryId: collaborationMergeMatch[1],
+              branchId: body.targetBranchId,
+              target: sourceOperation.target,
+              variants: [sourceOperation, targetOperation].map((operation) => ({
+                operationId: operation.id,
+                actorId: operation.actorId,
+                branchId: operation.branchId,
+                kind: operation.kind,
+                value: operation.value,
+              })),
+              status: 'open',
+              createdAt: now,
+              updatedAt: now,
+            }
+          : null;
+      if (conflict) conflicts.push(conflict);
+      const merge = {
+        id: `merge-${merges.length + 1}`,
+        entryId: collaborationMergeMatch[1],
+        sourceBranchId: body.sourceBranchId,
+        targetBranchId: body.targetBranchId,
+        status: conflict ? 'conflicted' : 'merged',
+        conflictIds: conflict ? [conflict.id] : [],
+        createdBy: 'local-admin',
+        createdAt: now,
+        updatedAt: now,
+      };
+      merges.push(merge);
+      collaborationVersion += 1;
+      return json(merge, 201);
+    }
+    const collaborationConflictMatch = url.pathname.match(
+      /^\/api\/v1\/content\/([^/]+)\/collaboration\/conflicts\/([^/]+)$/,
+    );
+    if (collaborationConflictMatch && init?.method === 'PATCH') {
+      const conflict = conflicts.find(
+        (candidate) => candidate.id === collaborationConflictMatch[2],
+      );
+      if (!conflict) return json({ error: { message: 'Not found.' } }, 404);
+      conflict.status = 'resolved';
+      conflict.updatedAt = now;
+      for (const merge of merges.filter((candidate) =>
+        (candidate.conflictIds as string[]).includes(String(conflict.id)),
+      )) {
+        merge.status = 'merged';
+      }
+      collaborationVersion += 1;
+      return json(conflict);
+    }
     const collaborationMatch = url.pathname.match(/^\/api\/v1\/content\/([^/]+)\/collaboration$/);
-    if (collaborationMatch) return json({ threads, presence });
+    if (collaborationMatch) return json(collaborationSnapshot(collaborationMatch[1] ?? 'entry-1'));
     const presenceMatch = url.pathname.match(/^\/api\/v1\/content\/([^/]+)\/presence$/);
     if (presenceMatch) {
       if (init?.method === 'DELETE') return new Response(null, { status: 204 });
@@ -806,6 +1046,28 @@ describe('GridStory Studio', () => {
     expect(screen.getByRole('heading', { name: 'Edited directly in preview' })).toBeTruthy();
 
     await waitFor(() => expect(screen.getByText(/Studio editor/)).toBeTruthy());
+    await user.selectOptions(screen.getByLabelText('Shared field or block'), 'headline');
+    await user.click(screen.getByRole('button', { name: 'Share current value' }));
+    await waitFor(() => expect(screen.getByText(/1 operations/)).toBeTruthy());
+    await user.type(screen.getByLabelText('New branch from current'), 'Campaign branch');
+    await user.click(screen.getByRole('button', { name: 'Create branch' }));
+    await waitFor(() =>
+      expect((screen.getByLabelText('Working branch') as HTMLSelectElement).value).toBe('branch-1'),
+    );
+    await user.type(screen.getByLabelText('Proposed value'), 'A collaborative headline');
+    await user.click(screen.getByRole('button', { name: 'Open suggestion' }));
+    const suggestions = await screen.findByRole('region', { name: 'Suggestions' });
+    expect(suggestions.textContent).toContain('A collaborative headline');
+    await user.click(within(suggestions).getByRole('button', { name: 'Accept' }));
+    await waitFor(() => expect(suggestions.textContent).toContain('accepted'));
+    await user.click(screen.getByRole('button', { name: 'Merge into Main' }));
+    const conflict = await screen.findByRole('region', { name: 'Merge conflicts' });
+    expect(conflict.textContent).toContain('A collaborative headline');
+    await user.click(within(conflict).getByRole('button', { name: /branch-1/ }));
+    await waitFor(() =>
+      expect(screen.queryByRole('region', { name: 'Merge conflicts' })).toBeNull(),
+    );
+
     await user.selectOptions(screen.getByLabelText('Comment target'), 'story');
     fireEvent.change(screen.getByLabelText('New comment'), {
       target: { value: 'Please check this, @reviewer' },

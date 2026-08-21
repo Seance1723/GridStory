@@ -8,6 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Corrected collaboration schema evaluation, service defaults and exact targets, SQLite test cleanup, API request typing, Studio JSON containment, interaction fixtures, review-region semantics, PostgreSQL schema qualification, and an API diagnostic dependency-boundary violation found during M6-001 (BUG-0248 through BUG-0258).
 - Corrected the five-package README/SPDX gap, inaccurate baseline wording, unpublished offline dependency resolution, missing installed `pg` declarations, and cleanup control flow found during M5-009 (BUG-0243 through BUG-0247).
 - Corrected the staged-readiness validator's formatter wrapping found during M5-008 verification (BUG-0242) and logged its publication-metadata gap as BUG-0243 for M5-009/RC-003.
 - Aligned the API's binary multipart route with its advertised 5 MiB part size and corrected M5-007 type, benchmark-concurrency/output/memory, archive-layout/inventory, checksum-callback, lint, and restricted Windows verification defects (BUG-0232 through BUG-0241).
@@ -68,6 +69,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Mapped malformed preview targets into the stable `invalid_preview_url` response boundary instead of allowing generic URL exceptions to become server errors.
 
 ### Added
+
+- Added bounded CRDT-compatible collaboration contracts with stable operation identity, actor clocks, causal dependency heads, deterministic multi-value field/block state, preserved conflict variants, suggestions, branches, merge records, and explicit resolution operations.
+- Added optimistic fully scoped in-memory, SQLite, and PostgreSQL collaboration repositories, durable comments/history, authorized private/no-store REST and universal-client methods, arrival-order/idempotency/tenant/restart regressions, and ADR 0012.
+- Added a responsive Studio collaboration workbench for sharing current field or selected-block values, creating branches, reviewing suggestions, merging into Main, and resolving competing variants without changing published delivery.
 
 - Added package-specific install/export/license guides, exact README/LICENSE/manifest archive validation with 10 negative cases, and an OS-temporary offline consumer that installs all five tarballs, executes every module/stylesheet export, and strictly type-checks installed declarations.
 - Added a dated evidence-linked alpha/beta/RC/GA review, fail-closed stage/outcome/path validator with nine negative overclaim tests, staged-readiness guide, ADR 0010, and a root `pnpm readiness:check` gate.

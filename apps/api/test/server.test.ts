@@ -1125,6 +1125,73 @@ describe('GridStory API', () => {
       expect.objectContaining({ actorId: 'api-test', displayName: 'API author', field: 'story' }),
     ]);
 
+    const baseOperation = await server.inject({
+      method: 'POST',
+      url: `/api/v1/content/${created.id}/collaboration/operations`,
+      headers,
+      payload: { id: 'base-title', target: { field: 'title' }, value: 'Base title' },
+    });
+    expect(baseOperation).toMatchObject({ statusCode: 201 });
+    const featureBranch = await server.inject({
+      method: 'POST',
+      url: `/api/v1/content/${created.id}/collaboration/branches`,
+      headers,
+      payload: { id: 'feature', name: 'Feature' },
+    });
+    expect(featureBranch.json()).toMatchObject({ id: 'feature', parentBranchId: 'main' });
+    expect(
+      await server.inject({
+        method: 'POST',
+        url: `/api/v1/content/${created.id}/collaboration/operations`,
+        headers,
+        payload: {
+          id: 'feature-title',
+          branchId: 'feature',
+          target: { field: 'title' },
+          value: 'Feature title',
+        },
+      }),
+    ).toMatchObject({ statusCode: 201 });
+    expect(
+      await server.inject({
+        method: 'POST',
+        url: `/api/v1/content/${created.id}/collaboration/operations`,
+        headers,
+        payload: { id: 'main-title', target: { field: 'title' }, value: 'Main title' },
+      }),
+    ).toMatchObject({ statusCode: 201 });
+    const suggestion = await server.inject({
+      method: 'POST',
+      url: `/api/v1/content/${created.id}/collaboration/suggestions`,
+      headers,
+      payload: { target: { field: 'summary' }, value: 'A suggested summary' },
+    });
+    expect(suggestion).toMatchObject({ statusCode: 201 });
+    expect(
+      await server.inject({
+        method: 'PATCH',
+        url: `/api/v1/content/${created.id}/collaboration/suggestions/${suggestion.json().id}`,
+        headers,
+        payload: { decision: 'accept' },
+      }),
+    ).toMatchObject({ statusCode: 200 });
+    const merge = await server.inject({
+      method: 'POST',
+      url: `/api/v1/content/${created.id}/collaboration/merges`,
+      headers,
+      payload: { sourceBranchId: 'feature' },
+    });
+    expect(merge.json()).toMatchObject({ status: 'conflicted' });
+    const conflictId = merge.json().conflictIds[0];
+    expect(
+      await server.inject({
+        method: 'PATCH',
+        url: `/api/v1/content/${created.id}/collaboration/conflicts/${conflictId}`,
+        headers,
+        payload: { operationId: 'feature-title' },
+      }),
+    ).toMatchObject({ statusCode: 200 });
+
     const visible = await server.inject({
       method: 'GET',
       url: `/api/v1/content/${created.id}/collaboration`,
@@ -1134,6 +1201,13 @@ describe('GridStory API', () => {
     expect(visible.json()).toMatchObject({
       threads: [{ id: threadId }],
       presence: [{ field: 'story' }],
+      operations: expect.arrayContaining([
+        expect.objectContaining({ id: 'feature-title' }),
+        expect.objectContaining({ id: 'main-title' }),
+      ]),
+      suggestions: [expect.objectContaining({ status: 'accepted' })],
+      merges: [expect.objectContaining({ status: 'merged' })],
+      conflicts: [expect.objectContaining({ status: 'resolved' })],
     });
 
     const denied = await server.inject({
@@ -1143,6 +1217,14 @@ describe('GridStory API', () => {
       payload: { body: 'Not allowed.' },
     });
     expect(denied.statusCode).toBe(403);
+
+    const deniedOperation = await server.inject({
+      method: 'POST',
+      url: `/api/v1/content/${created.id}/collaboration/operations`,
+      headers: { ...headers, 'x-gridstory-roles': 'viewer' },
+      payload: { target: { field: 'title' }, value: 'Not allowed' },
+    });
+    expect(deniedOperation.statusCode).toBe(403);
 
     const isolated = await server.inject({
       method: 'GET',

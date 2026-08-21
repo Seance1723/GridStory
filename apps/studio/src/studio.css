@@ -1121,6 +1121,79 @@ button:disabled {
 .collaboration-panel {
   margin-bottom: 1.5rem;
 }
+.collaboration-workbench {
+  background: #f8fafc;
+  border: 1px solid #dbe4f0;
+  border-radius: 0.85rem;
+  display: grid;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding: 1rem;
+}
+.collaboration-controls,
+.collaboration-create-row {
+  align-items: end;
+  display: grid;
+  gap: 0.75rem;
+}
+.collaboration-controls {
+  grid-template-columns: minmax(10rem, 0.8fr) minmax(12rem, 1fr) auto auto;
+}
+.collaboration-create-row {
+  grid-template-columns: minmax(14rem, 1fr) auto auto;
+}
+.collaboration-suggestion-composer {
+  grid-template-columns: minmax(18rem, 1fr) auto;
+}
+.collaboration-version {
+  color: #4b5563;
+  font-size: 0.78rem;
+  padding-bottom: 0.7rem;
+}
+.collaboration-review-list {
+  display: grid;
+  gap: 0.65rem;
+}
+.collaboration-review-list h3,
+.collaboration-review-card p {
+  margin: 0;
+}
+.collaboration-review-card {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #dbe4f0;
+  border-radius: 0.7rem;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  padding: 0.75rem;
+}
+.collaboration-review-card small {
+  color: #4b5563;
+}
+.collaboration-card-actions,
+.collaboration-conflict-variants {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.collaboration-conflict-card {
+  align-items: start;
+  border-left: 3px solid #b45309;
+  flex-direction: column;
+}
+.collaboration-conflict-variants button {
+  align-items: start;
+  background: #fff7ed;
+  color: #7c2d12;
+  display: grid;
+  gap: 0.2rem;
+  max-width: 20rem;
+  text-align: left;
+}
+.collaboration-comments-heading {
+  margin: 1.25rem 0 0;
+}
 .comment-composer {
   align-items: end;
   display: grid;
@@ -1174,6 +1247,10 @@ button:disabled {
   margin-top: 0.5rem;
 }
 @media (width <= 1120px) {
+  .collaboration-controls,
+  .collaboration-create-row {
+    grid-template-columns: 1fr 1fr;
+  }
   .comment-composer {
     grid-template-columns: 1fr 1fr;
   }
@@ -1182,9 +1259,15 @@ button:disabled {
   }
 }
 @media (width <= 720px) {
+  .collaboration-controls,
+  .collaboration-create-row,
   .comment-composer,
   .inline-editor > div {
     grid-template-columns: 1fr;
+  }
+  .collaboration-review-card {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 
