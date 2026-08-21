@@ -29,6 +29,10 @@ import type {
   ContentSort,
   CreateAssetDeliveryInput,
   DesignSystemManifest,
+  GroupRoleMapping,
+  IdentityProvider,
+  IdentitySession,
+  IdentitySnapshot,
   LocaleConfiguration,
   LocalizedContentResolution,
   PluginCapabilityGrant,
@@ -52,6 +56,7 @@ import type {
   SearchIndexStatus,
   SearchQuery,
   SearchResponse,
+  SessionPolicy,
   SignedPluginManifest,
   StartAssetUploadInput,
   TaxonomyDefinition,
@@ -325,6 +330,7 @@ export interface GridStoryClientOptions {
     Pick<RequestContext, 'organizationId' | 'workspaceId' | 'siteId' | 'environmentId' | 'locale'>
   >;
   fetch?: typeof globalThis.fetch;
+  developmentIdentityHeaders?: boolean;
 }
 
 export interface CreateCommentThreadInput {
@@ -428,6 +434,7 @@ export class GridStoryClient {
   readonly #actorId: string;
   readonly #scope: Required<NonNullable<GridStoryClientOptions['scope']>>;
   readonly #fetch: typeof globalThis.fetch;
+  readonly #developmentIdentityHeaders: boolean;
 
   constructor({
     baseUrl,
@@ -435,6 +442,7 @@ export class GridStoryClient {
     actorId = 'local-admin',
     scope = {},
     fetch,
+    developmentIdentityHeaders = true,
   }: GridStoryClientOptions) {
     this.#baseUrl = baseUrl.replace(/\/$/, '');
     this.#tenantId = tenantId;
@@ -447,11 +455,13 @@ export class GridStoryClient {
       locale: scope.locale ?? 'en',
     };
     this.#fetch = fetch ?? globalThis.fetch.bind(globalThis);
+    this.#developmentIdentityHeaders = developmentIdentityHeaders;
   }
 
   async #request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const response = await this.#fetch(`${this.#baseUrl}${path}`, {
       ...init,
+      credentials: init.credentials ?? 'include',
       headers: {
         accept: 'application/json',
         ...(init.body ? { 'content-type': 'application/json' } : {}),
@@ -461,7 +471,7 @@ export class GridStoryClient {
         'x-gridstory-site': this.#scope.siteId,
         'x-gridstory-environment': this.#scope.environmentId,
         'x-gridstory-locale': this.#scope.locale,
-        'x-gridstory-actor': this.#actorId,
+        ...(this.#developmentIdentityHeaders ? { 'x-gridstory-actor': this.#actorId } : {}),
         ...init.headers,
       },
     });
@@ -524,6 +534,107 @@ export class GridStoryClient {
 
   getRequestContext(signal?: AbortSignal): Promise<RequestContext> {
     return this.#request('/api/v1/context', { ...(signal ? { signal } : {}) });
+  }
+
+  getIdentity(signal?: AbortSignal): Promise<IdentitySnapshot> {
+    return this.#request('/api/v1/identity', { ...(signal ? { signal } : {}) });
+  }
+
+  configureIdentityProvider(
+    input: Omit<IdentityProvider, 'organizationId' | 'tenantId' | 'createdAt' | 'updatedAt'>,
+    signal?: AbortSignal,
+  ): Promise<IdentityProvider> {
+    return this.#request('/api/v1/identity/providers', {
+      method: 'POST',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  updateSessionPolicy(policy: SessionPolicy, signal?: AbortSignal): Promise<SessionPolicy> {
+    return this.#request('/api/v1/identity/session-policy', {
+      method: 'PUT',
+      body: JSON.stringify(policy),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  createGroupRoleMapping(
+    input: Omit<GroupRoleMapping, 'organizationId' | 'tenantId' | 'createdAt' | 'updatedAt'>,
+    signal?: AbortSignal,
+  ): Promise<GroupRoleMapping> {
+    return this.#request('/api/v1/identity/group-role-mappings', {
+      method: 'POST',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  deleteGroupRoleMapping(id: string, signal?: AbortSignal): Promise<void> {
+    return this.#request(`/api/v1/identity/group-role-mappings/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  issueDirectoryCredential(
+    name: string,
+    signal?: AbortSignal,
+  ): Promise<{ id: string; token: string; expiresAt: string }> {
+    return this.#request('/api/v1/identity/directory-credentials', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  createBreakGlassCredential(input: {
+    name: string;
+    roleId: string;
+    expiresAt: string;
+    incidentId: string;
+    signal?: AbortSignal;
+  }): Promise<{ id: string; token: string; expiresAt: string }> {
+    return this.#request('/api/v1/identity/break-glass', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: input.name,
+        roleId: input.roleId,
+        expiresAt: input.expiresAt,
+        incidentId: input.incidentId,
+      }),
+      ...(input.signal ? { signal: input.signal } : {}),
+    });
+  }
+
+  revokeBreakGlassCredential(id: string, incidentId: string, signal?: AbortSignal): Promise<void> {
+    return this.#request(`/api/v1/identity/break-glass/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      body: JSON.stringify({ incidentId }),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  getIdentitySession(signal?: AbortSignal): Promise<{
+    session: IdentitySession;
+    principal: RequestContext['principal'];
+  }> {
+    return this.#request('/api/v1/identity/session', { ...(signal ? { signal } : {}) });
+  }
+
+  logoutIdentitySession(signal?: AbortSignal): Promise<void> {
+    return this.#request('/api/v1/identity/session', {
+      method: 'DELETE',
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  federationStartUrl(providerId: string): string {
+    const query = new URLSearchParams({
+      organizationId: this.#scope.organizationId,
+      tenantId: this.#tenantId,
+    });
+    return `${this.#baseUrl}/api/v1/identity/federation/${encodeURIComponent(providerId)}/start?${query}`;
   }
 
   getComponentManifests(signal?: AbortSignal): Promise<ResolvedComponentManifest[]> {
@@ -1582,6 +1693,10 @@ export type {
   ContentSchemaDefinition,
   ContentSort,
   CreateAssetDeliveryInput,
+  GroupRoleMapping,
+  IdentityProvider,
+  IdentitySession,
+  IdentitySnapshot,
   LocaleConfiguration,
   LocalizedContentResolution,
   PresenceParticipant,
@@ -1599,6 +1714,7 @@ export type {
   SearchIndexStatus,
   SearchQuery,
   SearchResponse,
+  SessionPolicy,
   StartAssetUploadInput,
   TaxonomyDefinition,
   TranslationCompletenessReport,

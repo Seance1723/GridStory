@@ -90,7 +90,7 @@ Every modeled threat has a response, owner, concrete mitigations, and verificati
 | THREAT-0010 | GraphQL/query complexity exhaustion | D | 16 High | Depth, aliases, field selections, body size, batching/subscriptions, shared query shapes, and application-pipeline budgets are bounded; the M5-008 review records deployment rate/concurrency and introspection policy as absent beta/RC evidence. |
 | THREAT-0017 | Stored content script/markup execution | T/E | 16 High | Structured manifests and code-owned components constrain execution; every application renderer remains responsible for contextual encoding. |
 | THREAT-0019 | Resource exhaustion and unbounded retention | D | 16 High | M5-004 adds saturation signals/telemetry retention; M5-007 adds body/upload/archive/query/job/plugin limits and SQLite/PostgreSQL regression budgets. The M5-008 review leaves deployment quotas/rates/concurrency no-go; product retention remains M6-003. |
-| THREAT-0002 | Development identity exposed in production | S/E | 15 High | Explicitly unsupported; M5-002 tenant-binds OIDC roles and service grants, while deployed identity/session middleware and trusted-proxy enforcement remain M6-002 work and an explicit beta blocker. |
+| THREAT-0002 | Development identity exposed in production | S/E | 15 High | Production mode rejects actor/role/principal headers, backend-verifies opaque sessions, and tenant-binds SCIM credentials; trusted-proxy/TLS and live IdP deployment conformance remain explicit beta evidence. |
 | THREAT-0004 | Draft content enters public cache | I/T | 15 High | Public delivery remains published-only; full-scope cache prefixes, scoped invalidator inputs, namespaced workflow tags, and cross-scope regressions are verified. |
 | THREAT-0005 | Webhook SSRF or DNS rebinding | I/E | 15 High | HTTPS/public-host/no-redirect validation exists; production egress, allow-list, and DNS controls are required. |
 | THREAT-0009 | Archive tampering or cross-scope import | T/E/D | 15 High | Checksums, versions, dry-run, scope checks, rollback, a 16 MiB body, and bounded entries/revisions/audit events are enforced before mutation. |
@@ -110,6 +110,7 @@ The canonical register also covers preview and asset grant replay, forged webhoo
 
 - Production TLS and least-privilege infrastructure are deployment requirements, not properties of the local HTTP development server.
 - Development actor/role/scope headers and default local secrets must never be reachable from an untrusted network.
+- Production identity repository tests do not certify a customer's IdP, reverse proxy, TLS termination, secret manager, or authenticator fleet; those deployment controls must be verified independently.
 - GridStory validates structured content but cannot make arbitrary application-owned React code safe. Consuming applications own contextual output encoding, dependency review, and CSP compatibility.
 - Provider adapters must preserve complete tenant scope and the documented timeout, redirect, credential, and failure behavior.
 - Server plugin packages remain outside the control-plane process and execute only in operator-provided external processes/containers. GridStory verifies and mediates the protocol; operators own OS identity, filesystem, network, CPU, memory, and process isolation.

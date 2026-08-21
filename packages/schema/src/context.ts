@@ -71,7 +71,15 @@ export interface Principal {
   roleAssignments?: RoleAssignment[];
   grants?: AuthorizationGrant[];
   attributes?: Record<string, string | string[] | boolean | number>;
-  authenticationMethod?: 'oidc' | 'session' | 'service-token' | 'development' | 'anonymous';
+  authenticationMethod?:
+    | 'oidc'
+    | 'saml'
+    | 'webauthn'
+    | 'break-glass'
+    | 'session'
+    | 'service-token'
+    | 'development'
+    | 'anonymous';
 }
 
 export interface RequestContext {
@@ -100,17 +108,6 @@ export interface OidcIdentity {
   groups: string[];
   issuedAt: number;
   expiresAt: number;
-}
-
-export interface IdentitySession {
-  id: string;
-  principalId: string;
-  tenantId: string;
-  createdAt: string;
-  expiresAt: string;
-  lastSeenAt: string;
-  authenticationMethod: 'oidc';
-  revokedAt?: string;
 }
 
 export interface ServiceAccount {

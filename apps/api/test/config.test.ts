@@ -109,4 +109,53 @@ describe('API configuration', () => {
       /OTEL_SERVICE_NAME/,
     );
   });
+
+  it('loads explicit production identity and validates trusted federation adapters', () => {
+    const provider = {
+      id: 'workforce',
+      protocol: 'oidc',
+      issuer: 'https://identity.example.test',
+      clientId: 'gridstory',
+      clientSecret: 'from-secret-manager',
+      redirectUri: 'https://cms.example.test/api/v1/identity/federation/workforce/callback',
+      groupClaim: 'roles',
+    };
+    expect(
+      loadConfig({
+        GRIDSTORY_IDENTITY_MODE: 'production',
+        GRIDSTORY_FEDERATION_PROVIDERS_JSON: JSON.stringify([provider]),
+        GRIDSTORY_WEBAUTHN_RP_ID: 'cms.example.test',
+        GRIDSTORY_WEBAUTHN_ORIGINS: 'https://cms.example.test',
+      }).identity,
+    ).toEqual({
+      mode: 'production',
+      federationProviders: [provider],
+      webAuthn: {
+        rpName: 'GridStory',
+        rpId: 'cms.example.test',
+        origins: ['https://cms.example.test'],
+      },
+      cookieName: 'gridstory_session',
+      secureCookies: true,
+    });
+    expect(() =>
+      loadConfig({
+        GRIDSTORY_FEDERATION_PROVIDERS_JSON: JSON.stringify([
+          { id: 'broken', protocol: 'oidc', issuer: 'https://identity.example.test' },
+        ]),
+      }),
+    ).toThrow(/clientId/);
+    expect(() => loadConfig({ GRIDSTORY_IDENTITY_MODE: 'production' })).toThrow(
+      /requires at least one federation provider/,
+    );
+    expect(() =>
+      loadConfig({
+        GRIDSTORY_IDENTITY_MODE: 'production',
+        GRIDSTORY_FEDERATION_PROVIDERS_JSON: JSON.stringify([provider]),
+        GRIDSTORY_WEBAUTHN_RP_ID: 'cms.example.test',
+        GRIDSTORY_WEBAUTHN_ORIGINS: 'https://cms.example.test',
+        GRIDSTORY_IDENTITY_SECURE_COOKIES: 'false',
+      }),
+    ).toThrow(/requires secure identity cookies/);
+  });
 });

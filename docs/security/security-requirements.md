@@ -37,7 +37,7 @@ Publisher public keys are integrity trust configuration; private publisher keys 
 - Service-account grants SHALL be least privilege, tenant scoped, expiring where practical, hashed at rest, revocable, and attributable in audit/security events.
 - High-value workflow and release operations SHOULD use distinct permissions and separation of duties. Expected revisions and policy snapshots SHALL prevent stale or reordered approval.
 
-Current `IdentityService` is a framework-neutral foundation with in-memory sessions/accounts/tokens; it is not a deployed identity boundary or persistent production session store.
+M6-002 adds a production-selectable API identity boundary and a framework-neutral durable identity kernel. Maintained OIDC/SAML/WebAuthn adapters pass only verified results inward; SQLite/PostgreSQL persist hashed opaque sessions, directory lifecycle, group mappings, challenges, authenticators, break-glass records, and security events. [Enterprise identity and access](../identity-and-access.md) documents configuration and the exact deployment evidence that remains.
 
 ## Input, content, and browser safety
 
@@ -119,7 +119,7 @@ The application now has one canonical six-dimensional scope contract for validat
 
 Search adapter totals and facets are treated as untrusted: entries are reloaded under the requested scope and perspective, totals and facets are derived only from accepted hits, and mismatched adapter scope/status is rejected. Cache invalidation adapters receive both the explicit scope and full-scope-prefixed tags; workflow-provided tags are namespaced rather than accepted globally. `pnpm tenant:check` prevents ad hoc scope serializers and incomplete cache tags from returning.
 
-This baseline does not turn the development header identity into a production authentication system. Production OIDC/session middleware remains M6-002 work; trusted-proxy enforcement, infrastructure row/object policies, and deployment conformance are explicit unmet `BETA-003`/`RC-006` evidence. M5-004 supplies the application telemetry boundary and reference operations pack described below.
+Production identity mode now rejects development actor/role headers and requires a backend-verified session; the local mode remains explicit. Repository evidence covers the application boundary, but trusted-proxy/TLS enforcement, customer-IdP interoperability, secret-manager lifecycle, infrastructure row/object policy, and deployment conformance remain unmet `BETA-003`/`RC-006` evidence. M5-004 supplies the telemetry boundary and reference operations pack described below.
 
 ## M5-004 observability baseline
 
@@ -127,7 +127,7 @@ The Node API and worker now adapt the canonical bounded tenant envelope to opt-i
 
 Public liveness/readiness expose only stable minimal codes. Authorized private/no-store operations health reports bounded SDK/Collector state without endpoints, topology, versions, credentials, customer data, or failure text; Collector degradation does not weaken or acknowledge content operations. The reference contrib Collector adds memory bounds, batching, retry, a persistent queue, a fail-closed attribute allow-list, and private health/internal metrics. Dashboard, alert rules, event inventory, access, correlation, default retention targets, and exporter/data-exposure incident procedures are maintained in `docs/observability.md` and `deploy/observability`.
 
-`GS-SEC-028` is verified for current product capabilities. Authentication, credential-lifecycle, and break-glass event sources become applicable with the production identity/session work in M6-002 and must join the same inventory before that capability is complete. Backend deletion enforcement, append-only security-log storage, TLS/network policy, secret-manager lifecycle, and Collector deployment conformance remain operator evidence; M5-005 retains recovery guidance, M5-007 publishes the repository capacity/supply-chain process, and the M5-008 no-go review records the missing hosted/deployment verification.
+`GS-SEC-028` is verified for current product capabilities. M6-002 adds ordered tenant events for federation success/denial, user/group lifecycle, mapping, sessions, WebAuthn, and break-glass creation/failure/activation/revocation; credential values, assertion bodies, and public keys are excluded from event metadata. Backend deletion enforcement, database append-only policy, TLS/network policy, secret-manager lifecycle, event-export wiring, and deployed Collector conformance remain operator evidence; M5-005 retains recovery guidance, M5-007 publishes the repository capacity/supply-chain process, and the M5-008 no-go review records the missing hosted/deployment verification.
 
 ## M5-005 recovery and rollout baseline
 

@@ -1,4 +1,5 @@
 import type { LocaleConfiguration } from '@gridstory/schema';
+import type { FederationAdapterConfig } from './identity-adapters.js';
 
 export interface ApiConfig {
   host: string;
@@ -16,6 +17,13 @@ export interface ApiConfig {
   workerIntervalMs: number;
   shutdownTimeoutMs: number;
   observability: ObservabilityConfig;
+  identity: {
+    mode: 'development' | 'production';
+    federationProviders: FederationAdapterConfig[];
+    webAuthn: { rpName: string; rpId: string; origins: string[] };
+    cookieName: string;
+    secureCookies: boolean;
+  };
 }
 
 export interface ObservabilityConfig {
@@ -71,6 +79,83 @@ function parseBoolean(value: string | undefined, name: string): boolean {
   if (value === 'true') return true;
   if (value === 'false') return false;
   throw new Error(`${name} must be true or false.`);
+}
+
+function parseIdentityMode(value: string | undefined): 'development' | 'production' {
+  if (value === undefined || value === '' || value === 'development') return 'development';
+  if (value === 'production') return 'production';
+  throw new Error('GRIDSTORY_IDENTITY_MODE must be development or production.');
+}
+
+function requiredConfigurationString(
+  value: Record<string, unknown>,
+  name: string,
+  index: number,
+): string {
+  const candidate = value[name];
+  if (typeof candidate !== 'string' || !candidate.trim()) {
+    throw new Error(`GRIDSTORY_FEDERATION_PROVIDERS_JSON item ${index} requires ${name}.`);
+  }
+  return candidate;
+}
+
+function parseFederationProviders(value: string | undefined): FederationAdapterConfig[] {
+  if (!value?.trim()) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    throw new Error('GRIDSTORY_FEDERATION_PROVIDERS_JSON must be valid JSON.');
+  }
+  if (!Array.isArray(parsed)) {
+    throw new Error('GRIDSTORY_FEDERATION_PROVIDERS_JSON must be a JSON array.');
+  }
+  const providers = parsed.map((candidate, index): FederationAdapterConfig => {
+    if (typeof candidate !== 'object' || candidate === null || Array.isArray(candidate)) {
+      throw new Error(`GRIDSTORY_FEDERATION_PROVIDERS_JSON item ${index} must be an object.`);
+    }
+    const record = candidate as Record<string, unknown>;
+    const id = requiredConfigurationString(record, 'id', index);
+    const issuer = requiredConfigurationString(record, 'issuer', index);
+    if (record.protocol === 'oidc') {
+      const scopes = record.scopes;
+      if (
+        scopes !== undefined &&
+        (!Array.isArray(scopes) || scopes.some((item) => typeof item !== 'string'))
+      ) {
+        throw new Error(`OIDC provider ${id} scopes must be a string array.`);
+      }
+      return {
+        id,
+        protocol: 'oidc',
+        issuer,
+        clientId: requiredConfigurationString(record, 'clientId', index),
+        redirectUri: requiredConfigurationString(record, 'redirectUri', index),
+        ...(typeof record.clientSecret === 'string' ? { clientSecret: record.clientSecret } : {}),
+        ...(scopes ? { scopes: scopes as string[] } : {}),
+        ...(typeof record.groupClaim === 'string' ? { groupClaim: record.groupClaim } : {}),
+      };
+    }
+    if (record.protocol === 'saml') {
+      return {
+        id,
+        protocol: 'saml',
+        issuer,
+        entryPoint: requiredConfigurationString(record, 'entryPoint', index),
+        idpCertificate: requiredConfigurationString(record, 'idpCertificate', index),
+        serviceProviderIssuer: requiredConfigurationString(record, 'serviceProviderIssuer', index),
+        callbackUrl: requiredConfigurationString(record, 'callbackUrl', index),
+        ...(typeof record.groupAttribute === 'string'
+          ? { groupAttribute: record.groupAttribute }
+          : {}),
+      };
+    }
+    throw new Error(`Federation provider ${id} protocol must be oidc or saml.`);
+  });
+  if (new Set(providers.map((provider) => provider.id)).size !== providers.length) {
+    throw new Error('Federation provider IDs must be unique.');
+  }
+  return providers;
 }
 
 function parseBoundedInteger(
@@ -153,6 +238,45 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiCon
     environment.GRIDSTORY_SERVICE_VERSION,
     'GRIDSTORY_SERVICE_VERSION',
   );
+  const identityMode = parseIdentityMode(environment.GRIDSTORY_IDENTITY_MODE);
+  const cookieName = environment.GRIDSTORY_IDENTITY_COOKIE_NAME?.trim() || 'gridstory_session';
+  if (!/^[a-zA-Z0-9_-]{1,64}$/.test(cookieName)) {
+    throw new Error('GRIDSTORY_IDENTITY_COOKIE_NAME must be a bounded cookie token.');
+  }
+  const webAuthnOrigins = (environment.GRIDSTORY_WEBAUTHN_ORIGINS ?? allowedOrigins.join(','))
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  if (webAuthnOrigins.length === 0) {
+    throw new Error('GRIDSTORY_WEBAUTHN_ORIGINS must contain at least one origin.');
+  }
+  const federationProviders = parseFederationProviders(
+    environment.GRIDSTORY_FEDERATION_PROVIDERS_JSON,
+  );
+  const webAuthnRpId = environment.GRIDSTORY_WEBAUTHN_RP_ID?.trim() || 'localhost';
+  const secureIdentityCookies =
+    environment.GRIDSTORY_IDENTITY_SECURE_COOKIES === undefined
+      ? identityMode === 'production'
+      : parseBoolean(
+          environment.GRIDSTORY_IDENTITY_SECURE_COOKIES,
+          'GRIDSTORY_IDENTITY_SECURE_COOKIES',
+        );
+  if (identityMode === 'production') {
+    if (federationProviders.length === 0) {
+      throw new Error('Production identity mode requires at least one federation provider.');
+    }
+    if (!secureIdentityCookies) {
+      throw new Error('Production identity mode requires secure identity cookies.');
+    }
+    if (
+      webAuthnRpId === 'localhost' ||
+      webAuthnOrigins.some((origin) => !origin.startsWith('https://'))
+    ) {
+      throw new Error(
+        'Production identity mode requires a non-local WebAuthn RP ID and HTTPS origins.',
+      );
+    }
+  }
   return {
     host: environment.GRIDSTORY_HOST ?? '127.0.0.1',
     port: parsePort(environment.GRIDSTORY_PORT),
@@ -205,6 +329,17 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiCon
         1_000,
         300_000,
       ),
+    },
+    identity: {
+      mode: identityMode,
+      federationProviders,
+      webAuthn: {
+        rpName: environment.GRIDSTORY_WEBAUTHN_RP_NAME?.trim() || 'GridStory',
+        rpId: webAuthnRpId,
+        origins: webAuthnOrigins,
+      },
+      cookieName,
+      secureCookies: secureIdentityCookies,
     },
   };
 }

@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, type Page, test, type TestInfo } from '@playwright/test';
+import { expect, type Page, type TestInfo, test } from '@playwright/test';
 
 const wcagTags = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 
@@ -34,6 +34,7 @@ test('Studio critical authoring states have no detectable WCAG 2.2 A/AA violatio
   await expectNoDetectableWcagViolations(page, testInfo, 'studio-default');
 
   const panels = [
+    ['Identity', 'Enterprise identity administration'],
     ['Workflows', 'Workflow action designer'],
     ['Releases', 'Release manager'],
     ['Search', 'Search and discovery'],
@@ -68,6 +69,14 @@ test('critical authoring remains keyboard-operable and adapts at 200% zoom', asy
   await heroLayer.focus();
   await heroLayer.press('ArrowDown');
   await expect(page.getByText('Unsaved changes')).toBeVisible();
+
+  const identityButton = page.getByRole('button', { name: 'Identity', exact: true });
+  await identityButton.focus();
+  await identityButton.press('Enter');
+  await expect(
+    page.getByRole('region', { name: 'Enterprise identity administration' }),
+  ).toBeVisible();
+  await expect(identityButton).toHaveAttribute('aria-expanded', 'true');
 
   const undersizedTargets = await page
     .locator('a[href], button, input:not([type="hidden"]), select, textarea')

@@ -1,18 +1,18 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  createGridStoryClient,
   type AssetRecord,
   type AssetUploadSession,
   type ContentEntry,
+  createGridStoryClient,
   type Release,
 } from '@gridstory/client';
-import { componentManifests } from '@gridstory/example-kit/manifests';
 import { exampleDesignSystem } from '@gridstory/example-kit/design-system';
+import { componentManifests } from '@gridstory/example-kit/manifests';
 import type { ContentSchemaDefinition } from '@gridstory/schema';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/App.js';
 
 const schema: ContentSchemaDefinition = {
@@ -536,6 +536,66 @@ function createTestClient(
         recentAudit: [],
       });
     }
+    if (url.pathname === '/api/v1/identity' && init?.method !== 'POST') {
+      return json({
+        organizationId: 'local',
+        tenantId: 'default',
+        version: 3,
+        providers: [
+          {
+            organizationId: 'local',
+            tenantId: 'default',
+            id: 'workforce',
+            protocol: 'oidc',
+            issuer: 'https://identity.example.test',
+            displayName: 'Workforce identity',
+            enabled: true,
+            allowJitProvisioning: false,
+            createdAt: now,
+            updatedAt: now,
+          },
+        ],
+        users: [],
+        groups: [],
+        mappings: [],
+        sessions: [],
+        credentials: [],
+        breakGlassAccounts: [],
+        policy: {
+          idleTtlSeconds: 1_800,
+          absoluteTtlSeconds: 28_800,
+          reauthenticationSeconds: 1_800,
+          maximumConcurrentSessions: 5,
+          privilegedStepUpRequired: true,
+          breakGlassTtlSeconds: 900,
+          maximumFailedBreakGlassAttempts: 5,
+        },
+        securityEvents: [
+          {
+            organizationId: 'local',
+            tenantId: 'default',
+            id: 'identity-event-1',
+            sequence: 1,
+            action: 'identity.federation.succeeded',
+            outcome: 'success',
+            actorId: 'admin',
+            occurredAt: now,
+          },
+        ],
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+    if (url.pathname === '/api/v1/identity/directory-credentials' && init?.method === 'POST') {
+      return json(
+        {
+          id: 'directory-credential-1',
+          token: 'gsc_directory-credential-1.one-time-secret',
+          expiresAt: '2027-07-24T00:00:00.000Z',
+        },
+        201,
+      );
+    }
     const collaborationOperationMatch = url.pathname.match(
       /^\/api\/v1\/content\/([^/]+)\/collaboration\/operations$/,
     );
@@ -897,6 +957,26 @@ describe('GridStory Studio', () => {
     expect(panel.textContent).toContain('Audit chain verified');
     expect(panel.textContent).toContain('Pending events');
     expect(panel.textContent).toContain('Dead jobs');
+  });
+
+  it('shows enterprise identity policy, providers, security events, and one-time credentials', async () => {
+    const user = userEvent.setup();
+    render(<App client={createTestClient()} />);
+
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Identity' }));
+
+    const panel = await screen.findByRole('region', {
+      name: 'Enterprise identity administration',
+    });
+    expect(panel.textContent).toContain('Workforce identity');
+    expect(panel.textContent).toContain('Session policy');
+    expect(panel.textContent).toContain('identity.federation.succeeded');
+    await user.click(within(panel).getByRole('button', { name: 'Issue SCIM credential' }));
+    expect((await within(panel).findByRole('status')).textContent).toContain(
+      'gsc_directory-credential-1.one-time-secret',
+    );
+    expect(within(panel).getByText(/will not be shown again/i)).toBeTruthy();
   });
 
   it('starts and revokes a secure application iframe preview', async () => {

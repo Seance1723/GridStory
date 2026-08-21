@@ -75,6 +75,34 @@ const requiredTokens = new Map([
     ],
   ],
   [
+    'packages/core/src/identity-repository.ts',
+    [
+      'return JSON.stringify([scope.organizationId, scope.tenantId])',
+      "schema = options.schema ?? 'gridstory'",
+      'organization_id TEXT NOT NULL',
+      'tenant_id TEXT NOT NULL',
+    ],
+  ],
+  [
+    'packages/core/src/enterprise-identity-service.ts',
+    [
+      'organizationId: mapping.organizationId',
+      'tenantId: mapping.tenantId',
+      'this.#revokeUserSessions(document',
+      'secretHash: digest(secret)',
+      'consumeFederationTransaction',
+    ],
+  ],
+  [
+    'apps/api/src/identity-routes.ts',
+    [
+      'FORBIDDEN_DEVELOPMENT_HEADERS',
+      'authenticateSession(requestScope, token)',
+      'authenticateDirectoryCredential(requestScope, token)',
+      'Development identity headers are disabled in production mode.',
+    ],
+  ],
+  [
     'packages/core/test/tenant-isolation.test.ts',
     [
       'collision-safe keys, paths, and cache prefixes',

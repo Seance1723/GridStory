@@ -1,7 +1,9 @@
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { Readable } from 'node:stream';
+import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
+import formbody from '@fastify/formbody';
 import {
   type AssetContentInspector,
   AssetDeliveryService,
@@ -25,9 +27,11 @@ import {
   ContentService,
   contentCacheTags,
   type DueWorkflowExecution,
+  EnterpriseIdentityService,
   type ExternalLinkChecker,
   GridStoryActions,
   GridStoryError,
+  type IdentityRepository,
   type ImportConflictPolicy,
   InMemoryAssetRepository,
   InMemoryAssetStorageAdapter,
@@ -39,8 +43,9 @@ import {
   type PluginRuntimeAdapter,
   PluginService,
   PortabilityService,
-  PostgresContentRepository,
   PostgresCollaborationRepository,
+  PostgresContentRepository,
+  PostgresIdentityRepository,
   PostgresPluginRepository,
   PostgresReleaseRepository,
   PostgresWorkflowRepository,
@@ -54,6 +59,7 @@ import {
   SqliteAssetRepository,
   SqliteCollaborationRepository,
   SqliteContentRepository,
+  SqliteIdentityRepository,
   SqlitePluginRepository,
   SqliteReleaseRepository,
   SqliteWorkflowRepository,
@@ -105,6 +111,12 @@ import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest }
 import { parseContentQuery } from './content-query.js';
 import { defaultPageQualityPolicies, defaultWorkflowDefinitions } from './defaults.js';
 import { registerGridStoryGraphql } from './graphql.js';
+import {
+  createFederationAdapters,
+  type FederationAdapterConfig,
+  WebAuthnAdapter,
+} from './identity-adapters.js';
+import { registerIdentityRoutes } from './identity-routes.js';
 import type { GridStoryObservability } from './observability.js';
 import { authorize, contentScope, requestContext } from './request-context.js';
 
@@ -140,6 +152,21 @@ export interface BuildServerOptions {
   assetDeliverySigningSecret?: string;
   tenantTelemetry?: TenantTelemetrySink;
   observability?: GridStoryObservability;
+  identity?: {
+    mode?: 'development' | 'production';
+    repository?: IdentityRepository;
+    federationProviders?: FederationAdapterConfig[];
+    webAuthn?: { rpName: string; rpId: string; origins: string[] };
+    cookieName?: string;
+    secureCookies?: boolean;
+  };
+}
+
+export function resolveIdentityCookieSecurity(
+  mode: 'development' | 'production',
+  configured: boolean | undefined,
+): boolean {
+  return mode === 'production' || configured === true;
 }
 
 interface RequestBody {
@@ -376,6 +403,7 @@ export async function buildServer({
   assetDeliverySigningSecret = 'gridstory-local-asset-delivery-secret-change-me',
   tenantTelemetry,
   observability,
+  identity: identityOptions,
 }: BuildServerOptions): Promise<FastifyInstance> {
   if (!databaseUrl && databasePath !== ':memory:') {
     mkdirSync(dirname(resolve(databasePath)), { recursive: true });
@@ -408,6 +436,23 @@ export async function buildServer({
     (databaseUrl
       ? new PostgresPluginRepository({ connectionString: databaseUrl })
       : new SqlitePluginRepository({ filename: databasePath }));
+  const resolvedIdentityRepository: IdentityRepository =
+    identityOptions?.repository ??
+    (databaseUrl
+      ? new PostgresIdentityRepository({ connectionString: databaseUrl })
+      : new SqliteIdentityRepository({ filename: databasePath }));
+  const identity = new EnterpriseIdentityService({ repository: resolvedIdentityRepository });
+  const federationAdapters = createFederationAdapters(
+    identityOptions?.federationProviders ?? [],
+    identity,
+  );
+  const webAuthn = new WebAuthnAdapter(
+    identityOptions?.webAuthn ?? {
+      rpName: 'GridStory',
+      rpId: 'localhost',
+      origins: allowedOrigins,
+    },
+  );
   const resolvedTenantTelemetry = tenantTelemetry ?? observability?.tenantTelemetry;
   const workflows = new WorkflowService({
     repository: resolvedWorkflowRepository,
@@ -563,6 +608,19 @@ export async function buildServer({
       'x-gridstory-roles',
     ],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    credentials: true,
+  });
+  await server.register(cookie);
+  await server.register(formbody);
+  const identityMode = identityOptions?.mode ?? 'development';
+  await registerIdentityRoutes(server, {
+    mode: identityMode,
+    identity,
+    identityRepository: resolvedIdentityRepository,
+    adapters: federationAdapters,
+    webAuthn,
+    cookieName: identityOptions?.cookieName ?? 'gridstory_session',
+    secureCookies: resolveIdentityCookieSecurity(identityMode, identityOptions?.secureCookies),
   });
 
   server.addHook('onClose', async () => {
@@ -572,6 +630,7 @@ export async function buildServer({
     await resolvedWorkflowRepository.close();
     await resolvedReleaseRepository.close();
     await resolvedPluginRepository.close();
+    await resolvedIdentityRepository.close();
   });
   server.addHook('onSend', async (request, reply, payload) => {
     if (request.url.startsWith('/api/v1/delivery/')) {
@@ -606,6 +665,17 @@ export async function buildServer({
     const statusCode = known ? error.statusCode : safeFrameworkError ? frameworkStatus : 500;
     const frameworkMessage = error instanceof Error ? error.message : 'The request is invalid.';
     if (statusCode >= 500) request.log.error(error);
+    if (request.url.startsWith('/api/v1/scim/v2/')) {
+      return reply.status(statusCode).send({
+        schemas: ['urn:ietf:params:scim:api:messages:2.0:Error'],
+        status: String(statusCode),
+        detail:
+          known || safeFrameworkError
+            ? frameworkMessage
+            : 'An unexpected GridStory error occurred.',
+        ...(known ? { scimType: error.code } : {}),
+      });
+    }
     return reply.status(statusCode).send({
       error: {
         code: known ? error.code : safeFrameworkError ? 'invalid_request' : 'internal_error',

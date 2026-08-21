@@ -1,7 +1,6 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import type {
   AuthorizationGrant,
-  IdentitySession,
   OidcIdentity,
   Principal,
   ScopedTokenClaims,
@@ -27,8 +26,20 @@ export interface IdentityServiceOptions {
 
 export interface OidcSessionResult {
   identity: OidcIdentity;
-  session: IdentitySession;
+  session: LegacyIdentitySession;
   principal: Principal;
+}
+
+/** @deprecated Use EnterpriseIdentityService for durable production sessions. */
+export interface LegacyIdentitySession {
+  id: string;
+  principalId: string;
+  tenantId: string;
+  createdAt: string;
+  lastSeenAt: string;
+  expiresAt: string;
+  authenticationMethod: 'oidc';
+  revokedAt?: string;
 }
 
 export interface IssuedServiceToken {
@@ -59,7 +70,7 @@ export class IdentityService {
   readonly #now: () => Date;
   readonly #createId: () => string;
   readonly #createSecret: () => string;
-  readonly #sessions = new Map<string, IdentitySession>();
+  readonly #sessions = new Map<string, LegacyIdentitySession>();
   readonly #serviceAccounts = new Map<string, ServiceAccount>();
   readonly #tokens = new Map<string, StoredToken>();
 
@@ -120,7 +131,7 @@ export class IdentityService {
       },
     };
     const createdAt = this.#now();
-    const session: IdentitySession = {
+    const session: LegacyIdentitySession = {
       id: this.#createId(),
       principalId: principal.id,
       tenantId,
@@ -133,7 +144,7 @@ export class IdentityService {
     return { identity, session: structuredClone(session), principal };
   }
 
-  getSession(id: string): IdentitySession {
+  getSession(id: string): LegacyIdentitySession {
     const session = this.#sessions.get(id);
     if (!session || session.revokedAt || Date.parse(session.expiresAt) <= this.#now().getTime()) {
       throw new GridStoryError('Session is invalid or expired.', 'invalid_session', 401);

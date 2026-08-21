@@ -19,6 +19,7 @@ const server = await buildServer({
   seed: true,
   logger: true,
   observability,
+  identity: config.identity,
 });
 
 const shutdown = createGracefulShutdownController({

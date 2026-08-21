@@ -24,11 +24,11 @@ A `verified` project requirement can cover only the selected ASVS reference and 
 | V3 Web Frontend Security | Applicable | Exact CORS/postMessage origins, private asset headers, a three-engine browser review, and application-header guidance exist; deployed HTML CSP/header conformance remains. |
 | V4 API and Web Service | Applicable | REST/GraphQL boundaries, trusted intermediary requirements, bounded queries, and introspection policy. |
 | V5 File Handling | Applicable | Multipart integrity, byte/type inspection, private keys, quarantine, safe delivery; deployment quotas/scanner remain. |
-| V6 Authentication | Conditional | OIDC/service-token foundations exist; production IdP middleware, pathway policy, and abuse controls remain. |
-| V7 Session Management | Conditional | In-memory lifecycle foundation exists; production persistent browser-session controls remain. |
+| V6 Authentication | Conditional | Production-selectable OIDC/SAML relying-party, SCIM service, WebAuthn step-up, and break-glass pathways exist; live IdP/proxy/abuse-control conformance remains deployment evidence. |
+| V7 Session Management | Conditional | SQLite/PostgreSQL opaque sessions enforce idle/absolute/reauthentication/concurrency and lifecycle revocation; secure-cookie/TLS/proxy deployment remains conditional. |
 | V8 Authorization | Applicable | Deny-by-default RBAC/ABAC, tenant-bound role assignments, and fail-closed complete-scope boundary tests are verified. |
 | V9 Self-contained Tokens | Applicable | Preview, cursor, and asset grants use purpose/scope/time-bound HMAC verification. |
-| V10 OAuth and OIDC | Conditional | Applies to the production relying-party adapter; no OAuth authorization server is in scope. |
+| V10 OAuth and OIDC | Conditional | The maintained OIDC relying-party adapter binds code flow with state, nonce, and S256 PKCE; no OAuth authorization server is in scope and live issuer interoperability remains deployment evidence. |
 | V11 Cryptography | Applicable | Platform crypto and approved hashes/CSPRNG exist; formal inventory/lifecycle remains. |
 | V12 Secure Communication | Applicable | HTTPS is required for risky outbound/preview paths; deployment TLS evidence remains. |
 | V13 Configuration | Applicable | Explicit origins/hosts/secrets/adapters exist; production fail-safe validation and vault evidence remain. |
@@ -46,7 +46,7 @@ The machine profile contains 30 stable `GS-SEC-###` requirements:
 - Verified controls cover trusted-layer validation, parameterized persistence, SVG sanitization, atomic operations, exact origin messaging, tenant-bound deny-by-default authorization, credential/cache containment, signed token validation, approved platform cryptography, capability-isolated plugin execution, and fail-closed generic errors.
 - Partial controls cover structured rendering, SSRF/egress, browser headers, GraphQL cost/introspection, upload limits/scanning, external adapter configuration, sensitive-data policy, and minimal API fields.
 - Planned controls cover trusted production intermediary/identity configuration, cryptographic inventory/secret lifecycle, and production fail-safe configuration. Anti-automation, vulnerability/component lifecycle, GraphQL/upload bounds, and the resource-demand inventory are partial because distributed/deployment or hosted-release evidence remains.
-- Conditional controls cover production OIDC, persistent sessions, OIDC browser-flow binding, and deployed TLS/service communication.
+- Conditional controls cover deployed trusted-proxy/TLS/service communication and customer-specific IdP/secret-manager conformance; the repository-owned OIDC binding and persistent-session lifecycle are verified.
 
 Evidence paths point to repository code, tests, or documentation. Operational verification names are intentional future evidence and are linked to tasks. `pnpm security:check` rejects verified requirements without local evidence, malformed or duplicate IDs, unknown threat references, missing chapter coverage, invalid ASVS references, and unresolved partial/planned/conditional controls without stable task ownership.
 
@@ -64,7 +64,13 @@ This repository evidence does not certify the operator-provided OS/container san
 
 `GS-SEC-028` is now verified for current capabilities through an explicit event/signal inventory, official optional OTLP log/metric/trace exporters, reviewed low-cardinality attributes, live three-signal and negative-leakage tests, minimal public health, authorized bounded Collector health, a fail-closed Collector redaction template, dashboards, alerts, retention targets, and incident procedures. The immutable database audit remains the source of truth and is not replaced or shortened by telemetry.
 
-Production authentication, credential lifecycle, and break-glass event types are conditional on M6-002 and must extend this inventory when implemented. Backend access/deletion enforcement, append-only storage, TLS/network policy, secret-manager lifecycle, and deployed Collector conformance remain operator/GA evidence.
+M6-002 now contributes authentication, credential lifecycle, session, WebAuthn, and break-glass event types to the protected inventory without credential or assertion payloads. Backend access/deletion enforcement, append-only database policy, event export, TLS/network policy, secret-manager lifecycle, and deployed Collector conformance remain operator/GA evidence.
+
+## M6-002 evidence update
+
+`GS-SEC-013`, `GS-SEC-014`, and `GS-SEC-017` are verified for the repository-owned production boundary: maintained OIDC/SAML/WebAuthn adapters, durable one-time protocol state, tenant-scoped SQLite/PostgreSQL identity documents, hashed opaque sessions/credentials, lifecycle revocation, SCIM ETags/isolation, explicit role mappings, WebAuthn counter updates, and audited one-time break-glass controls. Focused core/API/client/Studio tests include replay, dev-header spoofing, cross-tenant SCIM denial, stale ETags, restart reconstruction, deprovisioning, and keyboard-operable administration.
+
+This does not clear `GS-SEC-010` or `BETA-003`: a target deployment must still prove trusted proxy/header stripping, TLS and secure cookies, actual IdP issuer/certificate/client configuration, customer interoperability, secret-manager rotation, external abuse monitoring, and operational approval/revocation procedures.
 
 ## M5-005 evidence update
 
@@ -95,7 +101,7 @@ Stable criteria now expose the unresolved security acceptance directly: producti
 | Gap | ASVS areas | Owner task |
 |---|---|---|
 | Production database/object-store tenant-policy conformance | V8, V14, V15 | `BETA-003`, `RC-006` |
-| Production identity/session and trusted-proxy boundary | V4, V6, V7, V10, V13 | M6-002; acceptance under `BETA-003` |
+| Live IdP, secret-manager, secure-cookie/TLS, and trusted-proxy conformance | V4, V6, V7, V10, V13 | Repository boundary delivered by M6-002; deployment acceptance under `BETA-003` |
 | Plugin runtime OS/container hardening, package review, and publisher enrollment | V8, V11, V13, V15 | M6-005; deployment evidence |
 | Telemetry backend access/deletion, Collector deployment conformance, and production identity/credential event sources | V11, V13, V14, V16 | `BETA-003`, `GA-003`; event sources M6-002 |
 | Backup storage/physical PITR, secret rotation, and orchestrator rollout proof | V13, V14, V15, V16 | `RC-006`, `GA-003`; identity lifecycle M6-002 |

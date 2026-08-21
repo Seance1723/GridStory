@@ -421,7 +421,7 @@
     {
       "id": "GS-SEC-013",
       "title": "Authentication pathways",
-      "status": "conditional",
+      "status": "verified",
       "owner": "Identity owner",
       "statement": "Before production use, every user and service authentication pathway SHALL be documented and consistently verify trusted issuer, signature, audience, time, nonce/replay semantics, subject namespace, and required authentication strength.",
       "asvsRefs": [
@@ -434,20 +434,37 @@
         "v5.0.0-10.5.4"
       ],
       "threatRefs": ["THREAT-0002", "THREAT-0016"],
-      "evidence": ["packages/core/src/identity.ts", "README.md"],
-      "verification": ["Production OIDC adapter conformance suite"],
+      "evidence": [
+        "packages/core/src/enterprise-identity-service.ts",
+        "apps/api/src/identity-adapters.ts",
+        "apps/api/src/identity-routes.ts",
+        "docs/identity-and-access.md"
+      ],
+      "verification": [
+        "packages/core/test/enterprise-identity-service.test.ts",
+        "apps/api/test/identity-adapters.test.ts",
+        "apps/api/test/identity-server.test.ts"
+      ],
       "taskIds": ["M6-002"]
     },
     {
       "id": "GS-SEC-014",
       "title": "Session lifecycle",
-      "status": "conditional",
+      "status": "verified",
       "owner": "Identity owner",
       "statement": "Production browser sessions SHALL be backend-verified, CSPRNG-generated with at least 128 bits of entropy, bounded by documented idle/absolute lifetimes, rotated at authentication, and invalid after logout, expiry, account disablement, or administrative revocation.",
       "asvsRefs": ["v5.0.0-7.1.1", "v5.0.0-7.2.1", "v5.0.0-7.2.3", "v5.0.0-7.4.1"],
       "threatRefs": ["THREAT-0002", "THREAT-0016"],
-      "evidence": ["packages/core/src/identity.ts"],
-      "verification": ["Persistent session adapter conformance suite"],
+      "evidence": [
+        "packages/core/src/enterprise-identity-service.ts",
+        "packages/core/src/identity-repository.ts",
+        "docs/identity-and-access.md"
+      ],
+      "verification": [
+        "packages/core/test/enterprise-identity-service.test.ts",
+        "packages/core/test/postgres-conformance.test.ts",
+        "apps/api/test/identity-server.test.ts"
+      ],
       "taskIds": ["M6-002"]
     },
     {
@@ -499,13 +516,20 @@
     {
       "id": "GS-SEC-017",
       "title": "OIDC browser-flow binding",
-      "status": "conditional",
+      "status": "verified",
       "owner": "Identity owner",
       "statement": "A production OIDC client SHALL keep tokens only in components that need them and bind authorization responses to the initiating browser session using unpredictable state, nonce, and PKCE where applicable.",
       "asvsRefs": ["v5.0.0-10.1.1", "v5.0.0-10.1.2"],
       "threatRefs": ["THREAT-0002", "THREAT-0016"],
-      "evidence": ["packages/core/src/identity.ts"],
-      "verification": ["Production OIDC browser-flow conformance suite"],
+      "evidence": [
+        "apps/api/src/identity-adapters.ts",
+        "packages/core/src/enterprise-identity-service.ts",
+        "docs/identity-and-access.md"
+      ],
+      "verification": [
+        "packages/core/test/enterprise-identity-service.test.ts",
+        "apps/api/test/identity-adapters.test.ts"
+      ],
       "taskIds": ["M6-002"]
     },
     {
@@ -706,6 +730,7 @@
         "apps/api/src/observability.ts",
         "docs/audit-and-administration.md",
         "packages/core/src/plugin-service.ts",
+        "packages/core/src/enterprise-identity-service.ts",
         "docs/observability.md",
         "deploy/observability/otel-collector.yaml",
         "deploy/observability/prometheus-alerts.yaml"
@@ -715,7 +740,8 @@
         "packages/core/test/tenant-isolation.test.ts",
         "apps/api/test/plugins.test.ts",
         "apps/api/test/observability.test.ts",
-        "apps/api/test/server.test.ts"
+        "apps/api/test/server.test.ts",
+        "packages/core/test/enterprise-identity-service.test.ts"
       ],
       "taskIds": ["M5-003", "M5-004", "M6-002"]
     },

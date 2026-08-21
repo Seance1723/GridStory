@@ -33,6 +33,8 @@ No hosted workflow, attestation verification, production deployment, partner ses
 
 Post-review update: M5-009 resolved `BUG-0243` through `BUG-0247` for a future candidate by requiring package README/SPDX/canonical-license metadata and proving the exact tarballs install, execute, and type-check in an isolated offline consumer. This does not rewrite the `b31193a` review or clear the remaining `RC-003` adapter/version/distribution requirements.
 
+Post-review update: M6-002 adds the future candidate's repository-owned OIDC/SAML/WebAuthn/SCIM boundary, durable sessions and role mappings, break-glass controls, and focused security evidence. This does not rewrite the immutable `b31193a` review or mark `BETA-003` met: live IdP interoperability, trusted-proxy/TLS/header stripping, secure-cookie deployment, secret-manager rotation, provider controls, and named operational acceptance remain external/deployment evidence.
+
 ## Decision rules
 
 Stages are always reviewed in the order `alpha` → `beta` → `rc` → `ga`. Every criterion has a stable stage ID, an accountable role, an action, and evidence. Required criteria can be only `met` or `unmet`; they cannot be waived as not applicable. A stage is `go` only when every required criterion is met and its predecessor is also `go`. Later stages are still assessed after an earlier no-go so their additional blockers are visible, but they cannot advance.
@@ -70,7 +72,7 @@ The JSON review is authoritative for complete wording. The release-critical grou
 | Criteria | Missing evidence | Accountable roles / existing roadmap ownership |
 |---|---|---|
 | `BETA-002`, `BETA-004`, `GA-002` | Design-partner recruitment, consent-safe research, success measures, outcomes, and feedback closure | Product and user-research owners |
-| `BETA-003`, `RC-006`, `GA-003` | Production identity/proxy, provider storage/scanning/telemetry, secret lifecycle, capacity, recovery, rollout, incident, and operating acceptance | Deployment/reliability/security owners; production identity relates to M6-002 and retention to M6-003 |
+| `BETA-003`, `RC-006`, `GA-003` | Live IdP/proxy/TLS/secret-manager identity conformance, provider storage/scanning/telemetry, capacity, recovery, rollout, incident, and operating acceptance | Deployment/reliability/security owners; M6-002 supplies the application identity boundary and M6-003 owns retention |
 | `BETA-005`, `RC-005` | Live disabled-author/assistive-technology sessions and independent security/accessibility assessment | Accessibility, security, research, and release owners |
 | `RC-003`, `GA-004`, `GA-005` | Next.js/React Router certification, approved version/distribution, complete v1 scope, install/upgrade proof, and v1 support line | Framework integration, product, release, and support owners |
 | `RC-004` | Hosted SPDX artifact and independently verified provenance/SBOM attestations for exact RC digests | Release engineering owner |

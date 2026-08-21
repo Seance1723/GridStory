@@ -1,9 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
-  GridStoryApiError,
-  createGridStoryClient,
   type AssetRecord,
   type AssetUsageReport,
+  type BacklinkRecord,
   type CollaborationSnapshot,
   type ComponentManifest,
   type ComponentMigrationPlanResponse,
@@ -11,26 +9,28 @@ import {
   type ContentEntry,
   type ContentQualityReport,
   type ContentRevision,
+  createGridStoryClient,
   type DurableJobRecord,
+  GridStoryApiError,
   type GridStoryClient,
+  type IdentitySnapshot,
   type OperationsDashboardRecord,
   type PreviewSessionGrant,
-  type WorkflowDefinition,
-  type WorkflowInstance,
+  type RelatedContentRecord,
   type Release,
   type ReleasePreview,
-  type BacklinkRecord,
-  type RelatedContentRecord,
   type SearchIndexStatus,
   type SearchResponse,
   type TaxonomyDefinition,
+  type WorkflowDefinition,
+  type WorkflowInstance,
 } from '@gridstory/client';
 import {
   createGridStoryPreviewController,
   type GridStoryPreviewController,
 } from '@gridstory/client/preview';
-import { componentManifests } from '@gridstory/example-kit/manifests';
 import { exampleDesignSystem } from '@gridstory/example-kit/design-system';
+import { componentManifests } from '@gridstory/example-kit/manifests';
 import { exampleComponentRegistry } from '@gridstory/example-kit/react';
 import { GridStoryRenderer } from '@gridstory/react';
 import type {
@@ -43,8 +43,11 @@ import type {
   PropDefinition,
   WorkflowActionDefinition,
 } from '@gridstory/schema';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AssetControl, RelationControl, RichTextControl } from './authoring-controls.js';
 import {
   addNode,
+  type CompositionResult,
   commitComposition,
   createCompositionHistory,
   findNode,
@@ -52,21 +55,20 @@ import {
   instantiateSymbol,
   instantiateTemplate,
   locateNode,
+  type MoveTarget,
   moveNode,
   redoComposition,
   removeNode,
   undoComposition,
-  updateNodeProps,
   updateNodePresentation,
-  type CompositionResult,
-  type MoveTarget,
+  updateNodeProps,
 } from './composition-editor.js';
-import { AssetControl, RelationControl, RichTextControl } from './authoring-controls.js';
 
 const defaultClient = createGridStoryClient({
   baseUrl: import.meta.env.VITE_GRIDSTORY_API_URL ?? 'http://localhost:4000',
   tenantId: import.meta.env.VITE_GRIDSTORY_TENANT ?? 'default',
   actorId: import.meta.env.VITE_GRIDSTORY_ACTOR_ID ?? 'studio-local-admin',
+  developmentIdentityHeaders: import.meta.env.VITE_GRIDSTORY_IDENTITY_MODE !== 'production',
 });
 
 type Notice = { tone: 'success' | 'error' | 'info'; message: string } | null;
@@ -488,6 +490,15 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   const [operationsDashboard, setOperationsDashboard] = useState<OperationsDashboardRecord | null>(
     null,
   );
+  const [identitySnapshot, setIdentitySnapshot] = useState<IdentitySnapshot | null>(null);
+  const [identityProviderId, setIdentityProviderId] = useState('');
+  const [identityProviderIssuer, setIdentityProviderIssuer] = useState('');
+  const [identityProviderName, setIdentityProviderName] = useState('');
+  const [identityProviderProtocol, setIdentityProviderProtocol] = useState<'oidc' | 'saml'>('oidc');
+  const [identityGroup, setIdentityGroup] = useState('');
+  const [identityRole, setIdentityRole] = useState('');
+  const [identityIncident, setIdentityIncident] = useState('');
+  const [identityOneTimeSecret, setIdentityOneTimeSecret] = useState<string | null>(null);
   const [searchPanelOpen, setSearchPanelOpen] = useState(false);
   const [searchBusy, setSearchBusy] = useState(false);
   const [searchText, setSearchText] = useState('');
@@ -1696,6 +1707,101 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
       setNotice({ tone: 'error', message: messageFrom(error) });
     }
   };
+  const refreshIdentity = async () => {
+    setIdentitySnapshot(await client.getIdentity());
+  };
+  const toggleIdentity = async () => {
+    if (identitySnapshot) {
+      setIdentitySnapshot(null);
+      setIdentityOneTimeSecret(null);
+      return;
+    }
+    try {
+      await refreshIdentity();
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
+  const configureIdentityProvider = async () => {
+    if (
+      !identityProviderId.trim() ||
+      !identityProviderIssuer.trim() ||
+      !identityProviderName.trim()
+    ) {
+      setNotice({ tone: 'error', message: 'Provider ID, issuer, and display name are required.' });
+      return;
+    }
+    try {
+      await client.configureIdentityProvider({
+        id: identityProviderId.trim(),
+        protocol: identityProviderProtocol,
+        issuer: identityProviderIssuer.trim(),
+        displayName: identityProviderName.trim(),
+        enabled: true,
+        allowJitProvisioning: false,
+      });
+      await refreshIdentity();
+      setNotice({ tone: 'success', message: 'Enterprise identity provider configured.' });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
+  const saveIdentityPolicy = async () => {
+    if (!identitySnapshot) return;
+    try {
+      await client.updateSessionPolicy(identitySnapshot.policy);
+      await refreshIdentity();
+      setNotice({ tone: 'success', message: 'Session policy saved.' });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
+  const createIdentityMapping = async () => {
+    if (!identityGroup.trim() || !identityRole.trim()) {
+      setNotice({ tone: 'error', message: 'External group and GridStory role are required.' });
+      return;
+    }
+    try {
+      await client.createGroupRoleMapping({
+        id: `mapping-${Date.now()}`,
+        externalGroup: identityGroup.trim(),
+        roleId: identityRole.trim(),
+        createdBy: 'studio-identity-admin',
+      });
+      await refreshIdentity();
+      setNotice({ tone: 'success', message: 'Group-to-role mapping created.' });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
+  const issueDirectoryCredential = async () => {
+    try {
+      const credential = await client.issueDirectoryCredential('Studio-created SCIM credential');
+      setIdentityOneTimeSecret(credential.token);
+      setNotice({ tone: 'success', message: 'Directory credential issued. Copy it now.' });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
+  const issueBreakGlassCredential = async () => {
+    if (!identityIncident.trim()) {
+      setNotice({ tone: 'error', message: 'An incident ID is required for break-glass access.' });
+      return;
+    }
+    try {
+      const credential = await client.createBreakGlassCredential({
+        name: `Emergency access for ${identityIncident.trim()}`,
+        roleId: 'admin',
+        expiresAt: new Date(Date.now() + 60 * 60 * 1_000).toISOString(),
+        incidentId: identityIncident.trim(),
+      });
+      setIdentityOneTimeSecret(credential.token);
+      await refreshIdentity();
+      setNotice({ tone: 'success', message: 'One-time break-glass credential issued.' });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
   const inspectComponent = async (componentId?: string) => {
     if (!componentId) {
       setComponentGovernance(null);
@@ -1933,6 +2039,14 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
             aria-expanded={operationsDashboard !== null}
           >
             Operations
+          </button>{' '}
+          <button
+            type="button"
+            className="button button--secondary"
+            onClick={() => void toggleIdentity()}
+            aria-expanded={identitySnapshot !== null}
+          >
+            Identity
           </button>{' '}
           <button
             type="button"
@@ -2742,6 +2856,231 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               <dd>{operationsDashboard.webhooks.active}</dd>
             </div>
           </dl>
+        </section>
+      ) : null}
+      {identitySnapshot ? (
+        <section className="identity-panel" aria-label="Enterprise identity administration">
+          <div className="section-heading">
+            <div>
+              <span className="kicker">Enterprise identity</span>
+              <h2>Federation and access controls</h2>
+              <p>
+                {identitySnapshot.providers.length} providers · {identitySnapshot.users.length}{' '}
+                users · {identitySnapshot.sessions.filter((session) => !session.revokedAt).length}{' '}
+                active sessions
+              </p>
+            </div>
+            <button
+              type="button"
+              className="button button--secondary"
+              onClick={() => void refreshIdentity()}
+            >
+              Refresh identity state
+            </button>
+          </div>
+          <div className="identity-panel__grid">
+            <fieldset>
+              <legend>Trusted provider</legend>
+              <label>
+                <span>Adapter ID</span>
+                <input
+                  value={identityProviderId}
+                  onChange={(event) => setIdentityProviderId(event.target.value)}
+                  placeholder="workforce-oidc"
+                />
+              </label>
+              <label>
+                <span>Protocol</span>
+                <select
+                  value={identityProviderProtocol}
+                  onChange={(event) =>
+                    setIdentityProviderProtocol(event.target.value as 'oidc' | 'saml')
+                  }
+                >
+                  <option value="oidc">OIDC</option>
+                  <option value="saml">SAML 2.0</option>
+                </select>
+              </label>
+              <label>
+                <span>Issuer</span>
+                <input
+                  value={identityProviderIssuer}
+                  onChange={(event) => setIdentityProviderIssuer(event.target.value)}
+                  placeholder="https://identity.example.com"
+                />
+              </label>
+              <label>
+                <span>Display name</span>
+                <input
+                  value={identityProviderName}
+                  onChange={(event) => setIdentityProviderName(event.target.value)}
+                  placeholder="Workforce identity"
+                />
+              </label>
+              <button
+                type="button"
+                className="button button--secondary"
+                onClick={() => void configureIdentityProvider()}
+              >
+                Save trusted provider
+              </button>
+              <ul>
+                {identitySnapshot.providers.map((provider) => (
+                  <li key={provider.id}>
+                    {provider.displayName} · {provider.protocol.toUpperCase()} ·{' '}
+                    {provider.enabled ? 'enabled' : 'disabled'}
+                  </li>
+                ))}
+              </ul>
+            </fieldset>
+
+            <fieldset>
+              <legend>Session policy</legend>
+              {(
+                [
+                  ['idleTtlSeconds', 'Idle lifetime'],
+                  ['absoluteTtlSeconds', 'Absolute lifetime'],
+                  ['reauthenticationSeconds', 'Reauthentication'],
+                  ['maximumConcurrentSessions', 'Concurrent sessions'],
+                ] as const
+              ).map(([field, label]) => (
+                <label key={field}>
+                  <span>{label}</span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={identitySnapshot.policy[field]}
+                    onChange={(event) =>
+                      setIdentitySnapshot((current) =>
+                        current
+                          ? {
+                              ...current,
+                              policy: {
+                                ...current.policy,
+                                [field]: Number(event.target.value),
+                              },
+                            }
+                          : current,
+                      )
+                    }
+                  />
+                </label>
+              ))}
+              <label className="identity-panel__checkbox">
+                <input
+                  type="checkbox"
+                  checked={identitySnapshot.policy.privilegedStepUpRequired}
+                  onChange={(event) =>
+                    setIdentitySnapshot((current) =>
+                      current
+                        ? {
+                            ...current,
+                            policy: {
+                              ...current.policy,
+                              privilegedStepUpRequired: event.target.checked,
+                            },
+                          }
+                        : current,
+                    )
+                  }
+                />
+                <span>Require WebAuthn step-up for privileged operations</span>
+              </label>
+              <button
+                type="button"
+                className="button button--secondary"
+                onClick={() => void saveIdentityPolicy()}
+              >
+                Save session policy
+              </button>
+            </fieldset>
+
+            <fieldset>
+              <legend>Group role mapping</legend>
+              <label>
+                <span>External group</span>
+                <input
+                  value={identityGroup}
+                  onChange={(event) => setIdentityGroup(event.target.value)}
+                  placeholder="cms-editors"
+                />
+              </label>
+              <label>
+                <span>GridStory role</span>
+                <input
+                  value={identityRole}
+                  onChange={(event) => setIdentityRole(event.target.value)}
+                  placeholder="author"
+                />
+              </label>
+              <button
+                type="button"
+                className="button button--secondary"
+                onClick={() => void createIdentityMapping()}
+              >
+                Add mapping
+              </button>
+              <ul>
+                {identitySnapshot.mappings.map((mapping) => (
+                  <li key={mapping.id}>
+                    {mapping.externalGroup} → {mapping.roleId}
+                  </li>
+                ))}
+              </ul>
+            </fieldset>
+
+            <fieldset>
+              <legend>Emergency and directory access</legend>
+              <button
+                type="button"
+                className="button button--secondary"
+                onClick={() => void issueDirectoryCredential()}
+              >
+                Issue SCIM credential
+              </button>
+              <label>
+                <span>Incident ID</span>
+                <input
+                  value={identityIncident}
+                  onChange={(event) => setIdentityIncident(event.target.value)}
+                  placeholder="INC-2026-001"
+                />
+              </label>
+              <button
+                type="button"
+                className="button button--secondary"
+                onClick={() => void issueBreakGlassCredential()}
+              >
+                Issue one-time break-glass credential
+              </button>
+              {identityOneTimeSecret ? (
+                <div className="identity-panel__secret" role="status">
+                  <strong>Copy this secret now. It will not be shown again.</strong>
+                  <code>{identityOneTimeSecret}</code>
+                  <button
+                    type="button"
+                    className="button button--secondary"
+                    onClick={() => setIdentityOneTimeSecret(null)}
+                  >
+                    I saved it
+                  </button>
+                </div>
+              ) : null}
+            </fieldset>
+          </div>
+          <div className="identity-panel__events">
+            <h3>Recent security events</h3>
+            <ol>
+              {identitySnapshot.securityEvents
+                .slice(-8)
+                .reverse()
+                .map((event) => (
+                  <li key={event.id}>
+                    <strong>{event.action}</strong> · {event.outcome} · {event.occurredAt}
+                  </li>
+                ))}
+            </ol>
+          </div>
         </section>
       ) : null}
       {componentGovernance ? (

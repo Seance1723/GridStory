@@ -170,6 +170,85 @@ button:disabled {
   margin: 0.15rem 0 0;
 }
 
+.identity-panel {
+  background: #f8fafc;
+  border-bottom: 1px solid #cbd5e1;
+  padding: 1rem 1.25rem 1.25rem;
+}
+.identity-panel .section-heading p {
+  color: #475569;
+  font-size: 0.78rem;
+  margin: 0.25rem 0 0;
+}
+.identity-panel__grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(4, minmax(13rem, 1fr));
+  margin-top: 1rem;
+}
+.identity-panel fieldset {
+  border: 1px solid #cbd5e1;
+  border-radius: 0.65rem;
+  display: grid;
+  gap: 0.65rem;
+  margin: 0;
+  min-width: 0;
+  padding: 0.85rem;
+}
+.identity-panel legend {
+  font-size: 0.82rem;
+  font-weight: 800;
+  padding: 0 0.3rem;
+}
+.identity-panel label {
+  display: grid;
+  font-size: 0.72rem;
+  font-weight: 700;
+  gap: 0.25rem;
+}
+.identity-panel input,
+.identity-panel select {
+  background: #fff;
+  border: 1px solid #94a3b8;
+  border-radius: 0.45rem;
+  color: #18212f;
+  min-width: 0;
+  padding: 0.5rem;
+}
+.identity-panel ul,
+.identity-panel ol {
+  color: #475569;
+  font-size: 0.72rem;
+  margin: 0;
+  padding-left: 1.2rem;
+}
+.identity-panel label.identity-panel__checkbox {
+  align-items: center;
+  display: flex;
+  font-weight: 650;
+}
+.identity-panel__checkbox input {
+  min-width: auto;
+}
+.identity-panel__secret {
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  border-radius: 0.5rem;
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.7rem;
+}
+.identity-panel__secret code {
+  overflow-wrap: anywhere;
+}
+.identity-panel__events {
+  margin-top: 1rem;
+}
+.identity-panel__events h3 {
+  font-size: 0.82rem;
+  margin: 0 0 0.5rem;
+}
+
 .governance-panel {
   align-items: start;
   background: #f8fafc;
@@ -952,6 +1031,9 @@ button:disabled {
   .governance-panel {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .identity-panel__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .studio-workspace {
     grid-template-columns: 14rem minmax(28rem, 1fr);
   }
@@ -969,6 +1051,9 @@ button:disabled {
     grid-column: auto;
   }
   .governance-panel {
+    grid-template-columns: 1fr;
+  }
+  .identity-panel__grid {
     grid-template-columns: 1fr;
   }
   .studio-header {
@@ -2143,6 +2228,9 @@ button:disabled {
 @media (forced-colors: active) {
   :where(a, button, input, textarea, select, [tabindex]):focus-visible {
     outline-color: Highlight;
+  }
+  .brand-copy > span {
+    color: CanvasText;
   }
   .studio-shell .preview-browser-bar div {
     background: Canvas;

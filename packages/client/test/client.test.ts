@@ -12,6 +12,45 @@ afterEach(() => {
 });
 
 describe('GridStoryClient browser compatibility', () => {
+  it('uses cookie-backed production identity without emitting development actor headers', async () => {
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    const client = createGridStoryClient({
+      baseUrl: 'https://cms.example.test',
+      tenantId: 'tenant-enterprise',
+      actorId: 'must-not-leak',
+      developmentIdentityHeaders: false,
+      scope: { organizationId: 'org-enterprise' },
+      fetch: async (input, init) => {
+        requests.push({ url: String(input), ...(init ? { init } : {}) });
+        return new Response(JSON.stringify({}), {
+          headers: { 'content-type': 'application/json' },
+        });
+      },
+    });
+
+    await client.getIdentity();
+    await client.issueDirectoryCredential('Workforce directory');
+    await client.createBreakGlassCredential({
+      name: 'Emergency operator',
+      roleId: 'admin',
+      expiresAt: '2026-08-22T00:00:00.000Z',
+      incidentId: 'INC-1',
+    });
+
+    expect(requests.map((request) => request.url)).toEqual([
+      'https://cms.example.test/api/v1/identity',
+      'https://cms.example.test/api/v1/identity/directory-credentials',
+      'https://cms.example.test/api/v1/identity/break-glass',
+    ]);
+    for (const request of requests) {
+      expect(request.init?.credentials).toBe('include');
+      expect(new Headers(request.init?.headers).has('x-gridstory-actor')).toBe(false);
+    }
+    expect(client.federationStartUrl('workforce oidc')).toBe(
+      'https://cms.example.test/api/v1/identity/federation/workforce%20oidc/start?organizationId=org-enterprise&tenantId=tenant-enterprise',
+    );
+  });
+
   it('sends the typed plugin lifecycle and invocation contracts', async () => {
     const requests: Array<{ url: string; init?: RequestInit }> = [];
     const client = createGridStoryClient({

@@ -404,11 +404,16 @@
       "response": "mitigate",
       "owner": "API owner",
       "mitigations": [
-        "Treat current header identity as development-only.",
-        "Require deployed OIDC or service-token middleware and trusted-proxy configuration before production.",
-        "Fail startup when production mode lacks identity configuration."
+        "Keep development header identity explicit and reject actor, role, and principal-type headers in production mode.",
+        "Verify backend-held opaque sessions or tenant-bound directory credentials before protected production requests.",
+        "Use maintained OIDC/SAML/WebAuthn adapters with one-time durable protocol state; retain trusted-proxy and TLS conformance as deployment evidence."
       ],
-      "verification": ["README.md", "packages/core/src/identity.ts", "M6-002"]
+      "verification": [
+        "apps/api/test/identity-server.test.ts",
+        "apps/api/test/identity-adapters.test.ts",
+        "packages/core/test/enterprise-identity-service.test.ts",
+        "docs/identity-and-access.md"
+      ]
     },
     {
       "id": "THREAT-0003",
@@ -743,7 +748,9 @@
         "Use a production secret manager, rotation schedule, credential inventory, and emergency revocation runbook."
       ],
       "verification": [
-        "packages/core/src/identity.ts",
+        "packages/core/src/enterprise-identity-service.ts",
+        "packages/core/test/enterprise-identity-service.test.ts",
+        "apps/api/test/identity-server.test.ts",
         "packages/core/src/preview-service.ts",
         "packages/core/src/asset-delivery-service.ts",
         "docs/observability.md",

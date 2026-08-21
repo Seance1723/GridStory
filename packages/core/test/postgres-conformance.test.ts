@@ -9,8 +9,10 @@ import { Pool } from 'pg';
 import { describe, expect, it } from 'vitest';
 import {
   CollaborationService,
+  EnterpriseIdentityService,
   PostgresCollaborationRepository,
   PostgresContentRepository,
+  PostgresIdentityRepository,
   PostgresPluginRepository,
 } from '../src/index.js';
 import { repositoryConformance } from './repository-conformance.js';
@@ -127,6 +129,59 @@ if (connectionString) {
       }
     });
   });
+  describe('PostgreSQL identity repository conformance', () => {
+    it('persists tenant sessions, mappings, and immediate deprovisioning across instances', async () => {
+      const schema = `gridstory_identity_test_${process.pid}_${schemaSequence++}`;
+      const pool = new Pool({ connectionString });
+      const scope = { organizationId: 'organization-a', tenantId: 'identity-tenant-a' };
+      const firstRepository = new PostgresIdentityRepository({ pool, schema });
+      const first = new EnterpriseIdentityService({ repository: firstRepository });
+      try {
+        await first.configureProvider(scope, 'bootstrap', {
+          id: 'postgres-oidc',
+          protocol: 'oidc',
+          issuer: 'https://identity.example.test',
+          displayName: 'PostgreSQL OIDC',
+          enabled: true,
+          allowJitProvisioning: true,
+        });
+        await first.upsertGroupRoleMapping(scope, 'bootstrap', {
+          id: 'postgres-admin-map',
+          externalGroup: 'postgres-admins',
+          roleId: 'admin',
+          createdBy: 'bootstrap',
+        });
+        const issued = await first.completeFederation(scope, {
+          identity: {
+            providerId: 'postgres-oidc',
+            protocol: 'oidc',
+            issuer: 'https://identity.example.test',
+            subject: 'postgres-user',
+            groups: ['postgres-admins'],
+            authenticatedAt: new Date().toISOString(),
+            strength: 'multi-factor',
+          },
+        });
+        await firstRepository.close();
+
+        const secondRepository = new PostgresIdentityRepository({ pool, schema });
+        const second = new EnterpriseIdentityService({ repository: secondRepository });
+        await expect(second.authenticateSession(scope, issued.token)).resolves.toMatchObject({
+          principal: { roles: ['admin'] },
+        });
+        const userId = issued.session.userId;
+        if (!userId) throw new Error('Expected a user-backed PostgreSQL session.');
+        await second.deprovisionUser(scope, 'scim-client', userId);
+        await expect(second.authenticateSession(scope, issued.token)).rejects.toMatchObject({
+          code: 'invalid_session',
+        });
+        await secondRepository.close();
+      } finally {
+        await pool.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);
+        await pool.end();
+      }
+    });
+  });
 } else {
   describe.skip('PostgreSQL repository conformance', () => {
     it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
@@ -135,6 +190,9 @@ if (connectionString) {
     it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
   });
   describe.skip('PostgreSQL collaboration repository conformance', () => {
+    it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
+  });
+  describe.skip('PostgreSQL identity repository conformance', () => {
     it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
   });
 }

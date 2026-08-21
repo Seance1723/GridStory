@@ -26,6 +26,7 @@
   "dependencies": {
     "@gridstory/schema": "workspace:*",
     "@types/pg": "8.20.0",
-    "pg": "8.22.0"
+    "pg": "8.22.0",
+    "zod": "4.4.3"
   }
 }

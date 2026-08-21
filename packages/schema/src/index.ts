@@ -6,6 +6,7 @@ export * from './content.js';
 export * from './context.js';
 export * from './contracts.js';
 export * from './design-system.js';
+export * from './identity.js';
 export * from './lifecycle.js';
 export * from './localization.js';
 export * from './plugins.js';
