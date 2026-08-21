@@ -19,6 +19,7 @@ This repository is in active foundation development. The current vertical slice 
 - Checksummed native SQLite/PostgreSQL backup commands, isolated restore drills, PostgreSQL PITR guidance, bounded API/worker shutdown, and exact current/candidate rollout preflight.
 - Evidence-bounded WCAG 2.2 A/AA automation and ATAG-informed review, keyboard/zoom/adaptation checks, three-engine browser gates, and React 18.3/19 plus Vite compatibility fixtures.
 - Machine-validated alpha/beta/RC/GA readiness reviews with evidence-linked decisions; the current candidate is private-alpha-ready while beta, RC, and GA remain explicit no-go decisions.
+- Deterministic private package archives with package-specific README/SPDX metadata, exact canonical-license and inventory checks, and isolated offline runtime/declaration consumption.
 - Draft, changed, and published content states.
 - Optimistic concurrency that rejects stale editor writes.
 - Canonical route generation with published-path uniqueness, route-based delivery, and loop-safe redirect chains.
@@ -92,7 +93,8 @@ pnpm security:check
 # Produce schema-validated application-pipeline benchmark reports
 pnpm benchmark:sqlite -- --output .gridstory/benchmark-sqlite.json
 
-# Pack reviewed private workspaces and verify their SHA-256 evidence (no publish)
+# Pack reviewed private workspaces, validate an isolated offline consumer, and verify SHA-256 evidence (no publish)
+pnpm release:self-test
 pnpm release:prepare -- --output release-artifacts
 pnpm release:manifest -- --output release-artifacts
 pnpm release:verify -- --output release-artifacts

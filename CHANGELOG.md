@@ -8,7 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
-- Corrected the staged-readiness validator's formatter wrapping found during M5-008 verification (BUG-0242); the publication-metadata overclaim discovered as BUG-0243 remains open under M5-009/RC-003.
+- Corrected the five-package README/SPDX gap, inaccurate baseline wording, unpublished offline dependency resolution, missing installed `pg` declarations, and cleanup control flow found during M5-009 (BUG-0243 through BUG-0247).
+- Corrected the staged-readiness validator's formatter wrapping found during M5-008 verification (BUG-0242) and logged its publication-metadata gap as BUG-0243 for M5-009/RC-003.
 - Aligned the API's binary multipart route with its advertised 5 MiB part size and corrected M5-007 type, benchmark-concurrency/output/memory, archive-layout/inventory, checksum-callback, lint, and restricted Windows verification defects (BUG-0232 through BUG-0241).
 - Corrected accessibility contrast, browser-native picker backgrounds, WebKit sequential bypass focus, forced-colors cascade ordering, cross-engine scenario timing, generated SSR source-gate scope, and Windows verification/install-path issues found during M5-006 (BUG-0225 through BUG-0231).
 - Corrected shutdown-state TypeScript narrowing, recovery/rollout/process-smoke fixtures, and restricted Windows process execution encountered during M5-005 verification (BUG-0219 through BUG-0224).
@@ -68,6 +69,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Added package-specific install/export/license guides, exact README/LICENSE/manifest archive validation with 10 negative cases, and an OS-temporary offline consumer that installs all five tarballs, executes every module/stylesheet export, and strictly type-checks installed declarations.
 - Added a dated evidence-linked alpha/beta/RC/GA review, fail-closed stage/outcome/path validator with nine negative overclaim tests, staged-readiness guide, ADR 0010, and a root `pnpm readiness:check` gate.
 - Added one exported machine resource profile, Zod-validated SQLite/PostgreSQL application-pipeline benchmarks, explicit asset/archive/GraphQL boundary regressions, and a public tested-limit/retention/deployment claim boundary.
 - Added pre-v1 support and private vulnerability-reporting/remediation policies, weekly/PR OSV lockfile scans, grouped Dependabot updates, reviewed private package packing, SHA-256 manifests, pinned SPDX SBOM generation, and GitHub/Sigstore provenance plus SBOM attestation workflows.
@@ -227,6 +229,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- Moved `@types/pg` into `@gridstory/core`'s shipped dependencies because public repository declarations import its types; local release evidence now clears the package-metadata/install portion of `RC-003` without changing private versions, registry state, framework coverage, or the historical RC no-go.
 - Declared candidate `b31193a` ready only for a controlled private technical alpha; design-partner beta, RC, and GA are explicit no-go decisions with stable unmet criteria, accountable roles, next actions, and no inferred partner/deployment/hosted/independent evidence. Added M5-009 for the archive metadata defect found by the RC review.
 - Centralized request, asset, archive, query/search, workflow, and plugin resource values in the exported release profile; support claims now distinguish hard admission bounds, regression budgets, reference-dataset evidence, retention gaps, and deployment-owned saturation/quotas.
 - Browser/framework support claims now fail closed against exact executable evidence; unshipped framework adapters, branded Safari/iOS, arbitrary consumer UI, live assistive technology, and deployment header proof remain explicitly outside the M5-006 claim.
@@ -317,6 +320,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Security
 
+- Made release archives fail closed on missing, duplicate, unexpected, mismatched, or workspace-bound package metadata; the installed-consumer check disables lifecycle scripts, forbids network resolution and workspace/link dependencies, and cleans only a pre-validated OS-temporary path.
 - Preserved planned/partial security controls as release-blocking readiness evidence: production identity/proxy/provider controls, live assistive-technology acceptance, hosted SBOM/provenance, independent assessment, production-shaped capacity/recovery, and operating-risk acceptance cannot be changed to met from repository or external-only claims.
 - Bounded ordinary, multipart, portability, and GraphQL work before service execution; added archive-history and declared asset limits, private disclosure/remediation targets, lockfile scanning, dependency review automation, reviewed archive inventories, checksums, SBOMs, and keyless hosted attestations while retaining deployment/hosted-release residual evidence under M5-008.
 - Updated rendering-security evidence for explicit React SSR/hydration fixtures, unsuppressed three-engine browser audits, exact application-owned CSP/header responsibilities, and the remaining deployment/live-assistive-technology evidence assigned to M5-008.

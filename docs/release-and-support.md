@@ -56,24 +56,28 @@ The manual `Release evidence` workflow is intentionally separate from ordinary q
 
 1. installs the frozen pnpm lockfile and runs `pnpm check`;
 2. packs exactly `@gridstory/schema`, `client`, `core`, `react`, and `example-kit` at their current private `0.0.0` identity;
-3. rejects unexpected archive paths or identities and publishes the machine limits;
-4. runs SQLite and PostgreSQL benchmark profiles;
-5. generates an SPDX JSON SBOM with `anchore/sbom-action@v0.24.0` and Syft `v1.51.0`;
-6. writes and re-verifies a sorted SHA-256 manifest;
-7. creates GitHub/Sigstore SLSA provenance for the packages/evidence and an SBOM attestation for the packages;
-8. uploads the complete evidence set for 30 days.
+3. rejects unexpected/missing/duplicate archive paths, package identities, SPDX/license/README drift, and unresolved workspace dependencies;
+4. installs the exact tarball set offline outside the workspace, executes every module/stylesheet export, and strictly type-checks installed declarations;
+5. runs SQLite and PostgreSQL benchmark profiles;
+6. generates an SPDX JSON SBOM with `anchore/sbom-action@v0.24.0` and Syft `v1.51.0`;
+7. writes and re-verifies a sorted SHA-256 manifest;
+8. creates GitHub/Sigstore SLSA provenance for the packages/evidence and an SBOM attestation for the packages;
+9. uploads the complete evidence set for 30 days.
 
 Local package/checksum verification (no publication or signing) is:
 
 ```powershell
+pnpm release:self-test
 pnpm release:prepare -- --output release-artifacts
 pnpm release:manifest -- --output release-artifacts
 pnpm release:verify -- --output release-artifacts
 ```
 
-The prepare command requires an empty child directory, uses pnpm's reviewed `files` inventories, and fails if a tarball contains anything outside `dist`, package metadata/license/readme, or the example kit stylesheet. The manifest covers every regular evidence file except itself and fails on missing, extra, resized, or rehashed bytes.
+The prepare command requires an empty child directory, uses pnpm's reviewed `files` inventories, and fails if a tarball contains anything outside `dist`, exact package metadata/license/readme, or the example kit stylesheet. It requires one package-specific README, one LICENSE byte-identical to the canonical repository file, exact `Apache-2.0` manifest metadata, current internal versions, and no packed `workspace:` dependency. Ten negative self-tests cover missing, duplicate, unexpected, mismatched, and overclaimed inputs.
 
-The current private `0.0.0` archives do not include per-package README or license metadata. `BUG-0243` and M5-009 own making those artifacts publication-ready and making the validator require that metadata. Until then, successful packing/checksum verification is local integrity evidence only and cannot satisfy readiness criterion `RC-003`.
+Preparation also creates a unique non-workspace consumer under the OS temporary root. With lifecycle scripts disabled and pnpm offline, it binds unpublished internal dependencies to the exact reviewed tarballs, rejects workspace/link lockfile resolution, imports all 10 JavaScript entries, resolves the stylesheet, and strictly type-checks public declarations before deleting the validated temporary path. `BUG-0243` through `BUG-0247` record the metadata, fixture, declaration-dependency, and cleanup regressions resolved by M5-009.
+
+The current archives remain private `0.0.0` verification artifacts, not releases. M5-009 clears only the package metadata and local installed-consumer portion of readiness criterion `RC-003`; an approved version/channel, promised framework adapters, registry install/upgrade evidence, and release sign-off remain absent.
 
 After an authorized hosted workflow run for a future accepted release candidate, download the artifact and verify each package against this repository identity:
 

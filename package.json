@@ -26,6 +26,7 @@
     "rollout:check": "pnpm build:packages && pnpm --filter @gridstory/api build && node apps/api/dist/rolling-upgrade-cli.js",
     "benchmark:sqlite": "pnpm build:packages && pnpm --filter @gridstory/api build && node scripts/benchmark-release.mjs --profile sqlite",
     "benchmark:postgres": "pnpm build:packages && pnpm --filter @gridstory/api build && node scripts/benchmark-release.mjs --profile postgres",
+    "release:self-test": "pnpm build:packages && node scripts/release-evidence.mjs self-test",
     "release:prepare": "pnpm build:packages && node scripts/release-evidence.mjs prepare",
     "release:manifest": "node scripts/release-evidence.mjs manifest",
     "release:verify": "node scripts/release-evidence.mjs verify",

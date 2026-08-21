@@ -2,6 +2,7 @@
   "name": "@gridstory/core",
   "version": "0.0.0",
   "private": true,
+  "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -24,9 +25,7 @@
   },
   "dependencies": {
     "@gridstory/schema": "workspace:*",
+    "@types/pg": "8.20.0",
     "pg": "8.22.0"
-  },
-  "devDependencies": {
-    "@types/pg": "8.20.0"
   }
 }

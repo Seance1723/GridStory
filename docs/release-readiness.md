@@ -27,9 +27,11 @@ The application/runtime source is unchanged from `b31193a`; the working changes 
 | `pnpm test:postgres` | Eight core plus two API PostgreSQL 17 tests passed; native dump/delete/isolated restore recovered one published entry. |
 | SQLite benchmark | 250 entries; read/query/GraphQL/write p95 2.234/26.117/27.208/7.859 ms; 6,219.518 published reads/s; 151 MiB peak RSS; passed published budgets. |
 | PostgreSQL benchmark | 250 entries; read/query/GraphQL/write p95 17.904/46.476/35.952/44.438 ms; 1,920.824 published reads/s; 141 MiB peak RSS; passed published budgets. |
-| Local release evidence | Five private archives packed and the six-artifact SHA-256 manifest verified. `BUG-0243` records that package README/license metadata is absent, so this is not public-release readiness. |
+| Local release evidence | At review time, five private archives packed and the six-artifact SHA-256 manifest verified; `BUG-0243` recorded the then-missing package README/SPDX metadata. |
 
 No hosted workflow, attestation verification, production deployment, partner session, independent assessment, or public publication was run. Those are decision inputs that require external authority and state, and remain no-go criteria.
+
+Post-review update: M5-009 resolved `BUG-0243` through `BUG-0247` for a future candidate by requiring package README/SPDX/canonical-license metadata and proving the exact tarballs install, execute, and type-check in an isolated offline consumer. This does not rewrite the `b31193a` review or clear the remaining `RC-003` adapter/version/distribution requirements.
 
 ## Decision rules
 
@@ -75,7 +77,7 @@ The JSON review is authoritative for complete wording. The release-critical grou
 
 No partner names, contact details, customer content, telemetry extracts, credentials, private vulnerability details, or assessor findings should be committed. Store them in a separately approved system and put only a non-sensitive reference and decision in a future review.
 
-`M5-009` is the first repository follow-up: it owns `BUG-0243` and publication-ready README/license metadata plus isolated consumer-install verification for the five library archives. Passing that task alone will not clear the other `RC-003` adapter/version/distribution requirements.
+`M5-009` completed the first repository follow-up: the five archives now have publication-ready README/license metadata plus isolated consumer-install verification. The other `RC-003` adapter/version/distribution requirements remain no-go inputs.
 
 ## Validation and future reviews
 
