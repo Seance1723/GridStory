@@ -26,6 +26,7 @@ export function emptyPersonalizationDocument(
       updatedAt: timestamp,
       updatedBy: actorId,
     },
+    experiments: [],
     createdAt: timestamp,
     updatedAt: timestamp,
   };

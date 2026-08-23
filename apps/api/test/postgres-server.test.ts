@@ -56,14 +56,21 @@ describe.skipIf(!connectionString)('GridStory API with PostgreSQL', () => {
       payload: {
         expectedVersion: 0,
         configuration: {
-          purposes: [],
+          purposes: [
+            {
+              id: 'postgres-experimentation',
+              name: 'PostgreSQL experimentation',
+              description: 'Verify durable experiment allocation through the API.',
+              honorGlobalPrivacyControl: true,
+            },
+          ],
           attributes: [],
           audiences: [],
           decisions: [
             {
               resourceKey: 'postgres-banner',
               name: 'PostgreSQL banner',
-              variants: ['default'],
+              variants: ['default', 'treatment'],
               rules: [],
               fallbackVariant: 'default',
             },
@@ -79,6 +86,45 @@ describe.skipIf(!connectionString)('GridStory API with PostgreSQL', () => {
       payload: { expectedVersion: 1, expectedDraftRevision: 2 },
     });
     expect(targetingPublished.statusCode, targetingPublished.body).toBe(200);
+    const experimentDraft = await server.inject({
+      method: 'PUT',
+      url: '/api/v1/experiments/postgres-banner-test',
+      headers,
+      payload: {
+        expectedVersion: 2,
+        design: {
+          id: 'postgres-banner-test',
+          name: 'PostgreSQL banner experiment',
+          hypothesis: 'The treatment improves the primary content metric.',
+          target: { resourceKey: 'postgres-banner' },
+          controlVariant: 'default',
+          purposeId: 'postgres-experimentation',
+          allocations: [
+            { variant: 'default', weightBasisPoints: 5_000 },
+            { variant: 'treatment', weightBasisPoints: 5_000 },
+          ],
+          metrics: [
+            {
+              key: 'engagement-rate',
+              name: 'Engagement rate',
+              role: 'primary',
+              direction: 'increase',
+              minimumSampleSize: 10,
+            },
+          ],
+          minimumDurationHours: 0,
+          maximumAllocationDeviationBasisPoints: 1_000,
+        },
+      },
+    });
+    expect(experimentDraft.statusCode, experimentDraft.body).toBe(200);
+    const experimentStarted = await server.inject({
+      method: 'POST',
+      url: '/api/v1/experiments/postgres-banner-test/transition',
+      headers,
+      payload: { expectedVersion: 3, action: 'start', reason: 'PostgreSQL restart fixture.' },
+    });
+    expect(experimentStarted.statusCode, experimentStarted.body).toBe(200);
 
     expect(
       await server.inject({
@@ -165,6 +211,38 @@ describe.skipIf(!connectionString)('GridStory API with PostgreSQL', () => {
       variant: 'default',
       publishedRevision: 2,
       cache: { mode: 'shared' },
+    });
+    const experiments = await server.inject({
+      method: 'GET',
+      url: '/api/v1/experiments',
+      headers,
+    });
+    expect(experiments.statusCode, experiments.body).toBe(200);
+    expect(experiments.json()).toMatchObject({
+      version: 4,
+      experiments: [{ id: 'postgres-banner-test', state: 'running', targetingRevision: 2 }],
+    });
+    const allocation = await server.inject({
+      method: 'POST',
+      url: '/api/v1/experiments/postgres-banner-test/allocate',
+      headers,
+      payload: {
+        attributes: {},
+        consent: {
+          grantedPurposes: ['postgres-experimentation'],
+          deniedPurposes: [],
+          globalPrivacyControl: false,
+        },
+        assignmentToken: 'd625a4ea-31a9-4b6c-a2ef-e12c32e56631',
+      },
+    });
+    expect(allocation.statusCode, allocation.body).toBe(200);
+    expect(allocation.json()).toMatchObject({
+      experimentId: 'postgres-banner-test',
+      participating: true,
+      reason: 'allocated',
+      personalizationRevision: 2,
+      cache: { mode: 'no-store' },
     });
 
     await approveForPublication(server, created, headers);

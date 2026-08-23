@@ -80,7 +80,7 @@ Attributes are boolean or finite enums. Personal attributes require at least one
 }
 ```
 
-Rules are evaluated by audience priority; the first match wins. There is no random choice, percentage allocation, sticky user ID, metric, experiment, winner, or promotion in M7-001. Those belong to M7-002.
+Rules are evaluated by audience priority; the first match wins. The ordinary targeting call remains deterministic and has no percentage allocation or sticky subject identifier. M7-002 experiments are an explicit, separately consented application call documented in [Governed content experiments](experiments.md); they do not change this baseline endpoint.
 
 ## Decision call
 
@@ -120,7 +120,7 @@ The API's POST response remains `private, no-store` in every case. `shared` is g
 
 ## Operations, rollback, and recovery
 
-SQLite and PostgreSQL persist the same optimistic scoped document. Native backup/restore includes targeting documents; recovery tests restore the exact draft and published snapshot. Application traffic remains application-owned, so deployments should validate representative decisions before switching consumers to a new published revision.
+SQLite and PostgreSQL persist the same optimistic scoped document. Native backup/restore includes targeting documents and governed experiment history; recovery tests restore the exact draft, published snapshot, and running experiment state. Application traffic remains application-owned, so deployments should validate representative decisions before switching consumers to a new published revision.
 
 To roll back a bad configuration, restore the prior configuration into a new draft, preview it, and publish that new revision. Do not rewrite history or decrement revision numbers. To roll back the code feature, stop application calls first, render application fallbacks, then revert the M7-001 commit. A code revert does not undo application caches; purge old targeting tags/keys at the edge according to the application/CDN runbook.
 

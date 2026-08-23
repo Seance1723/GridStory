@@ -5,8 +5,11 @@ import {
   type AssetUploadSession,
   type ContentEntry,
   createGridStoryClient,
-  type MigrationCutoverReport,
+  type ExperimentDesign,
+  type ExperimentMetricSnapshotInput,
+  type ExperimentOverview,
   type MarketplaceOverviewRecord,
+  type MigrationCutoverReport,
   type MigrationPlanSummary,
   type MigrationProjectSummary,
   type MigrationRecipe,
@@ -428,7 +431,14 @@ function createTestClient(
     draft: {
       revision: 2,
       configuration: {
-        purposes: [],
+        purposes: [
+          {
+            id: 'experience-optimization',
+            name: 'Experience optimization',
+            description: 'Consent for bounded content experimentation.',
+            honorGlobalPrivacyControl: true,
+          },
+        ],
         attributes: [
           {
             key: 'market',
@@ -473,8 +483,78 @@ function createTestClient(
       updatedAt: now,
       updatedBy: 'targeting-author',
     },
+    published: {
+      revision: 2,
+      configuration: {
+        purposes: [
+          {
+            id: 'experience-optimization',
+            name: 'Experience optimization',
+            description: 'Consent for bounded content experimentation.',
+            honorGlobalPrivacyControl: true,
+          },
+        ],
+        attributes: [
+          {
+            key: 'market',
+            name: 'Market',
+            source: 'market',
+            valueType: 'enum',
+            allowedValues: ['uk', 'us'],
+            classification: 'public',
+            requiredPurposes: [],
+            cacheability: 'shared',
+          },
+          {
+            key: 'device',
+            name: 'Device class',
+            source: 'device-class',
+            valueType: 'enum',
+            allowedValues: ['mobile', 'desktop'],
+            classification: 'public',
+            requiredPurposes: [],
+            cacheability: 'shared',
+          },
+        ],
+        audiences: [
+          {
+            id: 'uk-visitors',
+            name: 'UK visitors',
+            description: 'Visitors in the UK market.',
+            priority: 10,
+            conditions: [{ attributeKey: 'market', operator: 'equals', value: 'uk' }],
+          },
+        ],
+        decisions: [
+          {
+            resourceKey: 'homepage-hero',
+            name: 'Homepage hero',
+            variants: ['default', 'uk'],
+            rules: [{ audienceId: 'uk-visitors', variant: 'default' }],
+            fallbackVariant: 'default',
+          },
+        ],
+      },
+      updatedAt: now,
+      updatedBy: 'targeting-author',
+      publishedAt: now,
+      publishedBy: 'targeting-publisher',
+    },
+    experiments: [],
     createdAt: now,
     updatedAt: now,
+  };
+  let experimentOverview: ExperimentOverview = {
+    organizationId: 'local',
+    tenantId: 'default',
+    workspaceId: 'default',
+    siteId: 'default',
+    environmentId: 'development',
+    locale: 'en',
+    version: personalizationSnapshot.version,
+    targetingDraftRevision: personalizationSnapshot.draft.revision,
+    targetingPublishedRevision: 2,
+    experiments: [],
   };
   const workflowInstances = new Map(
     testEntries.map((candidate) => [
@@ -842,6 +922,166 @@ function createTestClient(
     }
     if (url.pathname === '/api/v1/marketplace' && init?.method !== 'POST') {
       return json(marketplaceOverview);
+    }
+    if (url.pathname === '/api/v1/experiments' && init?.method !== 'POST') {
+      return json(experimentOverview);
+    }
+    const experimentDraftMatch = url.pathname.match(/^\/api\/v1\/experiments\/([^/]+)$/);
+    if (experimentDraftMatch && init?.method === 'PUT') {
+      const body = JSON.parse(String(init.body)) as {
+        expectedVersion: number;
+        design: ExperimentDesign;
+      };
+      const experimentId = decodeURIComponent(experimentDraftMatch[1] ?? '');
+      const existing = experimentOverview.experiments.find(({ id }) => id === experimentId);
+      const experiment: ExperimentOverview['experiments'][number] = {
+        ...body.design,
+        state: 'draft',
+        revision: (existing?.revision ?? 0) + 1,
+        metricSnapshots: existing?.metricSnapshots ?? [],
+        createdAt: existing?.createdAt ?? now,
+        createdBy: existing?.createdBy ?? 'studio-local-admin',
+        updatedAt: now,
+        updatedBy: 'studio-local-admin',
+      };
+      experimentOverview = {
+        ...experimentOverview,
+        version: experimentOverview.version + 1,
+        experiments: [
+          ...experimentOverview.experiments.filter(({ id }) => id !== experimentId),
+          experiment,
+        ],
+      };
+      return json(experimentOverview);
+    }
+    const experimentTransitionMatch = url.pathname.match(
+      /^\/api\/v1\/experiments\/([^/]+)\/transition$/,
+    );
+    if (experimentTransitionMatch && init?.method === 'POST') {
+      const body = JSON.parse(String(init.body)) as {
+        action: 'start' | 'pause' | 'resume' | 'complete' | 'cancel';
+        reason: string;
+      };
+      const experimentId = decodeURIComponent(experimentTransitionMatch[1] ?? '');
+      const current = experimentOverview.experiments.find(({ id }) => id === experimentId);
+      if (!current) return json({ error: 'not_found' }, 404);
+      const state =
+        body.action === 'start' || body.action === 'resume'
+          ? 'running'
+          : body.action === 'pause'
+            ? 'paused'
+            : body.action === 'complete'
+              ? 'completed'
+              : 'cancelled';
+      const experiment: ExperimentOverview['experiments'][number] = {
+        ...current,
+        state,
+        revision: current.revision + 1,
+        ...(body.action === 'start'
+          ? {
+              targetingRevision: 2,
+              startedAt: now,
+              startedBy: 'studio-local-admin',
+            }
+          : {}),
+        ...(body.action === 'pause'
+          ? { pausedAt: now, pausedBy: 'studio-local-admin', pauseReason: body.reason }
+          : {}),
+        ...(body.action === 'complete'
+          ? {
+              completedAt: now,
+              completedBy: 'studio-local-admin',
+              completionReason: body.reason,
+            }
+          : {}),
+        ...(body.action === 'cancel'
+          ? {
+              cancelledAt: now,
+              cancelledBy: 'studio-local-admin',
+              cancellationReason: body.reason,
+            }
+          : {}),
+        updatedAt: now,
+        updatedBy: 'studio-local-admin',
+      };
+      experimentOverview = {
+        ...experimentOverview,
+        version: experimentOverview.version + 1,
+        experiments: experimentOverview.experiments.map((candidate) =>
+          candidate.id === experimentId ? experiment : candidate,
+        ),
+      };
+      return json(experimentOverview);
+    }
+    const experimentMetricsMatch = url.pathname.match(/^\/api\/v1\/experiments\/([^/]+)\/metrics$/);
+    if (experimentMetricsMatch && init?.method === 'POST') {
+      const body = JSON.parse(String(init.body)) as { snapshot: ExperimentMetricSnapshotInput };
+      const experimentId = decodeURIComponent(experimentMetricsMatch[1] ?? '');
+      const current = experimentOverview.experiments.find(({ id }) => id === experimentId);
+      if (!current) return json({ error: 'not_found' }, 404);
+      const experiment: ExperimentOverview['experiments'][number] = {
+        ...current,
+        revision: current.revision + 1,
+        metricSnapshots: [
+          ...current.metricSnapshots,
+          { ...body.snapshot, recordedAt: now, recordedBy: 'studio-local-admin' },
+        ],
+        lastGuardrailEvaluation: {
+          snapshotId: body.snapshot.id,
+          status: 'passed',
+          reasons: [],
+          evaluatedAt: now,
+        },
+        updatedAt: now,
+        updatedBy: 'studio-local-admin',
+      };
+      experimentOverview = {
+        ...experimentOverview,
+        version: experimentOverview.version + 1,
+        experiments: experimentOverview.experiments.map((candidate) =>
+          candidate.id === experimentId ? experiment : candidate,
+        ),
+      };
+      return json(experimentOverview);
+    }
+    const experimentPromotionMatch = url.pathname.match(
+      /^\/api\/v1\/experiments\/([^/]+)\/promote$/,
+    );
+    if (experimentPromotionMatch && init?.method === 'POST') {
+      const body = JSON.parse(String(init.body)) as {
+        snapshotId: string;
+        winnerVariant: string;
+        reason: string;
+      };
+      const experimentId = decodeURIComponent(experimentPromotionMatch[1] ?? '');
+      const current = experimentOverview.experiments.find(({ id }) => id === experimentId);
+      if (!current) return json({ error: 'not_found' }, 404);
+      const snapshot = current.metricSnapshots.find(({ id }) => id === body.snapshotId);
+      const experiment: ExperimentOverview['experiments'][number] = {
+        ...current,
+        state: 'promoted',
+        revision: current.revision + 1,
+        promotion: {
+          winnerVariant: body.winnerVariant,
+          snapshotId: body.snapshotId,
+          evidenceDigest: snapshot?.evidenceDigest ?? '0'.repeat(64),
+          reason: body.reason,
+          promotedAt: now,
+          promotedBy: 'studio-local-admin',
+          targetingDraftRevision: experimentOverview.targetingDraftRevision + 1,
+        },
+        updatedAt: now,
+        updatedBy: 'studio-local-admin',
+      };
+      experimentOverview = {
+        ...experimentOverview,
+        version: experimentOverview.version + 1,
+        targetingDraftRevision: experimentOverview.targetingDraftRevision + 1,
+        experiments: experimentOverview.experiments.map((candidate) =>
+          candidate.id === experimentId ? experiment : candidate,
+        ),
+      };
+      return json(experimentOverview);
     }
     if (url.pathname === '/api/v1/personalization' && init?.method !== 'POST') {
       return json(personalizationSnapshot);
@@ -1549,7 +1789,7 @@ describe('GridStory Studio', () => {
     await user.click(within(panel).getByRole('button', { name: 'Validate cutover' }));
     expect(await within(panel).findByText('Content checks ready')).toBeTruthy();
     expect(panel.textContent).toContain('1/1 current · 1 published');
-  });
+  }, 15_000);
 
   it('explains marketplace evidence boundaries and installs an approved release without grants', async () => {
     const user = userEvent.setup();
@@ -1603,6 +1843,54 @@ describe('GridStory Studio', () => {
     await user.click(within(panel).getByRole('button', { name: 'Publish exact draft' }));
     expect(await screen.findByText(/Published targeting revision 3/)).toBeTruthy();
   });
+
+  it('runs a governed experiment lifecycle with aggregate evidence and draft-only promotion', async () => {
+    const user = userEvent.setup();
+    render(<App client={createTestClient()} />);
+
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Experiments' }));
+
+    const panel = await screen.findByRole('region', { name: 'Content experiments workbench' });
+    expect(panel.textContent).toContain('Do not paste assignment tokens, user rows, cookies');
+    expect(panel.textContent).toContain('promotion changes the targeting draft only');
+    await user.click(within(panel).getByRole('button', { name: 'Save experiment draft' }));
+    expect(
+      await screen.findByText(/Published targeting and live allocation are unchanged/i),
+    ).toBeTruthy();
+    expect(panel.textContent).toContain('Homepage hero copy · draft');
+
+    const reason = within(panel).getByLabelText('Lifecycle or promotion reason');
+    await user.type(reason, 'Start the reviewed allocation.');
+    await user.click(within(panel).getByRole('button', { name: 'Start experiment' }));
+    expect(await screen.findByText('Experiment started.')).toBeTruthy();
+    expect(
+      (within(panel).getByLabelText('Experiment design JSON') as HTMLTextAreaElement).disabled,
+    ).toBe(true);
+
+    await user.type(reason, 'Pause for an operator review.');
+    await user.click(within(panel).getByRole('button', { name: 'Pause experiment' }));
+    expect(await screen.findByText('Experiment paused.')).toBeTruthy();
+    await user.type(reason, 'Resume after the operator review.');
+    await user.click(within(panel).getByRole('button', { name: 'Resume experiment' }));
+    expect(await screen.findByText('Experiment resumed.')).toBeTruthy();
+
+    await user.click(within(panel).getByRole('button', { name: 'Record aggregate snapshot' }));
+    expect(await screen.findByText(/guardrails evaluated/i)).toBeTruthy();
+    expect(panel.textContent).toContain('Guardrails: passed');
+
+    await user.type(reason, 'Minimum duration and evidence reviewed.');
+    await user.click(within(panel).getByRole('button', { name: 'Complete experiment' }));
+    expect(await screen.findByText('Experiment completed.')).toBeTruthy();
+
+    await user.type(reason, 'Promote the supported treatment for publisher review.');
+    await user.click(within(panel).getByRole('button', { name: 'Promote winner to draft' }));
+    expect(
+      await screen.findByText(/Supported winner promoted to targeting draft only/i),
+    ).toBeTruthy();
+    expect(panel.textContent).toContain('Homepage hero copy · promoted');
+    expect(panel.textContent).toContain('Draft promotion: uk');
+  }, 15_000);
 
   it('starts and revokes a secure application iframe preview', async () => {
     const user = userEvent.setup();

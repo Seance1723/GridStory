@@ -99,6 +99,11 @@ export const resourceLimits = {
     maximumVariantsPerDecision: 20,
     maximumRulesPerDecision: 100,
     maximumContextAttributes: 50,
+    maximumExperiments: 50,
+    maximumExperimentVariants: 10,
+    maximumExperimentMetrics: 20,
+    maximumExperimentSnapshots: 100,
+    maximumExperimentGuardrailReasons: 25,
   },
   benchmark: {
     datasetEntries: 250,

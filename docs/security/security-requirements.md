@@ -141,6 +141,16 @@ The implementation, limits, operator workflow, incident response, and recovery b
 
 The configuration, integration contract, privacy boundary, cache rules, recovery, and rollback guidance are documented in [Consent-aware personalization and targeting](../personalization.md). `THREAT-0030` owns overcollection, consent/GPC bypass, draft leakage, scope confusion, and incomplete cache keys.
 
+## Governed content experiments
+
+- `GS-SEC-035`: experiment designs, lifecycle evidence, aggregate snapshots, guardrail decisions, promotions, and management responses SHALL carry complete organization, tenant, workspace, site, environment, and locale scope. Read, manage, metric-recording, and promotion permissions SHALL be distinct and deny by default; management SHALL remain private/no-store.
+- A design SHALL have bounded unique variants whose positive basis-point weights total exactly 10,000, exactly one primary metric, bounded sample/allocation thresholds, a declared purpose, and valid published targeting references. Only drafts may change. Start SHALL pin the exact published targeting revision and reject active overlap at one resource/audience placement.
+- Participation SHALL require a random per-experiment UUID supplied by the application only after purpose grant. GridStory SHALL use it only for deterministic scope/experiment/revision allocation, SHALL NOT persist or echo the token, bucket, or raw context, SHALL set no assignment cookie, and SHALL return private/no-store guidance. Missing/denied purpose, applicable GPC, targeting ineligibility/drift, and inactive state SHALL return the ordinary published-targeting baseline without participation.
+- Metric input SHALL contain bounded complete aggregates for every declared variant and metric, an immutable snapshot/evidence identity, and an evidence SHA-256 digest. GridStory SHALL expose no raw exposure/conversion event or subject-row ingestion route. Allocation deviation, per-variant sample minima, and absolute guardrails SHALL be enforced; a failed snapshot SHALL pause a running experiment.
+- Promotion SHALL require a completed experiment, elapsed duration, a retained passing snapshot, acceptable allocation and samples, unchanged published/draft control targeting, and an explicit non-control treatment whose primary aggregate improves in the declared direction. Promotion SHALL atomically change only a new targeting draft revision, retain actor/reason/evidence history, and SHALL NOT publish, automatically choose a winner, or claim statistical significance.
+
+The integration, metric-evidence, lifecycle, recovery, rollback, and statistical-claim boundaries are documented in [Governed content experiments](../experiments.md). `THREAT-0031` owns assignment-token misuse, lifecycle/design tampering, invalid aggregate evidence, allocation/guardrail bypass, and unsafe winner promotion.
+
 ## Logging, error handling, and operations
 
 - `GS-SEC-028`: a maintained log inventory SHALL define event, metadata, format, sink, access, retention, correlation, and alerting. At minimum cover authentication, failed authorization, privileged mutation, publication, workflow/release, import/export, credential lifecycle, adapter failure, and control bypass.
@@ -202,6 +212,12 @@ Repository evidence does not host or download package bytes, implement scanner e
 `GS-SEC-034` and `THREAT-0030` cover complete-scope private targeting configuration, exact draft/published revision separation, bounded typed attributes, required purposes on personal inputs, denied-consent and configured GPC suppression, deterministic first-match/fallback evaluation, non-persistent hypothetical preview, published-only anonymous decisions, redacted explanation traces, and conservative cache guidance bound to scope, revision, resource, and every varying input. SQLite/PostgreSQL persist the same optimistic document, and live SQLite recovery restores the exact earlier draft and published snapshot.
 
 Repository evidence does not collect consent, interpret law, store customer profiles, verify upstream trait truth, ingest behavior, configure a CDN, purge an application cache, prevent an application from ignoring guidance, or implement CDP/experiment adapters. Those remain customer/application/deployment responsibilities; personal, authentication, consent-dependent, and preview results are never eligible for GridStory shared-cache guidance.
+
+## M7-002 experiment baseline
+
+`GS-SEC-035` and `THREAT-0031` cover complete-scope experiment state, immutable running design, exact weighted allocation, consent/GPC gating, non-persistent per-experiment random tokens, no-store application responses, pinned targeting, overlap prevention, bounded immutable aggregate evidence, allocation/sample/absolute guardrails, automatic failure pause, and explicit evidence-backed promotion into the targeting draft only. SQLite/PostgreSQL retain the experiment inside the optimistic targeting document; live SQLite recovery restores a running experiment and PostgreSQL verification covers restart allocation plus logical restore.
+
+Repository evidence does not collect consent, generate or retain the application token, ingest raw events, validate analytics attribution or evidence-store integrity, calculate statistical significance, select a winner, automatically publish, configure CDN/application isolation, enforce external rate limits, or certify lawful/statistically valid experimentation. Those remain customer/application/analytics/deployment responsibilities; M7-003 owns future normalized event and analytics adapter work.
 
 ## Verification ownership
 

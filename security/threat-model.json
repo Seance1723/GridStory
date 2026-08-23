@@ -3,7 +3,7 @@
   "model": {
     "id": "GRIDSTORY-TM-001",
     "title": "GridStory control plane and delivery threat model",
-    "version": "1.5.0",
+    "version": "1.6.0",
     "reviewedAt": "2026-08-23",
     "owners": ["GridStory security owner", "GridStory architecture owner"],
     "methodology": "OWASP four-question threat modeling with STRIDE categorization",
@@ -20,14 +20,15 @@
       "signed plugin manifests, tenant grants, lifecycle state, external runtime protocol, and scoped marketplace publisher/release evidence",
       "data governance, legal holds, rights requests, guarded erasure, encrypted exports, customer-managed key references, and placement attestations",
       "read-only CMS source adapters, private migration recipes, dry-run plans, checkpoints, links, receipts, and cutover evidence",
-      "consent-aware targeting attributes, audiences, draft/published configuration, hypothetical preview, edge decisions, and cache guidance"
+      "consent-aware targeting attributes, audiences, draft/published configuration, hypothetical preview, edge decisions, and cache guidance",
+      "governed experiment designs, lifecycle, stateless weighted allocation, aggregate evidence, guardrails, and targeting-draft promotion"
     ],
     "outOfScope": [
       "security of application-owned React components after validated data leaves GridStory",
       "identity-provider internals",
       "cloud, CDN, database, object-store, and network controls not configured by GridStory",
       "package binary hosting/download, scanner-engine internals, publisher business-legitimacy verification, and operating-system/container isolation supplied outside GridStory",
-      "customer profile storage, consent collection or legal interpretation, behavioral ingestion, CDP credentials/adapters, and experiment allocation"
+      "customer profile storage, consent collection or legal interpretation, raw behavioral ingestion, CDP/warehouse credentials or adapters, statistical-significance engines, and automatic experiment winner selection or publication"
     ],
     "riskModel": {
       "formula": "likelihood * impact",
@@ -40,7 +41,7 @@
       "id": "ACTOR-001",
       "name": "Anonymous delivery consumer",
       "trust": "untrusted",
-      "capabilities": ["read published delivery"]
+      "capabilities": ["read published delivery", "request published experiment allocation"]
     },
     {
       "id": "ACTOR-002",
@@ -202,6 +203,18 @@
         "purpose limitation",
         "cache correctness"
       ]
+    },
+    {
+      "id": "ASSET-019",
+      "name": "Experiment designs, lifecycle evidence, aggregate metric snapshots, guardrail decisions, and promotions",
+      "securityProperties": [
+        "confidentiality",
+        "integrity",
+        "tenant isolation",
+        "purpose limitation",
+        "allocation correctness",
+        "accountability"
+      ]
     }
   ],
   "trustBoundaries": [
@@ -328,14 +341,17 @@
     },
     {
       "id": "BOUNDARY-014",
-      "name": "Authoring and anonymous applications to draft or published targeting decisions",
+      "name": "Authoring and anonymous applications to targeting and experiment decisions",
       "controls": [
         "complete scope and distinct read, manage, preview, and delivery authorization",
         "typed finite allowlisted attributes with purpose and classification metadata",
         "authenticated private no-store draft preview with no profile lookup or persistence",
         "published-only deterministic first-match evaluation with required fallback",
         "purpose-specific consent and GPC suppression",
-        "complete revisioned shared-cache key or conservative private/no-store guidance"
+        "complete revisioned shared-cache key or conservative private/no-store guidance",
+        "immutable running experiments with pinned published targeting and active-placement exclusion",
+        "purpose-gated stateless token hashing with no token/bucket persistence or echo",
+        "complete immutable aggregate evidence, enforced guardrails, and draft-only promotion"
       ]
     }
   ],
@@ -473,6 +489,20 @@
       "to": "BOUNDARY-014",
       "data": "bounded published decision context, consent and GPC signals, selected variant, and cache guidance",
       "assets": ["ASSET-002", "ASSET-003", "ASSET-010", "ASSET-018"]
+    },
+    {
+      "id": "FLOW-019",
+      "from": "ACTOR-003",
+      "to": "BOUNDARY-014",
+      "data": "scoped experiment design, lifecycle reason, aggregate evidence digest and values, guardrail result, explicit winner, and targeting-draft promotion",
+      "assets": ["ASSET-003", "ASSET-004", "ASSET-009", "ASSET-018", "ASSET-019"]
+    },
+    {
+      "id": "FLOW-020",
+      "from": "ACTOR-001",
+      "to": "BOUNDARY-014",
+      "data": "bounded published context, consent and GPC signals, random per-experiment assignment token, ordinary baseline, and no-store allocation",
+      "assets": ["ASSET-002", "ASSET-003", "ASSET-010", "ASSET-018", "ASSET-019"]
     }
   ],
   "assumptions": [
@@ -483,7 +513,8 @@
     "The M5-002 application isolation review verifies canonical scope keys and fail-closed boundaries across persistence, cache, search, assets, jobs, events, audit, and telemetry; production infrastructure policies remain deployment evidence.",
     "Production plugin runtimes are separately operated processes or containers with least-privilege OS, filesystem, network, CPU, and memory policies; the GridStory adapter protocol does not itself provide OS isolation.",
     "Marketplace artifact inspectors are separately authenticated and operated trusted adapters whose policy, evidence storage, availability, and scanner-engine correctness require deployment conformance; a passing result or verified provenance is not a safety guarantee.",
-    "CMS migration credentials are read-only, least privilege, and injected by the trusted server runtime; the source stays authoritative and recoverable until an externally operated cutover is accepted."
+    "CMS migration credentials are read-only, least privilege, and injected by the trusted server runtime; the source stays authoritative and recoverable until an externally operated cutover is accepted.",
+    "Applications create and, when permitted, retain an unpredictable token separately for each experiment after consent; external analytics owns raw events, attribution, aggregate computation, statistical validity, and retained evidence integrity."
   ],
   "threats": [
     {
@@ -1334,6 +1365,63 @@
         "packages/client/test/client.test.ts",
         "apps/studio/test/App.test.tsx",
         "docs/personalization.md"
+      ]
+    },
+    {
+      "id": "THREAT-0031",
+      "title": "Experiment assignment, evidence, guardrail, or promotion abuse",
+      "stride": [
+        "Spoofing",
+        "Tampering",
+        "Repudiation",
+        "Information Disclosure",
+        "Denial of Service",
+        "Elevation of Privilege"
+      ],
+      "scenario": "An attacker or misconfigured application reuses an identifying token, allocates without consent, changes a running design or targeting baseline, overlaps experiments, submits incomplete or forged aggregates, bypasses sample/allocation/metric guardrails, leaks assignments through caches, or promotes/publishes an unsupported treatment.",
+      "actors": ["ACTOR-001", "ACTOR-003", "ACTOR-008"],
+      "assets": [
+        "ASSET-002",
+        "ASSET-003",
+        "ASSET-004",
+        "ASSET-009",
+        "ASSET-010",
+        "ASSET-012",
+        "ASSET-018",
+        "ASSET-019"
+      ],
+      "boundaries": [
+        "BOUNDARY-001",
+        "BOUNDARY-002",
+        "BOUNDARY-003",
+        "BOUNDARY-004",
+        "BOUNDARY-014"
+      ],
+      "likelihood": 4,
+      "impact": 5,
+      "risk": 20,
+      "response": "mitigate",
+      "owner": "Experimentation, privacy, analytics, and delivery owner",
+      "mitigations": [
+        "Authorize experiment read, manage, metric, and promotion operations separately against complete scope; keep management private/no-store and retain optimistic actor/reason/time evidence.",
+        "Validate exact 10,000-basis-point designs, one primary metric, declared purpose and targeting references; make started designs immutable, pin the published targeting revision, and reject active placement overlap or drift.",
+        "Require application-generated random per-experiment UUIDs after consent, hash them only with complete scope/experiment/revision, never persist or echo tokens/buckets/raw context, set no cookie, and make allocation responses no-store with an ordinary targeting fallback.",
+        "Accept only complete bounded aggregate snapshots with immutable identity and external SHA-256 evidence digest; enforce allocation deviation, every per-variant sample minimum, and absolute guardrails, automatically pausing a running failure.",
+        "Require completed state, elapsed duration, a retained passing snapshot, unchanged control targeting, explicit non-control choice, and primary-direction improvement; atomically update only the targeting draft and make no statistical-significance, automatic-winner, or publication claim.",
+        "Require external evidence-store integrity, metric/attribution/statistics review, token-retention policy, rate controls, consent/legal review, and application cache/render isolation as deployment evidence."
+      ],
+      "verification": [
+        "packages/schema/test/personalization.test.ts",
+        "packages/core/test/experiment-service.test.ts",
+        "packages/core/test/postgres-conformance.test.ts",
+        "apps/api/test/experiments.test.ts",
+        "apps/api/test/database-recovery.test.ts",
+        "apps/api/test/postgres-server.test.ts",
+        "packages/client/test/client.test.ts",
+        "apps/studio/test/App.test.tsx",
+        "tests/e2e/accessibility.spec.ts",
+        "docs/experiments.md",
+        "docs/adr/0018-governed-content-experiments.md"
       ]
     }
   ],

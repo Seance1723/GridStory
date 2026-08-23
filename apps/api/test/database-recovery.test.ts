@@ -147,14 +147,21 @@ describe('database recovery', () => {
         payload: {
           expectedVersion: 0,
           configuration: {
-            purposes: [],
+            purposes: [
+              {
+                id: 'recovery-experimentation',
+                name: 'Recovery experimentation',
+                description: 'Verify experiment state survives backup and restore.',
+                honorGlobalPrivacyControl: true,
+              },
+            ],
             attributes: [],
             audiences: [],
             decisions: [
               {
                 resourceKey: 'recovery-banner',
                 name: 'Recovery banner',
-                variants: ['default'],
+                variants: ['default', 'treatment'],
                 rules: [],
                 fallbackVariant: 'default',
               },
@@ -170,6 +177,45 @@ describe('database recovery', () => {
         payload: { expectedVersion: 1, expectedDraftRevision: 2 },
       });
       expect(personalizationPublished.statusCode, personalizationPublished.body).toBe(200);
+      const experimentDraft = await server.inject({
+        method: 'PUT',
+        url: '/api/v1/experiments/recovery-banner-test',
+        headers,
+        payload: {
+          expectedVersion: 2,
+          design: {
+            id: 'recovery-banner-test',
+            name: 'Recovery banner experiment',
+            hypothesis: 'The treatment improves the primary content metric.',
+            target: { resourceKey: 'recovery-banner' },
+            controlVariant: 'default',
+            purposeId: 'recovery-experimentation',
+            allocations: [
+              { variant: 'default', weightBasisPoints: 5_000 },
+              { variant: 'treatment', weightBasisPoints: 5_000 },
+            ],
+            metrics: [
+              {
+                key: 'engagement-rate',
+                name: 'Engagement rate',
+                role: 'primary',
+                direction: 'increase',
+                minimumSampleSize: 10,
+              },
+            ],
+            minimumDurationHours: 0,
+            maximumAllocationDeviationBasisPoints: 1_000,
+          },
+        },
+      });
+      expect(experimentDraft.statusCode, experimentDraft.body).toBe(200);
+      const experimentStarted = await server.inject({
+        method: 'POST',
+        url: '/api/v1/experiments/recovery-banner-test/transition',
+        headers,
+        payload: { expectedVersion: 3, action: 'start', reason: 'Recovery drill fixture.' },
+      });
+      expect(experimentStarted.statusCode, experimentStarted.body).toBe(200);
 
       const manifest = await backupSqlite({
         sourcePath,
@@ -293,7 +339,7 @@ describe('database recovery', () => {
       });
       expect(recoveredPersonalization.statusCode).toBe(200);
       expect(recoveredPersonalization.json()).toMatchObject({
-        version: 2,
+        version: 4,
         draft: { revision: 2 },
         published: {
           revision: 2,
@@ -301,6 +347,24 @@ describe('database recovery', () => {
             decisions: [{ resourceKey: 'recovery-banner', fallbackVariant: 'default' }],
           },
         },
+        experiments: [
+          {
+            id: 'recovery-banner-test',
+            state: 'running',
+            targetingRevision: 2,
+          },
+        ],
+      });
+      const recoveredExperiments = await restored.inject({
+        method: 'GET',
+        url: '/api/v1/experiments',
+        headers,
+      });
+      expect(recoveredExperiments.statusCode).toBe(200);
+      expect(recoveredExperiments.json()).toMatchObject({
+        version: 4,
+        targetingPublishedRevision: 2,
+        experiments: [{ id: 'recovery-banner-test', state: 'running' }],
       });
     } finally {
       await restored?.close();

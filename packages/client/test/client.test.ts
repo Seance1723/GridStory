@@ -1023,4 +1023,97 @@ describe('GridStoryClient browser compatibility', () => {
       override: { variant: 'default' },
     });
   });
+
+  it('routes governed experiment lifecycle, aggregate evidence, promotion, and allocation', async () => {
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    const client = createGridStoryClient({
+      baseUrl: 'http://gridstory.test',
+      tenantId: 'default',
+      fetch: async (input, init) => {
+        requests.push({ url: String(input), ...(init ? { init } : {}) });
+        return new Response(JSON.stringify({}), {
+          headers: { 'content-type': 'application/json' },
+        });
+      },
+    });
+    const design = {
+      id: 'hero-copy-test',
+      name: 'Hero copy',
+      hypothesis: 'Treatment improves signup rate.',
+      target: { resourceKey: 'hero' },
+      controlVariant: 'default',
+      purposeId: 'experimentation',
+      allocations: [
+        { variant: 'default', weightBasisPoints: 5_000 },
+        { variant: 'treatment', weightBasisPoints: 5_000 },
+      ],
+      metrics: [
+        {
+          key: 'signup-rate',
+          name: 'Signup rate',
+          role: 'primary' as const,
+          direction: 'increase' as const,
+          minimumSampleSize: 100,
+        },
+      ],
+      minimumDurationHours: 24,
+      maximumAllocationDeviationBasisPoints: 500,
+    };
+    const snapshot = {
+      id: 'snapshot-1',
+      evidenceId: 'warehouse-run-1',
+      evidenceDigest: 'a'.repeat(64),
+      observedAt: '2026-08-23T12:00:00.000Z',
+      variantResults: [
+        {
+          variant: 'default',
+          exposures: 100,
+          observations: [{ metricKey: 'signup-rate', sampleSize: 100, value: 0.1 }],
+        },
+        {
+          variant: 'treatment',
+          exposures: 100,
+          observations: [{ metricKey: 'signup-rate', sampleSize: 100, value: 0.12 }],
+        },
+      ],
+    };
+
+    await client.getExperiments();
+    await client.saveExperimentDraft('hero/copy', { expectedVersion: 2, design });
+    await client.transitionExperiment('hero/copy', {
+      expectedVersion: 3,
+      action: 'start',
+      reason: 'Reviewed.',
+    });
+    await client.recordExperimentMetrics('hero/copy', { expectedVersion: 4, snapshot });
+    await client.promoteExperimentWinner('hero/copy', {
+      expectedVersion: 6,
+      snapshotId: 'snapshot-1',
+      winnerVariant: 'treatment',
+      reason: 'Evidence supports treatment.',
+    });
+    await client.allocateExperiment('hero/copy', {
+      attributes: {},
+      consent: {
+        grantedPurposes: ['experimentation'],
+        deniedPurposes: [],
+        globalPrivacyControl: false,
+      },
+      assignmentToken: '5e2d7f02-6f34-4c66-aac2-1e869bced27e',
+    });
+
+    expect(requests.map((request) => [request.url, request.init?.method])).toEqual([
+      ['http://gridstory.test/api/v1/experiments', undefined],
+      ['http://gridstory.test/api/v1/experiments/hero%2Fcopy', 'PUT'],
+      ['http://gridstory.test/api/v1/experiments/hero%2Fcopy/transition', 'POST'],
+      ['http://gridstory.test/api/v1/experiments/hero%2Fcopy/metrics', 'POST'],
+      ['http://gridstory.test/api/v1/experiments/hero%2Fcopy/promote', 'POST'],
+      ['http://gridstory.test/api/v1/experiments/hero%2Fcopy/allocate', 'POST'],
+    ]);
+    expect(JSON.parse(String(requests[1]?.init?.body))).toEqual({ expectedVersion: 2, design });
+    expect(JSON.parse(String(requests[3]?.init?.body))).toEqual({
+      expectedVersion: 4,
+      snapshot,
+    });
+  });
 });

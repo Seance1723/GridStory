@@ -11,15 +11,18 @@ import {
   type ContentRevision,
   createGridStoryClient,
   type DurableJobRecord,
+  type ExperimentDesign,
+  type ExperimentMetricSnapshotInput,
+  type ExperimentOverview,
   type GovernancePlan,
   type GovernanceSnapshot,
   GridStoryApiError,
   type GridStoryClient,
   type IdentitySnapshot,
+  type MarketplaceOverviewRecord,
   type MigrationOverviewRecord,
   type MigrationPlanSummary,
   type MigrationRecipeInput,
-  type MarketplaceOverviewRecord,
   type OperationsDashboardRecord,
   type PersonalizationConfiguration,
   type PersonalizationPreviewRequest,
@@ -108,6 +111,71 @@ const defaultPersonalizationPreview = JSON.stringify(
       globalPrivacyControl: false,
     },
   },
+  null,
+  2,
+);
+
+const defaultExperimentDesign = JSON.stringify(
+  {
+    id: 'homepage-hero-copy',
+    name: 'Homepage hero copy',
+    hypothesis: 'The UK hero variant improves qualified visits without breaching guardrails.',
+    target: { resourceKey: 'homepage-hero', audienceId: 'uk-visitors' },
+    controlVariant: 'default',
+    purposeId: 'experience-optimization',
+    allocations: [
+      { variant: 'default', weightBasisPoints: 5_000 },
+      { variant: 'uk', weightBasisPoints: 5_000 },
+    ],
+    metrics: [
+      {
+        key: 'qualified-visit-rate',
+        name: 'Qualified visit rate',
+        role: 'primary',
+        direction: 'increase',
+        minimumSampleSize: 100,
+      },
+      {
+        key: 'error-rate',
+        name: 'Error rate',
+        role: 'guardrail',
+        direction: 'decrease',
+        minimumSampleSize: 100,
+        guardrail: { operator: 'lte', threshold: 0.02 },
+      },
+    ],
+    minimumDurationHours: 24,
+    maximumAllocationDeviationBasisPoints: 500,
+  } satisfies ExperimentDesign,
+  null,
+  2,
+);
+
+const defaultExperimentMetricSnapshot = JSON.stringify(
+  {
+    id: 'homepage-hero-copy-snapshot-1',
+    evidenceId: 'warehouse-export-1',
+    evidenceDigest: '0'.repeat(64),
+    observedAt: new Date().toISOString(),
+    variantResults: [
+      {
+        variant: 'default',
+        exposures: 100,
+        observations: [
+          { metricKey: 'qualified-visit-rate', sampleSize: 100, value: 0.1 },
+          { metricKey: 'error-rate', sampleSize: 100, value: 0.01 },
+        ],
+      },
+      {
+        variant: 'uk',
+        exposures: 100,
+        observations: [
+          { metricKey: 'qualified-visit-rate', sampleSize: 100, value: 0.12 },
+          { metricKey: 'error-rate', sampleSize: 100, value: 0.01 },
+        ],
+      },
+    ],
+  } satisfies ExperimentMetricSnapshotInput,
   null,
   2,
 );
@@ -572,6 +640,17 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   );
   const [personalizationPreview, setPersonalizationPreview] =
     useState<PersonalizationPreviewResult | null>(null);
+  const [experimentOverview, setExperimentOverview] = useState<ExperimentOverview | null>(null);
+  const [activeExperimentId, setActiveExperimentId] = useState('');
+  const [experimentDesignJson, setExperimentDesignJson] = useState(defaultExperimentDesign);
+  const [experimentMetricSnapshotJson, setExperimentMetricSnapshotJson] = useState(
+    defaultExperimentMetricSnapshot,
+  );
+  const [experimentReason, setExperimentReason] = useState('');
+  const [experimentPromotionSnapshotId, setExperimentPromotionSnapshotId] = useState(
+    'homepage-hero-copy-snapshot-1',
+  );
+  const [experimentWinnerVariant, setExperimentWinnerVariant] = useState('uk');
   const [searchPanelOpen, setSearchPanelOpen] = useState(false);
   const [searchBusy, setSearchBusy] = useState(false);
   const [searchText, setSearchText] = useState('');
@@ -615,6 +694,11 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   const [releaseScheduleAt, setReleaseScheduleAt] = useState('');
   const [releaseTimeZone, setReleaseTimeZone] = useState(
     () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+  );
+
+  const activeExperiment = useMemo(
+    () => experimentOverview?.experiments.find(({ id }) => id === activeExperimentId) ?? null,
+    [activeExperimentId, experimentOverview],
   );
 
   const selectEntry = useCallback(
@@ -2272,6 +2356,155 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
       setNotice({ tone: 'error', message: messageFrom(error) });
     }
   };
+  const applyExperimentOverview = (overview: ExperimentOverview, preferredId?: string) => {
+    setExperimentOverview(overview);
+    const selected =
+      overview.experiments.find(({ id }) => id === (preferredId ?? activeExperimentId)) ??
+      overview.experiments[0];
+    if (!selected) return;
+    setActiveExperimentId(selected.id);
+    setExperimentDesignJson(
+      JSON.stringify(
+        {
+          id: selected.id,
+          name: selected.name,
+          hypothesis: selected.hypothesis,
+          target: selected.target,
+          controlVariant: selected.controlVariant,
+          purposeId: selected.purposeId,
+          allocations: selected.allocations,
+          metrics: selected.metrics,
+          minimumDurationHours: selected.minimumDurationHours,
+          maximumAllocationDeviationBasisPoints: selected.maximumAllocationDeviationBasisPoints,
+        } satisfies ExperimentDesign,
+        null,
+        2,
+      ),
+    );
+    setExperimentWinnerVariant(
+      selected.promotion?.winnerVariant ??
+        selected.allocations.find(({ variant }) => variant !== selected.controlVariant)?.variant ??
+        '',
+    );
+    const latestSnapshot = selected.metricSnapshots.at(-1);
+    if (latestSnapshot) setExperimentPromotionSnapshotId(latestSnapshot.id);
+  };
+  const refreshExperiments = async () => {
+    const overview = await client.getExperiments();
+    applyExperimentOverview(overview);
+  };
+  const toggleExperiments = async () => {
+    if (experimentOverview) {
+      setExperimentOverview(null);
+      return;
+    }
+    try {
+      await refreshExperiments();
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
+  const selectExperiment = (experimentId: string) => {
+    if (!experimentOverview) return;
+    if (!experimentId) {
+      setActiveExperimentId('');
+      setExperimentDesignJson(defaultExperimentDesign);
+      setExperimentMetricSnapshotJson(defaultExperimentMetricSnapshot);
+      setExperimentPromotionSnapshotId('homepage-hero-copy-snapshot-1');
+      setExperimentWinnerVariant('uk');
+      return;
+    }
+    applyExperimentOverview(experimentOverview, experimentId);
+  };
+  const saveExperimentDraft = async () => {
+    if (!experimentOverview) return;
+    try {
+      const design = JSON.parse(experimentDesignJson) as ExperimentDesign;
+      const overview = await client.saveExperimentDraft(design.id, {
+        expectedVersion: experimentOverview.version,
+        design,
+      });
+      applyExperimentOverview(overview, design.id);
+      setNotice({
+        tone: 'success',
+        message: 'Experiment draft saved. Published targeting and live allocation are unchanged.',
+      });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
+  const transitionExperiment = async (
+    action: 'start' | 'pause' | 'resume' | 'complete' | 'cancel',
+  ) => {
+    if (!experimentOverview || !activeExperiment) return;
+    if (!experimentReason.trim()) {
+      setNotice({ tone: 'error', message: 'A lifecycle reason is required.' });
+      return;
+    }
+    try {
+      const overview = await client.transitionExperiment(activeExperiment.id, {
+        expectedVersion: experimentOverview.version,
+        action,
+        reason: experimentReason.trim(),
+      });
+      applyExperimentOverview(overview, activeExperiment.id);
+      setExperimentReason('');
+      const transitionLabel = {
+        start: 'started',
+        pause: 'paused',
+        resume: 'resumed',
+        complete: 'completed',
+        cancel: 'cancelled',
+      }[action];
+      setNotice({
+        tone: action === 'cancel' ? 'info' : 'success',
+        message: `Experiment ${transitionLabel}.`,
+      });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
+  const recordExperimentMetrics = async () => {
+    if (!experimentOverview || !activeExperiment) return;
+    try {
+      const snapshot = JSON.parse(experimentMetricSnapshotJson) as ExperimentMetricSnapshotInput;
+      const overview = await client.recordExperimentMetrics(activeExperiment.id, {
+        expectedVersion: experimentOverview.version,
+        snapshot,
+      });
+      applyExperimentOverview(overview, activeExperiment.id);
+      setExperimentPromotionSnapshotId(snapshot.id);
+      setNotice({
+        tone: 'success',
+        message: 'Aggregate metric evidence recorded and guardrails evaluated.',
+      });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
+  const promoteExperimentWinner = async () => {
+    if (!experimentOverview || !activeExperiment) return;
+    if (!experimentReason.trim()) {
+      setNotice({ tone: 'error', message: 'A promotion reason is required.' });
+      return;
+    }
+    try {
+      const overview = await client.promoteExperimentWinner(activeExperiment.id, {
+        expectedVersion: experimentOverview.version,
+        snapshotId: experimentPromotionSnapshotId,
+        winnerVariant: experimentWinnerVariant,
+        reason: experimentReason.trim(),
+      });
+      applyExperimentOverview(overview, activeExperiment.id);
+      setExperimentReason('');
+      setNotice({
+        tone: 'success',
+        message: 'Supported winner promoted to targeting draft only; publishing remains separate.',
+      });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
   const toggleIdentity = async () => {
     if (identitySnapshot) {
       setIdentitySnapshot(null);
@@ -2641,6 +2874,14 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
             aria-expanded={personalization !== null}
           >
             Targeting
+          </button>{' '}
+          <button
+            type="button"
+            className="button button--secondary"
+            onClick={() => void toggleExperiments()}
+            aria-expanded={experimentOverview !== null}
+          >
+            Experiments
           </button>{' '}
           <button
             type="button"
@@ -4590,6 +4831,213 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                 </section>
               ) : (
                 <p className="empty-copy">No draft decision has been previewed.</p>
+              )}
+            </fieldset>
+          </div>
+        </section>
+      ) : null}
+      {experimentOverview ? (
+        <section className="experiment-panel" aria-label="Content experiments workbench">
+          <div className="section-heading">
+            <div>
+              <span className="kicker">Governed experimentation</span>
+              <h2>Weighted variants, guardrails, and evidence-backed promotion</h2>
+              <p>
+                {experimentOverview.experiments.length} experiments · targeting draft r
+                {experimentOverview.targetingDraftRevision} · published{' '}
+                {experimentOverview.targetingPublishedRevision
+                  ? `r${experimentOverview.targetingPublishedRevision}`
+                  : 'never'}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="button button--secondary"
+              onClick={() => void refreshExperiments()}
+            >
+              Refresh experiments
+            </button>
+          </div>
+          <p className="experiment-panel__warning" role="note">
+            Submit aggregate metrics and a SHA-256 evidence digest only. Do not paste assignment
+            tokens, user rows, cookies, raw events, or provider credentials. Starting pins the
+            published targeting revision; promotion changes the targeting draft only.
+          </p>
+          <div className="experiment-panel__workbench">
+            <fieldset>
+              <legend>Immutable experiment design</legend>
+              <label>
+                <span>Managed experiment</span>
+                <select
+                  value={activeExperimentId}
+                  onChange={(event) => selectExperiment(event.target.value)}
+                >
+                  <option value="">New draft</option>
+                  {experimentOverview.experiments.map((experiment) => (
+                    <option key={experiment.id} value={experiment.id}>
+                      {experiment.name} · {experiment.state}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span>Experiment design JSON</span>
+                <textarea
+                  value={experimentDesignJson}
+                  onChange={(event) => setExperimentDesignJson(event.target.value)}
+                  disabled={activeExperiment !== null && activeExperiment.state !== 'draft'}
+                  aria-describedby="experiment-design-help"
+                />
+              </label>
+              <small id="experiment-design-help">
+                Weights total 10,000 basis points. Exactly one primary metric is required; active
+                experiments cannot overlap the same resource and audience placement.
+              </small>
+              <button
+                type="button"
+                className="button button--secondary"
+                onClick={() => void saveExperimentDraft()}
+                disabled={activeExperiment !== null && activeExperiment.state !== 'draft'}
+              >
+                Save experiment draft
+              </button>
+              <label>
+                <span>Lifecycle or promotion reason</span>
+                <input
+                  value={experimentReason}
+                  onChange={(event) => setExperimentReason(event.target.value)}
+                />
+              </label>
+              <div className="experiment-panel__actions">
+                <button
+                  type="button"
+                  className="button button--primary"
+                  onClick={() => void transitionExperiment('start')}
+                  disabled={activeExperiment?.state !== 'draft'}
+                >
+                  Start experiment
+                </button>
+                <button
+                  type="button"
+                  className="button button--secondary"
+                  onClick={() => void transitionExperiment('pause')}
+                  disabled={activeExperiment?.state !== 'running'}
+                >
+                  Pause experiment
+                </button>
+                <button
+                  type="button"
+                  className="button button--secondary"
+                  onClick={() => void transitionExperiment('resume')}
+                  disabled={activeExperiment?.state !== 'paused'}
+                >
+                  Resume experiment
+                </button>
+                <button
+                  type="button"
+                  className="button button--secondary"
+                  onClick={() => void transitionExperiment('complete')}
+                  disabled={
+                    !activeExperiment || !['running', 'paused'].includes(activeExperiment.state)
+                  }
+                >
+                  Complete experiment
+                </button>
+                <button
+                  type="button"
+                  className="button button--danger"
+                  onClick={() => void transitionExperiment('cancel')}
+                  disabled={
+                    !activeExperiment ||
+                    !['draft', 'running', 'paused'].includes(activeExperiment.state)
+                  }
+                >
+                  Cancel experiment
+                </button>
+              </div>
+            </fieldset>
+            <fieldset>
+              <legend>Aggregate metric evidence and promotion</legend>
+              <label>
+                <span>Aggregate metric snapshot JSON</span>
+                <textarea
+                  value={experimentMetricSnapshotJson}
+                  onChange={(event) => setExperimentMetricSnapshotJson(event.target.value)}
+                  aria-describedby="experiment-metric-help"
+                />
+              </label>
+              <small id="experiment-metric-help">
+                Every variant and declared metric must be present. Sample sizes and exposure totals
+                are bounded aggregates; the digest links the retained external evidence.
+              </small>
+              <button
+                type="button"
+                className="button button--secondary"
+                onClick={() => void recordExperimentMetrics()}
+                disabled={
+                  !activeExperiment ||
+                  !['running', 'paused', 'completed'].includes(activeExperiment.state)
+                }
+              >
+                Record aggregate snapshot
+              </button>
+              <label>
+                <span>Promotion snapshot ID</span>
+                <input
+                  value={experimentPromotionSnapshotId}
+                  onChange={(event) => setExperimentPromotionSnapshotId(event.target.value)}
+                />
+              </label>
+              <label>
+                <span>Supported winner variant</span>
+                <input
+                  value={experimentWinnerVariant}
+                  onChange={(event) => setExperimentWinnerVariant(event.target.value)}
+                />
+              </label>
+              <button
+                type="button"
+                className="button button--primary"
+                onClick={() => void promoteExperimentWinner()}
+                disabled={activeExperiment?.state !== 'completed'}
+              >
+                Promote winner to draft
+              </button>
+              {activeExperiment ? (
+                <article className="experiment-status" aria-label="Selected experiment status">
+                  <strong>
+                    {activeExperiment.name} · {activeExperiment.state} · r
+                    {activeExperiment.revision}
+                  </strong>
+                  <span>
+                    {activeExperiment.target.resourceKey} ·{' '}
+                    {activeExperiment.target.audienceId ?? 'fallback placement'} · control{' '}
+                    {activeExperiment.controlVariant}
+                  </span>
+                  <span>
+                    Pinned targeting:{' '}
+                    {activeExperiment.targetingRevision
+                      ? `r${activeExperiment.targetingRevision}`
+                      : 'not started'}
+                  </span>
+                  <span>
+                    Guardrails:{' '}
+                    {activeExperiment.lastGuardrailEvaluation
+                      ? `${activeExperiment.lastGuardrailEvaluation.status} (${activeExperiment.lastGuardrailEvaluation.snapshotId})`
+                      : 'not evaluated'}
+                  </span>
+                  <span>
+                    {activeExperiment.metricSnapshots.length} aggregate snapshots retained
+                  </span>
+                  {activeExperiment.promotion ? (
+                    <span>
+                      Draft promotion: {activeExperiment.promotion.winnerVariant} via{' '}
+                      {activeExperiment.promotion.snapshotId}
+                    </span>
+                  ) : null}
+                </article>
+              ) : (
+                <p className="empty-copy">Save a draft to begin the governed lifecycle.</p>
               )}
             </fieldset>
           </div>

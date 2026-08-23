@@ -32,6 +32,7 @@ import {
   type DataPlacementAdapter,
   type DueWorkflowExecution,
   EnterpriseIdentityService,
+  ExperimentService,
   type ExternalLinkChecker,
   type GovernanceRepository,
   GovernanceService,
@@ -134,6 +135,7 @@ import {
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import { parseContentQuery } from './content-query.js';
 import { defaultPageQualityPolicies, defaultWorkflowDefinitions } from './defaults.js';
+import { registerExperimentRoutes } from './experiment-routes.js';
 import { registerGovernanceRoutes } from './governance-routes.js';
 import { registerGridStoryGraphql } from './graphql.js';
 import {
@@ -573,6 +575,9 @@ export async function buildServer({
   const personalization = new PersonalizationService({
     repository: resolvedPersonalizationRepository,
   });
+  const experiments = new ExperimentService({
+    repository: resolvedPersonalizationRepository,
+  });
   const plugins = new PluginService({
     repository: resolvedPluginRepository,
     trustedPublishers: trustedPluginPublishers,
@@ -734,6 +739,7 @@ export async function buildServer({
   await registerMigrationRoutes(server, { service: migration, policy });
   await registerMarketplaceRoutes(server, { service: marketplace, plugins, policy });
   await registerPersonalizationRoutes(server, { service: personalization, policy });
+  await registerExperimentRoutes(server, { service: experiments, policy });
 
   server.addHook('onClose', async () => {
     await repository.close();

@@ -714,6 +714,81 @@ button:disabled {
   }
 }
 
+.experiment-panel {
+  background: #f7fee7;
+  border-bottom: 1px solid #a3e635;
+  padding: 1rem 1.25rem 1.25rem;
+}
+.experiment-panel p,
+.experiment-panel small,
+.experiment-panel span {
+  color: #3f6212;
+  font-size: 0.76rem;
+}
+.experiment-panel__warning {
+  background: #fff7ed;
+  border: 1px solid #c2410c;
+  border-radius: 0.55rem;
+  color: #7c2d12;
+  font-weight: 700;
+  padding: 0.7rem;
+}
+.experiment-panel__workbench {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 1rem;
+}
+.experiment-panel fieldset,
+.experiment-status {
+  border: 1px solid #84cc16;
+  border-radius: 0.65rem;
+  display: grid;
+  gap: 0.65rem;
+  margin: 0;
+  min-width: 0;
+  padding: 0.85rem;
+}
+.experiment-panel legend {
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+.experiment-panel label {
+  display: grid;
+  font-size: 0.72rem;
+  font-weight: 700;
+  gap: 0.25rem;
+}
+.experiment-panel textarea {
+  background: #fff;
+  border: 1px solid #4d7c0f;
+  border-radius: 0.45rem;
+  color: #18212f;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  min-height: 18rem;
+  min-width: 0;
+  padding: 0.6rem;
+  resize: vertical;
+}
+.experiment-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.experiment-status {
+  background: #fff;
+  margin-top: 0.25rem;
+}
+.experiment-status > span {
+  display: block;
+}
+
+@media (max-width: 900px) {
+  .experiment-panel__workbench {
+    grid-template-columns: 1fr;
+  }
+}
+
 .governance-panel {
   align-items: start;
   background: #f8fafc;

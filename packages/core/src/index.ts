@@ -10,6 +10,7 @@ export * from './content-quality-service.js';
 export * from './content-query.js';
 export * from './content-service.js';
 export * from './enterprise-identity-service.js';
+export * from './experiment-service.js';
 export * from './errors.js';
 export * from './governance-processors.js';
 export * from './governance-repository.js';

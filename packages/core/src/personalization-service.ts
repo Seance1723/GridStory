@@ -33,19 +33,19 @@ interface PersonalizationServiceOptions {
 type ConditionReason =
   PersonalizationPreviewResult['trace'][number]['conditions'][number]['reason'];
 
-interface EvaluatedCondition {
+export interface EvaluatedCondition {
   attributeKey: string;
   matched: boolean;
   reason: ConditionReason;
 }
 
-interface EvaluatedAudience {
+export interface EvaluatedAudience {
   audienceId: string;
   matched: boolean;
   conditions: EvaluatedCondition[];
 }
 
-interface EvaluatedDecision extends PersonalizationDecisionResult {
+export interface EvaluatedDecision extends PersonalizationDecisionResult {
   audienceId?: string;
 }
 
@@ -212,7 +212,7 @@ function validateRuntimeInput(
   }
 }
 
-function evaluate(input: {
+export function evaluatePersonalizationDecision(input: {
   scope: ContentScope;
   revision: number;
   configuration: PersonalizationConfiguration;
@@ -401,7 +401,7 @@ export class PersonalizationService {
   ): Promise<PersonalizationPreviewResult> {
     const parsed = personalizationPreviewRequestSchema.parse(request);
     const document = await this.overview(scope);
-    const { result, trace } = evaluate({
+    const { result, trace } = evaluatePersonalizationDecision({
       scope,
       revision: document.draft.revision,
       configuration: document.draft.configuration,
@@ -433,7 +433,7 @@ export class PersonalizationService {
     if (!document?.published) {
       throw new NotFoundError('Published personalization configuration was not found.');
     }
-    const { audienceId: _audienceId, ...result } = evaluate({
+    const { audienceId: _audienceId, ...result } = evaluatePersonalizationDecision({
       scope,
       revision: document.published.revision,
       configuration: document.published.configuration,

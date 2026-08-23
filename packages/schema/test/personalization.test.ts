@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  experimentAllocationRequestSchema,
+  experimentDesignSchema,
+  experimentSchema,
   personalizationConfigurationSchema,
   personalizationConsentSchema,
   targetingAttributeSchema,
@@ -65,6 +68,40 @@ function configuration() {
         fallbackVariant: 'default',
       },
     ],
+  };
+}
+
+function experimentDesign() {
+  return {
+    id: 'hero-copy-test',
+    name: 'Homepage hero copy',
+    hypothesis: 'A shorter treatment improves qualified signups without increasing exits.',
+    target: { resourceKey: 'hero' },
+    controlVariant: 'default',
+    purposeId: 'personalization',
+    allocations: [
+      { variant: 'default', weightBasisPoints: 5_000 },
+      { variant: 'travel', weightBasisPoints: 5_000 },
+    ],
+    metrics: [
+      {
+        key: 'signup-rate',
+        name: 'Qualified signup rate',
+        role: 'primary' as const,
+        direction: 'increase' as const,
+        minimumSampleSize: 1_000,
+      },
+      {
+        key: 'exit-rate',
+        name: 'Homepage exit rate',
+        role: 'guardrail' as const,
+        direction: 'decrease' as const,
+        minimumSampleSize: 1_000,
+        guardrail: { operator: 'lte' as const, threshold: 0.35 },
+      },
+    ],
+    minimumDurationHours: 168,
+    maximumAllocationDeviationBasisPoints: 500,
   };
 }
 
@@ -135,6 +172,105 @@ describe('personalization contracts', () => {
         grantedPurposes: ['personalization'],
         deniedPurposes: ['personalization'],
         globalPrivacyControl: false,
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe('experiment contracts', () => {
+  it('accepts a bounded draft design and optional random assignment token', () => {
+    expect(experimentDesignSchema.parse(experimentDesign())).toMatchObject({
+      controlVariant: 'default',
+      allocations: [{ weightBasisPoints: 5_000 }, { weightBasisPoints: 5_000 }],
+    });
+    expect(
+      experimentAllocationRequestSchema.parse({
+        attributes: { market: 'uk' },
+        consent: {
+          grantedPurposes: ['personalization'],
+          deniedPurposes: [],
+          globalPrivacyControl: false,
+        },
+        assignmentToken: '5e2d7f02-6f34-4c66-aac2-1e869bced27e',
+      }),
+    ).toMatchObject({ assignmentToken: '5e2d7f02-6f34-4c66-aac2-1e869bced27e' });
+  });
+
+  it('rejects incomplete allocation and ambiguous metric authority', () => {
+    expect(
+      experimentDesignSchema.safeParse({
+        ...experimentDesign(),
+        allocations: [
+          { variant: 'default', weightBasisPoints: 6_000 },
+          { variant: 'travel', weightBasisPoints: 3_000 },
+        ],
+      }).success,
+    ).toBe(false);
+    expect(
+      experimentDesignSchema.safeParse({
+        ...experimentDesign(),
+        metrics: experimentDesign().metrics.map((metric) => ({
+          ...metric,
+          role: 'primary',
+          guardrail: undefined,
+        })),
+      }).success,
+    ).toBe(false);
+  });
+
+  it('requires complete aggregate evidence and lifecycle metadata', () => {
+    const running = {
+      ...experimentDesign(),
+      state: 'running' as const,
+      revision: 1,
+      metricSnapshots: [
+        {
+          id: 'snapshot-1',
+          evidenceId: 'warehouse-run-1',
+          evidenceDigest: 'a'.repeat(64),
+          observedAt: '2026-08-23T10:00:00.000Z',
+          variantResults: [
+            {
+              variant: 'default',
+              exposures: 1_000,
+              observations: [
+                { metricKey: 'signup-rate', sampleSize: 1_000, value: 0.1 },
+                { metricKey: 'exit-rate', sampleSize: 1_000, value: 0.3 },
+              ],
+            },
+            {
+              variant: 'travel',
+              exposures: 1_000,
+              observations: [
+                { metricKey: 'signup-rate', sampleSize: 1_000, value: 0.12 },
+                { metricKey: 'exit-rate', sampleSize: 1_000, value: 0.31 },
+              ],
+            },
+          ],
+          recordedAt: '2026-08-23T10:05:00.000Z',
+          recordedBy: 'analyst-1',
+        },
+      ],
+      targetingRevision: 2,
+      startedAt: '2026-08-16T10:00:00.000Z',
+      startedBy: 'operator-1',
+      createdAt: '2026-08-16T09:00:00.000Z',
+      createdBy: 'operator-1',
+      updatedAt: '2026-08-23T10:05:00.000Z',
+      updatedBy: 'analyst-1',
+    };
+    expect(experimentSchema.parse(running)).toMatchObject({
+      state: 'running',
+      targetingRevision: 2,
+    });
+
+    const incomplete = structuredClone(running);
+    incomplete.metricSnapshots[0]?.variantResults[1]?.observations.pop();
+    expect(experimentSchema.safeParse(incomplete).success).toBe(false);
+    expect(
+      experimentSchema.safeParse({
+        ...running,
+        targetingRevision: undefined,
       }).success,
     ).toBe(false);
   });

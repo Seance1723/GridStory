@@ -128,15 +128,17 @@ function runPostgresRecoveryDrill(containerName) {
         '--tuples-only',
         '--no-align',
         '--command',
-        "SELECT count(*) FROM gridstory.gridstory_personalization_documents WHERE tenant_id = 'postgres-tenant' AND payload ? 'published';",
+        "SELECT count(*) FROM gridstory.gridstory_personalization_documents WHERE tenant_id = 'postgres-tenant' AND payload ? 'published' AND jsonb_array_length(payload->'experiments') = 1 AND payload->'experiments'->0->>'state' = 'running';",
       ],
       { capture: true },
     );
     if (restoredPersonalization.stdout.trim() !== '1') {
-      throw new Error('PostgreSQL restore did not recover the published personalization fixture.');
+      throw new Error(
+        'PostgreSQL restore did not recover the published targeting and running experiment fixture.',
+      );
     }
     console.log(
-      'PostgreSQL logical backup/restore drill passed (published content and targeting recovered).',
+      'PostgreSQL logical backup/restore drill passed (published content, targeting, and experiment lifecycle recovered).',
     );
   } finally {
     run(

@@ -1,5 +1,6 @@
 import {
   type ContentScope,
+  type PersonalizationSnapshot,
   PLUGIN_MANIFEST_FORMAT,
   PLUGIN_MANIFEST_VERSION,
   PLUGIN_PROTOCOL_VERSION,
@@ -306,7 +307,7 @@ if (connectionString) {
     });
   });
   describe('PostgreSQL personalization repository conformance', () => {
-    it('persists draft and published state under the complete scope key', async () => {
+    it('persists targeting and experiment state under the complete scope key', async () => {
       const schema = `gridstory_personalization_test_${process.pid}_${schemaSequence++}`;
       const pool = new Pool({ connectionString });
       const scope: ContentScope = {
@@ -340,9 +341,45 @@ if (connectionString) {
             publishedAt: '2026-08-23T00:01:00.000Z',
             publishedBy: 'targeting-publisher',
           },
+          experiments: [
+            {
+              id: 'postgres-experiment',
+              name: 'PostgreSQL experiment',
+              hypothesis: 'The treatment improves the primary metric.',
+              target: { resourceKey: 'postgres-banner' },
+              controlVariant: 'default',
+              purposeId: 'experimentation',
+              allocations: [
+                { variant: 'default', weightBasisPoints: 5_000 },
+                { variant: 'treatment', weightBasisPoints: 5_000 },
+              ],
+              metrics: [
+                {
+                  key: 'engagement-rate',
+                  name: 'Engagement rate',
+                  role: 'primary',
+                  direction: 'increase',
+                  minimumSampleSize: 10,
+                },
+              ],
+              minimumDurationHours: 0,
+              maximumAllocationDeviationBasisPoints: 1_000,
+              state: 'draft',
+              revision: 1,
+              metricSnapshots: [],
+              createdAt: '2026-08-23T00:01:00.000Z',
+              createdBy: 'experiment-author',
+              updatedAt: '2026-08-23T00:01:00.000Z',
+              updatedBy: 'experiment-author',
+            },
+          ],
           updatedAt: '2026-08-23T00:01:00.000Z',
-        };
+        } satisfies PersonalizationSnapshot;
         await second.save(next, 0);
+        await expect(second.get(scope)).resolves.toMatchObject({
+          version: 1,
+          experiments: [{ id: 'postgres-experiment', state: 'draft' }],
+        });
         await expect(second.save(next, 0)).rejects.toMatchObject({
           code: 'personalization_write_conflict',
         });

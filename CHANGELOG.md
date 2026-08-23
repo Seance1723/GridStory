@@ -8,11 +8,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- Recorded the accepted M7-002 governed-experiment decision: immutable running designs, consent-gated stateless deterministic allocation, externally computed bounded aggregate evidence, enforced allocation/metric guardrails, and explicit draft-only winner promotion without raw event ingestion or statistical-significance claims.
 - Recorded the accepted M7-001 consent-aware targeting decision: bounded typed attributes, purpose-specific consent/GPC handling, deterministic first-match rules, authenticated hypothetical preview, published-only edge evaluation, and conservative cache guidance without persistent profiles or experiment allocation.
 - Recorded the accepted M6-005 evidence-bound marketplace decision: operator-scoped publisher verification, signed compatibility/support metadata, injected non-executing artifact review, separate human approval, and approved-only handoff to the existing disabled plugin installation lifecycle.
 
 ### Fixed
 
+- Returned grammatically correct explicit Studio notices for every experiment lifecycle transition instead of generating `pauseed`/`resumeed` labels (BUG-0318).
+- Bounded the existing multi-step guarded-migration Studio regression exposed by the M7-002 full parallel gate without increasing the suite-wide timeout (BUG-0317).
+- Bounded the multi-step M7-002 Studio lifecycle regression timeout so it remains reliable under the full parallel workspace gate (BUG-0316).
+- Corrected the M7-002 machine-readable threat-model insertion so THREAT-0031 is registered as a threat rather than an actor (BUG-0315).
+- Corrected the M7-002 invalid-control regression fixture so schema validation remains intact while the intended published-target service gate is exercised (BUG-0314).
 - Preserved Studio header contrast in WebKit forced-colors mode at 200% zoom by resolving its foreground, background, and boundary from one system palette (BUG-0313).
 - Tightened M7-001 token-only value minimization, fixed-length complete cache identifiers, public audience redaction, Studio unsaved-publication protection, exact-optional/test trace fixtures, lint-safe schema regressions, and managed Windows verification paths discovered during implementation and audit (BUG-0304 through BUG-0312).
 - Corrected marketplace public-summary projection, strict SemVer typing, bodyless API fixtures, Studio review-region semantics, deterministic test-ID construction, and exact configured-inspector identity binding discovered during M6-005 verification and final audit (BUG-0298 through BUG-0303).
@@ -82,6 +88,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Added bounded experiment design/lifecycle/aggregate-evidence contracts, stateless SHA-256 weighted allocation, consent/GPC and targeting eligibility gates, active-placement exclusion, immutable running designs/snapshots, allocation/sample/absolute guardrails with automatic pause, and explicit evidence-backed targeting-draft-only promotion.
+- Added complete-scope optimistic experiment persistence inside targeting; distinct authorized management/metric/promotion and anonymous no-store allocation routes; typed universal-client methods; a responsive accessible Studio workbench; SQLite/PostgreSQL restart/restore evidence; governed experiment guidance; ADR 0018; `THREAT-0031`; and verified `GS-SEC-035`.
 - Added bounded consent-purpose, targeting-attribute, audience, resource-decision, context, preview, result, cache-guidance, and draft/published snapshot contracts with strict cross-reference, type, value, priority, purpose, classification, cacheability, and resource limits.
 - Added deterministic first-match/fallback evaluation with denied-consent and purpose-specific GPC gates, private redacted hypothetical audience/variant preview, public audience-identity redaction, published-only anonymous decisions, and fixed-length complete shared-cache keys only for bounded public consent-independent inputs.
 - Added complete-scope optimistic in-memory, SQLite, and qualified PostgreSQL personalization persistence; private authorized management/preview and anonymous published-only REST routes; typed universal-client methods; a responsive accessible Studio workbench; SQLite/PostgreSQL recovery coverage; ADR 0017; operator/privacy/cache guidance; `THREAT-0030`; and verified `GS-SEC-034`.
@@ -355,6 +363,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Security
 
+- Required complete-scope distinct experiment permissions, exact immutable pinned designs, random application-owned per-experiment tokens with no token/bucket/context persistence or echo, purpose/GPC gates, no-store allocation, complete digest-linked aggregate evidence, enforced guardrails/auto-pause, and explicit supported-treatment promotion into targeting draft only; analytics/statistics/evidence integrity, token retention, consent/legal review, rate limits, and application isolation remain deployment responsibilities.
 - Required exact expiring DNS possession plus distinct accountable publisher approval, current publisher/key/signature checks, immutable signed compatibility/support/capability metadata, trusted non-executing artifact inspection bound to digest/size/SBOM/provenance/inventory/malware/vulnerability/license evidence, distinct current-review release approval, retained rejection/yank history, private complete-scope state, and disabled installation with no automatic grants for M6-005; badges, scans, provenance, and support declarations are explicitly not safety or service guarantees.
 - Required trusted server-only read credentials, credential-free fixed HTTPS origins, no redirects or cross-origin continuations, bounded/validated source responses, complete-scope private/no-store migration state, separate read/manage/execute authorization, exact digest/expiry/version/revision checks, retry-safe links/receipts/checkpoints, normal content gates, preserved source deletions, and explicitly content-only cutover claims for M6-004.
 - Required active hold/restriction dominance, explicit subject links, distinct governance permissions, digest-bound separation of duties, fresh server-validated reauthentication, recent backup evidence, execution-time policy/resource/key/placement checks, fail-closed unsupported resources, envelope encryption without persisted plaintext keys, and private/no-store management responses for M6-003.

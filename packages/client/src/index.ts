@@ -31,6 +31,13 @@ import type {
   DataSubject,
   DataSubjectRequest,
   DesignSystemManifest,
+  ExperimentAllocationRequest,
+  ExperimentAllocationResult,
+  ExperimentDesign,
+  ExperimentMetricSnapshotInput,
+  ExperimentOverview,
+  ExperimentPromotionRequest,
+  ExperimentTransitionRequest,
   GovernanceBackupEvidence,
   GovernanceExportEnvelope,
   GovernanceExportPackage,
@@ -1050,6 +1057,70 @@ export class GridStoryClient {
     signal?: AbortSignal,
   ): Promise<PersonalizationDecisionResult> {
     return this.#request('/api/v1/personalization/decide', {
+      method: 'POST',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  getExperiments(signal?: AbortSignal): Promise<ExperimentOverview> {
+    return this.#request('/api/v1/experiments', { ...(signal ? { signal } : {}) });
+  }
+
+  saveExperimentDraft(
+    experimentId: string,
+    input: { expectedVersion: number; design: ExperimentDesign },
+    signal?: AbortSignal,
+  ): Promise<ExperimentOverview> {
+    return this.#request(`/api/v1/experiments/${encodeURIComponent(experimentId)}`, {
+      method: 'PUT',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  transitionExperiment(
+    experimentId: string,
+    input: ExperimentTransitionRequest,
+    signal?: AbortSignal,
+  ): Promise<ExperimentOverview> {
+    return this.#request(`/api/v1/experiments/${encodeURIComponent(experimentId)}/transition`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  recordExperimentMetrics(
+    experimentId: string,
+    input: { expectedVersion: number; snapshot: ExperimentMetricSnapshotInput },
+    signal?: AbortSignal,
+  ): Promise<ExperimentOverview> {
+    return this.#request(`/api/v1/experiments/${encodeURIComponent(experimentId)}/metrics`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  promoteExperimentWinner(
+    experimentId: string,
+    input: ExperimentPromotionRequest,
+    signal?: AbortSignal,
+  ): Promise<ExperimentOverview> {
+    return this.#request(`/api/v1/experiments/${encodeURIComponent(experimentId)}/promote`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  allocateExperiment(
+    experimentId: string,
+    input: ExperimentAllocationRequest,
+    signal?: AbortSignal,
+  ): Promise<ExperimentAllocationResult> {
+    return this.#request(`/api/v1/experiments/${encodeURIComponent(experimentId)}/allocate`, {
       method: 'POST',
       body: JSON.stringify(input),
       ...(signal ? { signal } : {}),
@@ -2114,6 +2185,13 @@ export type {
   CreateAssetDeliveryInput,
   DataSubject,
   DataSubjectRequest,
+  ExperimentAllocationRequest,
+  ExperimentAllocationResult,
+  ExperimentDesign,
+  ExperimentMetricSnapshotInput,
+  ExperimentOverview,
+  ExperimentPromotionRequest,
+  ExperimentTransitionRequest,
   GovernanceBackupEvidence,
   GovernanceExportEnvelope,
   GovernanceExportPackage,

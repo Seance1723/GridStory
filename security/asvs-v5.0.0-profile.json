@@ -945,6 +945,51 @@
         "apps/studio/test/App.test.tsx"
       ],
       "taskIds": ["M7-001"]
+    },
+    {
+      "id": "GS-SEC-035",
+      "title": "Governed consent-aware content experiments",
+      "status": "verified",
+      "owner": "Experimentation, privacy, analytics, and delivery owner",
+      "statement": "Experiment state SHALL be completely tenant scoped with distinct private management permissions; started designs SHALL be immutable, pin exact published targeting, and exclude placement overlap; public allocation SHALL require configured consent, hash an application-generated random per-experiment token without persisting or echoing token/bucket/context, and remain no-store; metric evidence SHALL be complete bounded immutable aggregates with an external digest and enforced allocation/sample/absolute guardrails; promotion SHALL require a completed unchanged experiment and explicit supported treatment and SHALL atomically update only the targeting draft without statistical-significance, automatic-winner, or publication claims.",
+      "asvsRefs": [
+        "v5.0.0-2.2.2",
+        "v5.0.0-8.1.1",
+        "v5.0.0-11.2.1",
+        "v5.0.0-14.1.1",
+        "v5.0.0-14.2.1",
+        "v5.0.0-16.5.3"
+      ],
+      "threatRefs": [
+        "THREAT-0001",
+        "THREAT-0004",
+        "THREAT-0010",
+        "THREAT-0019",
+        "THREAT-0030",
+        "THREAT-0031"
+      ],
+      "evidence": [
+        "packages/schema/src/personalization.ts",
+        "packages/core/src/experiment-service.ts",
+        "packages/core/src/personalization-repository.ts",
+        "apps/api/src/experiment-routes.ts",
+        "packages/client/src/index.ts",
+        "apps/studio/src/App.tsx",
+        "docs/experiments.md",
+        "docs/adr/0018-governed-content-experiments.md"
+      ],
+      "verification": [
+        "packages/schema/test/personalization.test.ts",
+        "packages/core/test/experiment-service.test.ts",
+        "packages/core/test/postgres-conformance.test.ts",
+        "apps/api/test/experiments.test.ts",
+        "apps/api/test/database-recovery.test.ts",
+        "apps/api/test/postgres-server.test.ts",
+        "packages/client/test/client.test.ts",
+        "apps/studio/test/App.test.tsx",
+        "tests/e2e/accessibility.spec.ts"
+      ],
+      "taskIds": ["M7-002"]
     }
   ]
 }
