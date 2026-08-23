@@ -45,6 +45,9 @@ import {
   LocaleRegistry,
   LocalizationService,
   logicalArchiveFromUnknown,
+  type MigrationRepository,
+  type MigrationSourceAdapter,
+  MigrationService,
   OperationsService,
   type PluginRepository,
   type PluginRuntimeAdapter,
@@ -54,6 +57,7 @@ import {
   PostgresContentRepository,
   PostgresGovernanceRepository,
   PostgresIdentityRepository,
+  PostgresMigrationRepository,
   PostgresPluginRepository,
   PostgresReleaseRepository,
   PostgresWorkflowRepository,
@@ -69,6 +73,7 @@ import {
   SqliteContentRepository,
   SqliteGovernanceRepository,
   SqliteIdentityRepository,
+  SqliteMigrationRepository,
   SqlitePluginRepository,
   SqliteReleaseRepository,
   SqliteWorkflowRepository,
@@ -127,6 +132,7 @@ import {
   WebAuthnAdapter,
 } from './identity-adapters.js';
 import { registerIdentityRoutes } from './identity-routes.js';
+import { registerMigrationRoutes } from './migration-routes.js';
 import type { GridStoryObservability } from './observability.js';
 import { authorize, contentScope, requestContext } from './request-context.js';
 
@@ -174,6 +180,10 @@ export interface BuildServerOptions {
     repository?: GovernanceRepository;
     keyAdapter?: CustomerManagedKeyAdapter;
     placementAdapter?: DataPlacementAdapter;
+  };
+  migration?: {
+    repository?: MigrationRepository;
+    sources?: MigrationSourceAdapter[];
   };
 }
 
@@ -420,6 +430,7 @@ export async function buildServer({
   observability,
   identity: identityOptions,
   governance: governanceOptions,
+  migration: migrationOptions,
 }: BuildServerOptions): Promise<FastifyInstance> {
   if (!databaseUrl && databasePath !== ':memory:') {
     mkdirSync(dirname(resolve(databasePath)), { recursive: true });
@@ -463,6 +474,11 @@ export async function buildServer({
     (databaseUrl
       ? new PostgresGovernanceRepository({ connectionString: databaseUrl })
       : new SqliteGovernanceRepository({ filename: databasePath }));
+  const resolvedMigrationRepository: MigrationRepository =
+    migrationOptions?.repository ??
+    (databaseUrl
+      ? new PostgresMigrationRepository({ connectionString: databaseUrl })
+      : new SqliteMigrationRepository({ filename: databasePath }));
   const governance = new GovernanceService({
     repository: resolvedGovernanceRepository,
     ...(governanceOptions?.keyAdapter ? { keyAdapter: governanceOptions.keyAdapter } : {}),
@@ -501,6 +517,12 @@ export async function buildServer({
     qualityGate: quality,
     workflowGate: workflows,
     governanceGate: governance,
+  });
+  const migration = new MigrationService({
+    repository: resolvedMigrationRepository,
+    contentRepository: repository,
+    contentService: service,
+    sources: migrationOptions?.sources ?? [],
   });
   const releases = new ReleaseService({
     repository: resolvedReleaseRepository,
@@ -662,6 +684,7 @@ export async function buildServer({
     secureCookies: resolveIdentityCookieSecurity(identityMode, identityOptions?.secureCookies),
   });
   await registerGovernanceRoutes(server, { service: governance, policy });
+  await registerMigrationRoutes(server, { service: migration, policy });
 
   server.addHook('onClose', async () => {
     await repository.close();
@@ -672,6 +695,7 @@ export async function buildServer({
     await resolvedPluginRepository.close();
     await resolvedIdentityRepository.close();
     await resolvedGovernanceRepository.close();
+    await resolvedMigrationRepository.close();
   });
   server.addHook('onSend', async (request, reply, payload) => {
     if (request.url.startsWith('/api/v1/delivery/')) {

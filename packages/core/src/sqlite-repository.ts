@@ -789,18 +789,20 @@ export class SqliteContentRepository implements ContentRepository {
 
   create({
     scope,
+    id: requestedId,
     contentType,
     data,
     actor,
     translationGroupId,
   }: {
     scope: ContentScope;
+    id?: string;
     contentType: string;
     data: Record<string, unknown>;
     actor: Actor;
     translationGroupId?: string;
   }): ContentEntry {
-    const id = this.#createId();
+    const id = requestedId ?? this.#createId();
     const revisionId = this.#createId();
     const now = this.#now();
     return this.#transaction(() => {

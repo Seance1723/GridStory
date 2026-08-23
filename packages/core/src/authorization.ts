@@ -52,6 +52,9 @@ export const GridStoryActions = {
   governanceRead: 'governance.read',
   governanceManage: 'governance.manage',
   governanceExecute: 'governance.execute',
+  migrationRead: 'migration.read',
+  migrationManage: 'migration.manage',
+  migrationExecute: 'migration.execute',
 } as const;
 
 export type GridStoryAction = (typeof GridStoryActions)[keyof typeof GridStoryActions];
@@ -67,6 +70,7 @@ export interface AuthorizationResource {
     | 'release'
     | 'plugin'
     | 'governance'
+    | 'migration'
     | 'delivery'
     | 'platform';
   id?: string;

@@ -12,6 +12,56 @@ afterEach(() => {
 });
 
 describe('GridStoryClient browser compatibility', () => {
+  it('sends typed migration planning, execution, state, and cutover contracts', async () => {
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    const client = createGridStoryClient({
+      baseUrl: 'https://cms.example.test',
+      tenantId: 'migration-tenant',
+      fetch: async (input, init) => {
+        requests.push({ url: String(input), ...(init ? { init } : {}) });
+        return new Response(JSON.stringify({}), {
+          headers: { 'content-type': 'application/json' },
+        });
+      },
+    });
+
+    await client.getMigrations();
+    await client.saveMigrationRecipe({
+      id: 'contentful page',
+      name: 'Contentful page',
+      provider: 'contentful',
+      sourceType: 'contentful.Entry.page',
+      targetContentType: 'page',
+      publicationMode: 'draft',
+      fields: [
+        { sourcePath: 'fields.title', targetField: 'title', transform: 'string', required: true },
+      ],
+    });
+    await client.createMigrationProject({
+      id: 'cutover-1',
+      name: 'Cutover',
+      sourceId: 'contentful-main',
+      recipeIds: ['contentful page'],
+      mode: 'dual-run',
+    });
+    await client.setMigrationProjectState('cutover 1', 'paused');
+    await client.createMigrationPlan('cutover 1');
+    await client.executeMigrationPlan('plan 1', 'a'.repeat(64));
+    await client.validateMigrationCutover('cutover 1');
+
+    expect(requests.map(({ url }) => url)).toEqual([
+      'https://cms.example.test/api/v1/migrations',
+      'https://cms.example.test/api/v1/migrations/recipes/contentful%20page',
+      'https://cms.example.test/api/v1/migrations/projects',
+      'https://cms.example.test/api/v1/migrations/projects/cutover%201/state',
+      'https://cms.example.test/api/v1/migrations/projects/cutover%201/plans',
+      'https://cms.example.test/api/v1/migrations/plans/plan%201/execute',
+      'https://cms.example.test/api/v1/migrations/projects/cutover%201/cutover-reports',
+    ]);
+    expect(JSON.parse(String(requests[1]?.init?.body))).not.toHaveProperty('id');
+    expect(JSON.parse(String(requests[5]?.init?.body))).toEqual({ digest: 'a'.repeat(64) });
+  });
+
   it('sends guarded governance workflow contracts without client-supplied reauthentication time', async () => {
     const requests: Array<{ url: string; init?: RequestInit }> = [];
     const client = createGridStoryClient({

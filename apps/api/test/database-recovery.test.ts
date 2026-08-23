@@ -1,6 +1,7 @@
 import { appendFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import type { MigrationSourceAdapter } from '@gridstory/core';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   backupPostgres,
@@ -35,6 +36,17 @@ const page = {
     },
   ],
 };
+const recoveryMigrationSource: MigrationSourceAdapter = {
+  descriptor: {
+    id: 'recovery-source',
+    provider: 'contentful',
+    name: 'Recovery source',
+    supportsDelta: true,
+    reportsDeletions: true,
+    includesAssets: true,
+  },
+  read: () => ({ kind: 'full', records: [], checkpoint: 'recovery-checkpoint', complete: true }),
+};
 
 describe('database recovery', () => {
   const directories: string[] = [];
@@ -51,7 +63,11 @@ describe('database recovery', () => {
     const sourcePath = join(directory, 'source.db');
     const backupPath = join(directory, 'backups', 'snapshot.db');
     const restoredPath = join(directory, 'restored.db');
-    const server = await buildServer({ databasePath: sourcePath, seed: false });
+    const server = await buildServer({
+      databasePath: sourcePath,
+      seed: false,
+      migration: { sources: [recoveryMigrationSource] },
+    });
     let restored: Awaited<ReturnType<typeof buildServer>> | undefined;
     try {
       const created = (
@@ -70,6 +86,40 @@ describe('database recovery', () => {
           payload: { reference: 'recovery-subject-before-backup' },
         })
       ).json();
+      const migrationRecipe = await server.inject({
+        method: 'PUT',
+        url: '/api/v1/migrations/recipes/recovery-page',
+        headers,
+        payload: {
+          name: 'Recovery page recipe',
+          provider: 'contentful',
+          sourceType: 'contentful.Entry.page',
+          targetContentType: 'page',
+          fields: [
+            {
+              sourcePath: 'fields.title',
+              targetField: 'title',
+              transform: 'string',
+              required: true,
+            },
+            { sourcePath: 'fields.slug', targetField: 'slug', transform: 'slug', required: true },
+          ],
+        },
+      });
+      expect(migrationRecipe.statusCode).toBe(200);
+      const migrationProject = await server.inject({
+        method: 'POST',
+        url: '/api/v1/migrations/projects',
+        headers,
+        payload: {
+          id: 'recovery-migration',
+          name: 'Recovery migration project',
+          sourceId: 'recovery-source',
+          recipeIds: ['recovery-page'],
+          mode: 'dual-run',
+        },
+      });
+      expect(migrationProject.statusCode).toBe(201);
 
       const manifest = await backupSqlite({
         sourcePath,
@@ -101,11 +151,35 @@ describe('database recovery', () => {
         headers,
         payload: { reference: 'recovery-subject-after-backup' },
       });
+      await server.inject({
+        method: 'PUT',
+        url: '/api/v1/migrations/recipes/recovery-page',
+        headers,
+        payload: {
+          name: 'Changed after backup',
+          provider: 'contentful',
+          sourceType: 'contentful.Entry.page',
+          targetContentType: 'page',
+          fields: [
+            {
+              sourcePath: 'fields.title',
+              targetField: 'title',
+              transform: 'string',
+              required: true,
+            },
+            { sourcePath: 'fields.slug', targetField: 'slug', transform: 'slug', required: true },
+          ],
+        },
+      });
 
       await expect(restoreSqlite({ backupPath, targetPath: restoredPath })).resolves.toEqual(
         manifest,
       );
-      restored = await buildServer({ databasePath: restoredPath, seed: false });
+      restored = await buildServer({
+        databasePath: restoredPath,
+        seed: false,
+        migration: { sources: [recoveryMigrationSource] },
+      });
       const recovered = await restored.inject({
         method: 'GET',
         url: `/api/v1/content/${created.id}`,
@@ -125,6 +199,16 @@ describe('database recovery', () => {
           reference: 'recovery-subject-before-backup',
         }),
       ]);
+      const recoveredMigrations = await restored.inject({
+        method: 'GET',
+        url: '/api/v1/migrations',
+        headers,
+      });
+      expect(recoveredMigrations.statusCode).toBe(200);
+      expect(recoveredMigrations.json()).toMatchObject({
+        recipes: [{ id: 'recovery-page', name: 'Recovery page recipe', version: 1 }],
+        projects: [{ id: 'recovery-migration', sourceId: 'recovery-source', state: 'active' }],
+      });
     } finally {
       await restored?.close();
       await server.close();

@@ -772,12 +772,13 @@ export class PostgresContentRepository implements ContentRepository {
 
   async create({
     scope,
+    id: requestedId,
     contentType,
     data,
     actor,
     translationGroupId,
   }: Parameters<ContentRepository['create']>[0]): Promise<ContentEntry> {
-    const id = this.#createId();
+    const id = requestedId ?? this.#createId();
     const revisionId = this.#createId();
     const now = this.#now();
     return this.#transaction(async (client) => {

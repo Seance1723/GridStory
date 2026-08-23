@@ -17,6 +17,8 @@ export * from './governance-service.js';
 export * from './identity.js';
 export * from './identity-repository.js';
 export * from './localization-service.js';
+export * from './migration-repository.js';
+export * from './migration-service.js';
 export * from './operations-service.js';
 export * from './plugin-repository.js';
 export * from './plugin-service.js';

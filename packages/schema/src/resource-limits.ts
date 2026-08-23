@@ -68,6 +68,17 @@ export const resourceLimits = {
     maximumReauthenticationAgeSeconds: 900,
     maximumBackupEvidenceAgeSeconds: 86_400,
   },
+  migration: {
+    maximumSources: 50,
+    maximumProjects: 50,
+    maximumRecipes: 100,
+    maximumFieldMappingsPerRecipe: 100,
+    maximumSourceRecordsPerRun: 1_000,
+    maximumSourceResponseBytes: 8_388_608,
+    maximumStoredPlans: 20,
+    maximumStoredRuns: 100,
+    planLifetimeSeconds: 3_600,
+  },
   benchmark: {
     datasetEntries: 250,
     readSamples: 120,

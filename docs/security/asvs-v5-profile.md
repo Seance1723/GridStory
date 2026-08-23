@@ -41,10 +41,11 @@ Every ASVS chapter is explicitly represented so an omitted area cannot be mistak
 
 ## Evidence summary
 
-The machine profile contains 31 stable `GS-SEC-###` requirements:
+The machine profile contains 32 stable `GS-SEC-###` requirements:
 
 - Verified controls cover trusted-layer validation, parameterized persistence, SVG sanitization, atomic operations, exact origin messaging, tenant-bound deny-by-default authorization, credential/cache containment, signed token validation, approved platform cryptography, capability-isolated plugin execution, and fail-closed generic errors.
 - `GS-SEC-031` verifies the repository-owned guarded-governance boundary: explicit subject links, private complete scope, hold/restriction dominance, independent digest-bound approval, fresh authentication and backup evidence, execution-time revalidation, envelope encryption, narrow processors/KMS/placement adapters, receipts, and events.
+- `GS-SEC-032` verifies the guarded CMS-migration boundary: trusted server composition, read-only fixed-origin bounded adapters, complete-scope private state, exact-effect digest review, source/target/project/recipe drift checks, idempotent recovery, post-success checkpoints, normal content gates, preserved source deletions, and explicitly limited cutover claims.
 - Partial controls cover structured rendering, SSRF/egress, browser headers, GraphQL cost/introspection, upload limits/scanning, external adapter configuration, sensitive-data policy, and minimal API fields.
 - Planned controls cover trusted production intermediary/identity configuration, cryptographic inventory/secret lifecycle, and production fail-safe configuration. Anti-automation, vulnerability/component lifecycle, GraphQL/upload bounds, and the resource-demand inventory are partial because distributed/deployment or hosted-release evidence remains.
 - Conditional controls cover deployed trusted-proxy/TLS/service communication and customer-specific IdP/secret-manager conformance; the repository-owned OIDC binding and persistent-session lifecycle are verified.
@@ -103,6 +104,12 @@ Stable criteria now expose the unresolved security acceptance directly: producti
 
 The control does not certify customer discovery/classification or law/policy choices, live provider clients/credentials/key policy, all external deletion processors, actual database/object/log/backup/support locations, coordinated external recovery, or regional movement/routing. Those remain deployment/privacy-owner evidence under `BETA-003`, `RC-005`, `RC-006`, and `GA-003`.
 
+## M6-004 evidence update
+
+`GS-SEC-032`, `THREAT-0026`, and `THREAT-0027` link bounded migration schemas; complete-scope optimistic memory, SQLite, and qualified PostgreSQL repositories; deterministic mapping/link/plan/run/cutover services; injected-fetch Contentful, Sanity, and WordPress adapters; private authorized REST/client/Studio operations; target workflow/quality/governance/publication gates; retry interruption recovery; full reconciliation; PostgreSQL persistence; and live SQLite recovery. Hostile adapter tests cover redirects/origin changes, oversize and malformed responses, missing tokens/headers, and the absence of source writes.
+
+This control does not certify a deployment's provider credentials/revocation, secret manager, egress/DNS/time/rate policies, source uptime, customer mappings, binary media/history/user/comment transfer, coordinated provider/object/config backups, application/route/SEO/analytics/identity acceptance, traffic switching, or source decommissioning. Those remain operator/deployment evidence under `BETA-003`, `RC-005`, `RC-006`, and `GA-003` while the source remains authoritative.
+
 ## Highest-priority gaps
 
 | Gap | ASVS areas | Owner task |
@@ -110,6 +117,7 @@ The control does not certify customer discovery/classification or law/policy cho
 | Production database/object-store tenant-policy conformance | V8, V14, V15 | `BETA-003`, `RC-006` |
 | Live IdP, secret-manager, secure-cookie/TLS, and trusted-proxy conformance | V4, V6, V7, V10, V13 | Repository boundary delivered by M6-002; deployment acceptance under `BETA-003` |
 | Plugin runtime OS/container hardening, package review, and publisher enrollment | V8, V11, V13, V15 | M6-005; deployment evidence |
+| Production CMS credential lifecycle, outbound egress, provider throttling/audit, coordinated backup, and application/traffic cutover proof | V8, V11, V12, V13, V14, V15 | Repository boundary delivered by M6-004; deployment acceptance under `BETA-003`, `RC-005`, `RC-006` |
 | Telemetry backend access/deletion, Collector deployment conformance, and production identity/credential event sources | V11, V13, V14, V16 | `BETA-003`, `GA-003`; event sources M6-002 |
 | Backup storage/physical PITR, secret rotation, and orchestrator rollout proof | V13, V14, V15, V16 | `RC-006`, `GA-003`; identity lifecycle M6-002 |
 | Deployed HTML CSP/header conformance, arbitrary application rendering, and branded-browser/assistive-technology acceptance | V1, V3, V14 | `BETA-003`, `BETA-005`, `RC-005` |

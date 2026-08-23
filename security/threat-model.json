@@ -3,7 +3,7 @@
   "model": {
     "id": "GRIDSTORY-TM-001",
     "title": "GridStory control plane and delivery threat model",
-    "version": "1.2.0",
+    "version": "1.3.0",
     "reviewedAt": "2026-08-23",
     "owners": ["GridStory security owner", "GridStory architecture owner"],
     "methodology": "OWASP four-question threat modeling with STRIDE categorization",
@@ -18,7 +18,8 @@
       "published REST delivery and application-owned React rendering",
       "logical archive export and import",
       "signed plugin manifests, tenant grants, lifecycle state, and external runtime protocol",
-      "data governance, legal holds, rights requests, guarded erasure, encrypted exports, customer-managed key references, and placement attestations"
+      "data governance, legal holds, rights requests, guarded erasure, encrypted exports, customer-managed key references, and placement attestations",
+      "read-only CMS source adapters, private migration recipes, dry-run plans, checkpoints, links, receipts, and cutover evidence"
     ],
     "outOfScope": [
       "security of application-owned React components after validated data leaves GridStory",
@@ -168,6 +169,17 @@
       "id": "ASSET-016",
       "name": "Customer-managed key references and encrypted subject exports",
       "securityProperties": ["confidentiality", "integrity", "key separation", "recoverability"]
+    },
+    {
+      "id": "ASSET-017",
+      "name": "CMS source credentials, customer source content, migration mappings, checkpoints, plans, links, receipts, and cutover evidence",
+      "securityProperties": [
+        "confidentiality",
+        "integrity",
+        "tenant isolation",
+        "idempotency",
+        "recoverability"
+      ]
     }
   ],
   "trustBoundaries": [
@@ -276,6 +288,18 @@
         "worker-time policy, plan, resource-version, key-state, and placement revalidation",
         "narrow describe/wrap/unwrap KMS authority and per-effect idempotent receipts"
       ]
+    },
+    {
+      "id": "BOUNDARY-013",
+      "name": "Migration service to read-only external CMS sources and guarded GridStory target writes",
+      "controls": [
+        "trusted server-side source composition with no browser credential exposure",
+        "credential-free configured HTTPS origins, disabled redirects, and same-origin continuation",
+        "bounded response bytes, records, mappings, plans, and error detail",
+        "complete scope, private no-store management state, and distinct migration permissions",
+        "digest-bound dry-run execution, deterministic links, drift checks, and post-success checkpoints",
+        "normal ContentService schema, reference, workflow, quality, governance, publication, and revision gates"
+      ]
     }
   ],
   "dataFlows": [
@@ -383,6 +407,21 @@
       "to": "BOUNDARY-012",
       "data": "scoped policy, explicit subject links, hold/request evidence, exact approved plan digest, wrapped export key, and processor receipts",
       "assets": ["ASSET-001", "ASSET-004", "ASSET-006", "ASSET-009", "ASSET-015", "ASSET-016"]
+    },
+    {
+      "id": "FLOW-016",
+      "from": "ACTOR-003",
+      "to": "BOUNDARY-013",
+      "data": "read-only CMS snapshot, versioned mapping recipe, exact sync-plan digest, scoped target revisions, checkpoint, run receipt, and cutover report",
+      "assets": [
+        "ASSET-001",
+        "ASSET-002",
+        "ASSET-003",
+        "ASSET-005",
+        "ASSET-009",
+        "ASSET-014",
+        "ASSET-017"
+      ]
     }
   ],
   "assumptions": [
@@ -391,7 +430,8 @@
     "Applications validate and safely render application-owned components; GridStory never executes editor-authored JavaScript.",
     "External adapters implement the documented timeouts, redirect, egress, credential, and tenant-scope contracts.",
     "The M5-002 application isolation review verifies canonical scope keys and fail-closed boundaries across persistence, cache, search, assets, jobs, events, audit, and telemetry; production infrastructure policies remain deployment evidence.",
-    "Production plugin runtimes are separately operated processes or containers with least-privilege OS, filesystem, network, CPU, and memory policies; the GridStory adapter protocol does not itself provide OS isolation."
+    "Production plugin runtimes are separately operated processes or containers with least-privilege OS, filesystem, network, CPU, and memory policies; the GridStory adapter protocol does not itself provide OS isolation.",
+    "CMS migration credentials are read-only, least privilege, and injected by the trusted server runtime; the source stays authoritative and recoverable until an externally operated cutover is accepted."
   ],
   "threats": [
     {
@@ -1050,6 +1090,81 @@
         "apps/api/test/governance-adapters.test.ts",
         "apps/api/test/database-recovery.test.ts",
         "docs/data-governance.md"
+      ]
+    },
+    {
+      "id": "THREAT-0026",
+      "title": "CMS source credential disclosure, SSRF, hostile continuation, or source exhaustion",
+      "stride": [
+        "Spoofing",
+        "Tampering",
+        "Information Disclosure",
+        "Denial of Service",
+        "Elevation of Privilege"
+      ],
+      "scenario": "A malicious configuration or compromised CMS response exposes credentials, redirects or continues to an attacker origin, returns malformed or oversized data, or causes unbounded source reads and persistent private-data leakage.",
+      "actors": ["ACTOR-007", "ACTOR-008"],
+      "assets": ["ASSET-001", "ASSET-003", "ASSET-005", "ASSET-012", "ASSET-017"],
+      "boundaries": ["BOUNDARY-006", "BOUNDARY-013"],
+      "likelihood": 4,
+      "impact": 5,
+      "risk": 20,
+      "response": "mitigate",
+      "owner": "Migration integration and deployment owner",
+      "mitigations": [
+        "Compose credentials only in the trusted server, require credential-free configured HTTPS base origins, disable redirects, and reject every cross-origin continuation or response URL.",
+        "Use provider read-only credentials, bounded response bytes and record counts, strict normalized schemas, redacted stable errors, and no source write methods.",
+        "Keep source snapshots, plans, checkpoints, and links in private complete-scope repositories and never expose credentials or mapped private data in plan summaries or telemetry.",
+        "Require production egress policy, secret-manager lifecycle, provider audit logs, revocation, and rate/timeout controls as deployment evidence."
+      ],
+      "verification": [
+        "apps/api/test/migration-adapters.test.ts",
+        "apps/api/test/migration.test.ts",
+        "packages/schema/test/migration.test.ts",
+        "docs/migration-and-cutover.md"
+      ]
+    },
+    {
+      "id": "THREAT-0027",
+      "title": "Migration drift, retry duplication, destructive reconciliation, or false cutover readiness",
+      "stride": [
+        "Tampering",
+        "Repudiation",
+        "Information Disclosure",
+        "Denial of Service",
+        "Elevation of Privilege"
+      ],
+      "scenario": "A stale or changed plan overwrites manual target work, a crash duplicates an import or advances a checkpoint early, a missing/deleted source record destroys target data, or an incomplete report is represented as traffic-cutover readiness.",
+      "actors": ["ACTOR-003", "ACTOR-007", "ACTOR-008"],
+      "assets": [
+        "ASSET-001",
+        "ASSET-002",
+        "ASSET-003",
+        "ASSET-007",
+        "ASSET-009",
+        "ASSET-014",
+        "ASSET-017"
+      ],
+      "boundaries": ["BOUNDARY-002", "BOUNDARY-003", "BOUNDARY-004", "BOUNDARY-013"],
+      "likelihood": 4,
+      "impact": 5,
+      "risk": 20,
+      "response": "mitigate",
+      "owner": "Migration and content operations owner",
+      "mitigations": [
+        "Require a bounded immutable dry-run with exact effects, blockers, expiry, deterministic digest, project and recipe versions, source checksum, expected target revision, and operator digest confirmation.",
+        "Persist a pending deterministic source-to-target link before each write, recover checksum-identical partial writes, finalize receipts before advancing checkpoints, and return the same successful receipt on retry.",
+        "Run all target writes through normal schema, reference, workflow, quality, governance, revision, route, and publish gates; fail closed on target/source/recipe/project drift.",
+        "Report source deletions, missing mappings, unsupported media, incomplete snapshots, missing targets, and unpublished targets as blockers without automatic deletion or unpublish propagation.",
+        "Require a backed-up shadow environment, full reconciliation, retained source traffic authority, and an external application/SEO/analytics/infrastructure cutover checklist; a content report never changes traffic."
+      ],
+      "verification": [
+        "packages/core/test/migration-service.test.ts",
+        "packages/core/test/migration-repository.test.ts",
+        "packages/core/test/postgres-conformance.test.ts",
+        "apps/api/test/database-recovery.test.ts",
+        "apps/studio/test/App.test.tsx",
+        "docs/migration-and-cutover.md"
       ]
     }
   ],

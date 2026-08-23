@@ -823,6 +823,52 @@
         "packages/core/test/postgres-conformance.test.ts"
       ],
       "taskIds": ["M6-003"]
+    },
+    {
+      "id": "GS-SEC-032",
+      "title": "Guarded read-only CMS migration and cutover evidence",
+      "status": "verified",
+      "owner": "Migration and content operations owner",
+      "statement": "CMS migration sources SHALL be trusted server-composed, read-only, same-origin HTTPS, bounded, and credential-private; migration state SHALL be completely tenant scoped and no-store; target mutations SHALL require the exact reviewed dry-run digest, detect source/target/project/recipe drift, recover idempotently without early checkpoint advancement, preserve source deletions, and pass normal content governance and publication gates; cutover reports SHALL state their observed content-only boundary and SHALL NOT switch traffic.",
+      "asvsRefs": [
+        "v5.0.0-2.2.2",
+        "v5.0.0-8.1.1",
+        "v5.0.0-11.2.1",
+        "v5.0.0-14.1.1",
+        "v5.0.0-14.2.1",
+        "v5.0.0-16.5.3"
+      ],
+      "threatRefs": [
+        "THREAT-0001",
+        "THREAT-0004",
+        "THREAT-0006",
+        "THREAT-0009",
+        "THREAT-0014",
+        "THREAT-0018",
+        "THREAT-0024",
+        "THREAT-0026",
+        "THREAT-0027"
+      ],
+      "evidence": [
+        "packages/schema/src/migration.ts",
+        "packages/core/src/migration-repository.ts",
+        "packages/core/src/migration-service.ts",
+        "apps/api/src/migration-adapters.ts",
+        "apps/api/src/migration-routes.ts",
+        "docs/migration-and-cutover.md",
+        "docs/adr/0015-guarded-cms-migration.md"
+      ],
+      "verification": [
+        "packages/schema/test/migration.test.ts",
+        "packages/core/test/migration-repository.test.ts",
+        "packages/core/test/migration-service.test.ts",
+        "packages/core/test/postgres-conformance.test.ts",
+        "apps/api/test/migration-adapters.test.ts",
+        "apps/api/test/migration.test.ts",
+        "apps/api/test/database-recovery.test.ts",
+        "apps/studio/test/App.test.tsx"
+      ],
+      "taskIds": ["M6-004"]
     }
   ]
 }

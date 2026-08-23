@@ -108,6 +108,17 @@ M6-002 adds a production-selectable API identity boundary and a framework-neutra
 
 The implementation, limitations, operator workflow, and recovery boundary are documented in [Data governance and guarded erasure](../data-governance.md). `THREAT-0025` owns irreversible-loss, overbroad-export, hold-bypass, approval, key, and placement abuse cases.
 
+## Guarded CMS migration
+
+- `GS-SEC-032`: CMS source adapters SHALL be composed only by the trusted server runtime, use read-only least-privilege credentials, accept credential-free configured HTTPS origins, disable redirects, reject cross-origin pagination/continuation, bound response bytes and records, validate normalized records, and keep credentials and raw private content out of client responses, errors, and telemetry.
+- Recipes, projects, source links, dry-run plans, mapped private plan data, checkpoints, runs, and cutover reports SHALL carry the complete organization, tenant, workspace, site, environment, and locale scope; management routes SHALL use distinct deny-by-default read/manage/execute permissions and `private, no-store` responses.
+- A target mutation SHALL require an unexpired exact SHA-256 plan digest and unchanged project, recipe, source record, and target revision evidence. The service SHALL persist a deterministic pending link before mutation, recover checksum-identical partial writes, finalize receipts before checkpoint advancement, and return the same completed receipt on retry.
+- Every target create, update, and publication SHALL pass the normal schema, reference, route, workflow, quality, governance, revision, and publication gates. Manual target drift, source drift, invalid mapping, unsupported media, incomplete snapshots, missing targets, and stale publication SHALL fail closed.
+- Source deletion or unpublish SHALL NOT automatically delete or unpublish target content. It SHALL appear as a blocker requiring an independently reviewed retention/editorial decision.
+- Cutover validation SHALL use a complete full reconciliation and describe only observed mapped-content currency/publication. It SHALL NOT change DNS, CDN, routers, application configuration, or source state and SHALL NOT claim media, SEO, analytics, identity, legal, infrastructure, or decommissioning readiness.
+
+The operator boundary, provider setup, rollback sequence, and claim limits are documented in [CMS migration and cutover](../migration-and-cutover.md). `THREAT-0026` owns source credential/SSRF/exhaustion abuse, and `THREAT-0027` owns drift, retry, destructive reconciliation, and false-readiness abuse.
+
 ## Logging, error handling, and operations
 
 - `GS-SEC-028`: a maintained log inventory SHALL define event, metadata, format, sink, access, retention, correlation, and alerting. At minimum cover authentication, failed authorization, privileged mutation, publication, workflow/release, import/export, credential lifecycle, adapter failure, and control bypass.
@@ -151,6 +162,12 @@ Production PostgreSQL PITR remains a database/platform control using physical ba
 `GS-SEC-031` and `THREAT-0025` cover fully scoped private governance records, explicit subject/resource links, hold/restriction dominance, rights request evidence, deterministic encrypted exports, digest-bound independent approval, backup and reauthentication gates, worker-time resource/policy/key/placement revalidation, built-in content/asset/identity effects, idempotent receipts, and ordered hash-chained governance events. SQLite/PostgreSQL persist the same optimistic document; the live recovery regression restores the earlier governance subject with the earlier content snapshot.
 
 Repository evidence does not discover all customer personal data, select applicable law, certify a production KMS/client/credential configuration, prove provider placement, move data/keys, route regions, back up external objects/providers, or execute application-specific/external deletion. Those remain customer/deployment evidence and fail-closed processor boundaries.
+
+## M6-004 CMS-migration baseline
+
+`GS-SEC-032`, `THREAT-0026`, and `THREAT-0027` cover server-only read-only provider adapters, same-origin HTTPS continuation, bounded normalization, fully scoped private migration state, deterministic versioned mapping, exact-effect digest review, drift and deletion blockers, crash-safe pending-link recovery, post-success checkpoints, normal content/publication gates, complete full reconciliation, and content-only cutover evidence. SQLite/PostgreSQL persist the same optimistic document, and live SQLite recovery restores the earlier mapping/project state with the earlier target content.
+
+Repository evidence does not certify production provider credentials, egress/DNS/rate policy, source availability, binary media transfer, source history/users/comments, inferred schema/reference semantics, customer mapping correctness, coordinated external backups, application/route/SEO/analytics/identity behavior, traffic operations, or source decommissioning. Those remain operator/deployment evidence while the source remains authoritative.
 
 ## Verification ownership
 

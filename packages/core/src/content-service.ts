@@ -166,6 +166,7 @@ export class ContentService {
 
   async create(input: {
     scope: ContentScope;
+    id?: string;
     contentType: string;
     data: unknown;
     actor: Actor;
@@ -176,6 +177,7 @@ export class ContentService {
     await this.#validateReferences(input.scope, input.contentType, input.data);
     const entry = await this.#repository.create({
       scope: input.scope,
+      ...(input.id ? { id: input.id } : {}),
       contentType: input.contentType,
       data: input.data,
       actor: input.actor,
@@ -183,6 +185,15 @@ export class ContentService {
     });
     await this.#workflowGate?.contentCreated({ scope: input.scope, entry, actor: input.actor });
     return entry;
+  }
+
+  async validateCandidate(input: {
+    scope: ContentScope;
+    contentType: string;
+    data: unknown;
+  }): Promise<void> {
+    this.#validate(input.contentType, input.data);
+    await this.#validateReferences(input.scope, input.contentType, input.data);
   }
 
   async updateDraft(input: {

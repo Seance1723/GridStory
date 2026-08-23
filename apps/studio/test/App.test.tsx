@@ -5,6 +5,12 @@ import {
   type AssetUploadSession,
   type ContentEntry,
   createGridStoryClient,
+  type MigrationCutoverReport,
+  type MigrationPlanSummary,
+  type MigrationProjectSummary,
+  type MigrationRecipe,
+  type MigrationRun,
+  type MigrationSourceDescriptor,
   type Release,
 } from '@gridstory/client';
 import { exampleDesignSystem } from '@gridstory/example-kit/design-system';
@@ -277,6 +283,21 @@ function createTestClient(
   };
   const releaseRecords: Release[] = [];
   const workflowActionRecords: Array<Record<string, unknown>> = [];
+  const migrationSources: MigrationSourceDescriptor[] = [
+    {
+      id: 'contentful-source',
+      provider: 'contentful',
+      name: 'Contentful production',
+      supportsDelta: true,
+      reportsDeletions: true,
+      includesAssets: true,
+    },
+  ];
+  const migrationRecipes: MigrationRecipe[] = [];
+  const migrationProjects: MigrationProjectSummary[] = [];
+  const migrationPlans: MigrationPlanSummary[] = [];
+  const migrationRuns: MigrationRun[] = [];
+  const migrationCutoverReports: MigrationCutoverReport[] = [];
   const workflowInstances = new Map(
     testEntries.map((candidate) => [
       candidate.id,
@@ -630,6 +651,154 @@ function createTestClient(
       governancePlans.push(plan);
       governanceVersion += 1;
       return json(plan, 201);
+    }
+    if (url.pathname === '/api/v1/migrations' && init?.method !== 'POST') {
+      return json({
+        sources: migrationSources,
+        recipes: migrationRecipes,
+        projects: migrationProjects,
+        plans: migrationPlans,
+        runs: migrationRuns,
+        cutoverReports: migrationCutoverReports,
+      });
+    }
+    const migrationRecipeMatch = url.pathname.match(/^\/api\/v1\/migrations\/recipes\/([^/]+)$/);
+    if (migrationRecipeMatch && init?.method === 'PUT') {
+      const body = JSON.parse(String(init.body)) as Omit<MigrationRecipe, 'id'>;
+      const previous = migrationRecipes.find(
+        (candidate) => candidate.id === migrationRecipeMatch[1],
+      );
+      const recipe: MigrationRecipe = {
+        ...body,
+        id: migrationRecipeMatch[1] ?? 'recipe',
+        version: (previous?.version ?? 0) + 1,
+        createdBy: previous?.createdBy ?? 'local-admin',
+        createdAt: previous?.createdAt ?? now,
+        updatedBy: 'local-admin',
+        updatedAt: now,
+      };
+      if (previous) migrationRecipes.splice(migrationRecipes.indexOf(previous), 1, recipe);
+      else migrationRecipes.push(recipe);
+      return json(recipe);
+    }
+    if (url.pathname === '/api/v1/migrations/projects' && init?.method === 'POST') {
+      const body = JSON.parse(String(init.body)) as {
+        id: string;
+        name: string;
+        sourceId: string;
+        recipeIds: string[];
+        mode: 'one-time' | 'dual-run';
+      };
+      const project: MigrationProjectSummary = {
+        ...body,
+        provider: 'contentful',
+        state: 'active',
+        version: 1,
+        recipeVersions: Object.fromEntries(body.recipeIds.map((id) => [id, 1])),
+        createdBy: 'local-admin',
+        createdAt: now,
+        updatedBy: 'local-admin',
+        updatedAt: now,
+      };
+      migrationProjects.push(project);
+      return json(project, 201);
+    }
+    const migrationProjectStateMatch = url.pathname.match(
+      /^\/api\/v1\/migrations\/projects\/([^/]+)\/state$/,
+    );
+    if (migrationProjectStateMatch && init?.method === 'POST') {
+      const project = migrationProjects.find(
+        (candidate) => candidate.id === migrationProjectStateMatch[1],
+      );
+      if (!project) return json({ error: { message: 'Not found.' } }, 404);
+      const body = JSON.parse(String(init.body)) as { state: 'active' | 'paused' };
+      project.state = body.state;
+      project.version += 1;
+      project.updatedAt = now;
+      return json(project);
+    }
+    const migrationProjectPlanMatch = url.pathname.match(
+      /^\/api\/v1\/migrations\/projects\/([^/]+)\/plans$/,
+    );
+    if (migrationProjectPlanMatch && init?.method === 'POST') {
+      const project = migrationProjects.find(
+        (candidate) => candidate.id === migrationProjectPlanMatch[1],
+      );
+      if (!project) return json({ error: { message: 'Not found.' } }, 404);
+      const plan: MigrationPlanSummary = {
+        id: `migration-plan-${migrationPlans.length + 1}`,
+        projectId: project.id,
+        projectVersion: project.version,
+        state: 'preview',
+        snapshotKind: 'full',
+        effects: [
+          {
+            externalId: 'contentful-page-1',
+            sourceType: 'contentful.Entry.page',
+            sourceStatus: 'published',
+            sourceChecksum: 'b'.repeat(64),
+            action: 'create',
+            publish: false,
+            recipeId: project.recipeIds[0],
+            recipeVersion: 1,
+            targetEntryId: 'migration-entry-1',
+            dataChecksum: 'c'.repeat(64),
+            blockers: [],
+          },
+        ],
+        counts: { create: 1, update: 0, publish: 0, noop: 0, sourceDeleted: 0, blocked: 0 },
+        digest: 'd'.repeat(64),
+        createdBy: 'local-admin',
+        createdAt: now,
+        expiresAt: '2026-07-17T01:00:00.000Z',
+      };
+      migrationPlans.push(plan);
+      return json(plan, 201);
+    }
+    const migrationPlanExecutionMatch = url.pathname.match(
+      /^\/api\/v1\/migrations\/plans\/([^/]+)\/execute$/,
+    );
+    if (migrationPlanExecutionMatch && init?.method === 'POST') {
+      const plan = migrationPlans.find(
+        (candidate) => candidate.id === migrationPlanExecutionMatch[1],
+      );
+      if (!plan) return json({ error: { message: 'Not found.' } }, 404);
+      plan.state = 'completed';
+      plan.startedAt = now;
+      plan.completedAt = now;
+      const run: MigrationRun = {
+        id: `migration-run-${migrationRuns.length + 1}`,
+        projectId: plan.projectId,
+        planId: plan.id,
+        state: 'succeeded',
+        counts: plan.counts,
+        actorId: 'local-admin',
+        startedAt: now,
+        completedAt: now,
+      };
+      migrationRuns.push(run);
+      return json(run);
+    }
+    const migrationCutoverMatch = url.pathname.match(
+      /^\/api\/v1\/migrations\/projects\/([^/]+)\/cutover-reports$/,
+    );
+    if (migrationCutoverMatch && init?.method === 'POST') {
+      const report: MigrationCutoverReport = {
+        id: `migration-cutover-${migrationCutoverReports.length + 1}`,
+        projectId: migrationCutoverMatch[1] ?? 'project',
+        ready: true,
+        digest: 'e'.repeat(64),
+        sourceDigest: 'f'.repeat(64),
+        sourceCount: 1,
+        linkedCount: 1,
+        currentCount: 1,
+        publishedCount: 1,
+        blockers: [],
+        validatedBy: 'local-admin',
+        validatedAt: now,
+      };
+      migrationCutoverReports.push(report);
+      return json(report, 201);
     }
     if (url.pathname === '/api/v1/identity' && init?.method !== 'POST') {
       return json({
@@ -1097,6 +1266,47 @@ describe('GridStory Studio', () => {
       within(panel).getByRole('textbox', { name: 'Independent approval reason' }),
     ).toBeTruthy();
     expect(within(panel).getByRole('button', { name: 'Approve irreversible plan' })).toBeTruthy();
+  });
+
+  it('previews, confirms, executes, and validates a guarded CMS migration', async () => {
+    const user = userEvent.setup();
+    render(<App client={createTestClient()} />);
+
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Migrations' }));
+
+    const panel = await screen.findByRole('region', { name: 'CMS migration workbench' });
+    expect(panel.textContent).toContain('Source adapters are read-only');
+    expect(panel.textContent).toContain('Contentful production');
+
+    await user.type(within(panel).getByLabelText('Recipe ID'), 'contentful-page');
+    await user.type(within(panel).getByLabelText('Recipe name'), 'Contentful pages');
+    await user.type(within(panel).getByLabelText('Source type'), 'contentful.Entry.page');
+    await user.click(within(panel).getByRole('button', { name: 'Save next recipe version' }));
+    await screen.findByText('Versioned migration recipe saved.');
+
+    await user.type(within(panel).getByLabelText('Project ID'), 'contentful-cutover');
+    await user.type(within(panel).getByLabelText('Project name'), 'Website cutover');
+    await user.click(within(panel).getByRole('button', { name: 'Create dual-run project' }));
+    await screen.findByText('Dual-run migration project created.');
+
+    await user.click(within(panel).getByRole('button', { name: 'Preview next sync' }));
+    expect(await within(panel).findByText('d'.repeat(64))).toBeTruthy();
+    expect(panel.textContent).toContain('1 create');
+    expect(panel.textContent).toContain('contentful-page-1 · create');
+
+    await user.click(
+      within(panel).getByRole('checkbox', {
+        name: 'I reviewed this exact digest, every effect, and all blockers.',
+      }),
+    );
+    await user.click(within(panel).getByRole('button', { name: 'Execute reviewed plan' }));
+    await screen.findByText('Migration plan completed with a durable receipt.');
+    expect(panel.textContent).toContain('full · completed');
+
+    await user.click(within(panel).getByRole('button', { name: 'Validate cutover' }));
+    expect(await within(panel).findByText('Content checks ready')).toBeTruthy();
+    expect(panel.textContent).toContain('1/1 current · 1 published');
   });
 
   it('starts and revokes a secure application iframe preview', async () => {

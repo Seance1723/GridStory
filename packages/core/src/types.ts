@@ -192,6 +192,7 @@ export interface ContentRepository {
   }): Awaitable<ContentEntry | null>;
   create(input: {
     scope: ContentScope;
+    id?: string;
     contentType: string;
     data: Record<string, unknown>;
     actor: Actor;

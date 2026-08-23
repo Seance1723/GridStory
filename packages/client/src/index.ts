@@ -44,6 +44,14 @@ import type {
   LegalHold,
   LocaleConfiguration,
   LocalizedContentResolution,
+  MigrationCutoverReport,
+  MigrationPlanSummary,
+  MigrationProjectInput,
+  MigrationProjectSummary,
+  MigrationRecipe,
+  MigrationRecipeInput,
+  MigrationRun,
+  MigrationSourceDescriptor,
   PluginCapabilityGrant,
   PluginCapabilityName,
   PluginInstallation,
@@ -79,6 +87,15 @@ import type {
   WorkflowDefinitionInput,
   WorkflowInstance,
 } from '@gridstory/schema';
+
+export interface MigrationOverviewRecord {
+  sources: MigrationSourceDescriptor[];
+  recipes: MigrationRecipe[];
+  projects: MigrationProjectSummary[];
+  plans: MigrationPlanSummary[];
+  runs: MigrationRun[];
+  cutoverReports: MigrationCutoverReport[];
+}
 
 export interface SchemaDeploymentRecord {
   document: SchemaIrDocument;
@@ -792,6 +809,64 @@ export class GridStoryClient {
 
   getResidencyStatus(signal?: AbortSignal): Promise<ResidencyStatus> {
     return this.#request('/api/v1/governance/residency', { ...(signal ? { signal } : {}) });
+  }
+
+  getMigrations(signal?: AbortSignal): Promise<MigrationOverviewRecord> {
+    return this.#request('/api/v1/migrations', { ...(signal ? { signal } : {}) });
+  }
+
+  saveMigrationRecipe(input: MigrationRecipeInput, signal?: AbortSignal): Promise<MigrationRecipe> {
+    const { id, ...body } = input;
+    return this.#request(`/api/v1/migrations/recipes/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  createMigrationProject(
+    input: MigrationProjectInput,
+    signal?: AbortSignal,
+  ): Promise<MigrationProjectSummary> {
+    return this.#request('/api/v1/migrations/projects', {
+      method: 'POST',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  setMigrationProjectState(
+    id: string,
+    state: 'active' | 'paused',
+    signal?: AbortSignal,
+  ): Promise<MigrationProjectSummary> {
+    return this.#request(`/api/v1/migrations/projects/${encodeURIComponent(id)}/state`, {
+      method: 'POST',
+      body: JSON.stringify({ state }),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  createMigrationPlan(id: string, signal?: AbortSignal): Promise<MigrationPlanSummary> {
+    return this.#request(`/api/v1/migrations/projects/${encodeURIComponent(id)}/plans`, {
+      method: 'POST',
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  executeMigrationPlan(id: string, digest: string, signal?: AbortSignal): Promise<MigrationRun> {
+    return this.#request(`/api/v1/migrations/plans/${encodeURIComponent(id)}/execute`, {
+      method: 'POST',
+      body: JSON.stringify({ digest }),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  validateMigrationCutover(id: string, signal?: AbortSignal): Promise<MigrationCutoverReport> {
+    return this.#request(`/api/v1/migrations/projects/${encodeURIComponent(id)}/cutover-reports`, {
+      method: 'POST',
+      ...(signal ? { signal } : {}),
+    });
   }
 
   getComponentManifests(signal?: AbortSignal): Promise<ResolvedComponentManifest[]> {
@@ -1865,6 +1940,14 @@ export type {
   LegalHold,
   LocaleConfiguration,
   LocalizedContentResolution,
+  MigrationCutoverReport,
+  MigrationPlanSummary,
+  MigrationProjectInput,
+  MigrationProjectSummary,
+  MigrationRecipe,
+  MigrationRecipeInput,
+  MigrationRun,
+  MigrationSourceDescriptor,
   PresenceParticipant,
   PreviewMessage,
   PreviewMode,

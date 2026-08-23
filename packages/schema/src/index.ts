@@ -10,6 +10,7 @@ export * from './governance.js';
 export * from './identity.js';
 export * from './lifecycle.js';
 export * from './localization.js';
+export * from './migration.js';
 export * from './plugins.js';
 export * from './preview.js';
 export * from './quality.js';

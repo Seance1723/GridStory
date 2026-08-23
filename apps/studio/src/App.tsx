@@ -16,6 +16,9 @@ import {
   GridStoryApiError,
   type GridStoryClient,
   type IdentitySnapshot,
+  type MigrationOverviewRecord,
+  type MigrationPlanSummary,
+  type MigrationRecipeInput,
   type OperationsDashboardRecord,
   type PreviewSessionGrant,
   type RelatedContentRecord,
@@ -508,6 +511,22 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   const [governanceApprovalReason, setGovernanceApprovalReason] = useState('');
   const [governanceBackupReference, setGovernanceBackupReference] = useState('');
   const [governanceBackupSha, setGovernanceBackupSha] = useState('');
+  const [migrationOverview, setMigrationOverview] = useState<MigrationOverviewRecord | null>(null);
+  const [migrationSourceId, setMigrationSourceId] = useState('');
+  const [migrationRecipeId, setMigrationRecipeId] = useState('');
+  const [migrationRecipeName, setMigrationRecipeName] = useState('');
+  const [migrationSourceType, setMigrationSourceType] = useState('');
+  const [migrationTargetType, setMigrationTargetType] = useState('page');
+  const [migrationMappings, setMigrationMappings] = useState(
+    'title -> title -> string\nslug -> slug -> slug',
+  );
+  const [migrationPublicationMode, setMigrationPublicationMode] = useState<
+    'draft' | 'mirror-source'
+  >('draft');
+  const [migrationProjectId, setMigrationProjectId] = useState('');
+  const [migrationProjectName, setMigrationProjectName] = useState('');
+  const [activeMigrationProjectId, setActiveMigrationProjectId] = useState('');
+  const [migrationPlanReviewed, setMigrationPlanReviewed] = useState(false);
   const [searchPanelOpen, setSearchPanelOpen] = useState(false);
   const [searchBusy, setSearchBusy] = useState(false);
   const [searchText, setSearchText] = useState('');
@@ -1799,6 +1818,161 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
       setNotice({ tone: 'error', message: messageFrom(error) });
     }
   };
+  const refreshMigrations = async () => {
+    const overview = await client.getMigrations();
+    setMigrationOverview(overview);
+    setMigrationSourceId((current) => current || overview.sources[0]?.id || '');
+    setActiveMigrationProjectId((current) => current || overview.projects[0]?.id || '');
+  };
+  const toggleMigrations = async () => {
+    if (migrationOverview) {
+      setMigrationOverview(null);
+      setMigrationPlanReviewed(false);
+      return;
+    }
+    try {
+      await refreshMigrations();
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
+  const parsedMigrationFields = (): MigrationRecipeInput['fields'] => {
+    const transforms = new Set(['copy', 'string', 'number', 'boolean', 'slug']);
+    return migrationMappings
+      .split(/\r?\n/gu)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const [sourcePath, targetField, requestedTransform = 'copy'] = line
+          .split('->')
+          .map((part) => part.trim());
+        if (!sourcePath || !targetField || !transforms.has(requestedTransform)) {
+          throw new Error(
+            'Each field mapping must be `source.path -> targetField -> copy|string|number|boolean|slug`.',
+          );
+        }
+        return {
+          sourcePath,
+          targetField,
+          transform: requestedTransform as MigrationRecipeInput['fields'][number]['transform'],
+          required: true,
+        };
+      });
+  };
+  const saveMigrationRecipe = async () => {
+    const source = migrationOverview?.sources.find(
+      (candidate) => candidate.id === migrationSourceId,
+    );
+    if (
+      !source ||
+      !migrationRecipeId.trim() ||
+      !migrationRecipeName.trim() ||
+      !migrationSourceType.trim() ||
+      !migrationTargetType.trim()
+    ) {
+      setNotice({ tone: 'error', message: 'Source and complete recipe identity are required.' });
+      return;
+    }
+    try {
+      await client.saveMigrationRecipe({
+        id: migrationRecipeId.trim(),
+        name: migrationRecipeName.trim(),
+        provider: source.provider,
+        sourceType: migrationSourceType.trim(),
+        targetContentType: migrationTargetType.trim(),
+        publicationMode: migrationPublicationMode,
+        fields: parsedMigrationFields(),
+      });
+      await refreshMigrations();
+      setNotice({ tone: 'success', message: 'Versioned migration recipe saved.' });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
+  const createMigrationProject = async () => {
+    if (
+      !migrationSourceId ||
+      !migrationRecipeId.trim() ||
+      !migrationProjectId.trim() ||
+      !migrationProjectName.trim()
+    ) {
+      setNotice({ tone: 'error', message: 'Source, recipe, project ID, and name are required.' });
+      return;
+    }
+    try {
+      const project = await client.createMigrationProject({
+        id: migrationProjectId.trim(),
+        name: migrationProjectName.trim(),
+        sourceId: migrationSourceId,
+        recipeIds: [migrationRecipeId.trim()],
+        mode: 'dual-run',
+      });
+      setActiveMigrationProjectId(project.id);
+      await refreshMigrations();
+      setNotice({ tone: 'success', message: 'Dual-run migration project created.' });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
+  const setMigrationProjectState = async (state: 'active' | 'paused') => {
+    if (!activeMigrationProjectId) return;
+    try {
+      await client.setMigrationProjectState(activeMigrationProjectId, state);
+      await refreshMigrations();
+      setNotice({
+        tone: state === 'paused' ? 'info' : 'success',
+        message: `Migration project ${state === 'paused' ? 'paused' : 'resumed'}.`,
+      });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
+  const previewMigrationSync = async () => {
+    if (!activeMigrationProjectId) return;
+    try {
+      await client.createMigrationPlan(activeMigrationProjectId);
+      setMigrationPlanReviewed(false);
+      await refreshMigrations();
+      setNotice({
+        tone: 'info',
+        message: 'Dry-run sync plan created. Target content is unchanged.',
+      });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
+  const executeMigrationPlan = async (plan: MigrationPlanSummary) => {
+    if (!migrationPlanReviewed) {
+      setNotice({
+        tone: 'error',
+        message: 'Review the exact digest and effects before execution.',
+      });
+      return;
+    }
+    try {
+      await client.executeMigrationPlan(plan.id, plan.digest);
+      setMigrationPlanReviewed(false);
+      await Promise.all([refreshMigrations(), refreshList()]);
+      setNotice({ tone: 'success', message: 'Migration plan completed with a durable receipt.' });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
+  const validateMigrationCutover = async () => {
+    if (!activeMigrationProjectId) return;
+    try {
+      const report = await client.validateMigrationCutover(activeMigrationProjectId);
+      await refreshMigrations();
+      setNotice({
+        tone: report.ready ? 'success' : 'info',
+        message: report.ready
+          ? 'Content cutover checks are current. Traffic switching remains external.'
+          : `Cutover remains blocked by ${report.blockers.length} observed issue(s).`,
+      });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
   const toggleIdentity = async () => {
     if (identitySnapshot) {
       setIdentitySnapshot(null);
@@ -2144,6 +2318,14 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
             aria-expanded={dataGovernance !== null}
           >
             Data governance
+          </button>{' '}
+          <button
+            type="button"
+            className="button button--secondary"
+            onClick={() => void toggleMigrations()}
+            aria-expanded={migrationOverview !== null}
+          >
+            Migrations
           </button>{' '}
           <button
             type="button"
@@ -3331,6 +3513,299 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   ) : null}
                 </article>
               ))}
+          </div>
+        </section>
+      ) : null}
+      {migrationOverview ? (
+        <section className="migration-panel" aria-label="CMS migration workbench">
+          <div className="section-heading">
+            <div>
+              <span className="kicker">Read-only source bridge</span>
+              <h2>CMS migration and cutover evidence</h2>
+              <p>
+                {migrationOverview.sources.length} configured sources ·{' '}
+                {migrationOverview.projects.length} projects · {migrationOverview.runs.length} runs
+              </p>
+            </div>
+            <button
+              type="button"
+              className="button button--secondary"
+              onClick={() => void refreshMigrations()}
+            >
+              Refresh migration state
+            </button>
+          </div>
+          <p className="migration-panel__warning" role="note">
+            Source adapters are read-only. A ready report proves only the observed content checks;
+            it does not switch traffic, migrate media binaries, decommission the source, or replace
+            a verified backup.
+          </p>
+          <div className="migration-panel__setup">
+            <fieldset>
+              <legend>Versioned mapping recipe</legend>
+              <label>
+                <span>Configured source</span>
+                <select
+                  value={migrationSourceId}
+                  onChange={(event) => setMigrationSourceId(event.target.value)}
+                >
+                  <option value="">Select a source</option>
+                  {migrationOverview.sources.map((source) => (
+                    <option key={source.id} value={source.id}>
+                      {source.name} · {source.provider}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {migrationOverview.sources.length === 0 ? (
+                <p className="empty-copy">Configure a trusted server-side source adapter first.</p>
+              ) : null}
+              <div className="migration-panel__fields">
+                <label>
+                  <span>Recipe ID</span>
+                  <input
+                    value={migrationRecipeId}
+                    onChange={(event) => setMigrationRecipeId(event.target.value)}
+                    placeholder="contentful-page"
+                  />
+                </label>
+                <label>
+                  <span>Recipe name</span>
+                  <input
+                    value={migrationRecipeName}
+                    onChange={(event) => setMigrationRecipeName(event.target.value)}
+                    placeholder="Contentful pages"
+                  />
+                </label>
+                <label>
+                  <span>Source type</span>
+                  <input
+                    value={migrationSourceType}
+                    onChange={(event) => setMigrationSourceType(event.target.value)}
+                    placeholder="contentful.Entry.page"
+                  />
+                </label>
+                <label>
+                  <span>Target content type</span>
+                  <input
+                    value={migrationTargetType}
+                    onChange={(event) => setMigrationTargetType(event.target.value)}
+                  />
+                </label>
+              </div>
+              <label>
+                <span>Field mappings, one per line</span>
+                <textarea
+                  value={migrationMappings}
+                  onChange={(event) => setMigrationMappings(event.target.value)}
+                  aria-describedby="migration-mapping-help"
+                />
+                <small id="migration-mapping-help">
+                  source.path -&gt; targetField -&gt; copy|string|number|boolean|slug
+                </small>
+              </label>
+              <label>
+                <span>Publication behavior</span>
+                <select
+                  value={migrationPublicationMode}
+                  onChange={(event) =>
+                    setMigrationPublicationMode(event.target.value as 'draft' | 'mirror-source')
+                  }
+                >
+                  <option value="draft">Import drafts; publish through normal workflow</option>
+                  <option value="mirror-source">
+                    Mirror source status through all publish gates
+                  </option>
+                </select>
+              </label>
+              <button
+                type="button"
+                className="button button--secondary"
+                onClick={() => void saveMigrationRecipe()}
+              >
+                Save next recipe version
+              </button>
+            </fieldset>
+            <fieldset>
+              <legend>Dual-run project</legend>
+              <label>
+                <span>Project ID</span>
+                <input
+                  value={migrationProjectId}
+                  onChange={(event) => setMigrationProjectId(event.target.value)}
+                  placeholder="contentful-cutover"
+                />
+              </label>
+              <label>
+                <span>Project name</span>
+                <input
+                  value={migrationProjectName}
+                  onChange={(event) => setMigrationProjectName(event.target.value)}
+                  placeholder="Website cutover"
+                />
+              </label>
+              <button
+                type="button"
+                className="button button--secondary"
+                onClick={() => void createMigrationProject()}
+              >
+                Create dual-run project
+              </button>
+              <label>
+                <span>Active project</span>
+                <select
+                  value={activeMigrationProjectId}
+                  onChange={(event) => {
+                    setActiveMigrationProjectId(event.target.value);
+                    setMigrationPlanReviewed(false);
+                  }}
+                >
+                  <option value="">Select a project</option>
+                  {migrationOverview.projects.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.name} · {project.state}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {activeMigrationProjectId ? (
+                <div className="migration-panel__actions">
+                  <button
+                    type="button"
+                    className="button button--secondary"
+                    onClick={() => void previewMigrationSync()}
+                    disabled={
+                      migrationOverview.projects.find(
+                        (project) => project.id === activeMigrationProjectId,
+                      )?.state !== 'active'
+                    }
+                  >
+                    Preview next sync
+                  </button>
+                  <button
+                    type="button"
+                    className="button button--secondary"
+                    onClick={() =>
+                      void setMigrationProjectState(
+                        migrationOverview.projects.find(
+                          (project) => project.id === activeMigrationProjectId,
+                        )?.state === 'paused'
+                          ? 'active'
+                          : 'paused',
+                      )
+                    }
+                  >
+                    {migrationOverview.projects.find(
+                      (project) => project.id === activeMigrationProjectId,
+                    )?.state === 'paused'
+                      ? 'Resume project'
+                      : 'Pause project'}
+                  </button>
+                  <button
+                    type="button"
+                    className="button button--primary"
+                    onClick={() => void validateMigrationCutover()}
+                  >
+                    Validate cutover
+                  </button>
+                </div>
+              ) : null}
+            </fieldset>
+          </div>
+          <div className="migration-panel__evidence">
+            <section aria-label="Migration sync plans">
+              <h3>Sync plans and exact effects</h3>
+              {migrationOverview.plans
+                .filter((plan) => plan.projectId === activeMigrationProjectId)
+                .slice()
+                .reverse()
+                .map((plan) => (
+                  <article key={plan.id} className="migration-plan-card">
+                    <div>
+                      <strong>
+                        {plan.snapshotKind} · {plan.state}
+                      </strong>
+                      <code>{plan.digest}</code>
+                    </div>
+                    <p>
+                      {plan.counts.create} create · {plan.counts.update} update ·{' '}
+                      {plan.counts.publish} publish · {plan.counts.noop} unchanged ·{' '}
+                      {plan.counts.sourceDeleted} deleted at source · {plan.counts.blocked} blocked
+                    </p>
+                    <ul>
+                      {plan.effects.map((effect) => (
+                        <li key={`${plan.id}-${effect.externalId}`}>
+                          <strong>{effect.externalId}</strong> · {effect.action}
+                          {effect.publish ? ' · publish' : ''}
+                          {effect.blockers.map((blocker) => ` · ${blocker.code}`).join('')}
+                        </li>
+                      ))}
+                    </ul>
+                    {plan.state === 'preview' ? (
+                      <>
+                        <label className="migration-panel__review">
+                          <input
+                            type="checkbox"
+                            checked={migrationPlanReviewed}
+                            onChange={(event) => setMigrationPlanReviewed(event.target.checked)}
+                          />
+                          <span>I reviewed this exact digest, every effect, and all blockers.</span>
+                        </label>
+                        <button
+                          type="button"
+                          className="button button--primary"
+                          disabled={
+                            !migrationPlanReviewed ||
+                            plan.counts.blocked > 0 ||
+                            plan.counts.sourceDeleted > 0
+                          }
+                          onClick={() => void executeMigrationPlan(plan)}
+                        >
+                          Execute reviewed plan
+                        </button>
+                      </>
+                    ) : null}
+                  </article>
+                ))}
+              {migrationOverview.plans.every(
+                (plan) => plan.projectId !== activeMigrationProjectId,
+              ) ? (
+                <p className="empty-copy">No sync plan for the selected project.</p>
+              ) : null}
+            </section>
+            <section aria-label="Migration cutover reports">
+              <h3>Cutover readiness reports</h3>
+              {migrationOverview.cutoverReports
+                .filter((report) => report.projectId === activeMigrationProjectId)
+                .slice()
+                .reverse()
+                .map((report) => (
+                  <article
+                    key={report.id}
+                    className={`migration-cutover-card migration-cutover-card--${report.ready ? 'ready' : 'blocked'}`}
+                  >
+                    <strong>{report.ready ? 'Content checks ready' : 'Cutover blocked'}</strong>
+                    <span>
+                      {report.currentCount}/{report.sourceCount} current · {report.publishedCount}{' '}
+                      published
+                    </span>
+                    <code>{report.digest}</code>
+                    <ul>
+                      {report.blockers.map((blocker, index) => (
+                        <li key={`${report.id}-${blocker.externalId ?? index}-${blocker.code}`}>
+                          {blocker.externalId ? `${blocker.externalId} · ` : ''}
+                          {blocker.code}: {blocker.message}
+                        </li>
+                      ))}
+                    </ul>
+                  </article>
+                ))}
+              {migrationOverview.cutoverReports.every(
+                (report) => report.projectId !== activeMigrationProjectId,
+              ) ? (
+                <p className="empty-copy">No cutover report for the selected project.</p>
+              ) : null}
+            </section>
           </div>
         </section>
       ) : null}

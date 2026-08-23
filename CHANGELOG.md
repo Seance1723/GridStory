@@ -8,6 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Corrected M6-004 schema/repository/API/workflow/publication/WordPress fixtures and exact-optional boundaries, verified pending-link crash recovery, restored scoped Windows formatter and audit invocation, formatted the exact migration change set, and removed the Studio cascade override found during verification (BUG-0286 through BUG-0297).
 - Corrected the M6-003 service/telemetry/cache exact-optional boundaries, bodyless API fixture, scoped formatter/import/lint quality, and broad Studio fixture timing discovered during verification (BUG-0278 through BUG-0285).
 - Corrected enterprise identity dependency boundaries and exact types, optimistic/durable mutation behavior, denial persistence, federated-role reconstruction, one-time test fixtures, SCIM filtering, production cookie defaults, exact audit-event coverage, forced-colors contrast, lint quality, and final security-document consistency found during M6-002 (BUG-0259 through BUG-0273, BUG-0275 through BUG-0277).
 - Overrode vulnerable Fastify/Mercurius transitive production dependencies with patched compatible releases; `pnpm audit --prod` reports no known vulnerabilities (BUG-0274).
@@ -73,6 +74,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Added bounded CMS-migration contracts and limits; complete-scope optimistic in-memory, SQLite, and qualified PostgreSQL documents for versioned recipes, projects, links, private plans, checkpoints, runs, and cutover reports; and deterministic mapping/reconciliation above normal content schema, reference, workflow, quality, governance, revision, route, and publication gates.
+- Added maintained read-only Contentful Sync, Sanity NDJSON export, and WordPress REST adapters with injected fetch/credentials, fixed credential-free HTTPS origins, disabled redirects, same-origin continuation, response/record bounds, strict normalization, trustworthy delta/full-reconciliation semantics, and no source mutation surface.
+- Added exact-effect expiring dry-runs, digest-bound idempotent execution, target/source/project/recipe drift blockers, non-destructive deletion reporting, pending-link crash recovery, post-success checkpoints, complete cutover validation, private authorized REST and typed-client methods, and a responsive accessible Studio migration workbench.
+- Added CMS migration/operator/rollback guidance, accepted ADR 0015, live SQLite migration-state recovery, PostgreSQL conformance, `THREAT-0026`/`THREAT-0027`, and verified `GS-SEC-032` while retaining credentials, egress, provider backups, binary media, application acceptance, traffic switching, and source decommissioning as explicit operator/deployment responsibilities.
 - Added bounded fully scoped governance contracts, optimistic in-memory/SQLite/PostgreSQL persistence, explicit subject/resource links, retention rules, active/released legal holds, processing restrictions, rights request state, ordered hash-chained events, and recovery coverage.
 - Added dry-run retention/erasure plans with exact effect/blocker summaries, SHA-256 digests, separate fresh approval and verified-backup evidence, worker-time revalidation, idempotent receipts, and built-in content/asset/identity processors that destructively execute only against isolated test fixtures.
 - Added deterministic subject exports with optional AES-256-GCM envelopes and tenant-bound wrapped DEKs, narrow injected AWS KMS/Google Cloud KMS wrappers, CMK describe/wrap/unwrap-only authority, placement attestations and allowed-region gates without migration/routing claims, private REST and typed universal-client operations, and a responsive Studio governance panel.
@@ -337,6 +342,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Security
 
+- Required trusted server-only read credentials, credential-free fixed HTTPS origins, no redirects or cross-origin continuations, bounded/validated source responses, complete-scope private/no-store migration state, separate read/manage/execute authorization, exact digest/expiry/version/revision checks, retry-safe links/receipts/checkpoints, normal content gates, preserved source deletions, and explicitly content-only cutover claims for M6-004.
 - Required active hold/restriction dominance, explicit subject links, distinct governance permissions, digest-bound separation of duties, fresh server-validated reauthentication, recent backup evidence, execution-time policy/resource/key/placement checks, fail-closed unsupported resources, envelope encryption without persisted plaintext keys, and private/no-store management responses for M6-003.
 - Replaced trusted production identity headers with cryptographically verified federation/WebAuthn results, tenant-bound hashed session and service credentials, one-time protocol challenges, lifecycle/concurrency revocation, private/no-store management boundaries, and exact scoped security events.
 - Patched the audited production graph for `fast-uri`, `find-my-way`, `@fastify/static`, and `brace-expansion` advisories while retaining frozen-lockfile reproducibility.
