@@ -23,6 +23,8 @@ SQLite is suitable for one local worker. PostgreSQL claims with row locks and `S
 
 CMS migration synchronization is intentionally not a background worker responsibility in M6-004. An authorized operator creates an exact dry-run plan, reviews its digest/effects/blockers, and invokes execution through the private migration API or Studio. Execution persists pending source links before target writes, resumes checksum-identical partial work, and advances its source checkpoint only after the entire plan and receipt succeed. Do not schedule the execute route externally without a separate reviewed lease, authorization, alerting, and failure policy. See [CMS migration and cutover](migration-and-cutover.md).
 
+Marketplace review and installation are also explicit operator actions rather than worker jobs. DNS verification uses the configured server resolver, and artifact inspection uses an injected trusted adapter; neither runs package code in the worker or control plane. Alert on scanner unavailability/stale evidence, repeated failed challenges, publisher suspension, rejected/yanked releases, and plugin revocation. During an incident, suspend publisher trust or yank the exact release to block new marketplace installs, then explicitly revoke affected tenant installations. See [Evidence-bound plugin marketplace](marketplace.md).
+
 ## Event and job lifecycle
 
 Content mutations emit `content.created`, `content.draft.updated`, or `content.published`. Events carry the complete immutable scope, aggregate/revision IDs, content payload, occurrence time, and deterministic cache tags.

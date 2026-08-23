@@ -29,6 +29,12 @@ export interface TrustedPluginPublisher {
   status: 'active' | 'revoked';
 }
 
+export type TrustedPluginPublisherResolver = (input: {
+  scope: ContentScope;
+  publisherId: string;
+  keyId: string;
+}) => Awaitable<TrustedPluginPublisher | undefined>;
+
 export interface PluginRuntimeRequest {
   protocolVersion: typeof PLUGIN_PROTOCOL_VERSION;
   scope: ContentScope;
@@ -80,6 +86,7 @@ export class PluginTestHarness implements PluginRuntimeAdapter {
 interface PluginServiceOptions {
   repository: PluginRepository;
   trustedPublishers: TrustedPluginPublisher[];
+  trustedPublisherResolver?: TrustedPluginPublisherResolver;
   runtime?: PluginRuntimeAdapter;
   sdkVersion?: string;
   now?: () => Date;
@@ -121,6 +128,7 @@ function serializedBytes(value: unknown): number {
 export class PluginService {
   readonly #repository: PluginRepository;
   readonly #trustedPublishers: TrustedPluginPublisher[];
+  readonly #trustedPublisherResolver: TrustedPluginPublisherResolver | undefined;
   readonly #runtime: PluginRuntimeAdapter | undefined;
   readonly #sdkVersion: string;
   readonly #now: () => Date;
@@ -134,6 +142,7 @@ export class PluginService {
   constructor(options: PluginServiceOptions) {
     this.#repository = options.repository;
     this.#trustedPublishers = [...options.trustedPublishers];
+    this.#trustedPublisherResolver = options.trustedPublisherResolver;
     this.#runtime = options.runtime;
     this.#sdkVersion = options.sdkVersion ?? GRIDSTORY_PLUGIN_SDK_VERSION;
     this.#now = options.now ?? (() => new Date());
@@ -169,7 +178,7 @@ export class PluginService {
     reason: string;
   }): Promise<PluginInstallation> {
     const manifest = signedPluginManifestSchema.parse(input.manifest);
-    this.#verifyManifest(manifest, input.artifactDigest);
+    await this.#verifyManifest(input.scope, manifest, input.artifactDigest);
     const grants = this.#validateGrants(manifest, input.grantedCapabilities);
     const previous = await this.#repository.get(input.scope, manifest.id);
     if (previous && previous.state !== 'uninstalled') {
@@ -352,7 +361,11 @@ export class PluginService {
     return result;
   }
 
-  #verifyManifest(manifest: SignedPluginManifest, artifactDigest: string): void {
+  async #verifyManifest(
+    scope: ContentScope,
+    manifest: SignedPluginManifest,
+    artifactDigest: string,
+  ): Promise<void> {
     if (manifest.package.sha256 !== artifactDigest) {
       throw new GridStoryError(
         'Plugin artifact digest does not match the manifest.',
@@ -370,11 +383,18 @@ export class PluginService {
         422,
       );
     }
-    const publisher = this.#trustedPublishers.find(
+    const configuredPublisher = this.#trustedPublishers.find(
       (candidate) =>
         candidate.publisherId === manifest.publisher.id &&
         candidate.keyId === manifest.signature.keyId,
     );
+    const publisher =
+      configuredPublisher ??
+      (await this.#trustedPublisherResolver?.({
+        scope,
+        publisherId: manifest.publisher.id,
+        keyId: manifest.signature.keyId,
+      }));
     if (publisher?.status !== 'active') {
       throw new GridStoryError('Plugin publisher key is not trusted.', 'plugin_untrusted', 403);
     }

@@ -9,6 +9,7 @@ import { Pool } from 'pg';
 import { describe, expect, it } from 'vitest';
 import {
   CollaborationService,
+  emptyMarketplaceDocument,
   EnterpriseIdentityService,
   emptyMigrationDocument,
   GovernanceService,
@@ -17,6 +18,7 @@ import {
   PostgresGovernanceRepository,
   PostgresIdentityRepository,
   PostgresMigrationRepository,
+  PostgresMarketplaceRepository,
   PostgresPluginRepository,
 } from '../src/index.js';
 import { repositoryConformance } from './repository-conformance.js';
@@ -262,6 +264,45 @@ if (connectionString) {
       }
     });
   });
+  describe('PostgreSQL marketplace repository conformance', () => {
+    it('persists an optimistic marketplace document under the complete scope key', async () => {
+      const schema = `gridstory_marketplace_test_${process.pid}_${schemaSequence++}`;
+      const pool = new Pool({ connectionString });
+      const scope: ContentScope = {
+        organizationId: 'organization-a',
+        tenantId: 'marketplace-tenant-a',
+        workspaceId: 'workspace-a',
+        siteId: 'site-a',
+        environmentId: 'marketplace-review',
+        locale: 'en',
+      };
+      const first = new PostgresMarketplaceRepository({ pool, schema });
+      try {
+        const initial = emptyMarketplaceDocument(scope, '2026-08-23T00:00:00.000Z');
+        await first.save(initial, null);
+        await first.close();
+
+        const second = new PostgresMarketplaceRepository({ pool, schema });
+        await expect(second.get(scope)).resolves.toEqual(initial);
+        await expect(second.get({ ...scope, tenantId: 'other-tenant' })).resolves.toBeNull();
+        await expect(second.listScopes()).resolves.toContainEqual(scope);
+
+        const next = {
+          ...initial,
+          version: 1,
+          updatedAt: '2026-08-23T00:01:00.000Z',
+        };
+        await second.save(next, 0);
+        await expect(second.save(next, 0)).rejects.toMatchObject({
+          code: 'marketplace_write_conflict',
+        });
+        await second.close();
+      } finally {
+        await pool.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);
+        await pool.end();
+      }
+    });
+  });
 } else {
   describe.skip('PostgreSQL repository conformance', () => {
     it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
@@ -279,6 +320,9 @@ if (connectionString) {
     it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
   });
   describe.skip('PostgreSQL migration repository conformance', () => {
+    it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
+  });
+  describe.skip('PostgreSQL marketplace repository conformance', () => {
     it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
   });
 }

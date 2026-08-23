@@ -79,6 +79,16 @@ export const resourceLimits = {
     maximumStoredRuns: 100,
     planLifetimeSeconds: 3_600,
   },
+  marketplace: {
+    maximumPublishers: 100,
+    maximumReleases: 500,
+    maximumReviewRunsPerRelease: 20,
+    maximumReviewChecks: 50,
+    maximumKeywords: 20,
+    maximumTestedRuntimes: 20,
+    publisherChallengeLifetimeSeconds: 900,
+    maximumReviewEvidenceAgeSeconds: 604_800,
+  },
   benchmark: {
     datasetEntries: 250,
     readSamples: 120,

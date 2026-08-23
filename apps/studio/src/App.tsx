@@ -19,6 +19,7 @@ import {
   type MigrationOverviewRecord,
   type MigrationPlanSummary,
   type MigrationRecipeInput,
+  type MarketplaceOverviewRecord,
   type OperationsDashboardRecord,
   type PreviewSessionGrant,
   type RelatedContentRecord,
@@ -46,6 +47,7 @@ import type {
   DesignSystemManifest,
   FieldDefinition,
   PropDefinition,
+  SignedPluginManifest,
   WorkflowActionDefinition,
 } from '@gridstory/schema';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -527,6 +529,23 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   const [migrationProjectName, setMigrationProjectName] = useState('');
   const [activeMigrationProjectId, setActiveMigrationProjectId] = useState('');
   const [migrationPlanReviewed, setMigrationPlanReviewed] = useState(false);
+  const [marketplaceOverview, setMarketplaceOverview] = useState<MarketplaceOverviewRecord | null>(
+    null,
+  );
+  const [marketplacePublisherId, setMarketplacePublisherId] = useState('');
+  const [marketplacePublisherName, setMarketplacePublisherName] = useState('');
+  const [marketplacePublisherDomain, setMarketplacePublisherDomain] = useState('');
+  const [marketplacePublisherKeyId, setMarketplacePublisherKeyId] = useState('release-1');
+  const [marketplacePublisherPublicKey, setMarketplacePublisherPublicKey] = useState('');
+  const [marketplaceChallenge, setMarketplaceChallenge] = useState<{
+    recordName: string;
+    token: string;
+    expiresAt: string;
+  } | null>(null);
+  const [marketplaceEvidenceReference, setMarketplaceEvidenceReference] = useState('');
+  const [marketplaceReason, setMarketplaceReason] = useState('');
+  const [marketplaceManifestJson, setMarketplaceManifestJson] = useState('');
+  const [marketplaceArtifactReference, setMarketplaceArtifactReference] = useState('');
   const [searchPanelOpen, setSearchPanelOpen] = useState(false);
   const [searchBusy, setSearchBusy] = useState(false);
   const [searchText, setSearchText] = useState('');
@@ -1973,6 +1992,189 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
       setNotice({ tone: 'error', message: messageFrom(error) });
     }
   };
+  const refreshMarketplace = async () => {
+    setMarketplaceOverview(await client.getMarketplace());
+  };
+  const toggleMarketplace = async () => {
+    if (marketplaceOverview) {
+      setMarketplaceOverview(null);
+      setMarketplaceChallenge(null);
+      return;
+    }
+    try {
+      await refreshMarketplace();
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
+  const registerMarketplacePublisher = async () => {
+    if (
+      !marketplacePublisherId.trim() ||
+      !marketplacePublisherName.trim() ||
+      !marketplacePublisherDomain.trim() ||
+      !marketplacePublisherKeyId.trim() ||
+      !marketplacePublisherPublicKey.trim()
+    ) {
+      setNotice({
+        tone: 'error',
+        message: 'Publisher identity, domain, and Ed25519 key are required.',
+      });
+      return;
+    }
+    try {
+      const domain = marketplacePublisherDomain.trim().toLowerCase();
+      await client.registerMarketplacePublisher({
+        id: marketplacePublisherId.trim(),
+        displayName: marketplacePublisherName.trim(),
+        domain,
+        websiteUrl: `https://${domain}`,
+        supportUrl: `https://${domain}/support`,
+        key: {
+          keyId: marketplacePublisherKeyId.trim(),
+          algorithm: 'ed25519',
+          publicKey: marketplacePublisherPublicKey.trim(),
+        },
+      });
+      await refreshMarketplace();
+      setNotice({
+        tone: 'success',
+        message:
+          'Publisher registered as pending. Domain proof and a distinct reviewer are still required.',
+      });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
+  const issueMarketplaceChallenge = async (publisherId: string) => {
+    try {
+      const challenge = await client.issueMarketplacePublisherChallenge(publisherId);
+      setMarketplaceChallenge(challenge);
+      setNotice({ tone: 'info', message: 'Publish the exact TXT value before it expires.' });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
+  const verifyMarketplaceDomain = async (publisherId: string) => {
+    try {
+      await client.verifyMarketplacePublisherDomain(publisherId);
+      setMarketplaceChallenge(null);
+      await refreshMarketplace();
+      setNotice({
+        tone: 'success',
+        message: 'Domain possession verified; human approval remains separate.',
+      });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
+  const approveMarketplacePublisher = async (publisherId: string) => {
+    if (!marketplaceEvidenceReference.trim() || !marketplaceReason.trim()) {
+      setNotice({
+        tone: 'error',
+        message: 'Publisher evidence reference and review reason are required.',
+      });
+      return;
+    }
+    try {
+      await client.approveMarketplacePublisher(publisherId, {
+        evidenceReference: marketplaceEvidenceReference.trim(),
+        reason: marketplaceReason.trim(),
+      });
+      await refreshMarketplace();
+      setNotice({
+        tone: 'success',
+        message: 'Publisher verified by a distinct accountable reviewer.',
+      });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
+  const suspendMarketplacePublisher = async (publisherId: string) => {
+    if (!marketplaceReason.trim()) {
+      setNotice({ tone: 'error', message: 'A suspension reason is required.' });
+      return;
+    }
+    try {
+      await client.suspendMarketplacePublisher(publisherId, marketplaceReason.trim());
+      await refreshMarketplace();
+      setNotice({
+        tone: 'info',
+        message: 'Publisher trust suspended for future reviews and installs.',
+      });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
+  const submitMarketplaceRelease = async () => {
+    if (!marketplaceManifestJson.trim() || !marketplaceArtifactReference.trim()) {
+      setNotice({
+        tone: 'error',
+        message: 'A signed manifest and opaque artifact reference are required.',
+      });
+      return;
+    }
+    try {
+      const manifest = JSON.parse(marketplaceManifestJson) as SignedPluginManifest;
+      await client.submitMarketplaceRelease({
+        manifest,
+        artifactReference: marketplaceArtifactReference.trim(),
+      });
+      await refreshMarketplace();
+      setNotice({
+        tone: 'success',
+        message: 'Immutable signed release submitted. No artifact code was loaded or executed.',
+      });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
+  const reviewMarketplaceRelease = async (releaseId: string) => {
+    try {
+      await client.reviewMarketplaceRelease(releaseId);
+      await refreshMarketplace();
+      setNotice({
+        tone: 'info',
+        message: 'Trusted automated evidence recorded; human approval remains separate.',
+      });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
+  const decideMarketplaceRelease = async (
+    releaseId: string,
+    decision: 'approve' | 'reject' | 'yank',
+  ) => {
+    if (!marketplaceReason.trim()) {
+      setNotice({ tone: 'error', message: 'A review decision reason is required.' });
+      return;
+    }
+    try {
+      await client.decideMarketplaceRelease(releaseId, decision, marketplaceReason.trim());
+      await refreshMarketplace();
+      setNotice({
+        tone: decision === 'approve' ? 'success' : 'info',
+        message: `Marketplace release ${decision === 'approve' ? 'approved' : decision === 'reject' ? 'rejected' : 'yanked'}.`,
+      });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
+  const installMarketplaceRelease = async (releaseId: string) => {
+    try {
+      await client.installMarketplaceRelease({
+        releaseId,
+        grantedCapabilities: [],
+        reason: 'Install reviewed marketplace metadata without capability grants.',
+      });
+      setNotice({
+        tone: 'success',
+        message:
+          'Release installed disabled with no grants. Enablement and runtime isolation remain separate.',
+      });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
   const toggleIdentity = async () => {
     if (identitySnapshot) {
       setIdentitySnapshot(null);
@@ -2326,6 +2528,14 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
             aria-expanded={migrationOverview !== null}
           >
             Migrations
+          </button>{' '}
+          <button
+            type="button"
+            className="button button--secondary"
+            onClick={() => void toggleMarketplace()}
+            aria-expanded={marketplaceOverview !== null}
+          >
+            Marketplace
           </button>{' '}
           <button
             type="button"
@@ -3804,6 +4014,356 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                 (report) => report.projectId !== activeMigrationProjectId,
               ) ? (
                 <p className="empty-copy">No cutover report for the selected project.</p>
+              ) : null}
+            </section>
+          </div>
+        </section>
+      ) : null}
+      {marketplaceOverview ? (
+        <section className="marketplace-panel" aria-label="Plugin marketplace workbench">
+          <div className="section-heading">
+            <div>
+              <span className="kicker">Evidence-bound extensions</span>
+              <h2>Verified publishers and reviewed packages</h2>
+              <p>
+                {marketplaceOverview.publishers.length} publishers ·{' '}
+                {marketplaceOverview.releases.length} immutable releases
+              </p>
+            </div>
+            <button
+              type="button"
+              className="button button--secondary"
+              onClick={() => void refreshMarketplace()}
+            >
+              Refresh marketplace
+            </button>
+          </div>
+          <p className="marketplace-panel__warning" role="note">
+            A verified badge means domain possession plus accountable human review. A passing scan
+            and provenance identify observed evidence; neither proves package safety. Installed
+            plugins remain disabled, ungranted, and dependent on a separately hardened runtime.
+          </p>
+          <div className="marketplace-panel__setup">
+            <fieldset>
+              <legend>Register publisher identity</legend>
+              <div className="marketplace-panel__fields">
+                <label>
+                  <span>Publisher ID</span>
+                  <input
+                    value={marketplacePublisherId}
+                    onChange={(event) => setMarketplacePublisherId(event.target.value)}
+                    placeholder="example"
+                  />
+                </label>
+                <label>
+                  <span>Display name</span>
+                  <input
+                    value={marketplacePublisherName}
+                    onChange={(event) => setMarketplacePublisherName(event.target.value)}
+                    placeholder="Example"
+                  />
+                </label>
+                <label>
+                  <span>Verified domain</span>
+                  <input
+                    value={marketplacePublisherDomain}
+                    onChange={(event) => setMarketplacePublisherDomain(event.target.value)}
+                    placeholder="example.com"
+                  />
+                </label>
+                <label>
+                  <span>Signing key ID</span>
+                  <input
+                    value={marketplacePublisherKeyId}
+                    onChange={(event) => setMarketplacePublisherKeyId(event.target.value)}
+                  />
+                </label>
+              </div>
+              <label>
+                <span>Ed25519 public key (PEM)</span>
+                <textarea
+                  value={marketplacePublisherPublicKey}
+                  onChange={(event) => setMarketplacePublisherPublicKey(event.target.value)}
+                  aria-describedby="marketplace-key-help"
+                />
+                <small id="marketplace-key-help">
+                  Public verification material only. Never paste a private signing key.
+                </small>
+              </label>
+              <button
+                type="button"
+                className="button button--secondary"
+                onClick={() => void registerMarketplacePublisher()}
+              >
+                Register pending publisher
+              </button>
+            </fieldset>
+            <fieldset>
+              <legend>Submit immutable signed release</legend>
+              <label>
+                <span>Signed Plugin SDK manifest JSON</span>
+                <textarea
+                  value={marketplaceManifestJson}
+                  onChange={(event) => setMarketplaceManifestJson(event.target.value)}
+                  aria-describedby="marketplace-manifest-help"
+                />
+                <small id="marketplace-manifest-help">
+                  Compatibility, support links, permissions, digest, and size must already be inside
+                  the publisher signature.
+                </small>
+              </label>
+              <label>
+                <span>Opaque artifact scanner reference</span>
+                <input
+                  value={marketplaceArtifactReference}
+                  onChange={(event) => setMarketplaceArtifactReference(event.target.value)}
+                  placeholder="scanner://review-system/package-version"
+                />
+              </label>
+              <button
+                type="button"
+                className="button button--secondary"
+                onClick={() => void submitMarketplaceRelease()}
+              >
+                Submit release for review
+              </button>
+            </fieldset>
+          </div>
+          {marketplaceChallenge ? (
+            <div className="marketplace-challenge" role="status">
+              <strong>Pending DNS TXT proof</strong>
+              <span>{marketplaceChallenge.recordName}</span>
+              <code>{marketplaceChallenge.token}</code>
+              <small>Expires {new Date(marketplaceChallenge.expiresAt).toLocaleString()}</small>
+            </div>
+          ) : null}
+          <fieldset className="marketplace-panel__review-inputs">
+            <legend>Accountable review decision</legend>
+            <label>
+              <span>Evidence reference</span>
+              <input
+                value={marketplaceEvidenceReference}
+                onChange={(event) => setMarketplaceEvidenceReference(event.target.value)}
+                placeholder="publisher-review:ticket-123"
+              />
+            </label>
+            <label>
+              <span>Reason</span>
+              <input
+                value={marketplaceReason}
+                onChange={(event) => setMarketplaceReason(event.target.value)}
+                placeholder="What was reviewed and why this decision is safe"
+              />
+            </label>
+            <small>
+              Publisher owners, automated-review operators, and release approvers must be distinct
+              authenticated principals where required.
+            </small>
+          </fieldset>
+          <div className="marketplace-panel__catalog">
+            <section aria-label="Marketplace publishers">
+              <h3>Publisher identity</h3>
+              {marketplaceOverview.publishers.map((publisher) => (
+                <article key={publisher.id} className="marketplace-card">
+                  <div className="marketplace-card__heading">
+                    <div>
+                      <strong>{publisher.displayName}</strong>
+                      <span>{publisher.domain}</span>
+                    </div>
+                    <span className={`status-pill status-pill--${publisher.state}`}>
+                      {publisher.state}
+                    </span>
+                  </div>
+                  <dl>
+                    <div>
+                      <dt>Domain proof</dt>
+                      <dd>{publisher.domainVerifiedAt ? 'observed' : 'pending'}</dd>
+                    </div>
+                    <div>
+                      <dt>Key</dt>
+                      <dd>{publisher.key.keyId}</dd>
+                    </div>
+                    <div>
+                      <dt>Fingerprint</dt>
+                      <dd>
+                        <code>{publisher.key.fingerprint}</code>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Human reviewer</dt>
+                      <dd>{publisher.verifiedBy ?? 'pending'}</dd>
+                    </div>
+                  </dl>
+                  <div className="marketplace-card__actions">
+                    {publisher.state === 'pending' ? (
+                      <>
+                        <button
+                          type="button"
+                          className="button button--secondary"
+                          onClick={() => void issueMarketplaceChallenge(publisher.id)}
+                        >
+                          Issue DNS challenge
+                        </button>
+                        <button
+                          type="button"
+                          className="button button--secondary"
+                          onClick={() => void verifyMarketplaceDomain(publisher.id)}
+                        >
+                          Verify TXT proof
+                        </button>
+                        <button
+                          type="button"
+                          className="button button--primary"
+                          disabled={!publisher.domainVerifiedAt}
+                          onClick={() => void approveMarketplacePublisher(publisher.id)}
+                        >
+                          Approve publisher
+                        </button>
+                      </>
+                    ) : null}
+                    {publisher.state === 'verified' ? (
+                      <button
+                        type="button"
+                        className="button button--danger"
+                        onClick={() => void suspendMarketplacePublisher(publisher.id)}
+                      >
+                        Suspend trust
+                      </button>
+                    ) : null}
+                  </div>
+                </article>
+              ))}
+              {marketplaceOverview.publishers.length === 0 ? (
+                <p className="empty-copy">No publisher identity has been registered.</p>
+              ) : null}
+            </section>
+            <section aria-label="Marketplace releases">
+              <h3>Signed package releases</h3>
+              {marketplaceOverview.releases.map((release) => {
+                const metadata = release.manifest.marketplace;
+                const review = release.reviews.at(-1);
+                return (
+                  <article key={release.id} className="marketplace-card marketplace-release-card">
+                    <div className="marketplace-card__heading">
+                      <div>
+                        <strong>{release.manifest.name}</strong>
+                        <span>
+                          {release.pluginId} · v{release.version}
+                        </span>
+                      </div>
+                      <span className={`status-pill status-pill--${release.state}`}>
+                        {release.state}
+                      </span>
+                    </div>
+                    <p>{release.manifest.description}</p>
+                    <dl>
+                      <div>
+                        <dt>Publisher</dt>
+                        <dd>{release.publisherId}</dd>
+                      </div>
+                      <div>
+                        <dt>Compatibility</dt>
+                        <dd>
+                          {metadata
+                            ? `${metadata.compatibility.gridstory.minVersion}–${metadata.compatibility.gridstory.maxVersionExclusive}`
+                            : 'missing'}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Support</dt>
+                        <dd>{metadata?.support.status ?? 'missing'}</dd>
+                      </div>
+                      <div>
+                        <dt>Artifact digest</dt>
+                        <dd>
+                          <code>{release.manifest.package.sha256}</code>
+                        </dd>
+                      </div>
+                    </dl>
+                    <div>
+                      <strong>Transparent permissions</strong>
+                      {release.manifest.requestedCapabilities.length > 0 ? (
+                        <ul>
+                          {release.manifest.requestedCapabilities.map((grant) => (
+                            <li key={grant.capability}>{grant.capability}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p>No capability requested.</p>
+                      )}
+                    </div>
+                    {review ? (
+                      <section
+                        className="marketplace-review"
+                        aria-label={`Review for ${release.pluginId}`}
+                      >
+                        <strong>
+                          Automated evidence · {review.status} · {review.inspector.id}{' '}
+                          {review.inspector.version}
+                        </strong>
+                        <ul>
+                          {review.checks.map((check) => (
+                            <li key={check.id} data-status={check.status}>
+                              {check.status} · {check.category}: {check.summary}
+                            </li>
+                          ))}
+                        </ul>
+                      </section>
+                    ) : (
+                      <p className="empty-copy">No automated review evidence recorded.</p>
+                    )}
+                    <div className="marketplace-card__actions">
+                      {release.state === 'submitted' ? (
+                        <button
+                          type="button"
+                          className="button button--secondary"
+                          onClick={() => void reviewMarketplaceRelease(release.id)}
+                        >
+                          Run trusted review
+                        </button>
+                      ) : null}
+                      {release.state === 'reviewed' ? (
+                        <>
+                          <button
+                            type="button"
+                            className="button button--primary"
+                            onClick={() => void decideMarketplaceRelease(release.id, 'approve')}
+                          >
+                            Approve exact release
+                          </button>
+                          <button
+                            type="button"
+                            className="button button--danger"
+                            onClick={() => void decideMarketplaceRelease(release.id, 'reject')}
+                          >
+                            Reject
+                          </button>
+                        </>
+                      ) : null}
+                      {release.state === 'approved' ? (
+                        <>
+                          <button
+                            type="button"
+                            className="button button--secondary"
+                            onClick={() => void installMarketplaceRelease(release.id)}
+                          >
+                            Install disabled · no grants
+                          </button>
+                          <button
+                            type="button"
+                            className="button button--danger"
+                            onClick={() => void decideMarketplaceRelease(release.id, 'yank')}
+                          >
+                            Yank release
+                          </button>
+                        </>
+                      ) : null}
+                    </div>
+                  </article>
+                );
+              })}
+              {marketplaceOverview.releases.length === 0 ? (
+                <p className="empty-copy">No signed release has been submitted.</p>
               ) : null}
             </section>
           </div>

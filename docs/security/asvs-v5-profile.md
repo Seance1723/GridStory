@@ -41,11 +41,12 @@ Every ASVS chapter is explicitly represented so an omitted area cannot be mistak
 
 ## Evidence summary
 
-The machine profile contains 32 stable `GS-SEC-###` requirements:
+The machine profile contains 33 stable `GS-SEC-###` requirements:
 
 - Verified controls cover trusted-layer validation, parameterized persistence, SVG sanitization, atomic operations, exact origin messaging, tenant-bound deny-by-default authorization, credential/cache containment, signed token validation, approved platform cryptography, capability-isolated plugin execution, and fail-closed generic errors.
 - `GS-SEC-031` verifies the repository-owned guarded-governance boundary: explicit subject links, private complete scope, hold/restriction dominance, independent digest-bound approval, fresh authentication and backup evidence, execution-time revalidation, envelope encryption, narrow processors/KMS/placement adapters, receipts, and events.
 - `GS-SEC-032` verifies the guarded CMS-migration boundary: trusted server composition, read-only fixed-origin bounded adapters, complete-scope private state, exact-effect digest review, source/target/project/recipe drift checks, idempotent recovery, post-success checkpoints, normal content gates, preserved source deletions, and explicitly limited cutover claims.
+- `GS-SEC-033` verifies the evidence-bound marketplace boundary: expiring DNS possession, distinct human publisher approval, signed compatibility/support/capability metadata, immutable releases, trusted exact-artifact inspection, fail-closed policy, distinct release approval, yanking, and disabled/no-grant installation.
 - Partial controls cover structured rendering, SSRF/egress, browser headers, GraphQL cost/introspection, upload limits/scanning, external adapter configuration, sensitive-data policy, and minimal API fields.
 - Planned controls cover trusted production intermediary/identity configuration, cryptographic inventory/secret lifecycle, and production fail-safe configuration. Anti-automation, vulnerability/component lifecycle, GraphQL/upload bounds, and the resource-demand inventory are partial because distributed/deployment or hosted-release evidence remains.
 - Conditional controls cover deployed trusted-proxy/TLS/service communication and customer-specific IdP/secret-manager conformance; the repository-owned OIDC binding and persistent-session lifecycle are verified.
@@ -60,7 +61,7 @@ The profile treats `GS-SEC-024` credential/cache containment as verified and ext
 
 `GS-SEC-030` and `THREAT-0023` now cover publisher-bound Ed25519 manifest verification, exact SHA-256 artifact binding, SDK/protocol compatibility, tenant-scoped constrained grants, explicit lifecycle authorization/revocation, durable SQLite/PostgreSQL state, and bounded invocation through an injected external-runtime adapter. `GS-SEC-015` and `GS-SEC-019` include the plugin authorization and platform-crypto evidence. Arbitrary packages are never imported into the control-plane process, and the in-process harness is test-only.
 
-This repository evidence does not certify the operator-provided OS/container sandbox or establish marketplace package safety. M5-007 supplies the repository dependency/SBOM/provenance process; the M5-008 review records hosted execution and runtime hardening as absent release/deployment evidence, while publisher/marketplace review remains M6-005.
+This repository evidence does not certify the operator-provided OS/container sandbox or establish marketplace package safety. M5-007 supplies the repository dependency/SBOM/provenance process; M6-005 adds scoped publisher/release review while leaving binary hosting, scanner engines, production scanner transport/policy, and runtime hardening as deployment evidence.
 
 ## M5-004 evidence update
 
@@ -110,13 +111,19 @@ The control does not certify customer discovery/classification or law/policy cho
 
 This control does not certify a deployment's provider credentials/revocation, secret manager, egress/DNS/time/rate policies, source uptime, customer mappings, binary media/history/user/comment transfer, coordinated provider/object/config backups, application/route/SEO/analytics/identity acceptance, traffic switching, or source decommissioning. Those remain operator/deployment evidence under `BETA-003`, `RC-005`, `RC-006`, and `GA-003` while the source remains authoritative.
 
+## M6-005 evidence update
+
+`GS-SEC-033`, `THREAT-0028`, and `THREAT-0029` link bounded marketplace schemas; complete-scope optimistic memory, SQLite, and qualified PostgreSQL repositories; expiring Node DNS TXT verification; distinct publisher and release approval; Ed25519 identity/signature checks; signed compatibility/support/capability metadata; an injected non-executing exact-artifact inspector; private authorized REST/client/Studio operations; yanking; approved-only disabled/no-grant installation; PostgreSQL persistence; and live SQLite recovery.
+
+This control does not host package bytes, implement or certify scanners, prove publisher business legitimacy, guarantee support, automatically approve/install/enable/upgrade, provision a Studio or server sandbox, or authenticate and operate a production scanner/evidence store. Those remain deployment/plugin-owner evidence under `BETA-003`, `RC-005`, `RC-006`, and `GA-003`; a badge, provenance result, or clean scan is never a safety guarantee.
+
 ## Highest-priority gaps
 
 | Gap | ASVS areas | Owner task |
 |---|---|---|
 | Production database/object-store tenant-policy conformance | V8, V14, V15 | `BETA-003`, `RC-006` |
 | Live IdP, secret-manager, secure-cookie/TLS, and trusted-proxy conformance | V4, V6, V7, V10, V13 | Repository boundary delivered by M6-002; deployment acceptance under `BETA-003` |
-| Plugin runtime OS/container hardening, package review, and publisher enrollment | V8, V11, V13, V15 | M6-005; deployment evidence |
+| Plugin runtime OS/container hardening, package hosting/scanner-engine conformance, and publisher business-legitimacy review | V8, V11, V13, V15 | Repository marketplace boundary delivered by M6-005; deployment evidence |
 | Production CMS credential lifecycle, outbound egress, provider throttling/audit, coordinated backup, and application/traffic cutover proof | V8, V11, V12, V13, V14, V15 | Repository boundary delivered by M6-004; deployment acceptance under `BETA-003`, `RC-005`, `RC-006` |
 | Telemetry backend access/deletion, Collector deployment conformance, and production identity/credential event sources | V11, V13, V14, V16 | `BETA-003`, `GA-003`; event sources M6-002 |
 | Backup storage/physical PITR, secret rotation, and orchestrator rollout proof | V13, V14, V15, V16 | `RC-006`, `GA-003`; identity lifecycle M6-002 |

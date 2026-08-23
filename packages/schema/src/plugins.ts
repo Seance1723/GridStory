@@ -32,6 +32,10 @@ const identifierSchema = z
   .regex(/^[a-z0-9]+(?:[._-][a-z0-9]+)*$/);
 const semverSchema = z.string().regex(/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/);
 const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/);
+const httpsUrlSchema = z
+  .url()
+  .max(500)
+  .refine((value) => new URL(value).protocol === 'https:', 'URL must use HTTPS.');
 const exactHostSchema = z
   .string()
   .min(1)
@@ -45,6 +49,88 @@ const contentScopeSchema = z.object({
   environmentId: z.string().min(1),
   locale: z.string().min(1),
 });
+
+export const pluginMarketplaceCategorySchema = z.enum([
+  'authoring',
+  'assets',
+  'automation',
+  'delivery',
+  'governance',
+  'integration',
+  'localization',
+  'search',
+]);
+
+function compareSemver(left: string, right: string): number {
+  const leftParts = (left.split('-', 1)[0] ?? '').split('.').map(Number);
+  const rightParts = (right.split('-', 1)[0] ?? '').split('.').map(Number);
+  for (let index = 0; index < 3; index += 1) {
+    const difference = (leftParts[index] ?? 0) - (rightParts[index] ?? 0);
+    if (difference !== 0) return difference;
+  }
+  return 0;
+}
+
+export const pluginMarketplaceMetadataSchema = z
+  .object({
+    categories: z.array(pluginMarketplaceCategorySchema).min(1).max(5),
+    keywords: z
+      .array(identifierSchema)
+      .max(resourceLimits.marketplace.maximumKeywords)
+      .refine((values) => new Set(values).size === values.length, 'Keywords must be unique.'),
+    homepageUrl: httpsUrlSchema,
+    documentationUrl: httpsUrlSchema,
+    repositoryUrl: httpsUrlSchema,
+    compatibility: z
+      .object({
+        gridstory: z
+          .object({ minVersion: semverSchema, maxVersionExclusive: semverSchema })
+          .strict(),
+        testedRuntimes: z
+          .array(
+            z
+              .object({
+                runtime: z.enum(['node', 'browser']),
+                version: z.string().min(1).max(50),
+                testedAt: z.string().datetime(),
+                evidenceUrl: httpsUrlSchema,
+              })
+              .strict(),
+          )
+          .min(1)
+          .max(resourceLimits.marketplace.maximumTestedRuntimes),
+      })
+      .strict(),
+    support: z
+      .object({
+        status: z.enum(['maintained', 'community', 'deprecated']),
+        policyUrl: httpsUrlSchema,
+        contactUrl: httpsUrlSchema,
+        supportedUntil: z.string().datetime().optional(),
+      })
+      .strict(),
+  })
+  .strict()
+  .superRefine((metadata, context) => {
+    const categories = new Set(metadata.categories);
+    if (categories.size !== metadata.categories.length) {
+      context.addIssue({
+        code: 'custom',
+        path: ['categories'],
+        message: 'Marketplace categories must be unique.',
+      });
+    }
+    const range = metadata.compatibility.gridstory;
+    if (compareSemver(range.minVersion, range.maxVersionExclusive) >= 0) {
+      context.addIssue({
+        code: 'custom',
+        path: ['compatibility', 'gridstory'],
+        message: 'GridStory compatibility maximum must be greater than the minimum.',
+      });
+    }
+  });
+
+export type PluginMarketplaceMetadata = z.output<typeof pluginMarketplaceMetadataSchema>;
 
 export const pluginCapabilityConstraintsSchema = z
   .object({
@@ -122,6 +208,7 @@ const unsignedPluginManifestSchema = z
     requestedCapabilities: z.array(pluginCapabilityGrantSchema).max(pluginCapabilityNames.length),
     operations: z.array(identifierSchema).min(1).max(100),
     configurationSchema: z.record(z.string(), z.unknown()).optional(),
+    marketplace: pluginMarketplaceMetadataSchema.optional(),
   })
   .strict()
   .superRefine((manifest, context) => {

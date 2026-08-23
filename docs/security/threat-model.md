@@ -1,6 +1,6 @@
 # GridStory threat model
 
-This document is the reviewable view of the canonical machine-readable model in [`security/threat-model.json`](../../security/threat-model.json). It follows OWASP's four threat-modeling questions: what are we building, what can go wrong, what will we do, and did we do enough. STRIDE is a discovery aid, not the risk score. This model covers GridStory's current control plane, authoring, preview, assets, delivery, background operations, search, portability, recovery, and plugin-runtime boundaries.
+This document is the reviewable view of the canonical machine-readable model in [`security/threat-model.json`](../../security/threat-model.json). It follows OWASP's four threat-modeling questions: what are we building, what can go wrong, what will we do, and did we do enough. STRIDE is a discovery aid, not the risk score. This model covers GridStory's current control plane, authoring, preview, assets, delivery, background operations, search, portability, recovery, plugin-runtime, and operator-scoped marketplace boundaries.
 
 This is a living engineering model. It is not a penetration-test report or a claim that a deployment is secure without its identity provider, TLS edge, secret manager, databases, object stores, egress controls, logging, and application-owned renderers being configured and reviewed.
 
@@ -22,6 +22,7 @@ flowchart LR
   app["Application-owned React renderer"]
   idp["OIDC provider"]
   publisher["Plugin publisher"]
+  scanner["Trusted marketplace artifact inspector"]
   plugin["External plugin process / container"]
   backup[("Encrypted off-host backup storage")]
 
@@ -38,7 +39,9 @@ flowchart LR
   preview -->|"origin/token-bound draft requests"| api
   core -->|"published revisions only"| delivery
   delivery --> app
-  publisher -->|"signed manifest + artifact digest"| api
+  publisher -->|"signed manifest + DNS/key identity"| api
+  api -->|"opaque reference + exact digest/size"| scanner
+  scanner -->|"bounded SBOM/provenance/security evidence"| api
   core -->|"bounded scoped protocol"| plugin
   db -->|"native snapshot/dump + checksum manifest"| backup
   backup -->|"verified isolated restore"| db
@@ -57,12 +60,14 @@ The numbered boundaries in the canonical model are:
 9. Logical archive to repository.
 10. Control plane to signed plugin package and external runtime.
 11. Database and recovery operator to protected backup storage.
+12. Governance approval and worker to governed resources, KMS, and placement adapters.
+13. Migration service to read-only external CMS sources and guarded target writes.
 
 A change that crosses or weakens one of these boundaries requires a threat-model review in the same change.
 
 ## Security assets
 
-The protected assets are draft history; published content and routes; complete tenant/locale scope; identities, roles, grants, and sessions; signing secrets and service credentials; private asset bytes and verdicts; workflow approvals and release intent; outbox/job state; audit history; search indexes and cache tags; logical archives; service capacity; plugin manifests, publisher trust, tenant grants, and lifecycle evidence; and whole-database backups/recovery manifests.
+The protected assets are draft history; published content and routes; complete tenant/locale scope; identities, roles, grants, and sessions; signing secrets and service credentials; private asset bytes and verdicts; workflow approvals and release intent; outbox/job state; audit history; search indexes and cache tags; logical archives; service capacity; plugin manifests, marketplace publisher/release evidence, tenant grants, and lifecycle evidence; and whole-database backups/recovery manifests.
 
 Draft content, identity attributes, credentials/tokens, private assets, and operational/audit data are sensitive. Published content is intentionally public, but its integrity, freshness, route correctness, and tenant separation remain security properties.
 
@@ -84,7 +89,9 @@ Every modeled threat has a response, owner, concrete mitigations, and verificati
 | ID | Threat | STRIDE | Inherent risk | Current position / residual work |
 |---|---|---|---:|---|
 | THREAT-0001 | Cross-tenant object access or mutation | S/I/E | 20 Critical | M5-002 established canonical collision-safe scope contracts and fail-closed repository/adapter/queue/telemetry checks; production database and object-store policy conformance remains deployment evidence. |
-| THREAT-0023 | Malicious, forged, over-granted, or escaped plugin | S/T/I/D/E | 20 Critical | M5-003 verifies signed digest-bound metadata, compatibility, constrained tenant grants, authorized lifecycle/revocation, and bounded external-runtime messages without importing plugin modules. M5-007 covers repository dependency/SBOM/provenance policy; OS/container hardening, marketplace review, and publisher enrollment remain deployment/M6-005 obligations. |
+| THREAT-0023 | Malicious, forged, over-granted, or escaped plugin | S/T/I/D/E | 20 Critical | M5-003 verifies signed digest-bound metadata, compatibility, constrained tenant grants, authorized lifecycle/revocation, and bounded external-runtime messages without importing plugin modules. M6-005 adds current approved marketplace-release revalidation and disabled/no-grant install handoff; OS/container hardening remains deployment evidence. |
+| THREAT-0028 | Forged, stale, or overclaimed marketplace publisher identity | S/T/R/E | 20 Critical | Validated identity/key input, exact expiring DNS possession, distinct evidence-referenced human approval, private summaries, current-trust install checks, and immediate suspension mitigate the repository boundary. Business-legitimacy review and DNS operations remain operator evidence. |
+| THREAT-0029 | Forged, stale, incomplete, or overtrusted marketplace release review | S/T/R/D/E | 20 Critical | A configured non-executing inspector must bind current inventory/SBOM/provenance/malware/vulnerability/license evidence to the exact signed artifact; unsafe/missing/error evidence blocks, another human approves, releases remain immutable/yankable, and UI/docs separate evidence from safety. Scanner transport, engine/policy, and evidence-store conformance remain deployment evidence. |
 | THREAT-0024 | Database backup disclosure, tampering, or unsafe restore | T/I/D | 20 Critical | M5-005 adds native consistent backup formats, minimal SHA-256 manifests, integrity/table checks, credential-safe PostgreSQL invocation, absent/empty isolated restore targets, live SQLite and disposable PostgreSQL restore drills, and protected storage/PITR guidance. Provider storage, keys, retention, access logging, and physical PITR proof remain deployment evidence. |
 | THREAT-0026 | CMS source credential disclosure, SSRF, hostile continuation, or source exhaustion | S/T/I/D/E | 20 Critical | Server-only read credentials, credential-free fixed HTTPS origins, disabled redirects, same-origin continuation, response/record bounds, strict normalization, private state, and mocked hostile adapter regressions mitigate the repository boundary. Egress policy, secret-manager lifecycle, provider logs/revocation, and production throttling remain deployment evidence. |
 | THREAT-0027 | Migration drift, retry duplication, destructive reconciliation, or false cutover readiness | T/R/I/D/E | 20 Critical | Exact-effect dry-runs, digest/expiry/version/revision binding, pending links, checksum recovery, post-success checkpoints, normal content gates, non-destructive deletion blockers, full reconciliation, and an explicit content-only readiness claim fail closed. External traffic/application/SEO/analytics acceptance remains operator work. |
@@ -117,7 +124,7 @@ The canonical register also covers preview and asset grant replay, forged webhoo
 - GridStory validates structured content but cannot make arbitrary application-owned React code safe. Consuming applications own contextual output encoding, dependency review, and CSP compatibility.
 - Provider adapters must preserve complete tenant scope and the documented timeout, redirect, credential, and failure behavior.
 - Server plugin packages remain outside the control-plane process and execute only in operator-provided external processes/containers. GridStory verifies and mediates the protocol; operators own OS identity, filesystem, network, CPU, memory, and process isolation.
-- Marketplace review, publisher enrollment, and the Studio sandbox loader are not supplied by M5-003. M5-007 supplies repository-level dependency, SBOM, and provenance evidence but does not establish marketplace package safety.
+- M6-005 supplies scoped publisher enrollment and evidence-bound release review, but package bytes/download, scanner engines, publisher business-legitimacy checks, automated safety guarantees, and the Studio/runtime sandbox remain external. Provenance, a verified badge, or a passing scan does not prove safety.
 - Whole-database backups contain every tenant and are never a tenant-scoped portability mechanism. Operators own encrypted off-host storage, key custody, retention/deletion, restore approvals, and provider-specific physical PITR evidence.
 - Governance automation is not legal advice or automatic personal-data discovery. Operators own classifications, link completeness, lawful-basis/hold decisions, external-system processors, coordinated backups, provider KMS/placement evidence, and production approval policy.
 - CMS source credentials are server-only, read-only, least privilege, and operator-managed. GridStory does not write to or decommission a source CMS, move binary media, or administer its credentials.
@@ -137,6 +144,14 @@ Residual deployment risk remains high until the customer proves data discovery/c
 Versioned deterministic recipes and complete-scope private repositories retain projects, links, plans, runs, checkpoints, and reports. Execution requires the exact unexpired plan digest, project/recipe/source checksums, and expected target revision; it records a pending deterministic link before content mutation, recovers a checksum-identical partial write, advances the checkpoint only after every effect and receipt completes, and sends mutations through normal content/reference/workflow/quality/governance/publication checks. Source deletions, unpublishes, unsupported media, incomplete snapshots, and manual target changes block rather than delete or overwrite.
 
 Residual production risk stays high until an operator proves least-privilege provider credentials and revocation, egress/DNS/rate/timeout policy, a coordinated database/provider/object/config backup, representative source fixtures and mapping acceptance, application/route/media/SEO/analytics/identity checks, and an independently controlled traffic rollback. The source remains authoritative until that external cutover is accepted; GridStory's report neither switches traffic nor certifies those systems.
+
+## M6-005 evidence update
+
+`THREAT-0028` covers deceptive/stale publisher identity, challenge replay, key substitution, self-approval, and continued trust after suspension. Publisher enrollment validates domains, same-domain ownership links, and Ed25519 public keys; short-lived exact-name TXT possession precedes a distinct evidence-referenced human approval, while suspension immediately removes marketplace trust. Catalog summaries omit challenges and public-key bodies, and every marketplace install revalidates publisher/key/signature state.
+
+`THREAT-0029` covers mismatched, stale, incomplete, unavailable, compromised, or overtrusted inspection. The control plane never imports or executes the package and fails closed without an injected trusted inspector. Review binds exact digest/size and current inventory, SPDX, provenance subject, malware, vulnerability, license, inspector-version, and evidence-reference results; unsafe or missing checks block, capabilities remain warnings for human judgment, a distinct operator approves, releases are immutable/yankable, and approved installation remains disabled with no grants.
+
+Residual deployment risk remains critical until an operator authenticates the scanner transport, validates scanner engines/policy/update/freshness and evidence-store integrity/retention, performs independent publisher due diligence, coordinates package/evidence recovery, and provisions least-privilege plugin runtime isolation. GridStory makes evidence reviewable; it does not certify third-party code as safe or guarantee publisher support.
 
 ## Review workflow
 

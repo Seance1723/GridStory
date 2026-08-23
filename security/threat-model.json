@@ -3,7 +3,7 @@
   "model": {
     "id": "GRIDSTORY-TM-001",
     "title": "GridStory control plane and delivery threat model",
-    "version": "1.3.0",
+    "version": "1.4.0",
     "reviewedAt": "2026-08-23",
     "owners": ["GridStory security owner", "GridStory architecture owner"],
     "methodology": "OWASP four-question threat modeling with STRIDE categorization",
@@ -17,7 +17,7 @@
       "workers, outbox, durable jobs, search, cache, and webhook adapters",
       "published REST delivery and application-owned React rendering",
       "logical archive export and import",
-      "signed plugin manifests, tenant grants, lifecycle state, and external runtime protocol",
+      "signed plugin manifests, tenant grants, lifecycle state, external runtime protocol, and scoped marketplace publisher/release evidence",
       "data governance, legal holds, rights requests, guarded erasure, encrypted exports, customer-managed key references, and placement attestations",
       "read-only CMS source adapters, private migration recipes, dry-run plans, checkpoints, links, receipts, and cutover evidence"
     ],
@@ -25,7 +25,7 @@
       "security of application-owned React components after validated data leaves GridStory",
       "identity-provider internals",
       "cloud, CDN, database, object-store, and network controls not configured by GridStory",
-      "marketplace review, publisher enrollment, dependency analysis, and operating-system/container isolation supplied outside GridStory"
+      "package binary hosting/download, scanner-engine internals, publisher business-legitimacy verification, and operating-system/container isolation supplied outside GridStory"
     ],
     "riskModel": {
       "formula": "likelihood * impact",
@@ -84,9 +84,11 @@
     },
     {
       "id": "ACTOR-009",
-      "name": "Plugin publisher or external runtime",
+      "name": "Plugin publisher, marketplace inspector, or external runtime",
       "trust": "signed but untrusted code boundary",
-      "capabilities": ["submit signed metadata and process mediated tenant-scoped plugin requests"]
+      "capabilities": [
+        "submit signed metadata, return exact-artifact review evidence, and process mediated tenant-scoped plugin requests"
+      ]
     }
   ],
   "assets": [
@@ -152,8 +154,15 @@
     },
     {
       "id": "ASSET-013",
-      "name": "Plugin manifests, publisher trust, tenant grants, and lifecycle history",
-      "securityProperties": ["authenticity", "least privilege", "tenant isolation", "revocability"]
+      "name": "Plugin manifests, marketplace publisher/release evidence, tenant grants, and lifecycle history",
+      "securityProperties": [
+        "authenticity",
+        "integrity",
+        "accountability",
+        "least privilege",
+        "tenant isolation",
+        "revocability"
+      ]
     },
     {
       "id": "ASSET-014",
@@ -261,7 +270,10 @@
       "name": "Control plane to plugin package and external runtime",
       "controls": [
         "Ed25519 manifest and SHA-256 artifact verification",
-        "publisher-bound trust records and SDK compatibility",
+        "DNS possession plus distinct evidence-referenced publisher approval and immediate suspension",
+        "publisher-bound trust records, signed compatibility/support metadata, and immutable releases",
+        "trusted exact-artifact inspection with SBOM, provenance, inventory, malware, vulnerability, license, and freshness checks",
+        "distinct current-review release approval plus rejection and yanking",
         "tenant-scoped constrained grants and deny-by-default lifecycle authorization",
         "external process/container protocol with bounded rate, time, and JSON size",
         "no imported plugin modules, ambient credentials, database handles, filesystem, or process authority"
@@ -391,7 +403,7 @@
       "id": "FLOW-013",
       "from": "ACTOR-009",
       "to": "BOUNDARY-010",
-      "data": "signed manifest metadata, artifact digest, health result, and bounded invocation messages",
+      "data": "signed manifest metadata, publisher DNS/key evidence, artifact digest/review evidence, approval decisions, health result, and bounded invocation messages",
       "assets": ["ASSET-003", "ASSET-005", "ASSET-012", "ASSET-013"]
     },
     {
@@ -431,6 +443,7 @@
     "External adapters implement the documented timeouts, redirect, egress, credential, and tenant-scope contracts.",
     "The M5-002 application isolation review verifies canonical scope keys and fail-closed boundaries across persistence, cache, search, assets, jobs, events, audit, and telemetry; production infrastructure policies remain deployment evidence.",
     "Production plugin runtimes are separately operated processes or containers with least-privilege OS, filesystem, network, CPU, and memory policies; the GridStory adapter protocol does not itself provide OS isolation.",
+    "Marketplace artifact inspectors are separately authenticated and operated trusted adapters whose policy, evidence storage, availability, and scanner-engine correctness require deployment conformance; a passing result or verified provenance is not a safety guarantee.",
     "CMS migration credentials are read-only, least privilege, and injected by the trusted server runtime; the source stays authoritative and recoverable until an externally operated cutover is accepted."
   ],
   "threats": [
@@ -1005,6 +1018,7 @@
       "owner": "Plugin platform owner",
       "mitigations": [
         "Verify canonical Ed25519 manifests, exact SHA-256 artifact digests, publisher trust, and SDK/protocol compatibility before installation.",
+        "For marketplace installs, require current publisher trust, immutable approved release state, and a current exact-artifact passing review before handing off to disabled installation with no automatic grants.",
         "Authorize tenant-scoped lifecycle actions and require granted constrained capabilities to be a subset of the signed request.",
         "Never import plugin modules; use an injected external runtime with bounded health/invocation messages, rate, time, input, and output limits, and fail closed when no runtime is configured.",
         "Retain immutable lifecycle evidence and support immediate tenant disablement and revocation; separately harden the operating-system/container boundary."
@@ -1012,8 +1026,11 @@
       "verification": [
         "packages/schema/test/plugins.test.ts",
         "packages/core/test/plugin-service.test.ts",
+        "packages/core/test/marketplace-service.test.ts",
         "packages/core/test/postgres-conformance.test.ts",
         "apps/api/test/plugins.test.ts",
+        "apps/api/test/marketplace.test.ts",
+        "docs/marketplace.md",
         "docs/plugins.md"
       ]
     },
@@ -1165,6 +1182,66 @@
         "apps/api/test/database-recovery.test.ts",
         "apps/studio/test/App.test.tsx",
         "docs/migration-and-cutover.md"
+      ]
+    },
+    {
+      "id": "THREAT-0028",
+      "title": "Forged, stale, or overclaimed marketplace publisher identity",
+      "stride": ["Spoofing", "Tampering", "Repudiation", "Elevation of Privilege"],
+      "scenario": "An attacker registers a deceptive identity, replays or guesses a DNS challenge, approves their own publisher, substitutes a key, or continues installing releases after publisher trust is suspended.",
+      "actors": ["ACTOR-003", "ACTOR-008", "ACTOR-009"],
+      "assets": ["ASSET-003", "ASSET-004", "ASSET-005", "ASSET-009", "ASSET-013"],
+      "boundaries": ["BOUNDARY-002", "BOUNDARY-003", "BOUNDARY-006", "BOUNDARY-010"],
+      "likelihood": 4,
+      "impact": 5,
+      "risk": 20,
+      "response": "mitigate",
+      "owner": "Marketplace trust owner",
+      "mitigations": [
+        "Validate stable identities, registrable domains, same-domain HTTPS ownership links, and Ed25519 public keys before persistence.",
+        "Use unpredictable bounded exact-name DNS TXT challenges that expire and record only an observed possession signal.",
+        "Require a different authenticated operator to approve evidence with a reason/reference and allow immediate publisher suspension.",
+        "Revalidate current publisher state, exact key ID, signature, release review, and immutable digest before every marketplace installation; omit challenges and key bodies from catalog summaries."
+      ],
+      "verification": [
+        "packages/schema/test/marketplace.test.ts",
+        "packages/core/test/marketplace-service.test.ts",
+        "apps/api/test/marketplace-adapters.test.ts",
+        "apps/api/test/marketplace.test.ts",
+        "docs/marketplace.md"
+      ]
+    },
+    {
+      "id": "THREAT-0029",
+      "title": "Forged, stale, incomplete, or overtrusted marketplace release review",
+      "stride": [
+        "Spoofing",
+        "Tampering",
+        "Repudiation",
+        "Denial of Service",
+        "Elevation of Privilege"
+      ],
+      "scenario": "A compromised or unavailable inspector returns evidence for different bytes, hides unsafe inventory or vulnerabilities, supplies stale provenance, or causes a human to treat a badge or scan as proof of safety and approve or install a risky release.",
+      "actors": ["ACTOR-003", "ACTOR-007", "ACTOR-008", "ACTOR-009"],
+      "assets": ["ASSET-004", "ASSET-005", "ASSET-009", "ASSET-012", "ASSET-013"],
+      "boundaries": ["BOUNDARY-002", "BOUNDARY-003", "BOUNDARY-006", "BOUNDARY-010"],
+      "likelihood": 4,
+      "impact": 5,
+      "risk": 20,
+      "response": "mitigate",
+      "owner": "Marketplace review and deployment owner",
+      "mitigations": [
+        "Never execute or import package code in the control plane; use only a configured trusted inspector and fail closed on absence or error.",
+        "Bind review to the exact signed manifest, digest, size, publisher/key, inspector identity/version, evidence reference, completion time, SPDX inventory, provenance subject, malware, vulnerability, license, and archive-inventory results.",
+        "Block stale, mismatched, missing, unknown, detected, denied, high/critical, traversal, install-script, or native-binary evidence and expose capability requests as human-review warnings.",
+        "Require a distinct release approver, retain rejected/yanked history, install disabled with no automatic grants, and state that identity, provenance, scanning, support, installation, and runtime safety are separate signals."
+      ],
+      "verification": [
+        "packages/core/test/marketplace-service.test.ts",
+        "apps/api/test/marketplace.test.ts",
+        "apps/studio/test/App.test.tsx",
+        "tests/e2e/accessibility.spec.ts",
+        "docs/marketplace.md"
       ]
     }
   ],

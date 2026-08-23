@@ -1,3 +1,4 @@
+import { generateKeyPairSync } from 'node:crypto';
 import { appendFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -120,6 +121,25 @@ describe('database recovery', () => {
         },
       });
       expect(migrationProject.statusCode).toBe(201);
+      const { publicKey } = generateKeyPairSync('ed25519');
+      const marketplacePublisher = await server.inject({
+        method: 'POST',
+        url: '/api/v1/marketplace/publishers',
+        headers,
+        payload: {
+          id: 'recovery-publisher',
+          displayName: 'Recovery publisher',
+          domain: 'recovery.example.com',
+          websiteUrl: 'https://recovery.example.com',
+          supportUrl: 'https://support.recovery.example.com',
+          key: {
+            keyId: 'recovery-release-key',
+            algorithm: 'ed25519',
+            publicKey: publicKey.export({ format: 'pem', type: 'spki' }).toString(),
+          },
+        },
+      });
+      expect(marketplacePublisher.statusCode, marketplacePublisher.body).toBe(201);
 
       const manifest = await backupSqlite({
         sourcePath,
@@ -171,6 +191,23 @@ describe('database recovery', () => {
           ],
         },
       });
+      await server.inject({
+        method: 'POST',
+        url: '/api/v1/marketplace/publishers',
+        headers,
+        payload: {
+          id: 'after-backup',
+          displayName: 'After backup',
+          domain: 'after.example.com',
+          websiteUrl: 'https://after.example.com',
+          supportUrl: 'https://support.after.example.com',
+          key: {
+            keyId: 'after-backup-key',
+            algorithm: 'ed25519',
+            publicKey: publicKey.export({ format: 'pem', type: 'spki' }).toString(),
+          },
+        },
+      });
 
       await expect(restoreSqlite({ backupPath, targetPath: restoredPath })).resolves.toEqual(
         manifest,
@@ -208,6 +245,16 @@ describe('database recovery', () => {
       expect(recoveredMigrations.json()).toMatchObject({
         recipes: [{ id: 'recovery-page', name: 'Recovery page recipe', version: 1 }],
         projects: [{ id: 'recovery-migration', sourceId: 'recovery-source', state: 'active' }],
+      });
+      const recoveredMarketplace = await restored.inject({
+        method: 'GET',
+        url: '/api/v1/marketplace',
+        headers,
+      });
+      expect(recoveredMarketplace.statusCode).toBe(200);
+      expect(recoveredMarketplace.json()).toMatchObject({
+        publishers: [{ id: 'recovery-publisher', state: 'pending' }],
+        releases: [],
       });
     } finally {
       await restored?.close();

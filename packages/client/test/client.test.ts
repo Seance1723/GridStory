@@ -62,6 +62,112 @@ describe('GridStoryClient browser compatibility', () => {
     expect(JSON.parse(String(requests[5]?.init?.body))).toEqual({ digest: 'a'.repeat(64) });
   });
 
+  it('sends evidence-bound marketplace publisher, review, decision, and install contracts', async () => {
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    const client = createGridStoryClient({
+      baseUrl: 'https://cms.example.test',
+      tenantId: 'marketplace-tenant',
+      fetch: async (input, init) => {
+        requests.push({ url: String(input), ...(init ? { init } : {}) });
+        return new Response(JSON.stringify({}), {
+          headers: { 'content-type': 'application/json' },
+        });
+      },
+    });
+    const manifest: SignedPluginManifest = {
+      format: PLUGIN_MANIFEST_FORMAT,
+      manifestVersion: PLUGIN_MANIFEST_VERSION,
+      id: 'com.example.marketplace',
+      name: 'Marketplace client plugin',
+      description: 'Typed client fixture.',
+      version: '1.0.0',
+      publisher: { id: 'example', name: 'Example' },
+      sdk: { minVersion: '1.0.0', maxVersionExclusive: '2.0.0' },
+      package: { sha256: 'f'.repeat(64), sizeBytes: 2_048 },
+      runtimes: { server: { isolation: 'external', protocolVersion: PLUGIN_PROTOCOL_VERSION } },
+      requestedCapabilities: [{ capability: 'content.read' }],
+      operations: ['read'],
+      marketplace: {
+        categories: ['authoring'],
+        keywords: ['editorial'],
+        homepageUrl: 'https://example.com/plugin',
+        documentationUrl: 'https://docs.example.com/plugin',
+        repositoryUrl: 'https://code.example.com/plugin',
+        compatibility: {
+          gridstory: { minVersion: '0.0.0', maxVersionExclusive: '1.0.0' },
+          testedRuntimes: [
+            {
+              runtime: 'node',
+              version: '22.14.0',
+              testedAt: '2026-08-23T12:00:00.000Z',
+              evidenceUrl: 'https://ci.example.com/runs/123',
+            },
+          ],
+        },
+        support: {
+          status: 'maintained',
+          policyUrl: 'https://example.com/support-policy',
+          contactUrl: 'https://example.com/support',
+        },
+      },
+      signature: { algorithm: 'ed25519', keyId: 'release-1', value: 'A'.repeat(88) },
+    };
+
+    await client.getMarketplace();
+    await client.registerMarketplacePublisher({
+      id: 'example',
+      displayName: 'Example',
+      domain: 'example.com',
+      websiteUrl: 'https://example.com',
+      supportUrl: 'https://support.example.com',
+      key: {
+        keyId: 'release-1',
+        algorithm: 'ed25519',
+        publicKey: `-----BEGIN PUBLIC KEY-----\n${'A'.repeat(100)}\n-----END PUBLIC KEY-----`,
+      },
+    });
+    await client.issueMarketplacePublisherChallenge('example publisher');
+    await client.verifyMarketplacePublisherDomain('example publisher');
+    await client.approveMarketplacePublisher('example publisher', {
+      evidenceReference: 'publisher-review:client',
+      reason: 'Reviewed.',
+    });
+    await client.submitMarketplaceRelease({
+      manifest,
+      artifactReference: 'scanner://client-fixture/plugin-1.0.0',
+    });
+    await client.reviewMarketplaceRelease('release one');
+    await client.decideMarketplaceRelease('release one', 'approve', 'Approved.');
+    await client.installMarketplaceRelease({
+      releaseId: 'release one',
+      grantedCapabilities: [{ capability: 'content.read' }],
+      reason: 'Install reviewed release.',
+    });
+    await client.suspendMarketplacePublisher('example publisher', 'Trust incident.');
+
+    expect(requests.map(({ url }) => url)).toEqual([
+      'https://cms.example.test/api/v1/marketplace',
+      'https://cms.example.test/api/v1/marketplace/publishers',
+      'https://cms.example.test/api/v1/marketplace/publishers/example%20publisher/challenge',
+      'https://cms.example.test/api/v1/marketplace/publishers/example%20publisher/verify-domain',
+      'https://cms.example.test/api/v1/marketplace/publishers/example%20publisher/approve',
+      'https://cms.example.test/api/v1/marketplace/releases',
+      'https://cms.example.test/api/v1/marketplace/releases/release%20one/review',
+      'https://cms.example.test/api/v1/marketplace/releases/release%20one/approve',
+      'https://cms.example.test/api/v1/marketplace/releases/release%20one/install',
+      'https://cms.example.test/api/v1/marketplace/publishers/example%20publisher/suspend',
+    ]);
+    expect(JSON.parse(String(requests[2]?.init?.body))).toEqual({});
+    expect(JSON.parse(String(requests[4]?.init?.body))).toEqual({
+      evidenceReference: 'publisher-review:client',
+      reason: 'Reviewed.',
+    });
+    expect(JSON.parse(String(requests[8]?.init?.body))).toEqual({
+      grantedCapabilities: [{ capability: 'content.read' }],
+      reason: 'Install reviewed release.',
+    });
+  });
+
   it('sends guarded governance workflow contracts without client-supplied reauthentication time', async () => {
     const requests: Array<{ url: string; init?: RequestInit }> = [];
     const client = createGridStoryClient({

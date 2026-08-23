@@ -24,7 +24,7 @@ A v1 manifest binds these security-relevant values:
 
 The signature covers canonical JSON for every field except the signature object itself, including the package digest. Installation separately receives the downloaded/verified artifact digest and requires an exact match. A publisher trust record is injected into `buildServer`; an unknown or revoked publisher/key, malformed public key, incompatible SDK range, digest mismatch, or invalid signature stops installation.
 
-Trusting a publisher signature authenticates metadata and artifact identity; it does not establish that the code is safe. Marketplace review, dependency analysis, SBOM/provenance, publisher enrollment, package download, and support policy remain M6-005/M5-007 work.
+Trusting a publisher signature authenticates metadata and artifact identity; it does not establish that the code is safe. The operator-scoped [evidence-bound marketplace](marketplace.md) now adds DNS possession, separate human publisher approval, signed compatibility/support metadata, injected artifact inspection, immutable release decisions, and approved-only disabled installation. Package storage/download, scanner engines, automatic approval/enablement, and runtime sandbox provisioning remain external responsibilities.
 
 ## Capabilities and grants
 
@@ -86,6 +86,7 @@ Before enabling a production runtime:
 - implement protocol version 1 health and invocation transport without importing plugin modules into the API/worker;
 - source publisher public keys from a reviewed trust configuration and exercise key revocation;
 - verify package bytes independently and pass their lowercase SHA-256 digest to installation;
+- when using the marketplace, authenticate and protect the DNS/scanner adapters and preserve exact review evidence without treating provenance or a clean scan as a safety guarantee;
 - grant only the capabilities and allow-list values approved by a tenant administrator;
 - send runtime/security logs to a protected sink without tokens, secrets, raw drafts, or private asset bytes;
 - test disable, revoke, unhealthy runtime, timeout, oversized input/output, tenant crossing, upgrade incompatibility, and rollback behavior.

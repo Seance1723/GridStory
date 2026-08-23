@@ -44,6 +44,12 @@ import type {
   LegalHold,
   LocaleConfiguration,
   LocalizedContentResolution,
+  MarketplaceDomainChallenge,
+  MarketplaceOverview,
+  MarketplacePublisherInput,
+  MarketplacePublisherSummary,
+  MarketplaceReleaseSubmission,
+  MarketplaceReleaseSummary,
   MigrationCutoverReport,
   MigrationPlanSummary,
   MigrationProjectInput,
@@ -96,6 +102,8 @@ export interface MigrationOverviewRecord {
   runs: MigrationRun[];
   cutoverReports: MigrationCutoverReport[];
 }
+
+export type MarketplaceOverviewRecord = MarketplaceOverview;
 
 export interface SchemaDeploymentRecord {
   document: SchemaIrDocument;
@@ -423,6 +431,19 @@ export interface CreatePreviewSessionInput {
 export interface InstallPluginInput {
   manifest: SignedPluginManifest;
   artifactDigest: string;
+  grantedCapabilities: PluginCapabilityGrant[];
+  reason: string;
+  signal?: AbortSignal;
+}
+
+export interface ApproveMarketplacePublisherInput {
+  evidenceReference: string;
+  reason: string;
+  signal?: AbortSignal;
+}
+
+export interface InstallMarketplaceReleaseInput {
+  releaseId: string;
   grantedCapabilities: PluginCapabilityGrant[];
   reason: string;
   signal?: AbortSignal;
@@ -867,6 +888,115 @@ export class GridStoryClient {
       method: 'POST',
       ...(signal ? { signal } : {}),
     });
+  }
+
+  getMarketplace(signal?: AbortSignal): Promise<MarketplaceOverview> {
+    return this.#request('/api/v1/marketplace', { ...(signal ? { signal } : {}) });
+  }
+
+  registerMarketplacePublisher(
+    input: MarketplacePublisherInput,
+    signal?: AbortSignal,
+  ): Promise<MarketplacePublisherSummary> {
+    return this.#request('/api/v1/marketplace/publishers', {
+      method: 'POST',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  issueMarketplacePublisherChallenge(
+    id: string,
+    signal?: AbortSignal,
+  ): Promise<MarketplaceDomainChallenge> {
+    return this.#request(`/api/v1/marketplace/publishers/${encodeURIComponent(id)}/challenge`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  verifyMarketplacePublisherDomain(
+    id: string,
+    signal?: AbortSignal,
+  ): Promise<MarketplacePublisherSummary> {
+    return this.#request(`/api/v1/marketplace/publishers/${encodeURIComponent(id)}/verify-domain`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  approveMarketplacePublisher(
+    id: string,
+    input: ApproveMarketplacePublisherInput,
+  ): Promise<MarketplacePublisherSummary> {
+    return this.#request(`/api/v1/marketplace/publishers/${encodeURIComponent(id)}/approve`, {
+      method: 'POST',
+      body: JSON.stringify({
+        evidenceReference: input.evidenceReference,
+        reason: input.reason,
+      }),
+      ...(input.signal ? { signal: input.signal } : {}),
+    });
+  }
+
+  suspendMarketplacePublisher(
+    id: string,
+    reason: string,
+    signal?: AbortSignal,
+  ): Promise<MarketplacePublisherSummary> {
+    return this.#request(`/api/v1/marketplace/publishers/${encodeURIComponent(id)}/suspend`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  submitMarketplaceRelease(
+    submission: MarketplaceReleaseSubmission,
+    signal?: AbortSignal,
+  ): Promise<MarketplaceReleaseSummary> {
+    return this.#request('/api/v1/marketplace/releases', {
+      method: 'POST',
+      body: JSON.stringify(submission),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  reviewMarketplaceRelease(id: string, signal?: AbortSignal): Promise<MarketplaceReleaseSummary> {
+    return this.#request(`/api/v1/marketplace/releases/${encodeURIComponent(id)}/review`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  decideMarketplaceRelease(
+    id: string,
+    decision: 'approve' | 'reject' | 'yank',
+    reason: string,
+    signal?: AbortSignal,
+  ): Promise<MarketplaceReleaseSummary> {
+    return this.#request(`/api/v1/marketplace/releases/${encodeURIComponent(id)}/${decision}`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  installMarketplaceRelease(input: InstallMarketplaceReleaseInput): Promise<PluginInstallation> {
+    return this.#request(
+      `/api/v1/marketplace/releases/${encodeURIComponent(input.releaseId)}/install`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          grantedCapabilities: input.grantedCapabilities,
+          reason: input.reason,
+        }),
+        ...(input.signal ? { signal: input.signal } : {}),
+      },
+    );
   }
 
   getComponentManifests(signal?: AbortSignal): Promise<ResolvedComponentManifest[]> {

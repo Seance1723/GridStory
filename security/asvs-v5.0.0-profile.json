@@ -869,6 +869,45 @@
         "apps/studio/test/App.test.tsx"
       ],
       "taskIds": ["M6-004"]
+    },
+    {
+      "id": "GS-SEC-033",
+      "title": "Evidence-bound marketplace publisher and release trust",
+      "status": "verified",
+      "owner": "Marketplace trust and plugin platform owner",
+      "statement": "Marketplace state SHALL be completely tenant scoped and private; publisher trust SHALL require an exact expiring DNS possession proof plus a distinct evidence-referenced human approval and immediate suspension; releases SHALL be immutable, publisher/key/signature/digest bound, and compatibility/support/capability transparent; automated review SHALL use only a configured trusted non-executing inspector, bind current SBOM/provenance/inventory/malware/vulnerability/license evidence to the exact artifact, fail closed, and require a distinct human release approver; marketplace installation SHALL revalidate current trust and install disabled without automatic capability grants.",
+      "asvsRefs": [
+        "v5.0.0-2.2.2",
+        "v5.0.0-8.1.1",
+        "v5.0.0-11.2.1",
+        "v5.0.0-13.2.4",
+        "v5.0.0-15.3.2",
+        "v5.0.0-16.5.3"
+      ],
+      "threatRefs": ["THREAT-0001", "THREAT-0023", "THREAT-0028", "THREAT-0029"],
+      "evidence": [
+        "packages/schema/src/marketplace.ts",
+        "packages/core/src/marketplace-repository.ts",
+        "packages/core/src/marketplace-service.ts",
+        "packages/core/src/plugin-service.ts",
+        "apps/api/src/marketplace-adapters.ts",
+        "apps/api/src/marketplace-routes.ts",
+        "docs/marketplace.md",
+        "docs/adr/0016-evidence-bound-marketplace.md"
+      ],
+      "verification": [
+        "packages/schema/test/marketplace.test.ts",
+        "packages/core/test/marketplace-repository.test.ts",
+        "packages/core/test/marketplace-service.test.ts",
+        "packages/core/test/postgres-conformance.test.ts",
+        "apps/api/test/marketplace-adapters.test.ts",
+        "apps/api/test/marketplace.test.ts",
+        "apps/api/test/database-recovery.test.ts",
+        "packages/client/test/client.test.ts",
+        "apps/studio/test/App.test.tsx",
+        "tests/e2e/accessibility.spec.ts"
+      ],
+      "taskIds": ["M6-005"]
     }
   ]
 }

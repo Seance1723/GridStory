@@ -45,6 +45,10 @@ import {
   LocaleRegistry,
   LocalizationService,
   logicalArchiveFromUnknown,
+  type MarketplaceArtifactInspector,
+  type MarketplaceDomainVerifier,
+  type MarketplaceRepository,
+  MarketplaceService,
   type MigrationRepository,
   type MigrationSourceAdapter,
   MigrationService,
@@ -57,6 +61,7 @@ import {
   PostgresContentRepository,
   PostgresGovernanceRepository,
   PostgresIdentityRepository,
+  PostgresMarketplaceRepository,
   PostgresMigrationRepository,
   PostgresPluginRepository,
   PostgresReleaseRepository,
@@ -73,6 +78,7 @@ import {
   SqliteContentRepository,
   SqliteGovernanceRepository,
   SqliteIdentityRepository,
+  SqliteMarketplaceRepository,
   SqliteMigrationRepository,
   SqlitePluginRepository,
   SqliteReleaseRepository,
@@ -132,6 +138,8 @@ import {
   WebAuthnAdapter,
 } from './identity-adapters.js';
 import { registerIdentityRoutes } from './identity-routes.js';
+import { NodeDnsMarketplaceDomainVerifier } from './marketplace-adapters.js';
+import { registerMarketplaceRoutes } from './marketplace-routes.js';
 import { registerMigrationRoutes } from './migration-routes.js';
 import type { GridStoryObservability } from './observability.js';
 import { authorize, contentScope, requestContext } from './request-context.js';
@@ -184,6 +192,12 @@ export interface BuildServerOptions {
   migration?: {
     repository?: MigrationRepository;
     sources?: MigrationSourceAdapter[];
+  };
+  marketplace?: {
+    repository?: MarketplaceRepository;
+    domainVerifier?: MarketplaceDomainVerifier;
+    artifactInspector?: MarketplaceArtifactInspector;
+    hostVersion?: string;
   };
 }
 
@@ -431,6 +445,7 @@ export async function buildServer({
   identity: identityOptions,
   governance: governanceOptions,
   migration: migrationOptions,
+  marketplace: marketplaceOptions,
 }: BuildServerOptions): Promise<FastifyInstance> {
   if (!databaseUrl && databasePath !== ':memory:') {
     mkdirSync(dirname(resolve(databasePath)), { recursive: true });
@@ -479,6 +494,11 @@ export async function buildServer({
     (databaseUrl
       ? new PostgresMigrationRepository({ connectionString: databaseUrl })
       : new SqliteMigrationRepository({ filename: databasePath }));
+  const resolvedMarketplaceRepository: MarketplaceRepository =
+    marketplaceOptions?.repository ??
+    (databaseUrl
+      ? new PostgresMarketplaceRepository({ connectionString: databaseUrl })
+      : new SqliteMarketplaceRepository({ filename: databasePath }));
   const governance = new GovernanceService({
     repository: resolvedGovernanceRepository,
     ...(governanceOptions?.keyAdapter ? { keyAdapter: governanceOptions.keyAdapter } : {}),
@@ -528,9 +548,19 @@ export async function buildServer({
     repository: resolvedReleaseRepository,
     contentService: service,
   });
+  const marketplace = new MarketplaceService({
+    repository: resolvedMarketplaceRepository,
+    domainVerifier: marketplaceOptions?.domainVerifier ?? new NodeDnsMarketplaceDomainVerifier(),
+    ...(marketplaceOptions?.artifactInspector
+      ? { artifactInspector: marketplaceOptions.artifactInspector }
+      : {}),
+    ...(marketplaceOptions?.hostVersion ? { hostVersion: marketplaceOptions.hostVersion } : {}),
+  });
   const plugins = new PluginService({
     repository: resolvedPluginRepository,
     trustedPublishers: trustedPluginPublishers,
+    trustedPublisherResolver: ({ scope, publisherId, keyId }) =>
+      marketplace.trustedPublisher(scope, publisherId, keyId),
     ...(pluginRuntime ? { runtime: pluginRuntime } : {}),
   });
   const executeWorkflowSchedule = async ({
@@ -685,6 +715,7 @@ export async function buildServer({
   });
   await registerGovernanceRoutes(server, { service: governance, policy });
   await registerMigrationRoutes(server, { service: migration, policy });
+  await registerMarketplaceRoutes(server, { service: marketplace, plugins, policy });
 
   server.addHook('onClose', async () => {
     await repository.close();
@@ -696,6 +727,7 @@ export async function buildServer({
     await resolvedIdentityRepository.close();
     await resolvedGovernanceRepository.close();
     await resolvedMigrationRepository.close();
+    await resolvedMarketplaceRepository.close();
   });
   server.addHook('onSend', async (request, reply, payload) => {
     if (request.url.startsWith('/api/v1/delivery/')) {

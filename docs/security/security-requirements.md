@@ -119,6 +119,17 @@ The implementation, limitations, operator workflow, and recovery boundary are do
 
 The operator boundary, provider setup, rollback sequence, and claim limits are documented in [CMS migration and cutover](../migration-and-cutover.md). `THREAT-0026` owns source credential/SSRF/exhaustion abuse, and `THREAT-0027` owns drift, retry, destructive reconciliation, and false-readiness abuse.
 
+## Evidence-bound plugin marketplace
+
+- `GS-SEC-033`: marketplace publisher, release, review, and decision state SHALL carry the complete organization, tenant, workspace, site, environment, and locale scope; management responses SHALL be private/no-store and use distinct deny-by-default read/manage/review permissions, with plugin management additionally required for installation.
+- Publisher registration SHALL validate stable identities, registrable domain ownership links, and Ed25519 public verification keys. Verification SHALL require an unpredictable exact-name DNS TXT token before its bounded expiry plus a different authenticated human reviewer with an evidence reference and reason. Suspension SHALL immediately remove marketplace trust.
+- Marketplace discovery, compatibility ranges, tested-runtime links, support status/policy/contact, requested capabilities, exact package digest/size, publisher/key, and version SHALL be covered by the publisher signature. A submitted plugin/version SHALL be immutable.
+- Automated review SHALL never import or execute the package. It SHALL fail closed without a configured trusted inspector and bind current exact digest/size, safe archive inventory, SPDX SBOM, provenance subject, malware, vulnerability, and license evidence to a stable inspector version/reference. Adapter errors and missing/stale/mismatched/unsafe evidence SHALL block approval.
+- Release approval SHALL require the latest current passing review and an authenticated approver distinct from submission and automated-review actors. Rejected/yanked history SHALL be retained. Installation SHALL revalidate current publisher/key/review/release state, invoke the existing signed installer disabled, and SHALL NOT grant capabilities automatically.
+- Interfaces SHALL distinguish DNS possession, human identity approval, cryptographic authorship/integrity, automated evidence, publisher-declared support, release approval, installation, capability grants, and runtime isolation. No badge, provenance, or scan SHALL be represented as proof of package safety.
+
+The implementation, limits, operator workflow, incident response, and recovery boundary are documented in [Evidence-bound plugin marketplace](../marketplace.md). `THREAT-0028` owns publisher identity/key/trust abuse, while `THREAT-0029` owns forged, stale, incomplete, or overtrusted package-review evidence.
+
 ## Logging, error handling, and operations
 
 - `GS-SEC-028`: a maintained log inventory SHALL define event, metadata, format, sink, access, retention, correlation, and alerting. At minimum cover authentication, failed authorization, privileged mutation, publication, workflow/release, import/export, credential lifecycle, adapter failure, and control bypass.
@@ -168,6 +179,12 @@ Repository evidence does not discover all customer personal data, select applica
 `GS-SEC-032`, `THREAT-0026`, and `THREAT-0027` cover server-only read-only provider adapters, same-origin HTTPS continuation, bounded normalization, fully scoped private migration state, deterministic versioned mapping, exact-effect digest review, drift and deletion blockers, crash-safe pending-link recovery, post-success checkpoints, normal content/publication gates, complete full reconciliation, and content-only cutover evidence. SQLite/PostgreSQL persist the same optimistic document, and live SQLite recovery restores the earlier mapping/project state with the earlier target content.
 
 Repository evidence does not certify production provider credentials, egress/DNS/rate policy, source availability, binary media transfer, source history/users/comments, inferred schema/reference semantics, customer mapping correctness, coordinated external backups, application/route/SEO/analytics/identity behavior, traffic operations, or source decommissioning. Those remain operator/deployment evidence while the source remains authoritative.
+
+## M6-005 marketplace baseline
+
+`GS-SEC-033`, `THREAT-0028`, and `THREAT-0029` cover complete-scope private marketplace state, expiring exact DNS possession proof, distinct evidence-referenced publisher approval, immediate trust suspension, signed discovery/compatibility/support/capability metadata, immutable releases, configured exact-artifact inspection, fail-closed evidence policy, distinct release approval, yanking, and approved-only disabled/no-grant installation. SQLite/PostgreSQL persist the same optimistic document, and live SQLite recovery restores the earlier publisher state with the earlier content snapshot.
+
+Repository evidence does not host or download package bytes, implement scanner engines, verify business legitimacy, guarantee third-party support, automatically approve/install/enable/upgrade, certify a package as safe, provision the external runtime sandbox, authenticate a production scanner transport, or prove scanner policy/evidence-store operations. Those remain operator/deployment evidence.
 
 ## Verification ownership
 

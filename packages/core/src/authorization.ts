@@ -55,6 +55,9 @@ export const GridStoryActions = {
   migrationRead: 'migration.read',
   migrationManage: 'migration.manage',
   migrationExecute: 'migration.execute',
+  marketplaceRead: 'marketplace.read',
+  marketplaceManage: 'marketplace.manage',
+  marketplaceReview: 'marketplace.review',
 } as const;
 
 export type GridStoryAction = (typeof GridStoryActions)[keyof typeof GridStoryActions];
@@ -69,6 +72,7 @@ export interface AuthorizationResource {
     | 'workflow'
     | 'release'
     | 'plugin'
+    | 'marketplace'
     | 'governance'
     | 'migration'
     | 'delivery'
@@ -112,6 +116,7 @@ export const defaultRoles: RoleDefinition[] = [
       GridStoryActions.workflowRead,
       GridStoryActions.releaseRead,
       GridStoryActions.collaborationRead,
+      GridStoryActions.marketplaceRead,
     ],
   },
   {
@@ -134,6 +139,7 @@ export const defaultRoles: RoleDefinition[] = [
       GridStoryActions.collaborationRead,
       GridStoryActions.collaborationWrite,
       GridStoryActions.presenceWrite,
+      GridStoryActions.marketplaceRead,
     ],
   },
   {
@@ -162,6 +168,7 @@ export const defaultRoles: RoleDefinition[] = [
       GridStoryActions.collaborationRead,
       GridStoryActions.collaborationWrite,
       GridStoryActions.presenceWrite,
+      GridStoryActions.marketplaceRead,
     ],
   },
   { id: 'delivery', actions: [GridStoryActions.deliveryRead] },

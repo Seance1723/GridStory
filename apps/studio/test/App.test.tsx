@@ -6,6 +6,7 @@ import {
   type ContentEntry,
   createGridStoryClient,
   type MigrationCutoverReport,
+  type MarketplaceOverviewRecord,
   type MigrationPlanSummary,
   type MigrationProjectSummary,
   type MigrationRecipe,
@@ -298,6 +299,122 @@ function createTestClient(
   const migrationPlans: MigrationPlanSummary[] = [];
   const migrationRuns: MigrationRun[] = [];
   const migrationCutoverReports: MigrationCutoverReport[] = [];
+  const marketplaceOverview: MarketplaceOverviewRecord = {
+    publishers: [
+      {
+        organizationId: 'local',
+        tenantId: 'default',
+        workspaceId: 'default',
+        siteId: 'default',
+        environmentId: 'development',
+        locale: 'en',
+        id: 'example',
+        displayName: 'Example publisher',
+        domain: 'example.com',
+        websiteUrl: 'https://example.com',
+        supportUrl: 'https://support.example.com',
+        key: {
+          keyId: 'release-1',
+          algorithm: 'ed25519',
+          fingerprint: 'a'.repeat(64),
+        },
+        state: 'verified',
+        domainVerifiedAt: now,
+        verifiedAt: now,
+        verifiedBy: 'publisher-reviewer',
+        verificationEvidenceReference: 'publisher-review:123',
+        verificationReason: 'Domain and accountable owner reviewed.',
+        createdAt: now,
+        createdBy: 'publisher-owner',
+        updatedAt: now,
+      },
+    ],
+    releases: [
+      {
+        organizationId: 'local',
+        tenantId: 'default',
+        workspaceId: 'default',
+        siteId: 'default',
+        environmentId: 'development',
+        locale: 'en',
+        id: 'com.example.marketplace@1.0.0',
+        pluginId: 'com.example.marketplace',
+        publisherId: 'example',
+        version: '1.0.0',
+        manifest: {
+          format: 'gridstory.plugin',
+          manifestVersion: 1,
+          id: 'com.example.marketplace',
+          name: 'Marketplace plugin',
+          description: 'Reviewed marketplace fixture.',
+          version: '1.0.0',
+          publisher: { id: 'example', name: 'Example publisher' },
+          sdk: { minVersion: '1.0.0', maxVersionExclusive: '2.0.0' },
+          package: { sha256: 'b'.repeat(64), sizeBytes: 2_048 },
+          runtimes: { server: { isolation: 'external', protocolVersion: 1 } },
+          requestedCapabilities: [{ capability: 'content.read' }],
+          operations: ['summarize'],
+          marketplace: {
+            categories: ['authoring'],
+            keywords: ['editorial'],
+            homepageUrl: 'https://example.com/plugin',
+            documentationUrl: 'https://docs.example.com/plugin',
+            repositoryUrl: 'https://code.example.com/plugin',
+            compatibility: {
+              gridstory: { minVersion: '0.0.0', maxVersionExclusive: '1.0.0' },
+              testedRuntimes: [
+                {
+                  runtime: 'node',
+                  version: '22.14.0',
+                  testedAt: now,
+                  evidenceUrl: 'https://ci.example.com/runs/123',
+                },
+              ],
+            },
+            support: {
+              status: 'maintained',
+              policyUrl: 'https://example.com/support-policy',
+              contactUrl: 'https://example.com/support',
+            },
+          },
+          signature: { algorithm: 'ed25519', keyId: 'release-1', value: 'A'.repeat(88) },
+        },
+        state: 'approved',
+        submittedAt: now,
+        submittedBy: 'publisher-owner',
+        updatedAt: now,
+        reviews: [
+          {
+            id: 'review-1',
+            policyVersion: 1,
+            status: 'passed',
+            manifestDigest: 'c'.repeat(64),
+            inspector: { id: 'trusted-scanner', version: '1.0.0' },
+            evidenceReference: 'scan:123',
+            completedAt: now,
+            reviewedBy: 'package-reviewer',
+            checks: [
+              {
+                id: 'signature',
+                category: 'signature',
+                status: 'passed',
+                summary: 'Signature matches the verified publisher key.',
+              },
+              {
+                id: 'permissions',
+                category: 'permissions',
+                status: 'warning',
+                summary: 'Review requested capabilities before enabling.',
+              },
+            ],
+          },
+        ],
+        approvedAt: now,
+        approvedBy: 'release-approver',
+        approvalReason: 'Evidence and compatibility reviewed.',
+      },
+    ],
+  };
   const workflowInstances = new Map(
     testEntries.map((candidate) => [
       candidate.id,
@@ -661,6 +778,15 @@ function createTestClient(
         runs: migrationRuns,
         cutoverReports: migrationCutoverReports,
       });
+    }
+    if (url.pathname === '/api/v1/marketplace' && init?.method !== 'POST') {
+      return json(marketplaceOverview);
+    }
+    if (
+      url.pathname === '/api/v1/marketplace/releases/com.example.marketplace%401.0.0/install' &&
+      init?.method === 'POST'
+    ) {
+      return json({ id: 'installation-1', state: 'disabled' }, 201);
     }
     const migrationRecipeMatch = url.pathname.match(/^\/api\/v1\/migrations\/recipes\/([^/]+)$/);
     if (migrationRecipeMatch && init?.method === 'PUT') {
@@ -1307,6 +1433,25 @@ describe('GridStory Studio', () => {
     await user.click(within(panel).getByRole('button', { name: 'Validate cutover' }));
     expect(await within(panel).findByText('Content checks ready')).toBeTruthy();
     expect(panel.textContent).toContain('1/1 current · 1 published');
+  });
+
+  it('explains marketplace evidence boundaries and installs an approved release without grants', async () => {
+    const user = userEvent.setup();
+    render(<App client={createTestClient()} />);
+
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Marketplace' }));
+
+    const panel = await screen.findByRole('region', { name: 'Plugin marketplace workbench' });
+    expect(panel.textContent).toContain('A verified badge means domain possession');
+    expect(panel.textContent).toContain('neither proves package safety');
+    expect(panel.textContent).toContain('Example publisher');
+    expect(panel.textContent).toContain('maintained');
+    expect(panel.textContent).toContain('content.read');
+    expect(panel.textContent).toContain('Signature matches the verified publisher key.');
+
+    await user.click(within(panel).getByRole('button', { name: 'Install disabled · no grants' }));
+    expect(await screen.findByText(/installed disabled with no grants/i)).toBeTruthy();
   });
 
   it('starts and revokes a secure application iframe preview', async () => {
