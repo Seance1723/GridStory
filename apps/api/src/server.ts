@@ -53,6 +53,8 @@ import {
   type MigrationSourceAdapter,
   MigrationService,
   OperationsService,
+  type PersonalizationRepository,
+  PersonalizationService,
   type PluginRepository,
   type PluginRuntimeAdapter,
   PluginService,
@@ -63,6 +65,7 @@ import {
   PostgresIdentityRepository,
   PostgresMarketplaceRepository,
   PostgresMigrationRepository,
+  PostgresPersonalizationRepository,
   PostgresPluginRepository,
   PostgresReleaseRepository,
   PostgresWorkflowRepository,
@@ -80,6 +83,7 @@ import {
   SqliteIdentityRepository,
   SqliteMarketplaceRepository,
   SqliteMigrationRepository,
+  SqlitePersonalizationRepository,
   SqlitePluginRepository,
   SqliteReleaseRepository,
   SqliteWorkflowRepository,
@@ -142,6 +146,7 @@ import { NodeDnsMarketplaceDomainVerifier } from './marketplace-adapters.js';
 import { registerMarketplaceRoutes } from './marketplace-routes.js';
 import { registerMigrationRoutes } from './migration-routes.js';
 import type { GridStoryObservability } from './observability.js';
+import { registerPersonalizationRoutes } from './personalization-routes.js';
 import { authorize, contentScope, requestContext } from './request-context.js';
 
 export interface BuildServerOptions {
@@ -198,6 +203,9 @@ export interface BuildServerOptions {
     domainVerifier?: MarketplaceDomainVerifier;
     artifactInspector?: MarketplaceArtifactInspector;
     hostVersion?: string;
+  };
+  personalization?: {
+    repository?: PersonalizationRepository;
   };
 }
 
@@ -446,6 +454,7 @@ export async function buildServer({
   governance: governanceOptions,
   migration: migrationOptions,
   marketplace: marketplaceOptions,
+  personalization: personalizationOptions,
 }: BuildServerOptions): Promise<FastifyInstance> {
   if (!databaseUrl && databasePath !== ':memory:') {
     mkdirSync(dirname(resolve(databasePath)), { recursive: true });
@@ -499,6 +508,11 @@ export async function buildServer({
     (databaseUrl
       ? new PostgresMarketplaceRepository({ connectionString: databaseUrl })
       : new SqliteMarketplaceRepository({ filename: databasePath }));
+  const resolvedPersonalizationRepository: PersonalizationRepository =
+    personalizationOptions?.repository ??
+    (databaseUrl
+      ? new PostgresPersonalizationRepository({ connectionString: databaseUrl })
+      : new SqlitePersonalizationRepository({ filename: databasePath }));
   const governance = new GovernanceService({
     repository: resolvedGovernanceRepository,
     ...(governanceOptions?.keyAdapter ? { keyAdapter: governanceOptions.keyAdapter } : {}),
@@ -555,6 +569,9 @@ export async function buildServer({
       ? { artifactInspector: marketplaceOptions.artifactInspector }
       : {}),
     ...(marketplaceOptions?.hostVersion ? { hostVersion: marketplaceOptions.hostVersion } : {}),
+  });
+  const personalization = new PersonalizationService({
+    repository: resolvedPersonalizationRepository,
   });
   const plugins = new PluginService({
     repository: resolvedPluginRepository,
@@ -716,6 +733,7 @@ export async function buildServer({
   await registerGovernanceRoutes(server, { service: governance, policy });
   await registerMigrationRoutes(server, { service: migration, policy });
   await registerMarketplaceRoutes(server, { service: marketplace, plugins, policy });
+  await registerPersonalizationRoutes(server, { service: personalization, policy });
 
   server.addHook('onClose', async () => {
     await repository.close();
@@ -728,6 +746,7 @@ export async function buildServer({
     await resolvedGovernanceRepository.close();
     await resolvedMigrationRepository.close();
     await resolvedMarketplaceRepository.close();
+    await resolvedPersonalizationRepository.close();
   });
   server.addHook('onSend', async (request, reply, payload) => {
     if (request.url.startsWith('/api/v1/delivery/')) {

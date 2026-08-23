@@ -12,6 +12,7 @@ import {
   type MigrationRecipe,
   type MigrationRun,
   type MigrationSourceDescriptor,
+  type PersonalizationSnapshot,
   type Release,
 } from '@gridstory/client';
 import { exampleDesignSystem } from '@gridstory/example-kit/design-system';
@@ -415,6 +416,66 @@ function createTestClient(
       },
     ],
   };
+  let personalizationSnapshot: PersonalizationSnapshot = {
+    organizationId: 'local',
+    tenantId: 'default',
+    workspaceId: 'default',
+    siteId: 'default',
+    environmentId: 'development',
+    locale: 'en',
+    schemaVersion: 1,
+    version: 1,
+    draft: {
+      revision: 2,
+      configuration: {
+        purposes: [],
+        attributes: [
+          {
+            key: 'market',
+            name: 'Market',
+            source: 'market',
+            valueType: 'enum',
+            allowedValues: ['uk', 'us'],
+            classification: 'public',
+            requiredPurposes: [],
+            cacheability: 'shared',
+          },
+          {
+            key: 'device',
+            name: 'Device class',
+            source: 'device-class',
+            valueType: 'enum',
+            allowedValues: ['mobile', 'desktop'],
+            classification: 'public',
+            requiredPurposes: [],
+            cacheability: 'shared',
+          },
+        ],
+        audiences: [
+          {
+            id: 'uk-visitors',
+            name: 'UK visitors',
+            description: 'Visitors in the UK market.',
+            priority: 10,
+            conditions: [{ attributeKey: 'market', operator: 'equals', value: 'uk' }],
+          },
+        ],
+        decisions: [
+          {
+            resourceKey: 'homepage-hero',
+            name: 'Homepage hero',
+            variants: ['default', 'uk'],
+            rules: [{ audienceId: 'uk-visitors', variant: 'uk' }],
+            fallbackVariant: 'default',
+          },
+        ],
+      },
+      updatedAt: now,
+      updatedBy: 'targeting-author',
+    },
+    createdAt: now,
+    updatedAt: now,
+  };
   const workflowInstances = new Map(
     testEntries.map((candidate) => [
       candidate.id,
@@ -781,6 +842,61 @@ function createTestClient(
     }
     if (url.pathname === '/api/v1/marketplace' && init?.method !== 'POST') {
       return json(marketplaceOverview);
+    }
+    if (url.pathname === '/api/v1/personalization' && init?.method !== 'POST') {
+      return json(personalizationSnapshot);
+    }
+    if (url.pathname === '/api/v1/personalization/draft' && init?.method === 'PUT') {
+      const body = JSON.parse(String(init.body)) as {
+        configuration: PersonalizationSnapshot['draft']['configuration'];
+      };
+      personalizationSnapshot = {
+        ...personalizationSnapshot,
+        version: personalizationSnapshot.version + 1,
+        draft: {
+          revision: personalizationSnapshot.draft.revision + 1,
+          configuration: body.configuration,
+          updatedAt: now,
+          updatedBy: 'targeting-author',
+        },
+        updatedAt: now,
+      };
+      return json(personalizationSnapshot);
+    }
+    if (url.pathname === '/api/v1/personalization/publish' && init?.method === 'POST') {
+      personalizationSnapshot = {
+        ...personalizationSnapshot,
+        version: personalizationSnapshot.version + 1,
+        published: {
+          ...personalizationSnapshot.draft,
+          publishedAt: now,
+          publishedBy: 'targeting-publisher',
+        },
+        updatedAt: now,
+      };
+      return json(personalizationSnapshot);
+    }
+    if (url.pathname === '/api/v1/personalization/preview' && init?.method === 'POST') {
+      return json({
+        resourceKey: 'homepage-hero',
+        variant: 'uk',
+        audienceId: 'uk-visitors',
+        reason: 'matched',
+        draftRevision: personalizationSnapshot.draft.revision,
+        cache: {
+          mode: 'no-store',
+          tag: 'personalization:local:default:r2',
+          inputs: ['market'],
+          reason: 'Draft preview decisions must never enter a cache.',
+        },
+        trace: [
+          {
+            audienceId: 'uk-visitors',
+            matched: true,
+            conditions: [{ attributeKey: 'market', matched: true, reason: 'matched' }],
+          },
+        ],
+      });
     }
     if (
       url.pathname === '/api/v1/marketplace/releases/com.example.marketplace%401.0.0/install' &&
@@ -1452,6 +1568,40 @@ describe('GridStory Studio', () => {
 
     await user.click(within(panel).getByRole('button', { name: 'Install disabled · no grants' }));
     expect(await screen.findByText(/installed disabled with no grants/i)).toBeTruthy();
+  });
+
+  it('edits, previews, and publishes a consent-aware targeting draft without user impersonation', async () => {
+    const user = userEvent.setup();
+    render(<App client={createTestClient()} />);
+
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Targeting' }));
+
+    const panel = await screen.findByRole('region', {
+      name: 'Personalization targeting workbench',
+    });
+    expect(panel.textContent).toContain('Do not paste names, email addresses, account IDs');
+    expect(panel.textContent).toContain('Draft r2');
+    const configurationEditor = within(panel).getByLabelText('Targeting configuration JSON');
+    expect(configurationEditor).toBeTruthy();
+    await user.type(configurationEditor, ' ');
+    expect(
+      (within(panel).getByRole('button', { name: 'Publish exact draft' }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    await user.click(within(panel).getByRole('button', { name: 'Save targeting draft' }));
+    expect(await screen.findByText(/published edge decisions are unchanged/i)).toBeTruthy();
+
+    await user.click(within(panel).getByRole('button', { name: 'Preview draft decision' }));
+    const explanation = await within(panel).findByRole('region', {
+      name: 'Personalization decision explanation',
+    });
+    expect(explanation.textContent).toContain('uk · matched');
+    expect(explanation.textContent).toContain('Cache: no-store');
+    expect(explanation.textContent).toContain('market: matched');
+
+    await user.click(within(panel).getByRole('button', { name: 'Publish exact draft' }));
+    expect(await screen.findByText(/Published targeting revision 3/)).toBeTruthy();
   });
 
   it('starts and revokes a secure application iframe preview', async () => {

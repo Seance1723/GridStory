@@ -49,6 +49,36 @@ describe.skipIf(!connectionString)('GridStory API with PostgreSQL', () => {
     });
     expect(createResponse.statusCode).toBe(201);
     const created = createResponse.json();
+    const targetingDraft = await server.inject({
+      method: 'PUT',
+      url: '/api/v1/personalization/draft',
+      headers,
+      payload: {
+        expectedVersion: 0,
+        configuration: {
+          purposes: [],
+          attributes: [],
+          audiences: [],
+          decisions: [
+            {
+              resourceKey: 'postgres-banner',
+              name: 'PostgreSQL banner',
+              variants: ['default'],
+              rules: [],
+              fallbackVariant: 'default',
+            },
+          ],
+        },
+      },
+    });
+    expect(targetingDraft.statusCode, targetingDraft.body).toBe(200);
+    const targetingPublished = await server.inject({
+      method: 'POST',
+      url: '/api/v1/personalization/publish',
+      headers,
+      payload: { expectedVersion: 1, expectedDraftRevision: 2 },
+    });
+    expect(targetingPublished.statusCode, targetingPublished.body).toBe(200);
 
     expect(
       await server.inject({
@@ -119,6 +149,22 @@ describe.skipIf(!connectionString)('GridStory API with PostgreSQL', () => {
     expect(collaboration.json()).toMatchObject({
       version: 1,
       operations: [{ id: 'postgres-title-operation', value: 'Collaborative PostgreSQL title' }],
+    });
+    const targetingDecision = await server.inject({
+      method: 'POST',
+      url: '/api/v1/personalization/decide',
+      headers,
+      payload: {
+        resourceKey: 'postgres-banner',
+        attributes: {},
+        consent: { grantedPurposes: [], deniedPurposes: [], globalPrivacyControl: false },
+      },
+    });
+    expect(targetingDecision.statusCode, targetingDecision.body).toBe(200);
+    expect(targetingDecision.json()).toMatchObject({
+      variant: 'default',
+      publishedRevision: 2,
+      cache: { mode: 'shared' },
     });
 
     await approveForPublication(server, created, headers);

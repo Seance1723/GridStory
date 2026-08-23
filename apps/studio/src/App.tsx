@@ -21,6 +21,10 @@ import {
   type MigrationRecipeInput,
   type MarketplaceOverviewRecord,
   type OperationsDashboardRecord,
+  type PersonalizationConfiguration,
+  type PersonalizationPreviewRequest,
+  type PersonalizationPreviewResult,
+  type PersonalizationSnapshot,
   type PreviewSessionGrant,
   type RelatedContentRecord,
   type Release,
@@ -93,6 +97,20 @@ type ComponentGovernanceState = {
   migration: ComponentMigrationPlanResponse;
   visual: ComponentVisualRegressionPlan;
 };
+
+const defaultPersonalizationPreview = JSON.stringify(
+  {
+    resourceKey: 'homepage-hero',
+    attributes: { market: 'uk', device: 'mobile' },
+    consent: {
+      grantedPurposes: [],
+      deniedPurposes: [],
+      globalPrivacyControl: false,
+    },
+  },
+  null,
+  2,
+);
 
 function emptyCollaborationSnapshot(entryId = ''): CollaborationSnapshot {
   return {
@@ -546,6 +564,14 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   const [marketplaceReason, setMarketplaceReason] = useState('');
   const [marketplaceManifestJson, setMarketplaceManifestJson] = useState('');
   const [marketplaceArtifactReference, setMarketplaceArtifactReference] = useState('');
+  const [personalization, setPersonalization] = useState<PersonalizationSnapshot | null>(null);
+  const [personalizationConfigurationJson, setPersonalizationConfigurationJson] = useState('');
+  const [personalizationConfigurationDirty, setPersonalizationConfigurationDirty] = useState(false);
+  const [personalizationPreviewJson, setPersonalizationPreviewJson] = useState(
+    defaultPersonalizationPreview,
+  );
+  const [personalizationPreview, setPersonalizationPreview] =
+    useState<PersonalizationPreviewResult | null>(null);
   const [searchPanelOpen, setSearchPanelOpen] = useState(false);
   const [searchBusy, setSearchBusy] = useState(false);
   const [searchText, setSearchText] = useState('');
@@ -2175,6 +2201,77 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
       setNotice({ tone: 'error', message: messageFrom(error) });
     }
   };
+  const refreshPersonalization = async () => {
+    const snapshot = await client.getPersonalization();
+    setPersonalization(snapshot);
+    setPersonalizationConfigurationJson(JSON.stringify(snapshot.draft.configuration, null, 2));
+    setPersonalizationConfigurationDirty(false);
+  };
+  const togglePersonalization = async () => {
+    if (personalization) {
+      setPersonalization(null);
+      setPersonalizationPreview(null);
+      setPersonalizationConfigurationDirty(false);
+      return;
+    }
+    try {
+      await refreshPersonalization();
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
+  const savePersonalizationDraft = async () => {
+    if (!personalization) return;
+    try {
+      const configuration = JSON.parse(
+        personalizationConfigurationJson,
+      ) as PersonalizationConfiguration;
+      const snapshot = await client.replacePersonalizationDraft({
+        expectedVersion: personalization.version,
+        configuration,
+      });
+      setPersonalization(snapshot);
+      setPersonalizationConfigurationJson(JSON.stringify(snapshot.draft.configuration, null, 2));
+      setPersonalizationConfigurationDirty(false);
+      setPersonalizationPreview(null);
+      setNotice({
+        tone: 'success',
+        message: 'Targeting draft saved. Published edge decisions are unchanged.',
+      });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
+  const publishPersonalization = async () => {
+    if (!personalization) return;
+    try {
+      const snapshot = await client.publishPersonalization({
+        expectedVersion: personalization.version,
+        expectedDraftRevision: personalization.draft.revision,
+      });
+      setPersonalization(snapshot);
+      setNotice({
+        tone: 'success',
+        message: `Published targeting revision ${snapshot.published?.revision ?? snapshot.draft.revision}.`,
+      });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
+  const previewPersonalizationDecision = async () => {
+    try {
+      const input = JSON.parse(personalizationPreviewJson) as PersonalizationPreviewRequest;
+      const result = await client.previewPersonalization(input);
+      setPersonalizationPreview(result);
+      setNotice({
+        tone: 'info',
+        message: 'Hypothetical draft decision evaluated without storing a subject profile.',
+      });
+    } catch (error) {
+      setPersonalizationPreview(null);
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
   const toggleIdentity = async () => {
     if (identitySnapshot) {
       setIdentitySnapshot(null);
@@ -2536,6 +2633,14 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
             aria-expanded={marketplaceOverview !== null}
           >
             Marketplace
+          </button>{' '}
+          <button
+            type="button"
+            className="button button--secondary"
+            onClick={() => void togglePersonalization()}
+            aria-expanded={personalization !== null}
+          >
+            Targeting
           </button>{' '}
           <button
             type="button"
@@ -4366,6 +4471,127 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                 <p className="empty-copy">No signed release has been submitted.</p>
               ) : null}
             </section>
+          </div>
+        </section>
+      ) : null}
+      {personalization ? (
+        <section className="personalization-panel" aria-label="Personalization targeting workbench">
+          <div className="section-heading">
+            <div>
+              <span className="kicker">Consent-aware decisions</span>
+              <h2>Audiences, variants, and edge cache guidance</h2>
+              <p>
+                Draft r{personalization.draft.revision} ·{' '}
+                {personalization.draft.configuration.audiences.length} audiences ·{' '}
+                {personalization.draft.configuration.decisions.length} decisions · published{' '}
+                {personalization.published ? `r${personalization.published.revision}` : 'never'}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="button button--secondary"
+              onClick={() => void refreshPersonalization()}
+            >
+              Refresh targeting
+            </button>
+          </div>
+          <p className="personalization-panel__warning" role="note">
+            Use only bounded declared traits. Do not paste names, email addresses, account IDs,
+            cookies, IP addresses, or raw referral URLs. Preview is hypothetical and private;
+            published decisions never read this draft.
+          </p>
+          <div className="personalization-panel__workbench">
+            <fieldset>
+              <legend>Versioned targeting configuration</legend>
+              <label>
+                <span>Targeting configuration JSON</span>
+                <textarea
+                  value={personalizationConfigurationJson}
+                  onChange={(event) => {
+                    setPersonalizationConfigurationJson(event.target.value);
+                    setPersonalizationConfigurationDirty(true);
+                  }}
+                  aria-describedby="personalization-configuration-help"
+                />
+              </label>
+              <small id="personalization-configuration-help">
+                Every personal attribute needs explicit purposes; priorities and resource keys must
+                be unique, and every decision needs a fallback variant.
+              </small>
+              <div className="personalization-panel__actions">
+                <button
+                  type="button"
+                  className="button button--secondary"
+                  onClick={() => void savePersonalizationDraft()}
+                >
+                  Save targeting draft
+                </button>
+                <button
+                  type="button"
+                  className="button button--primary"
+                  onClick={() => void publishPersonalization()}
+                  disabled={personalizationConfigurationDirty}
+                >
+                  Publish exact draft
+                </button>
+              </div>
+            </fieldset>
+            <fieldset>
+              <legend>Hypothetical audience or variant preview</legend>
+              <label>
+                <span>Hypothetical decision JSON</span>
+                <textarea
+                  value={personalizationPreviewJson}
+                  onChange={(event) => setPersonalizationPreviewJson(event.target.value)}
+                  aria-describedby="personalization-preview-help"
+                />
+              </label>
+              <small id="personalization-preview-help">
+                Supply declared finite values and consent signals, or add an audience/variant
+                override. No protected user is searched for or impersonated.
+              </small>
+              <button
+                type="button"
+                className="button button--secondary"
+                onClick={() => void previewPersonalizationDecision()}
+              >
+                Preview draft decision
+              </button>
+              {personalizationPreview ? (
+                <section
+                  className="personalization-preview-result"
+                  aria-label="Personalization decision explanation"
+                >
+                  <strong>
+                    {personalizationPreview.variant} · {personalizationPreview.reason}
+                  </strong>
+                  <span>
+                    {personalizationPreview.audienceId ?? 'fallback audience'} · draft r
+                    {personalizationPreview.draftRevision}
+                  </span>
+                  <span>
+                    Cache: {personalizationPreview.cache.mode} ·{' '}
+                    {personalizationPreview.cache.reason}
+                  </span>
+                  <ul>
+                    {personalizationPreview.trace.map((audience) => (
+                      <li key={audience.audienceId}>
+                        <strong>
+                          {audience.audienceId} · {audience.matched ? 'matched' : 'not matched'}
+                        </strong>
+                        <span>
+                          {audience.conditions
+                            .map((condition) => `${condition.attributeKey}: ${condition.reason}`)
+                            .join(' · ')}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : (
+                <p className="empty-copy">No draft decision has been previewed.</p>
+              )}
+            </fieldset>
           </div>
         </section>
       ) : null}

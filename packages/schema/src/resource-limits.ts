@@ -89,6 +89,17 @@ export const resourceLimits = {
     publisherChallengeLifetimeSeconds: 900,
     maximumReviewEvidenceAgeSeconds: 604_800,
   },
+  personalization: {
+    maximumPurposes: 25,
+    maximumAttributes: 50,
+    maximumAttributeValues: 100,
+    maximumAudiences: 100,
+    maximumConditionsPerAudience: 20,
+    maximumDecisions: 100,
+    maximumVariantsPerDecision: 20,
+    maximumRulesPerDecision: 100,
+    maximumContextAttributes: 50,
+  },
   benchmark: {
     datasetEntries: 250,
     readSamples: 120,

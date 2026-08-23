@@ -50,6 +50,12 @@ import type {
   MarketplacePublisherSummary,
   MarketplaceReleaseSubmission,
   MarketplaceReleaseSummary,
+  PersonalizationConfiguration,
+  PersonalizationDecisionRequest,
+  PersonalizationDecisionResult,
+  PersonalizationPreviewRequest,
+  PersonalizationPreviewResult,
+  PersonalizationSnapshot,
   MigrationCutoverReport,
   MigrationPlanSummary,
   MigrationProjectInput,
@@ -997,6 +1003,57 @@ export class GridStoryClient {
         ...(input.signal ? { signal: input.signal } : {}),
       },
     );
+  }
+
+  getPersonalization(signal?: AbortSignal): Promise<PersonalizationSnapshot> {
+    return this.#request('/api/v1/personalization', { ...(signal ? { signal } : {}) });
+  }
+
+  replacePersonalizationDraft(
+    input: {
+      expectedVersion: number;
+      configuration: PersonalizationConfiguration;
+    },
+    signal?: AbortSignal,
+  ): Promise<PersonalizationSnapshot> {
+    return this.#request('/api/v1/personalization/draft', {
+      method: 'PUT',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  publishPersonalization(
+    input: { expectedVersion: number; expectedDraftRevision: number },
+    signal?: AbortSignal,
+  ): Promise<PersonalizationSnapshot> {
+    return this.#request('/api/v1/personalization/publish', {
+      method: 'POST',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  previewPersonalization(
+    input: PersonalizationPreviewRequest,
+    signal?: AbortSignal,
+  ): Promise<PersonalizationPreviewResult> {
+    return this.#request('/api/v1/personalization/preview', {
+      method: 'POST',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  decidePersonalization(
+    input: PersonalizationDecisionRequest,
+    signal?: AbortSignal,
+  ): Promise<PersonalizationDecisionResult> {
+    return this.#request('/api/v1/personalization/decide', {
+      method: 'POST',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
   }
 
   getComponentManifests(signal?: AbortSignal): Promise<ResolvedComponentManifest[]> {
@@ -2078,6 +2135,12 @@ export type {
   MigrationRecipeInput,
   MigrationRun,
   MigrationSourceDescriptor,
+  PersonalizationConfiguration,
+  PersonalizationDecisionRequest,
+  PersonalizationDecisionResult,
+  PersonalizationPreviewRequest,
+  PersonalizationPreviewResult,
+  PersonalizationSnapshot,
   PresenceParticipant,
   PreviewMessage,
   PreviewMode,

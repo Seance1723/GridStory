@@ -140,6 +140,36 @@ describe('database recovery', () => {
         },
       });
       expect(marketplacePublisher.statusCode, marketplacePublisher.body).toBe(201);
+      const personalizationDraft = await server.inject({
+        method: 'PUT',
+        url: '/api/v1/personalization/draft',
+        headers,
+        payload: {
+          expectedVersion: 0,
+          configuration: {
+            purposes: [],
+            attributes: [],
+            audiences: [],
+            decisions: [
+              {
+                resourceKey: 'recovery-banner',
+                name: 'Recovery banner',
+                variants: ['default'],
+                rules: [],
+                fallbackVariant: 'default',
+              },
+            ],
+          },
+        },
+      });
+      expect(personalizationDraft.statusCode, personalizationDraft.body).toBe(200);
+      const personalizationPublished = await server.inject({
+        method: 'POST',
+        url: '/api/v1/personalization/publish',
+        headers,
+        payload: { expectedVersion: 1, expectedDraftRevision: 2 },
+      });
+      expect(personalizationPublished.statusCode, personalizationPublished.body).toBe(200);
 
       const manifest = await backupSqlite({
         sourcePath,
@@ -255,6 +285,22 @@ describe('database recovery', () => {
       expect(recoveredMarketplace.json()).toMatchObject({
         publishers: [{ id: 'recovery-publisher', state: 'pending' }],
         releases: [],
+      });
+      const recoveredPersonalization = await restored.inject({
+        method: 'GET',
+        url: '/api/v1/personalization',
+        headers,
+      });
+      expect(recoveredPersonalization.statusCode).toBe(200);
+      expect(recoveredPersonalization.json()).toMatchObject({
+        version: 2,
+        draft: { revision: 2 },
+        published: {
+          revision: 2,
+          configuration: {
+            decisions: [{ resourceKey: 'recovery-banner', fallbackVariant: 'default' }],
+          },
+        },
       });
     } finally {
       await restored?.close();

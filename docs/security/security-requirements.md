@@ -130,6 +130,17 @@ The operator boundary, provider setup, rollback sequence, and claim limits are d
 
 The implementation, limits, operator workflow, incident response, and recovery boundary are documented in [Evidence-bound plugin marketplace](../marketplace.md). `THREAT-0028` owns publisher identity/key/trust abuse, while `THREAT-0029` owns forged, stale, incomplete, or overtrusted package-review evidence.
 
+## Consent-aware personalization
+
+- `GS-SEC-034`: purposes, attributes, audiences, decisions, draft/published revisions, and management responses SHALL carry complete organization, tenant, workspace, site, environment, and locale scope; read/manage/preview permissions SHALL be deny-by-default and management/preview SHALL remain private with `no-store`.
+- Every runtime attribute SHALL be declared as a boolean or bounded enum with source, classification, purposes, and cacheability. Personal attributes SHALL require declared purposes and SHALL NOT be shared-cache inputs. Authentication state SHALL remain private-cache only. Unknown keys, values, types, and purposes SHALL fail closed.
+- Missing or explicitly denied required consent SHALL prevent a condition match. A received GPC signal SHALL suppress only purposes explicitly configured to honor it; GridStory SHALL NOT represent that switch as a universal legal interpretation.
+- Draft preview SHALL accept only hypothetical bounded inputs or declared overrides, SHALL NOT look up or persist a subject/profile, SHALL omit raw values from its trace, and SHALL never change published state or prime a published cache.
+- Publishing SHALL copy only the exact optimistic draft revision. Anonymous decisions SHALL read only the published snapshot, use unique-priority deterministic first-match rules with a required fallback, and SHALL NOT perform random or sticky experiment allocation.
+- Shared-cache guidance SHALL be emitted only when every possible decision input is public, bounded, consent-independent, and explicitly eligible. The key SHALL include complete scope, locale, published revision, resource, and every varying input. All other decisions SHALL be private or no-store, and the decision POST response itself SHALL remain private/no-store.
+
+The configuration, integration contract, privacy boundary, cache rules, recovery, and rollback guidance are documented in [Consent-aware personalization and targeting](../personalization.md). `THREAT-0030` owns overcollection, consent/GPC bypass, draft leakage, scope confusion, and incomplete cache keys.
+
 ## Logging, error handling, and operations
 
 - `GS-SEC-028`: a maintained log inventory SHALL define event, metadata, format, sink, access, retention, correlation, and alerting. At minimum cover authentication, failed authorization, privileged mutation, publication, workflow/release, import/export, credential lifecycle, adapter failure, and control bypass.
@@ -185,6 +196,12 @@ Repository evidence does not certify production provider credentials, egress/DNS
 `GS-SEC-033`, `THREAT-0028`, and `THREAT-0029` cover complete-scope private marketplace state, expiring exact DNS possession proof, distinct evidence-referenced publisher approval, immediate trust suspension, signed discovery/compatibility/support/capability metadata, immutable releases, configured exact-artifact inspection, fail-closed evidence policy, distinct release approval, yanking, and approved-only disabled/no-grant installation. SQLite/PostgreSQL persist the same optimistic document, and live SQLite recovery restores the earlier publisher state with the earlier content snapshot.
 
 Repository evidence does not host or download package bytes, implement scanner engines, verify business legitimacy, guarantee third-party support, automatically approve/install/enable/upgrade, certify a package as safe, provision the external runtime sandbox, authenticate a production scanner transport, or prove scanner policy/evidence-store operations. Those remain operator/deployment evidence.
+
+## M7-001 personalization baseline
+
+`GS-SEC-034` and `THREAT-0030` cover complete-scope private targeting configuration, exact draft/published revision separation, bounded typed attributes, required purposes on personal inputs, denied-consent and configured GPC suppression, deterministic first-match/fallback evaluation, non-persistent hypothetical preview, published-only anonymous decisions, redacted explanation traces, and conservative cache guidance bound to scope, revision, resource, and every varying input. SQLite/PostgreSQL persist the same optimistic document, and live SQLite recovery restores the exact earlier draft and published snapshot.
+
+Repository evidence does not collect consent, interpret law, store customer profiles, verify upstream trait truth, ingest behavior, configure a CDN, purge an application cache, prevent an application from ignoring guidance, or implement CDP/experiment adapters. Those remain customer/application/deployment responsibilities; personal, authentication, consent-dependent, and preview results are never eligible for GridStory shared-cache guidance.
 
 ## Verification ownership
 

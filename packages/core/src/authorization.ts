@@ -58,6 +58,9 @@ export const GridStoryActions = {
   marketplaceRead: 'marketplace.read',
   marketplaceManage: 'marketplace.manage',
   marketplaceReview: 'marketplace.review',
+  personalizationRead: 'personalization.read',
+  personalizationManage: 'personalization.manage',
+  personalizationPreview: 'personalization.preview',
 } as const;
 
 export type GridStoryAction = (typeof GridStoryActions)[keyof typeof GridStoryActions];
@@ -73,6 +76,7 @@ export interface AuthorizationResource {
     | 'release'
     | 'plugin'
     | 'marketplace'
+    | 'personalization'
     | 'governance'
     | 'migration'
     | 'delivery'
@@ -117,6 +121,7 @@ export const defaultRoles: RoleDefinition[] = [
       GridStoryActions.releaseRead,
       GridStoryActions.collaborationRead,
       GridStoryActions.marketplaceRead,
+      GridStoryActions.personalizationRead,
     ],
   },
   {
@@ -140,6 +145,8 @@ export const defaultRoles: RoleDefinition[] = [
       GridStoryActions.collaborationWrite,
       GridStoryActions.presenceWrite,
       GridStoryActions.marketplaceRead,
+      GridStoryActions.personalizationRead,
+      GridStoryActions.personalizationPreview,
     ],
   },
   {
@@ -169,6 +176,9 @@ export const defaultRoles: RoleDefinition[] = [
       GridStoryActions.collaborationWrite,
       GridStoryActions.presenceWrite,
       GridStoryActions.marketplaceRead,
+      GridStoryActions.personalizationRead,
+      GridStoryActions.personalizationManage,
+      GridStoryActions.personalizationPreview,
     ],
   },
   { id: 'delivery', actions: [GridStoryActions.deliveryRead] },

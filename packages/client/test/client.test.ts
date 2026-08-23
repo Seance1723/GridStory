@@ -982,4 +982,45 @@ describe('GridStoryClient browser compatibility', () => {
     });
     expect(JSON.parse(String(requests[3]?.init?.body))).toEqual({ perspective: 'draft' });
   });
+  it('routes personalization draft, publish, preview, and edge decisions without profile state', async () => {
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    const client = createGridStoryClient({
+      baseUrl: 'http://gridstory.test',
+      tenantId: 'default',
+      fetch: async (input, init) => {
+        requests.push({ url: String(input), ...(init ? { init } : {}) });
+        return new Response(JSON.stringify({}), {
+          headers: { 'content-type': 'application/json' },
+        });
+      },
+    });
+    const configuration = { purposes: [], attributes: [], audiences: [], decisions: [] };
+    const decision = {
+      resourceKey: 'hero',
+      attributes: {},
+      consent: { grantedPurposes: [], deniedPurposes: [], globalPrivacyControl: false },
+    };
+
+    await client.getPersonalization();
+    await client.replacePersonalizationDraft({ expectedVersion: 0, configuration });
+    await client.publishPersonalization({ expectedVersion: 1, expectedDraftRevision: 2 });
+    await client.previewPersonalization({ ...decision, override: { variant: 'default' } });
+    await client.decidePersonalization(decision);
+
+    expect(requests.map((request) => [request.url, request.init?.method])).toEqual([
+      ['http://gridstory.test/api/v1/personalization', undefined],
+      ['http://gridstory.test/api/v1/personalization/draft', 'PUT'],
+      ['http://gridstory.test/api/v1/personalization/publish', 'POST'],
+      ['http://gridstory.test/api/v1/personalization/preview', 'POST'],
+      ['http://gridstory.test/api/v1/personalization/decide', 'POST'],
+    ]);
+    expect(JSON.parse(String(requests[1]?.init?.body))).toEqual({
+      expectedVersion: 0,
+      configuration,
+    });
+    expect(JSON.parse(String(requests[3]?.init?.body))).toEqual({
+      ...decision,
+      override: { variant: 'default' },
+    });
+  });
 });

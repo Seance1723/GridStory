@@ -117,7 +117,27 @@ function runPostgresRecoveryDrill(containerName) {
     if (restored.stdout.trim() !== '1') {
       throw new Error('PostgreSQL restore did not recover the published API fixture.');
     }
-    console.log('PostgreSQL logical backup/restore drill passed (1 published entry recovered).');
+    const restoredPersonalization = run(
+      'docker',
+      [
+        'exec',
+        containerName,
+        'psql',
+        '--username=gridstory',
+        `--dbname=${targetDatabase}`,
+        '--tuples-only',
+        '--no-align',
+        '--command',
+        "SELECT count(*) FROM gridstory.gridstory_personalization_documents WHERE tenant_id = 'postgres-tenant' AND payload ? 'published';",
+      ],
+      { capture: true },
+    );
+    if (restoredPersonalization.stdout.trim() !== '1') {
+      throw new Error('PostgreSQL restore did not recover the published personalization fixture.');
+    }
+    console.log(
+      'PostgreSQL logical backup/restore drill passed (published content and targeting recovered).',
+    );
   } finally {
     run(
       'docker',

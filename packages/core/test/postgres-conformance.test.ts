@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest';
 import {
   CollaborationService,
   emptyMarketplaceDocument,
+  emptyPersonalizationDocument,
   EnterpriseIdentityService,
   emptyMigrationDocument,
   GovernanceService,
@@ -19,6 +20,7 @@ import {
   PostgresIdentityRepository,
   PostgresMigrationRepository,
   PostgresMarketplaceRepository,
+  PostgresPersonalizationRepository,
   PostgresPluginRepository,
 } from '../src/index.js';
 import { repositoryConformance } from './repository-conformance.js';
@@ -303,6 +305,54 @@ if (connectionString) {
       }
     });
   });
+  describe('PostgreSQL personalization repository conformance', () => {
+    it('persists draft and published state under the complete scope key', async () => {
+      const schema = `gridstory_personalization_test_${process.pid}_${schemaSequence++}`;
+      const pool = new Pool({ connectionString });
+      const scope: ContentScope = {
+        organizationId: 'organization-a',
+        tenantId: 'personalization-tenant-a',
+        workspaceId: 'workspace-a',
+        siteId: 'site-a',
+        environmentId: 'production',
+        locale: 'en',
+      };
+      const first = new PostgresPersonalizationRepository({ pool, schema });
+      try {
+        const initial = emptyPersonalizationDocument(
+          scope,
+          'targeting-author',
+          '2026-08-23T00:00:00.000Z',
+        );
+        await first.save(initial, null);
+        await first.close();
+
+        const second = new PostgresPersonalizationRepository({ pool, schema });
+        await expect(second.get(scope)).resolves.toEqual(initial);
+        await expect(second.get({ ...scope, tenantId: 'other-tenant' })).resolves.toBeNull();
+        await expect(second.listScopes()).resolves.toContainEqual(scope);
+
+        const next = {
+          ...initial,
+          version: 1,
+          published: {
+            ...initial.draft,
+            publishedAt: '2026-08-23T00:01:00.000Z',
+            publishedBy: 'targeting-publisher',
+          },
+          updatedAt: '2026-08-23T00:01:00.000Z',
+        };
+        await second.save(next, 0);
+        await expect(second.save(next, 0)).rejects.toMatchObject({
+          code: 'personalization_write_conflict',
+        });
+        await second.close();
+      } finally {
+        await pool.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);
+        await pool.end();
+      }
+    });
+  });
 } else {
   describe.skip('PostgreSQL repository conformance', () => {
     it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
@@ -323,6 +373,9 @@ if (connectionString) {
     it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
   });
   describe.skip('PostgreSQL marketplace repository conformance', () => {
+    it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
+  });
+  describe.skip('PostgreSQL personalization repository conformance', () => {
     it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
   });
 }

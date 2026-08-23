@@ -8,10 +8,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- Recorded the accepted M7-001 consent-aware targeting decision: bounded typed attributes, purpose-specific consent/GPC handling, deterministic first-match rules, authenticated hypothetical preview, published-only edge evaluation, and conservative cache guidance without persistent profiles or experiment allocation.
 - Recorded the accepted M6-005 evidence-bound marketplace decision: operator-scoped publisher verification, signed compatibility/support metadata, injected non-executing artifact review, separate human approval, and approved-only handoff to the existing disabled plugin installation lifecycle.
 
 ### Fixed
 
+- Preserved Studio header contrast in WebKit forced-colors mode at 200% zoom by resolving its foreground, background, and boundary from one system palette (BUG-0313).
+- Tightened M7-001 token-only value minimization, fixed-length complete cache identifiers, public audience redaction, Studio unsaved-publication protection, exact-optional/test trace fixtures, lint-safe schema regressions, and managed Windows verification paths discovered during implementation and audit (BUG-0304 through BUG-0312).
 - Corrected marketplace public-summary projection, strict SemVer typing, bodyless API fixtures, Studio review-region semantics, deterministic test-ID construction, and exact configured-inspector identity binding discovered during M6-005 verification and final audit (BUG-0298 through BUG-0303).
 - Corrected M6-004 schema/repository/API/workflow/publication/WordPress fixtures and exact-optional boundaries, verified pending-link crash recovery, restored scoped Windows formatter and audit invocation, formatted the exact migration change set, and removed the Studio cascade override found during verification (BUG-0286 through BUG-0297).
 - Corrected the M6-003 service/telemetry/cache exact-optional boundaries, bodyless API fixture, scoped formatter/import/lint quality, and broad Studio fixture timing discovered during verification (BUG-0278 through BUG-0285).
@@ -79,6 +82,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Added bounded consent-purpose, targeting-attribute, audience, resource-decision, context, preview, result, cache-guidance, and draft/published snapshot contracts with strict cross-reference, type, value, priority, purpose, classification, cacheability, and resource limits.
+- Added deterministic first-match/fallback evaluation with denied-consent and purpose-specific GPC gates, private redacted hypothetical audience/variant preview, public audience-identity redaction, published-only anonymous decisions, and fixed-length complete shared-cache keys only for bounded public consent-independent inputs.
+- Added complete-scope optimistic in-memory, SQLite, and qualified PostgreSQL personalization persistence; private authorized management/preview and anonymous published-only REST routes; typed universal-client methods; a responsive accessible Studio workbench; SQLite/PostgreSQL recovery coverage; ADR 0017; operator/privacy/cache guidance; `THREAT-0030`; and verified `GS-SEC-034`.
 - Added bounded signed marketplace discovery, compatibility, tested-runtime, support, capability, digest, and size metadata; expiring DNS publisher possession with separate evidence-referenced human approval/suspension; immutable release submission/review/approval/rejection/yanking; injected non-executing exact-artifact inspection; and approved-only disabled/no-grant Plugin SDK installation handoff.
 - Added complete-scope optimistic memory, SQLite, and qualified PostgreSQL marketplace persistence; private/no-store authorized REST and typed-client operations; a responsive accessible Studio workbench; recovery/PostgreSQL/browser coverage; operator/support/incident guidance; accepted ADR 0016; `THREAT-0028`/`THREAT-0029`; and verified `GS-SEC-033`.
 - Added bounded CMS-migration contracts and limits; complete-scope optimistic in-memory, SQLite, and qualified PostgreSQL documents for versioned recipes, projects, links, private plans, checkpoints, runs, and cutover reports; and deterministic mapping/reconciliation above normal content schema, reference, workflow, quality, governance, revision, route, and publication gates.

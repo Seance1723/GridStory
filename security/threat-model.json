@@ -3,7 +3,7 @@
   "model": {
     "id": "GRIDSTORY-TM-001",
     "title": "GridStory control plane and delivery threat model",
-    "version": "1.4.0",
+    "version": "1.5.0",
     "reviewedAt": "2026-08-23",
     "owners": ["GridStory security owner", "GridStory architecture owner"],
     "methodology": "OWASP four-question threat modeling with STRIDE categorization",
@@ -19,13 +19,15 @@
       "logical archive export and import",
       "signed plugin manifests, tenant grants, lifecycle state, external runtime protocol, and scoped marketplace publisher/release evidence",
       "data governance, legal holds, rights requests, guarded erasure, encrypted exports, customer-managed key references, and placement attestations",
-      "read-only CMS source adapters, private migration recipes, dry-run plans, checkpoints, links, receipts, and cutover evidence"
+      "read-only CMS source adapters, private migration recipes, dry-run plans, checkpoints, links, receipts, and cutover evidence",
+      "consent-aware targeting attributes, audiences, draft/published configuration, hypothetical preview, edge decisions, and cache guidance"
     ],
     "outOfScope": [
       "security of application-owned React components after validated data leaves GridStory",
       "identity-provider internals",
       "cloud, CDN, database, object-store, and network controls not configured by GridStory",
-      "package binary hosting/download, scanner-engine internals, publisher business-legitimacy verification, and operating-system/container isolation supplied outside GridStory"
+      "package binary hosting/download, scanner-engine internals, publisher business-legitimacy verification, and operating-system/container isolation supplied outside GridStory",
+      "customer profile storage, consent collection or legal interpretation, behavioral ingestion, CDP credentials/adapters, and experiment allocation"
     ],
     "riskModel": {
       "formula": "likelihood * impact",
@@ -189,6 +191,17 @@
         "idempotency",
         "recoverability"
       ]
+    },
+    {
+      "id": "ASSET-018",
+      "name": "Personalization purposes, attributes, audiences, decisions, preview context, and cache guidance",
+      "securityProperties": [
+        "confidentiality",
+        "integrity",
+        "tenant isolation",
+        "purpose limitation",
+        "cache correctness"
+      ]
     }
   ],
   "trustBoundaries": [
@@ -312,6 +325,18 @@
         "digest-bound dry-run execution, deterministic links, drift checks, and post-success checkpoints",
         "normal ContentService schema, reference, workflow, quality, governance, publication, and revision gates"
       ]
+    },
+    {
+      "id": "BOUNDARY-014",
+      "name": "Authoring and anonymous applications to draft or published targeting decisions",
+      "controls": [
+        "complete scope and distinct read, manage, preview, and delivery authorization",
+        "typed finite allowlisted attributes with purpose and classification metadata",
+        "authenticated private no-store draft preview with no profile lookup or persistence",
+        "published-only deterministic first-match evaluation with required fallback",
+        "purpose-specific consent and GPC suppression",
+        "complete revisioned shared-cache key or conservative private/no-store guidance"
+      ]
     }
   ],
   "dataFlows": [
@@ -434,6 +459,20 @@
         "ASSET-014",
         "ASSET-017"
       ]
+    },
+    {
+      "id": "FLOW-017",
+      "from": "ACTOR-003",
+      "to": "BOUNDARY-014",
+      "data": "scoped purpose and attribute declarations, audience rules, variant decisions, draft preview input, and exact publish revision",
+      "assets": ["ASSET-003", "ASSET-004", "ASSET-009", "ASSET-018"]
+    },
+    {
+      "id": "FLOW-018",
+      "from": "ACTOR-001",
+      "to": "BOUNDARY-014",
+      "data": "bounded published decision context, consent and GPC signals, selected variant, and cache guidance",
+      "assets": ["ASSET-002", "ASSET-003", "ASSET-010", "ASSET-018"]
     }
   ],
   "assumptions": [
@@ -1242,6 +1281,59 @@
         "apps/studio/test/App.test.tsx",
         "tests/e2e/accessibility.spec.ts",
         "docs/marketplace.md"
+      ]
+    },
+    {
+      "id": "THREAT-0030",
+      "title": "Personal-data overcollection, consent bypass, draft leakage, or targeting cache confusion",
+      "stride": [
+        "Spoofing",
+        "Tampering",
+        "Repudiation",
+        "Information Disclosure",
+        "Denial of Service",
+        "Elevation of Privilege"
+      ],
+      "scenario": "An attacker or misconfigured application submits identifying or unbounded traits, claims consent that is absent or denied, bypasses a GPC-sensitive purpose, evaluates draft policy publicly, crosses tenant scope, or omits a varying input/revision from a shared cache key so one visitor or tenant receives another decision.",
+      "actors": ["ACTOR-001", "ACTOR-003", "ACTOR-008"],
+      "assets": [
+        "ASSET-002",
+        "ASSET-003",
+        "ASSET-004",
+        "ASSET-009",
+        "ASSET-010",
+        "ASSET-012",
+        "ASSET-018"
+      ],
+      "boundaries": [
+        "BOUNDARY-001",
+        "BOUNDARY-002",
+        "BOUNDARY-003",
+        "BOUNDARY-004",
+        "BOUNDARY-014"
+      ],
+      "likelihood": 4,
+      "impact": 5,
+      "risk": 20,
+      "response": "mitigate",
+      "owner": "Personalization, privacy, and delivery owner",
+      "mitigations": [
+        "Accept only declared boolean or finite-enum attributes, reject unknown keys, types, values, purposes, duplicate priorities, and dangling rule or variant references, and never persist decision inputs or profiles.",
+        "Require purposes on every personal attribute, make personal and authentication inputs private-cache only, honor explicit denied consent, and suppress only purposes configured to honor a received GPC signal.",
+        "Authorize management and hypothetical preview separately, keep them private and no-store, publish only the exact optimistic draft revision, and expose anonymous evaluation only from the published snapshot.",
+        "Evaluate deterministic first-match rules with a required fallback and emit shared guidance only when every possible input is bounded public and consent-independent; bind the key to complete scope, locale, published revision, resource, and every decision input.",
+        "Keep the HTTP decision response private/no-store, omit raw values from explanations, bound configuration/context sizes, and document customer responsibility for consent collection, legal interpretation, source normalization, CDN configuration, and purge operations."
+      ],
+      "verification": [
+        "packages/schema/test/personalization.test.ts",
+        "packages/core/test/personalization-service.test.ts",
+        "packages/core/test/personalization-repository.test.ts",
+        "packages/core/test/postgres-conformance.test.ts",
+        "apps/api/test/personalization.test.ts",
+        "apps/api/test/database-recovery.test.ts",
+        "packages/client/test/client.test.ts",
+        "apps/studio/test/App.test.tsx",
+        "docs/personalization.md"
       ]
     }
   ],

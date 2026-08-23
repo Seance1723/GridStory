@@ -908,6 +908,43 @@
         "tests/e2e/accessibility.spec.ts"
       ],
       "taskIds": ["M6-005"]
+    },
+    {
+      "id": "GS-SEC-034",
+      "title": "Consent-aware deterministic targeting and cache isolation",
+      "status": "verified",
+      "owner": "Personalization, privacy, and delivery owner",
+      "statement": "Targeting configuration SHALL be completely tenant scoped with private draft preview and exact published revision separation; runtime context SHALL accept only declared bounded typed attributes and purposes, SHALL fail closed on absent or denied required consent and configured GPC suppression, and SHALL NOT persist subject profiles; decisions SHALL be deterministic with a required fallback; shared-cache guidance SHALL be emitted only for public consent-independent inputs and SHALL bind complete scope, published revision, resource, and every varying input, while personal, authentication, consent-dependent, and preview decisions SHALL remain private or no-store.",
+      "asvsRefs": [
+        "v5.0.0-2.2.2",
+        "v5.0.0-8.1.1",
+        "v5.0.0-11.2.1",
+        "v5.0.0-14.1.1",
+        "v5.0.0-14.2.1",
+        "v5.0.0-16.5.3"
+      ],
+      "threatRefs": ["THREAT-0001", "THREAT-0004", "THREAT-0010", "THREAT-0019", "THREAT-0030"],
+      "evidence": [
+        "packages/schema/src/personalization.ts",
+        "packages/core/src/personalization-repository.ts",
+        "packages/core/src/personalization-service.ts",
+        "apps/api/src/personalization-routes.ts",
+        "packages/client/src/index.ts",
+        "apps/studio/src/App.tsx",
+        "docs/personalization.md",
+        "docs/adr/0017-consent-aware-targeting.md"
+      ],
+      "verification": [
+        "packages/schema/test/personalization.test.ts",
+        "packages/core/test/personalization-repository.test.ts",
+        "packages/core/test/personalization-service.test.ts",
+        "packages/core/test/postgres-conformance.test.ts",
+        "apps/api/test/personalization.test.ts",
+        "apps/api/test/database-recovery.test.ts",
+        "packages/client/test/client.test.ts",
+        "apps/studio/test/App.test.tsx"
+      ],
+      "taskIds": ["M7-001"]
     }
   ]
 }
