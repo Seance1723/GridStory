@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { schemaIrDocumentSchema } from '@gridstory/schema';
 import { auditEventHash } from './audit-service.js';
-import { contentEventCacheTags } from './tenant-scope.js';
 import { ConflictError, NotFoundError } from './errors.js';
+import { contentEventCacheTags } from './tenant-scope.js';
 import type {
   Actor,
   AuditEvent,
@@ -13,11 +13,11 @@ import type {
   ContentRevision,
   ContentScope,
   ContentStatus,
-  SchemaDeployment,
   DurableJob,
   OutboxEvent,
   PortableContentRecord,
   PortableImportResult,
+  SchemaDeployment,
   WebhookSubscription,
 } from './types.js';
 
@@ -1125,6 +1125,47 @@ export class SqliteContentRepository implements ContentRepository {
       ...(row.previous_hash ? { previousHash: row.previous_hash } : {}),
       eventHash: row.event_hash,
     }));
+  }
+
+  deleteEntry({ scope, id }: Parameters<ContentRepository['deleteEntry']>[0]): boolean {
+    const existing = this.#database
+      .prepare(
+        `SELECT 1 FROM entries
+         WHERE organization_id = ? AND tenant_id = ? AND workspace_id = ?
+           AND site_id = ? AND environment_id = ? AND locale = ? AND id = ?`,
+      )
+      .get(...scopeValues(scope), id);
+    if (!existing) return false;
+    this.#database.exec('BEGIN IMMEDIATE');
+    try {
+      this.#database
+        .prepare(
+          `DELETE FROM outbox_events
+           WHERE organization_id = ? AND tenant_id = ? AND workspace_id = ?
+             AND site_id = ? AND environment_id = ? AND locale = ? AND aggregate_id = ?`,
+        )
+        .run(...scopeValues(scope), id);
+      this.#database
+        .prepare(
+          `DELETE FROM durable_jobs
+           WHERE organization_id = ? AND tenant_id = ? AND workspace_id = ?
+             AND site_id = ? AND environment_id = ? AND locale = ?
+             AND json_extract(payload_json, '$.entryId') = ?`,
+        )
+        .run(...scopeValues(scope), id);
+      const result = this.#database
+        .prepare(
+          `DELETE FROM entries
+           WHERE organization_id = ? AND tenant_id = ? AND workspace_id = ?
+             AND site_id = ? AND environment_id = ? AND locale = ? AND id = ?`,
+        )
+        .run(...scopeValues(scope), id);
+      this.#database.exec('COMMIT');
+      return result.changes === 1;
+    } catch (error) {
+      this.#database.exec('ROLLBACK');
+      throw error;
+    }
   }
 
   getTranslationGroup({ scope, id }: { scope: ContentScope; id: string }): string | null {

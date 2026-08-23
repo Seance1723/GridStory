@@ -1,20 +1,31 @@
 import {
+  ConfiguredPlacementAdapter,
+  ContentGovernanceProcessor,
   ContentQualityService,
+  type ContentRepository,
   ContentService,
+  type DueWorkflowExecution,
+  EnterpriseIdentityService,
+  type GovernanceRepository,
+  GovernanceService,
+  IdentityGovernanceProcessor,
+  type IdentityRepository,
   OperationsService,
   PostgresContentRepository,
+  PostgresGovernanceRepository,
+  PostgresIdentityRepository,
+  PostgresReleaseRepository,
   PostgresWorkflowRepository,
-  SqliteContentRepository,
-  SqliteWorkflowRepository,
-  WorkflowService,
+  type ReleaseRepository,
   ReleaseService,
   SearchService,
-  PostgresReleaseRepository,
+  SqliteContentRepository,
+  SqliteGovernanceRepository,
+  SqliteIdentityRepository,
   SqliteReleaseRepository,
-  type ContentRepository,
-  type DueWorkflowExecution,
+  SqliteWorkflowRepository,
   type WorkflowRepository,
-  type ReleaseRepository,
+  WorkflowService,
 } from '@gridstory/core';
 import { componentManifests, pageSchema } from '@gridstory/example-kit/manifests';
 import { loadConfig } from './config.js';
@@ -34,6 +45,25 @@ const workflowRepository: WorkflowRepository = config.databaseUrl
 const releaseRepository: ReleaseRepository = config.databaseUrl
   ? new PostgresReleaseRepository({ connectionString: config.databaseUrl })
   : new SqliteReleaseRepository({ filename: config.databasePath });
+const governanceRepository: GovernanceRepository = config.databaseUrl
+  ? new PostgresGovernanceRepository({ connectionString: config.databaseUrl })
+  : new SqliteGovernanceRepository({ filename: config.databasePath });
+const identityRepository: IdentityRepository = config.databaseUrl
+  ? new PostgresIdentityRepository({ connectionString: config.databaseUrl })
+  : new SqliteIdentityRepository({ filename: config.databasePath });
+const identity = new EnterpriseIdentityService({ repository: identityRepository });
+const governance = new GovernanceService({
+  repository: governanceRepository,
+  placementAdapter: new ConfiguredPlacementAdapter({
+    content: config.dataRegions,
+    asset: config.dataRegions,
+    identity: config.dataRegions,
+    plugin: config.dataRegions,
+  }),
+  telemetry: observability.tenantTelemetry,
+});
+governance.registerProcessor(new ContentGovernanceProcessor({ repository }));
+governance.registerProcessor(new IdentityGovernanceProcessor(identity));
 const workflows = new WorkflowService({
   repository: workflowRepository,
   jobRepository: repository,
@@ -50,6 +80,7 @@ const content = new ContentService({
   componentManifests,
   qualityGate: quality,
   workflowGate: workflows,
+  governanceGate: governance,
 });
 const releases = new ReleaseService({
   repository: releaseRepository,
@@ -103,18 +134,27 @@ const workerRun = runWorkerLoop({
   signal: stopController.signal,
   intervalMs: config.workerIntervalMs,
   cycle: async () => {
-    const scopes = await operations.listOperationalScopes(1000);
+    const operationalScopes = await operations.listOperationalScopes(1000);
+    const governanceScopes = await governance.listScopes();
+    const scopes = [...operationalScopes, ...governanceScopes].filter(
+      (scope, index, all) =>
+        all.findIndex((candidate) => JSON.stringify(candidate) === JSON.stringify(scope)) === index,
+    );
     for (const scope of scopes) {
       if (stopController.signal.aborted) break;
-      const { dueReleases, due, result } = await observability.runWorkerScope(scope, async () => ({
-        dueReleases: await releases.processDue(scope),
-        due: await workflows.processDue({ scope, execute: executeWorkflowSchedule }),
-        result: await operations.drain({
-          scope,
-          workerId: `operations-${process.pid}`,
-          limit: 100,
+      const { dueReleases, due, result, governed } = await observability.runWorkerScope(
+        scope,
+        async () => ({
+          dueReleases: await releases.processDue(scope),
+          due: await workflows.processDue({ scope, execute: executeWorkflowSchedule }),
+          result: await operations.drain({
+            scope,
+            workerId: `operations-${process.pid}`,
+            limit: 100,
+          }),
+          governed: await governance.processApprovedPlans(scope, `governance-${process.pid}`),
         }),
-      }));
+      );
       if (
         dueReleases.executed +
           dueReleases.failed +
@@ -122,11 +162,18 @@ const workerRun = runWorkerLoop({
           due.executed +
           due.failed +
           result.claimedOutbox +
-          result.claimedJobs >
+          result.claimedJobs +
+          governed.claimed >
         0
       ) {
         console.log(
-          JSON.stringify({ scope, releases: dueReleases, workflow: due, operations: result }),
+          JSON.stringify({
+            scope,
+            releases: dueReleases,
+            workflow: due,
+            operations: result,
+            governance: governed,
+          }),
         );
       }
     }
@@ -146,6 +193,8 @@ const closeWorker = () => {
       () => repository.close(),
       () => workflowRepository.close(),
       () => releaseRepository.close(),
+      () => governanceRepository.close(),
+      () => identityRepository.close(),
       () => observability.shutdown(),
     ]) {
       try {

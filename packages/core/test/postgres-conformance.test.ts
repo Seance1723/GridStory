@@ -10,8 +10,10 @@ import { describe, expect, it } from 'vitest';
 import {
   CollaborationService,
   EnterpriseIdentityService,
+  GovernanceService,
   PostgresCollaborationRepository,
   PostgresContentRepository,
+  PostgresGovernanceRepository,
   PostgresIdentityRepository,
   PostgresPluginRepository,
 } from '../src/index.js';
@@ -182,6 +184,43 @@ if (connectionString) {
       }
     });
   });
+  describe('PostgreSQL governance repository conformance', () => {
+    it('persists an optimistic, fully scoped governance document across instances', async () => {
+      const schema = `gridstory_governance_test_${process.pid}_${schemaSequence++}`;
+      const pool = new Pool({ connectionString });
+      const scope: ContentScope = {
+        organizationId: 'organization-a',
+        tenantId: 'governance-tenant-a',
+        workspaceId: 'workspace-a',
+        siteId: 'site-a',
+        environmentId: 'production',
+        locale: 'en',
+      };
+      const firstRepository = new PostgresGovernanceRepository({ pool, schema });
+      const first = new GovernanceService({ repository: firstRepository });
+      try {
+        await first.createSubject(scope, 'privacy-admin', 'postgres-subject');
+        await firstRepository.close();
+
+        const secondRepository = new PostgresGovernanceRepository({ pool, schema });
+        const second = new GovernanceService({ repository: secondRepository });
+        await expect(second.snapshot(scope)).resolves.toMatchObject({
+          version: 1,
+          subjects: [{ reference: 'postgres-subject', status: 'active' }],
+        });
+        await expect(
+          second.snapshot({ ...scope, tenantId: 'other-tenant' }),
+        ).resolves.toMatchObject({
+          version: 0,
+          subjects: [],
+        });
+        await secondRepository.close();
+      } finally {
+        await pool.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);
+        await pool.end();
+      }
+    });
+  });
 } else {
   describe.skip('PostgreSQL repository conformance', () => {
     it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
@@ -193,6 +232,9 @@ if (connectionString) {
     it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
   });
   describe.skip('PostgreSQL identity repository conformance', () => {
+    it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
+  });
+  describe.skip('PostgreSQL governance repository conformance', () => {
     it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
   });
 }

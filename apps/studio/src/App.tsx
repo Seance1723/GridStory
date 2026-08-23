@@ -11,6 +11,8 @@ import {
   type ContentRevision,
   createGridStoryClient,
   type DurableJobRecord,
+  type GovernancePlan,
+  type GovernanceSnapshot,
   GridStoryApiError,
   type GridStoryClient,
   type IdentitySnapshot,
@@ -499,6 +501,13 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   const [identityRole, setIdentityRole] = useState('');
   const [identityIncident, setIdentityIncident] = useState('');
   const [identityOneTimeSecret, setIdentityOneTimeSecret] = useState<string | null>(null);
+  const [dataGovernance, setDataGovernance] = useState<GovernanceSnapshot | null>(null);
+  const [governanceSubjectReference, setGovernanceSubjectReference] = useState('');
+  const [governanceHoldMatter, setGovernanceHoldMatter] = useState('');
+  const [governanceHoldReason, setGovernanceHoldReason] = useState('');
+  const [governanceApprovalReason, setGovernanceApprovalReason] = useState('');
+  const [governanceBackupReference, setGovernanceBackupReference] = useState('');
+  const [governanceBackupSha, setGovernanceBackupSha] = useState('');
   const [searchPanelOpen, setSearchPanelOpen] = useState(false);
   const [searchBusy, setSearchBusy] = useState(false);
   const [searchText, setSearchText] = useState('');
@@ -1710,6 +1719,86 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   const refreshIdentity = async () => {
     setIdentitySnapshot(await client.getIdentity());
   };
+  const refreshDataGovernance = async () => {
+    setDataGovernance(await client.getGovernance());
+  };
+  const toggleDataGovernance = async () => {
+    if (dataGovernance) {
+      setDataGovernance(null);
+      return;
+    }
+    try {
+      await refreshDataGovernance();
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
+  const registerDataSubject = async () => {
+    if (!governanceSubjectReference.trim()) {
+      setNotice({ tone: 'error', message: 'A bounded data-subject reference is required.' });
+      return;
+    }
+    try {
+      await client.createDataSubject(governanceSubjectReference.trim());
+      setGovernanceSubjectReference('');
+      await refreshDataGovernance();
+      setNotice({ tone: 'success', message: 'Data subject registered in this exact scope.' });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
+  const createScopeHold = async () => {
+    if (!governanceHoldMatter.trim() || !governanceHoldReason.trim()) {
+      setNotice({ tone: 'error', message: 'A hold matter and reason are required.' });
+      return;
+    }
+    try {
+      await client.createLegalHold({
+        matter: governanceHoldMatter.trim(),
+        reason: governanceHoldReason.trim(),
+        target: { kind: 'scope' },
+      });
+      setGovernanceHoldMatter('');
+      setGovernanceHoldReason('');
+      await refreshDataGovernance();
+      setNotice({ tone: 'success', message: 'Legal hold activated for this exact scope.' });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
+  const previewRetention = async () => {
+    try {
+      await client.createRetentionPlan();
+      await refreshDataGovernance();
+      setNotice({ tone: 'info', message: 'Dry-run retention plan created. No data was erased.' });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
+  const approveGovernancePlan = async (plan: GovernancePlan) => {
+    if (!governanceApprovalReason.trim() || !governanceBackupReference.trim()) {
+      setNotice({
+        tone: 'error',
+        message: 'Approval reason and verified backup reference are required.',
+      });
+      return;
+    }
+    try {
+      await client.approveGovernancePlan(plan.id, {
+        digest: plan.digest,
+        reason: governanceApprovalReason.trim(),
+        backup: {
+          reference: governanceBackupReference.trim(),
+          sha256: governanceBackupSha.trim(),
+          verifiedAt: new Date().toISOString(),
+        },
+      });
+      await refreshDataGovernance();
+      setNotice({ tone: 'success', message: 'Plan approved for asynchronous guarded execution.' });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
   const toggleIdentity = async () => {
     if (identitySnapshot) {
       setIdentitySnapshot(null);
@@ -2047,6 +2136,14 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
             aria-expanded={identitySnapshot !== null}
           >
             Identity
+          </button>{' '}
+          <button
+            type="button"
+            className="button button--secondary"
+            onClick={() => void toggleDataGovernance()}
+            aria-expanded={dataGovernance !== null}
+          >
+            Data governance
           </button>{' '}
           <button
             type="button"
@@ -3080,6 +3177,160 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   </li>
                 ))}
             </ol>
+          </div>
+        </section>
+      ) : null}
+      {dataGovernance ? (
+        <section className="data-governance-panel" aria-label="Data governance administration">
+          <div className="section-heading">
+            <div>
+              <span className="kicker">Guarded lifecycle</span>
+              <h2>Retention, privacy requests, and legal holds</h2>
+              <p>
+                {dataGovernance.subjects.length} subjects ·{' '}
+                {dataGovernance.holds.filter((hold) => hold.status === 'active').length} active
+                holds · {dataGovernance.plans.length} plans
+              </p>
+            </div>
+            <button
+              type="button"
+              className="button button--secondary"
+              onClick={() => void refreshDataGovernance()}
+            >
+              Refresh governance state
+            </button>
+          </div>
+          <p className="data-governance-panel__warning" role="note">
+            Erasure is irreversible: a code rollback cannot restore erased records or external
+            objects. Verify a recoverable backup before approval.
+          </p>
+          <div className="data-governance-panel__grid">
+            <fieldset>
+              <legend>Data subjects</legend>
+              <label>
+                <span>Customer reference</span>
+                <input
+                  value={governanceSubjectReference}
+                  onChange={(event) => setGovernanceSubjectReference(event.target.value)}
+                  placeholder="customer-123"
+                />
+              </label>
+              <button
+                type="button"
+                className="button button--secondary"
+                onClick={() => void registerDataSubject()}
+              >
+                Register subject
+              </button>
+              <ul>
+                {dataGovernance.subjects.map((subject) => (
+                  <li key={subject.id}>
+                    {subject.reference} · {subject.status}
+                  </li>
+                ))}
+                {dataGovernance.subjects.length === 0 ? <li>No subjects in this scope.</li> : null}
+              </ul>
+            </fieldset>
+            <fieldset>
+              <legend>Legal holds</legend>
+              <label>
+                <span>Matter</span>
+                <input
+                  value={governanceHoldMatter}
+                  onChange={(event) => setGovernanceHoldMatter(event.target.value)}
+                  placeholder="CASE-2026-001"
+                />
+              </label>
+              <label>
+                <span>Reason</span>
+                <textarea
+                  value={governanceHoldReason}
+                  onChange={(event) => setGovernanceHoldReason(event.target.value)}
+                />
+              </label>
+              <button
+                type="button"
+                className="button button--secondary"
+                onClick={() => void createScopeHold()}
+              >
+                Activate scope hold
+              </button>
+              <ul>
+                {dataGovernance.holds.map((hold) => (
+                  <li key={hold.id}>
+                    {hold.matter} · {hold.status}
+                  </li>
+                ))}
+              </ul>
+            </fieldset>
+            <fieldset>
+              <legend>Retention execution</legend>
+              <button
+                type="button"
+                className="button button--secondary"
+                onClick={() => void previewRetention()}
+              >
+                Preview retention plan
+              </button>
+              <label>
+                <span>Independent approval reason</span>
+                <textarea
+                  value={governanceApprovalReason}
+                  onChange={(event) => setGovernanceApprovalReason(event.target.value)}
+                />
+              </label>
+              <label>
+                <span>Verified backup reference</span>
+                <input
+                  value={governanceBackupReference}
+                  onChange={(event) => setGovernanceBackupReference(event.target.value)}
+                  placeholder="backup://tenant/date"
+                />
+              </label>
+              <label>
+                <span>Backup SHA-256</span>
+                <input
+                  value={governanceBackupSha}
+                  onChange={(event) => setGovernanceBackupSha(event.target.value)}
+                  placeholder="64 lowercase hex characters"
+                />
+              </label>
+            </fieldset>
+          </div>
+          <div className="data-governance-panel__plans">
+            <h3>Plan effects and blockers</h3>
+            {dataGovernance.plans
+              .slice()
+              .reverse()
+              .map((plan) => (
+                <article key={plan.id}>
+                  <div>
+                    <strong>
+                      {plan.kind} · {plan.state}
+                    </strong>
+                    <code>{plan.digest}</code>
+                  </div>
+                  <ul>
+                    {plan.candidates.map((candidate) => (
+                      <li key={candidate.id}>
+                        {candidate.action} {candidate.resource.type}:{candidate.resource.id} ·{' '}
+                        {candidate.state}
+                        {candidate.blockers.length > 0 ? ` · ${candidate.blockers.join(', ')}` : ''}
+                      </li>
+                    ))}
+                    {plan.candidates.length === 0 ? <li>No eligible resources.</li> : null}
+                  </ul>
+                  {plan.state === 'preview' ? (
+                    <button
+                      type="button"
+                      className="button button--danger"
+                      onClick={() => void approveGovernancePlan(plan)}
+                    >
+                      Approve irreversible plan
+                    </button>
+                  ) : null}
+                </article>
+              ))}
           </div>
         </section>
       ) : null}

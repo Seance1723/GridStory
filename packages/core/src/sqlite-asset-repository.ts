@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
-import { contentScopeKey } from './tenant-scope.js';
-import { assetRecordSchema, type AssetRecord, type ContentScope } from '@gridstory/schema';
+import { type AssetRecord, assetRecordSchema, type ContentScope } from '@gridstory/schema';
 import type { AssetRepository } from './asset-service.js';
+import { contentScopeKey } from './tenant-scope.js';
 
 export interface SqliteAssetRepositoryOptions {
   filename: string;
@@ -58,6 +58,13 @@ export class SqliteAssetRepository implements AssetRepository {
            payload = excluded.payload`,
       )
       .run(contentScopeKey(parsed), parsed.id, parsed.updatedAt, JSON.stringify(parsed));
+  }
+
+  delete(scope: ContentScope, id: string): boolean {
+    const result = this.#database
+      .prepare('DELETE FROM gridstory_assets WHERE scope_key = ? AND id = ?')
+      .run(contentScopeKey(scope), id);
+    return result.changes === 1;
   }
 
   close(): void {

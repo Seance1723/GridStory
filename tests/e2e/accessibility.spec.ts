@@ -35,6 +35,7 @@ test('Studio critical authoring states have no detectable WCAG 2.2 A/AA violatio
 
   const panels = [
     ['Identity', 'Enterprise identity administration'],
+    ['Data governance', 'Data governance administration'],
     ['Workflows', 'Workflow action designer'],
     ['Releases', 'Release manager'],
     ['Search', 'Search and discovery'],

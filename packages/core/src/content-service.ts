@@ -1,18 +1,18 @@
 import {
-  SchemaValidationError,
   assertValidContent,
   buildContentRoute,
-  collectContentReferences,
   type ComponentManifest,
   type ContentSchemaDefinition,
+  collectContentReferences,
   type ReleaseMember,
   type ReleasePreviewEntry,
   type ReleaseValidationIssue,
+  SchemaValidationError,
 } from '@gridstory/schema';
 import {
   ConflictError,
-  GridStoryError,
   ContentValidationError,
+  GridStoryError,
   NotFoundError,
   PublishQualityGateError,
 } from './errors.js';
@@ -31,6 +31,7 @@ export class ContentService {
   readonly #componentManifests: ComponentManifest[];
   readonly #qualityGate?: ContentServiceOptions['qualityGate'];
   readonly #workflowGate?: ContentServiceOptions['workflowGate'];
+  readonly #governanceGate?: ContentServiceOptions['governanceGate'];
 
   constructor({
     repository,
@@ -38,12 +39,14 @@ export class ContentService {
     componentManifests,
     qualityGate,
     workflowGate,
+    governanceGate,
   }: ContentServiceOptions) {
     this.#repository = repository;
     this.#schemas = new Map(schemas.map((schema) => [schema.id, schema]));
     this.#componentManifests = componentManifests;
     this.#qualityGate = qualityGate;
     this.#workflowGate = workflowGate;
+    this.#governanceGate = governanceGate;
   }
 
   getSchemas(): ContentSchemaDefinition[] {
@@ -168,6 +171,7 @@ export class ContentService {
     actor: Actor;
     translationGroupId?: string;
   }): Promise<ContentEntry> {
+    await this.#governanceGate?.assertWrite(input.scope, 'content');
     this.#validate(input.contentType, input.data);
     await this.#validateReferences(input.scope, input.contentType, input.data);
     const entry = await this.#repository.create({
@@ -188,6 +192,7 @@ export class ContentService {
     data: unknown;
     actor: Actor;
   }): Promise<ContentEntry> {
+    await this.#governanceGate?.assertWrite(input.scope, 'content', input.id);
     const current = await this.get({ scope: input.scope, id: input.id, perspective: 'draft' });
     this.#validate(current.contentType, input.data);
     await this.#validateReferences(input.scope, current.contentType, input.data);
@@ -209,6 +214,7 @@ export class ContentService {
     actor: Actor;
     channel?: string;
   }): Promise<ContentEntry> {
+    await this.#governanceGate?.assertWrite(input.scope, 'content', input.id);
     const current = await this.get({ scope: input.scope, id: input.id, perspective: 'draft' });
     this.#validate(current.contentType, current.data);
     await this.#workflowGate?.assertCanPublish({
@@ -426,6 +432,9 @@ export class ContentService {
     actor: Actor;
     channel?: string;
   }): Promise<ContentEntry[]> {
+    for (const member of input.entries) {
+      await this.#governanceGate?.assertWrite(input.scope, 'content', member.entryId);
+    }
     const issues = await this.assessRelease(input);
     if (issues.some((issue) => issue.severity === 'error')) {
       throw new GridStoryError(
@@ -456,6 +465,9 @@ export class ContentService {
     entries: ReleaseMember[];
     actor: Actor;
   }): Promise<ContentEntry[]> {
+    for (const member of input.entries) {
+      await this.#governanceGate?.assertWrite(input.scope, 'content', member.entryId);
+    }
     if (input.entries.some((entry) => entry.previousPublishedRevisionId === null)) {
       throw new GridStoryError(
         'A release containing a first publication cannot be rolled back atomically.',

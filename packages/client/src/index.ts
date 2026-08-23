@@ -28,11 +28,20 @@ import type {
   ContentSchemaDefinition,
   ContentSort,
   CreateAssetDeliveryInput,
+  DataSubject,
+  DataSubjectRequest,
   DesignSystemManifest,
+  GovernanceBackupEvidence,
+  GovernanceExportEnvelope,
+  GovernanceExportPackage,
+  GovernancePlan,
+  GovernancePolicyInput,
+  GovernanceSnapshot,
   GroupRoleMapping,
   IdentityProvider,
   IdentitySession,
   IdentitySnapshot,
+  LegalHold,
   LocaleConfiguration,
   LocalizedContentResolution,
   PluginCapabilityGrant,
@@ -49,6 +58,7 @@ import type {
   ReleaseInput,
   ReleasePreview,
   RequestContext,
+  ResidencyStatus,
   ResolvedComponentManifest,
   SchemaDriftReport,
   SchemaIrDocument,
@@ -59,6 +69,7 @@ import type {
   SessionPolicy,
   SignedPluginManifest,
   StartAssetUploadInput,
+  SubjectResourceLink,
   TaxonomyDefinition,
   TranslationCompletenessReport,
   UpdateAssetInput,
@@ -635,6 +646,152 @@ export class GridStoryClient {
       tenantId: this.#tenantId,
     });
     return `${this.#baseUrl}/api/v1/identity/federation/${encodeURIComponent(providerId)}/start?${query}`;
+  }
+
+  getGovernance(signal?: AbortSignal): Promise<GovernanceSnapshot> {
+    return this.#request('/api/v1/governance', { ...(signal ? { signal } : {}) });
+  }
+
+  saveGovernancePolicy(
+    input: GovernancePolicyInput,
+    signal?: AbortSignal,
+  ): Promise<GovernanceSnapshot> {
+    return this.#request('/api/v1/governance/policy', {
+      method: 'PUT',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  createDataSubject(reference: string, signal?: AbortSignal): Promise<DataSubject> {
+    return this.#request('/api/v1/governance/subjects', {
+      method: 'POST',
+      body: JSON.stringify({ reference }),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  linkDataSubjectResource(
+    subjectId: string,
+    input: Omit<SubjectResourceLink, 'id' | 'subjectId' | 'createdBy' | 'createdAt'>,
+    signal?: AbortSignal,
+  ): Promise<SubjectResourceLink> {
+    return this.#request(`/api/v1/governance/subjects/${encodeURIComponent(subjectId)}/links`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  createLegalHold(
+    input: Omit<
+      LegalHold,
+      'id' | 'status' | 'createdBy' | 'createdAt' | 'releasedBy' | 'releasedAt' | 'releaseReason'
+    >,
+    signal?: AbortSignal,
+  ): Promise<LegalHold> {
+    return this.#request('/api/v1/governance/holds', {
+      method: 'POST',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  releaseLegalHold(id: string, reason: string, signal?: AbortSignal): Promise<LegalHold> {
+    return this.#request(`/api/v1/governance/holds/${encodeURIComponent(id)}/release`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  createDataSubjectRequest(
+    input: Pick<DataSubjectRequest, 'subjectId' | 'type' | 'reason'>,
+    signal?: AbortSignal,
+  ): Promise<DataSubjectRequest> {
+    return this.#request('/api/v1/governance/requests', {
+      method: 'POST',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  verifyDataSubjectRequest(
+    id: string,
+    input: {
+      method: 'customer-process' | 'federated-session' | 'manual-review';
+      evidenceReference: string;
+    },
+    signal?: AbortSignal,
+  ): Promise<DataSubjectRequest> {
+    return this.#request(`/api/v1/governance/requests/${encodeURIComponent(id)}/verify`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  reviewDataSubjectRequest(
+    id: string,
+    input: { decision: 'approve' | 'reject'; reason: string },
+    signal?: AbortSignal,
+  ): Promise<DataSubjectRequest> {
+    return this.#request(`/api/v1/governance/requests/${encodeURIComponent(id)}/review`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  createErasurePlan(requestId: string, signal?: AbortSignal): Promise<GovernancePlan> {
+    return this.#request(`/api/v1/governance/requests/${encodeURIComponent(requestId)}/plan`, {
+      method: 'POST',
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  createRetentionPlan(signal?: AbortSignal): Promise<GovernancePlan> {
+    return this.#request('/api/v1/governance/retention/plans', {
+      method: 'POST',
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  approveGovernancePlan(
+    id: string,
+    input: { digest: string; reason: string; backup: GovernanceBackupEvidence },
+    signal?: AbortSignal,
+  ): Promise<GovernancePlan> {
+    return this.#request(`/api/v1/governance/plans/${encodeURIComponent(id)}/approve`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  processGovernancePlans(
+    signal?: AbortSignal,
+  ): Promise<{ claimed: number; completed: number; blocked: number; failed: number }> {
+    return this.#request('/api/v1/governance/plans/process', {
+      method: 'POST',
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  exportDataSubjectRequest(
+    id: string,
+    encrypt = true,
+    signal?: AbortSignal,
+  ): Promise<GovernanceExportEnvelope | GovernanceExportPackage> {
+    return this.#request(`/api/v1/governance/requests/${encodeURIComponent(id)}/export`, {
+      method: 'POST',
+      body: JSON.stringify({ encrypt }),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  getResidencyStatus(signal?: AbortSignal): Promise<ResidencyStatus> {
+    return this.#request('/api/v1/governance/residency', { ...(signal ? { signal } : {}) });
   }
 
   getComponentManifests(signal?: AbortSignal): Promise<ResolvedComponentManifest[]> {
@@ -1693,10 +1850,19 @@ export type {
   ContentSchemaDefinition,
   ContentSort,
   CreateAssetDeliveryInput,
+  DataSubject,
+  DataSubjectRequest,
+  GovernanceBackupEvidence,
+  GovernanceExportEnvelope,
+  GovernanceExportPackage,
+  GovernancePlan,
+  GovernancePolicyInput,
+  GovernanceSnapshot,
   GroupRoleMapping,
   IdentityProvider,
   IdentitySession,
   IdentitySnapshot,
+  LegalHold,
   LocaleConfiguration,
   LocalizedContentResolution,
   PresenceParticipant,
@@ -1707,6 +1873,7 @@ export type {
   Release,
   ReleaseInput,
   ReleasePreview,
+  ResidencyStatus,
   ResolvedComponentManifest,
   SchemaDriftReport,
   SchemaIrDocument,
@@ -1716,6 +1883,7 @@ export type {
   SearchResponse,
   SessionPolicy,
   StartAssetUploadInput,
+  SubjectResourceLink,
   TaxonomyDefinition,
   TranslationCompletenessReport,
   UpdateAssetInput,

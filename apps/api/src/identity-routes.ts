@@ -285,6 +285,7 @@ export async function registerIdentityRoutes(
     bindRequestIdentity(request, {
       ...requestScope,
       principal: authenticated.principal,
+      session: authenticated.session,
     });
   });
 

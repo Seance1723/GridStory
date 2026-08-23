@@ -1,13 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
 import {
-  assertSameContentScope,
-  contentScopeKey,
-  contentScopePath,
-  emitTenantTelemetry,
-  type TenantTelemetrySink,
-} from './tenant-scope.js';
-import {
-  resourceLimits,
   type AssetObject,
   type AssetRecord,
   type AssetRendition,
@@ -17,24 +9,30 @@ import {
   type AssetUploadSession,
   type AssetUsageLocation,
   type AssetUsageReport,
+  assetMetadataSchema,
+  assetRecordSchema,
+  assetRenditionPresetSchema,
+  assetUploadSessionSchema,
   type ContentPerspective,
   type ContentScope,
+  resourceLimits,
   type StartAssetUploadInput,
-  type UpdateAssetInput,
-} from '@gridstory/schema';
-import {
-  assetMetadataSchema,
-  assetRenditionPresetSchema,
-  assetRecordSchema,
-  assetUploadSessionSchema,
   startAssetUploadSchema,
+  type UpdateAssetInput,
   updateAssetSchema,
 } from '@gridstory/schema';
-import { BuiltInAssetContentInspector } from './asset-security.js';
 import type { AssetContentInspector, AssetMalwareScanner } from './asset-security.js';
-import { GridStoryError, NotFoundError } from './errors.js';
+import { BuiltInAssetContentInspector } from './asset-security.js';
 import type { ContentService } from './content-service.js';
-import type { Actor, Awaitable } from './types.js';
+import { GridStoryError, NotFoundError } from './errors.js';
+import {
+  assertSameContentScope,
+  contentScopeKey,
+  contentScopePath,
+  emitTenantTelemetry,
+  type TenantTelemetrySink,
+} from './tenant-scope.js';
+import type { Actor, Awaitable, GovernedWriteGate } from './types.js';
 
 const DEFAULT_PART_SIZE = 5 * 1024 * 1024;
 const UPLOAD_TTL_MS = 24 * 60 * 60 * 1000;
@@ -54,6 +52,7 @@ export interface AssetRepository {
   list(scope: ContentScope): Awaitable<AssetRecord[]>;
   get(scope: ContentScope, id: string): Awaitable<AssetRecord | null>;
   save(asset: AssetRecord): Awaitable<void>;
+  delete(scope: ContentScope, id: string): Awaitable<boolean>;
   close?(): Awaitable<void>;
 }
 
@@ -73,6 +72,10 @@ export class InMemoryAssetRepository implements AssetRepository {
 
   save(asset: AssetRecord): void {
     this.#assets.set(`${contentScopeKey(asset)}\u001e${asset.id}`, structuredClone(asset));
+  }
+
+  delete(scope: ContentScope, id: string): boolean {
+    return this.#assets.delete(`${contentScopeKey(scope)}\u001e${id}`);
   }
 }
 
@@ -99,6 +102,7 @@ export interface AssetStorageAdapter {
     height?: number;
   }): Awaitable<AssetObject>;
   readObject(input: { scope: ContentScope; object: AssetObject }): Awaitable<Uint8Array>;
+  deleteObject(input: { scope: ContentScope; object: AssetObject }): Awaitable<void>;
   abortMultipart(input: { scope: ContentScope; uploadId: string }): Awaitable<void>;
 }
 
@@ -198,6 +202,13 @@ export class InMemoryAssetStorageAdapter implements AssetStorageAdapter {
     assertScope(stored.scope, input.scope);
     return Uint8Array.from(stored.body);
   }
+
+  deleteObject(input: { scope: ContentScope; object: AssetObject }): void {
+    const stored = this.#objects.get(input.object.objectKey);
+    if (!stored) return;
+    assertScope(stored.scope, input.scope);
+    this.#objects.delete(input.object.objectKey);
+  }
   abortMultipart(input: { scope: ContentScope; uploadId: string }): void {
     const upload = this.#uploads.get(input.uploadId);
     if (!upload) return;
@@ -252,6 +263,7 @@ export class AssetService {
   readonly #malwareScanner: AssetMalwareScanner | undefined;
   readonly #uploads = new Map<string, PendingUpload>();
   readonly #telemetry: TenantTelemetrySink | undefined;
+  readonly #governanceGate: GovernedWriteGate | undefined;
 
   constructor(input: {
     repository?: AssetRepository;
@@ -261,6 +273,7 @@ export class AssetService {
     contentInspector?: AssetContentInspector;
     malwareScanner?: AssetMalwareScanner;
     telemetry?: TenantTelemetrySink;
+    governanceGate?: GovernedWriteGate;
   }) {
     this.#repository = input.repository ?? new InMemoryAssetRepository();
     this.#storage = input.storage;
@@ -269,6 +282,7 @@ export class AssetService {
     this.#inspector = input.contentInspector ?? new BuiltInAssetContentInspector();
     this.#malwareScanner = input.malwareScanner;
     this.#telemetry = input.telemetry;
+    this.#governanceGate = input.governanceGate;
   }
 
   async list(scope: ContentScope): Promise<AssetRecord[]> {
@@ -327,6 +341,7 @@ export class AssetService {
     asset: StartAssetUploadInput;
     now?: Date;
   }): Promise<AssetUploadSession> {
+    await this.#governanceGate?.assertWrite(input.scope, 'asset');
     const parsed = startAssetUploadSchema.parse(input.asset);
     const storage = await this.#storage.startMultipart({
       scope: input.scope,
@@ -405,6 +420,7 @@ export class AssetService {
     actor: Actor;
     now?: Date;
   }): Promise<AssetRecord> {
+    await this.#governanceGate?.assertWrite(input.scope, 'asset');
     const pending = this.#uploads.get(input.uploadId);
     if (!pending) throw new NotFoundError('Upload session was not found.');
     assertScope(pending.session, input.scope);
@@ -603,6 +619,7 @@ export class AssetService {
     actor: Actor;
     now?: Date;
   }): Promise<AssetRecord> {
+    await this.#governanceGate?.assertWrite(input.scope, 'asset', input.id);
     const asset = await this.get(input.scope, input.id);
     const changes = updateAssetSchema.parse(input.changes);
     const current = asset.revisions.find((revision) => revision.id === asset.currentRevisionId);
@@ -632,6 +649,7 @@ export class AssetService {
     preset: AssetRenditionPreset;
     now?: Date;
   }): Promise<AssetRendition> {
+    await this.#governanceGate?.assertWrite(input.scope, 'asset', input.id);
     if (!this.#renditions) {
       throw new GridStoryError(
         'No rendition adapter is configured.',
@@ -719,5 +737,34 @@ export class AssetService {
       },
       locations,
     };
+  }
+
+  async erase(scope: ContentScope, id: string): Promise<{ effect: string }> {
+    const asset = await this.#repository.get(scope, id);
+    if (!asset) return { effect: 'asset_already_absent' };
+    assertSameContentScope(scope, asset, 'asset repository erase');
+    const objects = new Map<string, AssetObject>();
+    for (const revision of asset.revisions)
+      objects.set(revision.original.objectKey, revision.original);
+    for (const rendition of asset.renditions)
+      objects.set(rendition.object.objectKey, rendition.object);
+    for (const object of objects.values()) {
+      await this.#storage.deleteObject({ scope, object });
+    }
+    if (!(await this.#repository.delete(scope, id))) {
+      throw new GridStoryError(
+        'Asset metadata changed during erasure.',
+        'governance_resource_changed',
+        409,
+      );
+    }
+    await emitTenantTelemetry(this.#telemetry, {
+      scope,
+      name: 'asset.erased',
+      outcome: 'success',
+      subjectId: id,
+      metadata: { objects: objects.size },
+    });
+    return { effect: `asset_erased:${objects.size}_objects` };
   }
 }

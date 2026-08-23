@@ -7,6 +7,7 @@ import formbody from '@fastify/formbody';
 import {
   type AssetContentInspector,
   AssetDeliveryService,
+  AssetGovernanceProcessor,
   type AssetMalwareScanner,
   type AssetRenditionAdapter,
   type AssetRepository,
@@ -19,18 +20,24 @@ import {
   CollaborationService,
   ComponentLifecycleService,
   type ContentEventType,
+  ContentGovernanceProcessor,
   type ContentPerspective,
   ContentQualityService,
   ContentQueryService,
   type ContentRepository,
   ContentRoutingService,
   ContentService,
+  type CustomerManagedKeyAdapter,
   contentCacheTags,
+  type DataPlacementAdapter,
   type DueWorkflowExecution,
   EnterpriseIdentityService,
   type ExternalLinkChecker,
+  type GovernanceRepository,
+  GovernanceService,
   GridStoryActions,
   GridStoryError,
+  IdentityGovernanceProcessor,
   type IdentityRepository,
   type ImportConflictPolicy,
   InMemoryAssetRepository,
@@ -45,6 +52,7 @@ import {
   PortabilityService,
   PostgresCollaborationRepository,
   PostgresContentRepository,
+  PostgresGovernanceRepository,
   PostgresIdentityRepository,
   PostgresPluginRepository,
   PostgresReleaseRepository,
@@ -59,6 +67,7 @@ import {
   SqliteAssetRepository,
   SqliteCollaborationRepository,
   SqliteContentRepository,
+  SqliteGovernanceRepository,
   SqliteIdentityRepository,
   SqlitePluginRepository,
   SqliteReleaseRepository,
@@ -110,6 +119,7 @@ import {
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import { parseContentQuery } from './content-query.js';
 import { defaultPageQualityPolicies, defaultWorkflowDefinitions } from './defaults.js';
+import { registerGovernanceRoutes } from './governance-routes.js';
 import { registerGridStoryGraphql } from './graphql.js';
 import {
   createFederationAdapters,
@@ -159,6 +169,11 @@ export interface BuildServerOptions {
     webAuthn?: { rpName: string; rpId: string; origins: string[] };
     cookieName?: string;
     secureCookies?: boolean;
+  };
+  governance?: {
+    repository?: GovernanceRepository;
+    keyAdapter?: CustomerManagedKeyAdapter;
+    placementAdapter?: DataPlacementAdapter;
   };
 }
 
@@ -404,6 +419,7 @@ export async function buildServer({
   tenantTelemetry,
   observability,
   identity: identityOptions,
+  governance: governanceOptions,
 }: BuildServerOptions): Promise<FastifyInstance> {
   if (!databaseUrl && databasePath !== ':memory:') {
     mkdirSync(dirname(resolve(databasePath)), { recursive: true });
@@ -441,6 +457,20 @@ export async function buildServer({
     (databaseUrl
       ? new PostgresIdentityRepository({ connectionString: databaseUrl })
       : new SqliteIdentityRepository({ filename: databasePath }));
+  const resolvedTenantTelemetry = tenantTelemetry ?? observability?.tenantTelemetry;
+  const resolvedGovernanceRepository: GovernanceRepository =
+    governanceOptions?.repository ??
+    (databaseUrl
+      ? new PostgresGovernanceRepository({ connectionString: databaseUrl })
+      : new SqliteGovernanceRepository({ filename: databasePath }));
+  const governance = new GovernanceService({
+    repository: resolvedGovernanceRepository,
+    ...(governanceOptions?.keyAdapter ? { keyAdapter: governanceOptions.keyAdapter } : {}),
+    ...(governanceOptions?.placementAdapter
+      ? { placementAdapter: governanceOptions.placementAdapter }
+      : {}),
+    ...(resolvedTenantTelemetry ? { telemetry: resolvedTenantTelemetry } : {}),
+  });
   const identity = new EnterpriseIdentityService({ repository: resolvedIdentityRepository });
   const federationAdapters = createFederationAdapters(
     identityOptions?.federationProviders ?? [],
@@ -453,7 +483,6 @@ export async function buildServer({
       origins: allowedOrigins,
     },
   );
-  const resolvedTenantTelemetry = tenantTelemetry ?? observability?.tenantTelemetry;
   const workflows = new WorkflowService({
     repository: resolvedWorkflowRepository,
     jobRepository: repository,
@@ -471,6 +500,7 @@ export async function buildServer({
     componentManifests,
     qualityGate: quality,
     workflowGate: workflows,
+    governanceGate: governance,
   });
   const releases = new ReleaseService({
     repository: resolvedReleaseRepository,
@@ -520,11 +550,20 @@ export async function buildServer({
     storage: assetStorage,
     contentService: service,
     repository: resolvedAssetRepository,
+    governanceGate: governance,
     ...(assetRenditionAdapter ? { renditionAdapter: assetRenditionAdapter } : {}),
     ...(assetContentInspector ? { contentInspector: assetContentInspector } : {}),
     ...(assetMalwareScanner ? { malwareScanner: assetMalwareScanner } : {}),
     ...(resolvedTenantTelemetry ? { telemetry: resolvedTenantTelemetry } : {}),
   });
+  governance.registerProcessor(
+    new ContentGovernanceProcessor({
+      repository,
+      ...(cacheInvalidator ? { cacheInvalidator } : {}),
+    }),
+  );
+  governance.registerProcessor(new AssetGovernanceProcessor(assets));
+  governance.registerProcessor(new IdentityGovernanceProcessor(identity));
   const assetDeliveries = new AssetDeliveryService({
     signingSecret: assetDeliverySigningSecret,
   });
@@ -622,6 +661,7 @@ export async function buildServer({
     cookieName: identityOptions?.cookieName ?? 'gridstory_session',
     secureCookies: resolveIdentityCookieSecurity(identityMode, identityOptions?.secureCookies),
   });
+  await registerGovernanceRoutes(server, { service: governance, policy });
 
   server.addHook('onClose', async () => {
     await repository.close();
@@ -631,6 +671,7 @@ export async function buildServer({
     await resolvedReleaseRepository.close();
     await resolvedPluginRepository.close();
     await resolvedIdentityRepository.close();
+    await resolvedGovernanceRepository.close();
   });
   server.addHook('onSend', async (request, reply, payload) => {
     if (request.url.startsWith('/api/v1/delivery/')) {

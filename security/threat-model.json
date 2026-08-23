@@ -3,8 +3,8 @@
   "model": {
     "id": "GRIDSTORY-TM-001",
     "title": "GridStory control plane and delivery threat model",
-    "version": "1.1.0",
-    "reviewedAt": "2026-08-21",
+    "version": "1.2.0",
+    "reviewedAt": "2026-08-23",
     "owners": ["GridStory security owner", "GridStory architecture owner"],
     "methodology": "OWASP four-question threat modeling with STRIDE categorization",
     "scope": [
@@ -17,7 +17,8 @@
       "workers, outbox, durable jobs, search, cache, and webhook adapters",
       "published REST delivery and application-owned React rendering",
       "logical archive export and import",
-      "signed plugin manifests, tenant grants, lifecycle state, and external runtime protocol"
+      "signed plugin manifests, tenant grants, lifecycle state, and external runtime protocol",
+      "data governance, legal holds, rights requests, guarded erasure, encrypted exports, customer-managed key references, and placement attestations"
     ],
     "outOfScope": [
       "security of application-owned React components after validated data leaves GridStory",
@@ -157,6 +158,16 @@
       "id": "ASSET-014",
       "name": "Whole-database backups and recovery manifests",
       "securityProperties": ["confidentiality", "integrity", "recoverability"]
+    },
+    {
+      "id": "ASSET-015",
+      "name": "Governance policy, subject links, holds, requests, plans, receipts, and events",
+      "securityProperties": ["confidentiality", "integrity", "tenant isolation", "preservation"]
+    },
+    {
+      "id": "ASSET-016",
+      "name": "Customer-managed key references and encrypted subject exports",
+      "securityProperties": ["confidentiality", "integrity", "key separation", "recoverability"]
     }
   ],
   "trustBoundaries": [
@@ -253,6 +264,17 @@
         "credentials passed through process environment rather than command arguments",
         "restricted encrypted off-host storage with retention and access policy",
         "isolated absent or empty restore target with explicit PostgreSQL database confirmation"
+      ]
+    },
+    {
+      "id": "BOUNDARY-012",
+      "name": "Governance approval and worker to governed resources, KMS, and placement adapters",
+      "controls": [
+        "complete scope and distinct governance permissions",
+        "explicit subject/resource links and legal-hold/restriction precedence",
+        "digest-bound separate approval with fresh reauthentication and verified backup evidence",
+        "worker-time policy, plan, resource-version, key-state, and placement revalidation",
+        "narrow describe/wrap/unwrap KMS authority and per-effect idempotent receipts"
       ]
     }
   ],
@@ -354,6 +376,13 @@
       "to": "BOUNDARY-011",
       "data": "whole-database snapshot or dump, bounded manifest, and isolated restore command",
       "assets": ["ASSET-001", "ASSET-004", "ASSET-009", "ASSET-012", "ASSET-014"]
+    },
+    {
+      "id": "FLOW-015",
+      "from": "ACTOR-003",
+      "to": "BOUNDARY-012",
+      "data": "scoped policy, explicit subject links, hold/request evidence, exact approved plan digest, wrapped export key, and processor receipts",
+      "assets": ["ASSET-001", "ASSET-004", "ASSET-006", "ASSET-009", "ASSET-015", "ASSET-016"]
     }
   ],
   "assumptions": [
@@ -972,6 +1001,55 @@
         "scripts/test-postgres.mjs",
         "docs/recovery-and-rollouts.md",
         "M5-005"
+      ]
+    },
+    {
+      "id": "THREAT-0025",
+      "title": "Governance bypass, overbroad export, or irreversible deletion",
+      "stride": [
+        "Spoofing",
+        "Tampering",
+        "Repudiation",
+        "Information Disclosure",
+        "Denial of Service",
+        "Elevation of Privilege"
+      ],
+      "scenario": "An attacker or mistaken operator crosses scope, exports unlinked personal data, bypasses a hold/restriction, approves their own stale plan, uses an unavailable/wrong-region key, or deletes changed/external resources without recoverable evidence.",
+      "actors": ["ACTOR-003", "ACTOR-006", "ACTOR-008"],
+      "assets": [
+        "ASSET-001",
+        "ASSET-004",
+        "ASSET-006",
+        "ASSET-009",
+        "ASSET-014",
+        "ASSET-015",
+        "ASSET-016"
+      ],
+      "boundaries": [
+        "BOUNDARY-002",
+        "BOUNDARY-003",
+        "BOUNDARY-006",
+        "BOUNDARY-008",
+        "BOUNDARY-011",
+        "BOUNDARY-012"
+      ],
+      "likelihood": 4,
+      "impact": 5,
+      "risk": 20,
+      "response": "mitigate",
+      "owner": "Security and privacy owner",
+      "mitigations": [
+        "Authorize read/manage/execute separately against complete scope and inventory only explicit subject/resource links.",
+        "Make active holds/restrictions dominate deletion and require a new dry-run after any governance change.",
+        "Require another administrator, fresh server-validated reauthentication, exact digest, recent verified backup evidence, and worker-time plan/resource/policy revalidation.",
+        "Use narrow processor/KMS/placement adapters, envelope encryption, no plaintext key persistence, fail-closed unsupported resources, and ordered hash-chained receipts/events."
+      ],
+      "verification": [
+        "packages/core/test/governance-service.test.ts",
+        "apps/api/test/governance.test.ts",
+        "apps/api/test/governance-adapters.test.ts",
+        "apps/api/test/database-recovery.test.ts",
+        "docs/data-governance.md"
       ]
     }
   ],

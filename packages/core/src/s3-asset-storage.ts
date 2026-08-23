@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { AssetObject, AssetUploadPart, ContentScope } from '@gridstory/schema';
-import { NotFoundError } from './errors.js';
 import type { AssetStorageAdapter } from './asset-service.js';
+import { NotFoundError } from './errors.js';
 import { contentScopeKey, contentScopePath } from './tenant-scope.js';
 import type { Awaitable } from './types.js';
 
@@ -26,6 +26,7 @@ export interface S3MultipartClient {
   }): Awaitable<{ size: number; checksum: string; url?: string }>;
   abortMultipartUpload(input: { bucket: string; key: string; uploadId: string }): Awaitable<void>;
   getObject(input: { bucket: string; key: string }): Awaitable<{ body: Uint8Array }>;
+  deleteObject(input: { bucket: string; key: string }): Awaitable<void>;
 }
 
 export interface S3AssetStorageOptions {
@@ -137,6 +138,14 @@ export class S3AssetStorageAdapter implements AssetStorageAdapter {
       key: input.object.objectKey,
     });
     return Uint8Array.from(object.body);
+  }
+
+  async deleteObject(input: { scope: ContentScope; object: AssetObject }): Promise<void> {
+    const expectedPrefix = `${this.#keyPrefix}/${contentScopePath(input.scope)}/`;
+    if (!input.object.objectKey.startsWith(expectedPrefix)) {
+      throw new NotFoundError('Asset object was not found.');
+    }
+    await this.#client.deleteObject({ bucket: this.#bucket, key: input.object.objectKey });
   }
   async abortMultipart(input: { scope: ContentScope; uploadId: string }): Promise<void> {
     const descriptor = this.#uploads.get(input.uploadId);

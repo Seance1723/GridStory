@@ -66,6 +66,16 @@ describe('API configuration', () => {
     );
   });
 
+  it('loads bounded data-placement attestation regions', () => {
+    expect(loadConfig({}).dataRegions).toEqual(['local']);
+    expect(
+      loadConfig({ GRIDSTORY_DATA_REGIONS: 'eu-west-1, europe-west1,eu-west-1' }).dataRegions,
+    ).toEqual(['eu-west-1', 'europe-west1']);
+    expect(() => loadConfig({ GRIDSTORY_DATA_REGIONS: '../outside' })).toThrow(
+      /GRIDSTORY_DATA_REGIONS/,
+    );
+  });
+
   it('bounds graceful shutdown inside the deployment termination window', () => {
     expect(loadConfig({}).shutdownTimeoutMs).toBe(25_000);
     expect(loadConfig({ GRIDSTORY_SHUTDOWN_TIMEOUT_MS: '45000' }).shutdownTimeoutMs).toBe(45_000);

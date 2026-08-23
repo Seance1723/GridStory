@@ -3,10 +3,12 @@ import {
   type AuthorizationResource,
   assertValidContentScope,
   type GridStoryAction,
+  GridStoryError,
 } from '@gridstory/core';
 import type {
   ContentPerspective,
   ContentScope,
+  IdentitySession,
   Principal,
   PrincipalType,
   RequestContext,
@@ -17,6 +19,20 @@ interface BoundRequestIdentity {
   organizationId: string;
   tenantId: string;
   principal: Principal;
+  session?: IdentitySession;
+}
+
+export function requestReauthenticationTime(request: FastifyRequest): string {
+  const session = boundIdentities.get(request)?.session;
+  if (!session) return new Date().toISOString();
+  if (session.revokedAt || Date.parse(session.reauthenticateAt) <= Date.now()) {
+    throw new GridStoryError(
+      'A fresh enterprise reauthentication is required.',
+      'governance_reauthentication_required',
+      403,
+    );
+  }
+  return new Date().toISOString();
 }
 
 const boundIdentities = new WeakMap<FastifyRequest, BoundRequestIdentity>();

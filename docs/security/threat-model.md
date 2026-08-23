@@ -103,6 +103,7 @@ Every modeled threat has a response, owner, concrete mitigations, and verificati
 | THREAT-0022 | Sensitive error or debug disclosure | I | 12 High | Generic responses remain enforced; M5-004 removes detailed public readiness drift, excludes raw URLs/headers/bodies/error messages from OTLP, and verifies credentials/query strings do not reach live exports. Production debug-off validation remains deployment evidence. |
 | THREAT-0020 | Dependency/build compromise | T/E | 15 High | M5-007 adds OSV/Dependabot policy, reviewed package inventories, SHA-256 verification, pinned SPDX generation, and GitHub/Sigstore provenance/SBOM workflows; M5-008 records hosted issuance/verification as unmet `RC-004`, so RC/GA remain no-go. |
 | THREAT-0021 | Transport/proxy misconfiguration | S/I | 15 High | Explicit origin policy exists; TLS/proxy/deployment conformance is required before GA. |
+| THREAT-0025 | Governance bypass, overbroad export, or irreversible deletion | S/T/R/I/D/E | 20 Critical | Explicit links, scoped permissions, hold/restriction dominance, exact plan digests, separate fresh approval, verified backup evidence, worker-time revalidation, narrow KMS/placement/processors, and receipts fail closed; customer discovery/legal decisions and production provider conformance remain external. |
 
 The canonical register also covers preview and asset grant replay, forged webhooks, cursor tampering, audit/log attacks, and error disclosure.
 
@@ -116,7 +117,14 @@ The canonical register also covers preview and asset grant replay, forged webhoo
 - Server plugin packages remain outside the control-plane process and execute only in operator-provided external processes/containers. GridStory verifies and mediates the protocol; operators own OS identity, filesystem, network, CPU, memory, and process isolation.
 - Marketplace review, publisher enrollment, and the Studio sandbox loader are not supplied by M5-003. M5-007 supplies repository-level dependency, SBOM, and provenance evidence but does not establish marketplace package safety.
 - Whole-database backups contain every tenant and are never a tenant-scoped portability mechanism. Operators own encrypted off-host storage, key custody, retention/deletion, restore approvals, and provider-specific physical PITR evidence.
+- Governance automation is not legal advice or automatic personal-data discovery. Operators own classifications, link completeness, lawful-basis/hold decisions, external-system processors, coordinated backups, provider KMS/placement evidence, and production approval policy.
 - No threat is accepted merely because it is listed. Any residual high or critical risk needs a task or explicit, named, expiring acceptance.
+
+## M6-003 evidence update
+
+`THREAT-0025` adds the governance approval/worker-to-resource/KMS/placement boundary. The implemented mitigations use explicit subject links, distinct scoped permissions, legal-hold/restriction precedence, immutable dry-run candidates and digest, a different freshly authenticated approver, current backup evidence, execution-time revalidation, fail-closed processors and placement/key state, envelope encryption, idempotent receipts, and hash-chained events. Focused core/API/Studio/recovery/PostgreSQL evidence uses only isolated fixtures and mocked KMS clients.
+
+Residual deployment risk remains high until the customer proves data discovery/classification, applicable policy, all external processors, object/provider backups, live KMS credentials/key policy/region, actual storage and support locations, and operational separation of duties. Configured placement is an attestation input, not routing or compliance certification.
 
 ## Review workflow
 

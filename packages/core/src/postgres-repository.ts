@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { Pool, type PoolClient, type PoolConfig, type QueryResultRow } from 'pg';
 import { schemaIrDocumentSchema } from '@gridstory/schema';
+import { Pool, type PoolClient, type PoolConfig, type QueryResultRow } from 'pg';
 import { auditEventHash } from './audit-service.js';
-import { contentEventCacheTags } from './tenant-scope.js';
 import { ConflictError, NotFoundError } from './errors.js';
+import { contentEventCacheTags } from './tenant-scope.js';
 import type {
   Actor,
   AuditEvent,
@@ -13,11 +13,11 @@ import type {
   ContentRevision,
   ContentScope,
   ContentStatus,
-  SchemaDeployment,
   DurableJob,
   OutboxEvent,
   PortableContentRecord,
   PortableImportResult,
+  SchemaDeployment,
   WebhookSubscription,
 } from './types.js';
 
@@ -1091,6 +1091,54 @@ export class PostgresContentRepository implements ContentRepository {
       ...(row.previous_hash ? { previousHash: row.previous_hash } : {}),
       eventHash: row.event_hash,
     }));
+  }
+
+  async deleteEntry({
+    scope,
+    id,
+  }: Parameters<ContentRepository['deleteEntry']>[0]): Promise<boolean> {
+    await this.#ready;
+    const client = await this.#pool.connect();
+    try {
+      await client.query('BEGIN');
+      const existing = await client.query(
+        `SELECT 1 FROM ${this.#entries}
+         WHERE organization_id = $1 AND tenant_id = $2 AND workspace_id = $3
+           AND site_id = $4 AND environment_id = $5 AND locale = $6 AND id = $7
+         FOR UPDATE`,
+        [...scopeValues(scope), id],
+      );
+      if (existing.rowCount !== 1) {
+        await client.query('ROLLBACK');
+        return false;
+      }
+      await client.query(
+        `DELETE FROM ${this.#outboxEvents}
+         WHERE organization_id = $1 AND tenant_id = $2 AND workspace_id = $3
+           AND site_id = $4 AND environment_id = $5 AND locale = $6 AND aggregate_id = $7`,
+        [...scopeValues(scope), id],
+      );
+      await client.query(
+        `DELETE FROM ${this.#durableJobs}
+         WHERE organization_id = $1 AND tenant_id = $2 AND workspace_id = $3
+           AND site_id = $4 AND environment_id = $5 AND locale = $6
+           AND payload_json ->> 'entryId' = $7`,
+        [...scopeValues(scope), id],
+      );
+      const result = await client.query(
+        `DELETE FROM ${this.#entries}
+         WHERE organization_id = $1 AND tenant_id = $2 AND workspace_id = $3
+           AND site_id = $4 AND environment_id = $5 AND locale = $6 AND id = $7`,
+        [...scopeValues(scope), id],
+      );
+      await client.query('COMMIT');
+      return result.rowCount === 1;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async getTranslationGroup({

@@ -16,6 +16,7 @@ export interface ApiConfig {
   allowedWebhookHosts?: string[];
   workerIntervalMs: number;
   shutdownTimeoutMs: number;
+  dataRegions: string[];
   observability: ObservabilityConfig;
   identity: {
     mode: 'development' | 'production';
@@ -208,6 +209,21 @@ function parseResourceValue(
   return candidate;
 }
 
+function parseDataRegions(value: string | undefined): string[] {
+  const regions = (value ?? 'local')
+    .split(',')
+    .map((region) => region.trim())
+    .filter(Boolean);
+  if (
+    regions.length === 0 ||
+    regions.length > 20 ||
+    regions.some((region) => !/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/.test(region))
+  ) {
+    throw new Error('GRIDSTORY_DATA_REGIONS must contain 1-20 bounded region identifiers.');
+  }
+  return [...new Set(regions)];
+}
+
 export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiConfig {
   const allowedOrigins = (
     environment.GRIDSTORY_ALLOWED_ORIGINS ?? 'http://localhost:5173,http://localhost:5174'
@@ -310,6 +326,7 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiCon
       1_000,
       300_000,
     ),
+    dataRegions: parseDataRegions(environment.GRIDSTORY_DATA_REGIONS),
     observability: {
       enabled: parseBoolean(environment.GRIDSTORY_OTEL_ENABLED, 'GRIDSTORY_OTEL_ENABLED'),
       serviceName: serviceName ?? 'gridstory-api',

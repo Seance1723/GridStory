@@ -12,6 +12,51 @@ afterEach(() => {
 });
 
 describe('GridStoryClient browser compatibility', () => {
+  it('sends guarded governance workflow contracts without client-supplied reauthentication time', async () => {
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    const client = createGridStoryClient({
+      baseUrl: 'https://cms.example.test',
+      tenantId: 'tenant-governed',
+      fetch: async (input, init) => {
+        requests.push({ url: String(input), ...(init ? { init } : {}) });
+        return new Response(JSON.stringify({}), {
+          headers: { 'content-type': 'application/json' },
+        });
+      },
+    });
+
+    await client.getGovernance();
+    await client.createDataSubject('subject@example.test');
+    await client.createRetentionPlan();
+    await client.approveGovernancePlan('plan one', {
+      digest: 'a'.repeat(64),
+      reason: 'Approved after review.',
+      backup: {
+        reference: 'backup://tenant-governed/2026-08-23',
+        sha256: 'b'.repeat(64),
+        verifiedAt: '2026-08-23T00:00:00.000Z',
+      },
+    });
+    await client.processGovernancePlans();
+
+    expect(requests.map(({ url }) => url)).toEqual([
+      'https://cms.example.test/api/v1/governance',
+      'https://cms.example.test/api/v1/governance/subjects',
+      'https://cms.example.test/api/v1/governance/retention/plans',
+      'https://cms.example.test/api/v1/governance/plans/plan%20one/approve',
+      'https://cms.example.test/api/v1/governance/plans/process',
+    ]);
+    expect(JSON.parse(String(requests[3]?.init?.body))).toEqual({
+      digest: 'a'.repeat(64),
+      reason: 'Approved after review.',
+      backup: {
+        reference: 'backup://tenant-governed/2026-08-23',
+        sha256: 'b'.repeat(64),
+        verifiedAt: '2026-08-23T00:00:00.000Z',
+      },
+    });
+  });
+
   it('uses cookie-backed production identity without emitting development actor headers', async () => {
     const requests: Array<{ url: string; init?: RequestInit }> = [];
     const client = createGridStoryClient({

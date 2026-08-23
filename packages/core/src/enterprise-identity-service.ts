@@ -358,6 +358,42 @@ export class EnterpriseIdentityService {
     });
   }
 
+  async anonymizeUser(
+    scope: IdentityTenantScope,
+    actorId: string,
+    userId: string,
+  ): Promise<DirectoryUser> {
+    return this.#mutate(scope, (document, now) => {
+      const user = document.users.find((candidate) => candidate.id === userId);
+      if (!user) throw new NotFoundError('Directory user was not found.');
+      this.#revokeUserSessions(document, user.id, actorId, now, 'user_erased');
+      document.credentials = document.credentials.filter(
+        (credential) => credential.userId !== user.id,
+      );
+      for (const group of document.groups) {
+        group.memberIds = group.memberIds.filter((memberId) => memberId !== user.id);
+      }
+      user.userName = `erased:${digest(`${scope.organizationId}:${scope.tenantId}:${user.id}`).slice(0, 24)}`;
+      delete user.externalId;
+      delete user.displayName;
+      user.emails = [];
+      user.active = false;
+      user.providerLinks = [];
+      user.federatedGroups = [];
+      user.groupIds = [];
+      user.version += 1;
+      user.updatedAt = now.toISOString();
+      this.#event(document, now, {
+        action: 'identity.user.erased',
+        outcome: 'success',
+        actorId,
+        subjectId: user.id,
+        reason: 'direct_identifiers_anonymized',
+      });
+      return user;
+    });
+  }
+
   async upsertGroup(
     scope: IdentityTenantScope,
     actorId: string,

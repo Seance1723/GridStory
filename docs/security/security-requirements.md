@@ -97,6 +97,17 @@ M6-002 adds a production-selectable API identity boundary and a framework-neutra
 - Secret values SHALL come from a production secret manager, never source control or build artifacts; access SHALL be least privilege and rotations SHALL be exercised.
 - `GS-SEC-020`: production client, external, database, storage, IdP, monitoring, and service-to-service connections SHALL use TLS 1.2/1.3 or a stronger appropriate encrypted protocol without plaintext fallback and with certificate validation.
 
+## Guarded data governance
+
+- `GS-SEC-031`: governance reads, policy, subjects, links, holds, restrictions, rights requests, exports, plans, approvals, execution, receipts, and events SHALL carry the complete tenant scope, use distinct deny-by-default permissions, and remain private with `no-store`.
+- Subject access/export/erasure SHALL inventory only explicit resource links. Missing discovery, external resources, or an unavailable processor SHALL be reported as blockers rather than silently omitted or treated as completed.
+- Active legal holds and processing restrictions SHALL dominate retention and erasure both when a dry-run plan is created and immediately before every effect. A release SHALL require a new plan.
+- Irreversible execution SHALL require another authorized administrator, a fresh server-validated enterprise session, the exact SHA-256 plan digest, recent verified coordinated-backup evidence, and execution-time plan/policy/resource/key/placement revalidation with a bounded receipt.
+- Customer-managed key integration SHALL store opaque references only, bind wrap/unwrap to tenant/request context, use fresh authenticated export envelopes, avoid plaintext DEK persistence, and SHALL NOT grant GridStory key creation/rotation/disablement/destruction/recovery authority.
+- Residency policy SHALL compare explicit allowed locations to adapter attestations and fail closed when required evidence is unknown or disallowed. A configured label SHALL NOT be represented as migration, routing, replication, or legal compliance proof.
+
+The implementation, limitations, operator workflow, and recovery boundary are documented in [Data governance and guarded erasure](../data-governance.md). `THREAT-0025` owns irreversible-loss, overbroad-export, hold-bypass, approval, key, and placement abuse cases.
+
 ## Logging, error handling, and operations
 
 - `GS-SEC-028`: a maintained log inventory SHALL define event, metadata, format, sink, access, retention, correlation, and alerting. At minimum cover authentication, failed authorization, privileged mutation, publication, workflow/release, import/export, credential lifecycle, adapter failure, and control bypass.
@@ -134,6 +145,12 @@ Public liveness/readiness expose only stable minimal codes. Authorized private/n
 The Node operations boundary creates consistent SQLite `VACUUM INTO` snapshots or PostgreSQL custom-format logical dumps, verifies a minimal sidecar manifest plus SHA-256 and native format/integrity checks, keeps PostgreSQL credentials out of arguments and manifests, and restores only to an absent SQLite path or explicitly confirmed empty PostgreSQL GridStory target. Live-WAL SQLite and disposable PostgreSQL regressions prove backup-before-mutation restores the earlier application state. `THREAT-0024` models the whole-database artifact and protected-storage boundary.
 
 Production PostgreSQL PITR remains a database/platform control using physical base backups and an unbroken continuous-WAL archive; provider storage, keys, access logging, retention, and physical restore evidence are not certified by the repository. The application adds bounded first-signal drain, timeout/second-signal force behavior, interruptible worker polling, and an exact current/candidate health/readiness preflight. The deployment still owns traffic removal, termination grace, shared-database proof, expand/contract migration sequencing, canary observation, artifact rollback, and provider-specific recovery drills.
+
+## M6-003 data-governance baseline
+
+`GS-SEC-031` and `THREAT-0025` cover fully scoped private governance records, explicit subject/resource links, hold/restriction dominance, rights request evidence, deterministic encrypted exports, digest-bound independent approval, backup and reauthentication gates, worker-time resource/policy/key/placement revalidation, built-in content/asset/identity effects, idempotent receipts, and ordered hash-chained governance events. SQLite/PostgreSQL persist the same optimistic document; the live recovery regression restores the earlier governance subject with the earlier content snapshot.
+
+Repository evidence does not discover all customer personal data, select applicable law, certify a production KMS/client/credential configuration, prove provider placement, move data/keys, route regions, back up external objects/providers, or execute application-specific/external deletion. Those remain customer/deployment evidence and fail-closed processor boundaries.
 
 ## Verification ownership
 

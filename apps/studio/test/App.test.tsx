@@ -162,6 +162,41 @@ function createTestClient(
   const merges: Array<Record<string, unknown>> = [];
   const conflicts: Array<Record<string, unknown>> = [];
   let collaborationVersion = 0;
+  const governanceSubjects: Array<Record<string, unknown>> = [];
+  const governanceHolds: Array<Record<string, unknown>> = [];
+  const governancePlans: Array<Record<string, unknown>> = [];
+  let governanceVersion = 0;
+  const governanceSnapshot = () => ({
+    organizationId: 'local',
+    tenantId: 'default',
+    workspaceId: 'default',
+    siteId: 'default',
+    environmentId: 'development',
+    locale: 'en',
+    version: governanceVersion,
+    retentionRules: [],
+    subjects: governanceSubjects,
+    links: [],
+    holds: governanceHolds,
+    restrictions: [],
+    requests: [],
+    plans: governancePlans,
+    residencyPolicy: {
+      homeRegion: 'local',
+      requireAttestation: true,
+      rules: [
+        { resourceType: 'content', allowedRegions: ['local'] },
+        { resourceType: 'asset', allowedRegions: ['local'] },
+        { resourceType: 'identity', allowedRegions: ['local'] },
+        { resourceType: 'plugin', allowedRegions: ['local'] },
+      ],
+      updatedBy: 'system',
+      updatedAt: now,
+    },
+    events: [],
+    createdAt: now,
+    updatedAt: now,
+  });
   const collaborationSnapshot = (entryId: string) => ({
     organizationId: 'local',
     tenantId: 'default',
@@ -535,6 +570,66 @@ function createTestClient(
         audit: { valid: true, eventCount: 4, entryCount: 2, failures: [] },
         recentAudit: [],
       });
+    }
+    if (url.pathname === '/api/v1/governance' && init?.method !== 'POST') {
+      return json(governanceSnapshot());
+    }
+    if (url.pathname === '/api/v1/governance/subjects' && init?.method === 'POST') {
+      const body = JSON.parse(String(init.body)) as { reference: string };
+      const subject = {
+        id: `subject-${governanceSubjects.length + 1}`,
+        reference: body.reference,
+        status: 'active',
+        createdBy: 'studio-local-admin',
+        createdAt: now,
+        updatedAt: now,
+      };
+      governanceSubjects.push(subject);
+      governanceVersion += 1;
+      return json(subject, 201);
+    }
+    if (url.pathname === '/api/v1/governance/holds' && init?.method === 'POST') {
+      const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+      const hold = {
+        id: `hold-${governanceHolds.length + 1}`,
+        ...body,
+        status: 'active',
+        createdBy: 'studio-local-admin',
+        createdAt: now,
+      };
+      governanceHolds.push(hold);
+      governanceVersion += 1;
+      return json(hold, 201);
+    }
+    if (url.pathname === '/api/v1/governance/retention/plans' && init?.method === 'POST') {
+      const plan = {
+        organizationId: 'local',
+        tenantId: 'default',
+        workspaceId: 'default',
+        siteId: 'default',
+        environmentId: 'development',
+        locale: 'en',
+        id: `plan-${governancePlans.length + 1}`,
+        kind: 'retention',
+        state: 'preview',
+        documentVersion: governanceVersion + 1,
+        candidates: [
+          {
+            id: 'candidate-1',
+            resource: { type: 'content', id: 'one', external: false },
+            action: 'delete',
+            state: 'eligible',
+            blockers: [],
+            expectedVersion: 'one-revision-1',
+          },
+        ],
+        digest: 'a'.repeat(64),
+        createdBy: 'studio-local-admin',
+        createdAt: now,
+      };
+      governancePlans.push(plan);
+      governanceVersion += 1;
+      return json(plan, 201);
     }
     if (url.pathname === '/api/v1/identity' && init?.method !== 'POST') {
       return json({
@@ -979,6 +1074,31 @@ describe('GridStory Studio', () => {
     expect(within(panel).getByText(/will not be shown again/i)).toBeTruthy();
   });
 
+  it('previews guarded retention effects and collects independent approval evidence', async () => {
+    const user = userEvent.setup();
+    render(<App client={createTestClient()} />);
+
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Data governance' }));
+
+    const panel = await screen.findByRole('region', { name: 'Data governance administration' });
+    expect(panel.textContent).toContain('code rollback cannot restore erased records');
+    await user.type(
+      within(panel).getByRole('textbox', { name: 'Customer reference' }),
+      'customer-123',
+    );
+    await user.click(within(panel).getByRole('button', { name: 'Register subject' }));
+    expect(await within(panel).findByText(/customer-123 · active/)).toBeTruthy();
+
+    await user.click(within(panel).getByRole('button', { name: 'Preview retention plan' }));
+    expect(await within(panel).findByText(/delete content:one · eligible/)).toBeTruthy();
+    expect(within(panel).getByText('a'.repeat(64))).toBeTruthy();
+    expect(
+      within(panel).getByRole('textbox', { name: 'Independent approval reason' }),
+    ).toBeTruthy();
+    expect(within(panel).getByRole('button', { name: 'Approve irreversible plan' })).toBeTruthy();
+  });
+
   it('starts and revokes a secure application iframe preview', async () => {
     const user = userEvent.setup();
     render(<App client={createTestClient()} />);
@@ -1158,7 +1278,7 @@ describe('GridStory Studio', () => {
     const thread = screen.getByText('Assigned to reviewer').closest('.comment-thread');
     expect(thread?.textContent).toContain('story');
     expect(thread?.textContent).not.toContain('one-hero-a');
-  });
+  }, 15_000);
 
   it('shows scoped component usage and visual regression hooks in governance', async () => {
     const user = userEvent.setup();

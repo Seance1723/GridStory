@@ -176,6 +176,7 @@ export const identitySecurityEventActionSchema = z.enum([
   'identity.user.provisioned',
   'identity.user.updated',
   'identity.user.deprovisioned',
+  'identity.user.erased',
   'identity.group.provisioned',
   'identity.group.updated',
   'identity.group.deprovisioned',

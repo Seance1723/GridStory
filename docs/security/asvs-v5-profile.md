@@ -41,9 +41,10 @@ Every ASVS chapter is explicitly represented so an omitted area cannot be mistak
 
 ## Evidence summary
 
-The machine profile contains 30 stable `GS-SEC-###` requirements:
+The machine profile contains 31 stable `GS-SEC-###` requirements:
 
 - Verified controls cover trusted-layer validation, parameterized persistence, SVG sanitization, atomic operations, exact origin messaging, tenant-bound deny-by-default authorization, credential/cache containment, signed token validation, approved platform cryptography, capability-isolated plugin execution, and fail-closed generic errors.
+- `GS-SEC-031` verifies the repository-owned guarded-governance boundary: explicit subject links, private complete scope, hold/restriction dominance, independent digest-bound approval, fresh authentication and backup evidence, execution-time revalidation, envelope encryption, narrow processors/KMS/placement adapters, receipts, and events.
 - Partial controls cover structured rendering, SSRF/egress, browser headers, GraphQL cost/introspection, upload limits/scanning, external adapter configuration, sensitive-data policy, and minimal API fields.
 - Planned controls cover trusted production intermediary/identity configuration, cryptographic inventory/secret lifecycle, and production fail-safe configuration. Anti-automation, vulnerability/component lifecycle, GraphQL/upload bounds, and the resource-demand inventory are partial because distributed/deployment or hosted-release evidence remains.
 - Conditional controls cover deployed trusted-proxy/TLS/service communication and customer-specific IdP/secret-manager conformance; the repository-owned OIDC binding and persistent-session lifecycle are verified.
@@ -96,6 +97,12 @@ The dated machine-validated review of candidate `b31193a` derives `alpha=go`, `b
 
 Stable criteria now expose the unresolved security acceptance directly: production identity/proxy/provider controls are `BETA-003`; disabled-author and assistive-technology evidence is `BETA-005`; hosted SBOM/provenance is `RC-004`; independent security/accessibility acceptance is `RC-005`; production-shaped capacity/recovery/rollout is `RC-006`; and operating/security/privacy ownership is `GA-003`. `pnpm readiness:check` rejects external-only proof marked met, missing evidence paths, required not-applicable decisions, and any beta/RC/GA prerequisite bypass.
 
+## M6-003 evidence update
+
+`GS-SEC-031` and `THREAT-0025` now link the scoped governance schema/repositories/service/processors to private authorized REST/client/Studio operations, mocked AWS/Google KMS wrappers, deterministic encrypted export verification, isolated-fixture content/asset/identity effects, legal-hold and stale-plan denial, PostgreSQL persistence, and live SQLite recovery. GridStory keeps only opaque CMK references and has no provider key-administration authority.
+
+The control does not certify customer discovery/classification or law/policy choices, live provider clients/credentials/key policy, all external deletion processors, actual database/object/log/backup/support locations, coordinated external recovery, or regional movement/routing. Those remain deployment/privacy-owner evidence under `BETA-003`, `RC-005`, `RC-006`, and `GA-003`.
+
 ## Highest-priority gaps
 
 | Gap | ASVS areas | Owner task |
@@ -106,7 +113,7 @@ Stable criteria now expose the unresolved security acceptance directly: producti
 | Telemetry backend access/deletion, Collector deployment conformance, and production identity/credential event sources | V11, V13, V14, V16 | `BETA-003`, `GA-003`; event sources M6-002 |
 | Backup storage/physical PITR, secret rotation, and orchestrator rollout proof | V13, V14, V15, V16 | `RC-006`, `GA-003`; identity lifecycle M6-002 |
 | Deployed HTML CSP/header conformance, arbitrary application rendering, and branded-browser/assistive-technology acceptance | V1, V3, V14 | `BETA-003`, `BETA-005`, `RC-005` |
-| Hosted release attestation/SBOM verification plus deployment rate, concurrency, saturation, quota, and retention evidence | V2, V4, V5, V15 | `RC-004`, `RC-006`; retention M6-003 |
+| Hosted release attestation/SBOM verification plus deployment rate, concurrency, saturation, quota, and retention evidence | V2, V4, V5, V15 | `RC-004`, `RC-006`; repository governance M6-003 |
 | Independent readiness/risk acceptance | All applicable chapters | `RC-005`, `GA-001` |
 
 ## How to update the profile

@@ -6,7 +6,7 @@
     "standard": "OWASP Application Security Verification Standard",
     "standardVersion": "5.0.0",
     "targetLevel": "L2-oriented",
-    "reviewedAt": "2026-08-21",
+    "reviewedAt": "2026-08-23",
     "source": "https://github.com/OWASP/ASVS/tree/v5.0.0/5.0",
     "statement": "This is a project-specific selection and applicability record, not an ASVS certification or a claim that every ASVS L2 requirement has been independently verified.",
     "statusDefinitions": {
@@ -781,6 +781,48 @@
         "packages/client/test/client.test.ts"
       ],
       "taskIds": ["M5-003"]
+    },
+    {
+      "id": "GS-SEC-031",
+      "title": "Guarded data governance and erasure",
+      "status": "verified",
+      "owner": "Security and privacy owner",
+      "statement": "Governance access SHALL be completely tenant scoped and private; exports SHALL inventory only explicit subject links; holds and restrictions SHALL dominate deletion; irreversible effects SHALL require an exact dry-run digest, a distinct authorized approver, fresh reauthentication, recent verified backup evidence, and execution-time policy/resource/key/placement revalidation with an attributable receipt.",
+      "asvsRefs": [
+        "v5.0.0-2.2.2",
+        "v5.0.0-8.1.1",
+        "v5.0.0-11.2.1",
+        "v5.0.0-14.1.1",
+        "v5.0.0-14.2.1",
+        "v5.0.0-16.1.1"
+      ],
+      "threatRefs": [
+        "THREAT-0001",
+        "THREAT-0006",
+        "THREAT-0015",
+        "THREAT-0016",
+        "THREAT-0018",
+        "THREAT-0024",
+        "THREAT-0025"
+      ],
+      "evidence": [
+        "packages/schema/src/governance.ts",
+        "packages/core/src/governance-service.ts",
+        "packages/core/src/governance-processors.ts",
+        "apps/api/src/governance-routes.ts",
+        "apps/api/src/governance-adapters.ts",
+        "docs/data-governance.md",
+        "docs/adr/0014-guarded-data-governance.md"
+      ],
+      "verification": [
+        "packages/core/test/governance-service.test.ts",
+        "packages/core/test/governance-repository.test.ts",
+        "apps/api/test/governance.test.ts",
+        "apps/api/test/governance-adapters.test.ts",
+        "apps/api/test/database-recovery.test.ts",
+        "packages/core/test/postgres-conformance.test.ts"
+      ],
+      "taskIds": ["M6-003"]
     }
   ]
 }

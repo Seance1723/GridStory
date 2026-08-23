@@ -1,6 +1,6 @@
 # Database recovery, graceful shutdown, and rolling upgrades
 
-GridStory treats database recovery as an infrastructure operation, not as tenant-scoped logical portability. A backup contains all tenants, drafts, revisions, workflows, jobs, audit history, schema state, and any credentials or identity records stored by the selected deployment. Classify it as confidential, restrict and audit access, encrypt it in transit and at rest, keep an off-host copy, and never place database URLs or passwords in filenames, manifests, logs, or command arguments.
+GridStory treats database recovery as an infrastructure operation, not as tenant-scoped logical portability. A backup contains all tenants, drafts, revisions, workflows, jobs, audit history, schema state, governance rules/subjects/links/holds/requests/plans/receipts/events, and any credentials or identity records stored by the selected deployment. Classify it as confidential, restrict and audit access, encrypt it in transit and at rest, keep an off-host copy, and never place database URLs or passwords in filenames, manifests, logs, or command arguments.
 
 The recovery commands produce or require a versioned sidecar manifest at `<archive>.manifest.json`. It contains only the database kind, native format, creation time, basename, byte length, and SHA-256 checksum. Verification checks the manifest and checksum plus SQLite integrity/required tables or the PostgreSQL archive table of contents. These checks detect damage and substitution; they do not replace protected storage, tested retention, or recovery approval.
 
@@ -18,7 +18,7 @@ Before production, the deployment owner records:
 | Custody | Backup principal, storage/key owner, restore approvers, break-glass process, access log, and separation between the live database and backup administrator where practical. |
 | Drill cadence | At least before each major release and at the deployment's risk-based recurring interval; record archive ID/time (never credentials), target, timings, recovered point, verification, and cleanup. |
 
-An archive is not successful evidence until an isolated restore passes database integrity, GridStory readiness, audit verification, representative draft/published reads, pending-job inspection, and application-owned asset checks. Keep the original failed/live database immutable until the recovered target is accepted and cut over.
+An archive is not successful evidence until an isolated restore passes database integrity, GridStory readiness, audit and governance-chain verification, active-hold/approved-plan inspection, representative governed draft/published reads, pending-job inspection, and application-owned asset checks. The live SQLite recovery regression proves the earlier governance subject document is restored alongside earlier content. Keep the original failed/live database immutable until the recovered target is accepted and cut over.
 
 ## SQLite snapshot and restore drill
 

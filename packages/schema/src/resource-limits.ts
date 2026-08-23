@@ -60,6 +60,14 @@ export const resourceLimits = {
     defaultInputBytes: 65_536,
     defaultOutputBytes: 262_144,
   },
+  governance: {
+    maximumRetentionRules: 1_000,
+    maximumPlanCandidates: 10_000,
+    maximumExecutionBatch: 100,
+    maximumExportResources: 10_000,
+    maximumReauthenticationAgeSeconds: 900,
+    maximumBackupEvidenceAgeSeconds: 86_400,
+  },
   benchmark: {
     datasetEntries: 250,
     readSamples: 120,

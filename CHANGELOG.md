@@ -8,6 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Corrected the M6-003 service/telemetry/cache exact-optional boundaries, bodyless API fixture, scoped formatter/import/lint quality, and broad Studio fixture timing discovered during verification (BUG-0278 through BUG-0285).
 - Corrected enterprise identity dependency boundaries and exact types, optimistic/durable mutation behavior, denial persistence, federated-role reconstruction, one-time test fixtures, SCIM filtering, production cookie defaults, exact audit-event coverage, forced-colors contrast, lint quality, and final security-document consistency found during M6-002 (BUG-0259 through BUG-0273, BUG-0275 through BUG-0277).
 - Overrode vulnerable Fastify/Mercurius transitive production dependencies with patched compatible releases; `pnpm audit --prod` reports no known vulnerabilities (BUG-0274).
 - Corrected collaboration schema evaluation, service defaults and exact targets, SQLite test cleanup, API request typing, Studio JSON containment, interaction fixtures, review-region semantics, PostgreSQL schema qualification, and an API diagnostic dependency-boundary violation found during M6-001 (BUG-0248 through BUG-0258).
@@ -72,6 +73,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Added bounded fully scoped governance contracts, optimistic in-memory/SQLite/PostgreSQL persistence, explicit subject/resource links, retention rules, active/released legal holds, processing restrictions, rights request state, ordered hash-chained events, and recovery coverage.
+- Added dry-run retention/erasure plans with exact effect/blocker summaries, SHA-256 digests, separate fresh approval and verified-backup evidence, worker-time revalidation, idempotent receipts, and built-in content/asset/identity processors that destructively execute only against isolated test fixtures.
+- Added deterministic subject exports with optional AES-256-GCM envelopes and tenant-bound wrapped DEKs, narrow injected AWS KMS/Google Cloud KMS wrappers, CMK describe/wrap/unwrap-only authority, placement attestations and allowed-region gates without migration/routing claims, private REST and typed universal-client operations, and a responsive Studio governance panel.
+- Added data-governance/rollback/restore/operator guidance, accepted ADR 0014, `THREAT-0025`, and verified `GS-SEC-031` evidence while retaining customer discovery, legal decisions, external processors, live provider configuration, and actual placement as deployment responsibilities.
 - Added bounded tenant-scoped enterprise identity contracts, optimistic in-memory/SQLite/PostgreSQL persistence, scoped group-to-role materialization, ordered security events, and an ADR separating maintained Node protocol verification from the framework-neutral identity kernel.
 - Added production OIDC Authorization Code with discovery/state/nonce/S256 PKCE, signed SAML Web SSO with durable RelayState/InResponseTo replay protection, exact-origin/RP/user-verified WebAuthn enrollment and step-up, and fail-closed production request authentication using hashed opaque secure-cookie sessions.
 - Added RFC-shaped tenant-authenticated SCIM Users/Groups discovery, filtering, PATCH, ETags, lifecycle revocation, and one-time directory credentials; added idle/absolute/reauthentication/concurrency session policy and single-use, incident-bound, rate-limited, audited break-glass access.
@@ -332,6 +337,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Security
 
+- Required active hold/restriction dominance, explicit subject links, distinct governance permissions, digest-bound separation of duties, fresh server-validated reauthentication, recent backup evidence, execution-time policy/resource/key/placement checks, fail-closed unsupported resources, envelope encryption without persisted plaintext keys, and private/no-store management responses for M6-003.
 - Replaced trusted production identity headers with cryptographically verified federation/WebAuthn results, tenant-bound hashed session and service credentials, one-time protocol challenges, lifecycle/concurrency revocation, private/no-store management boundaries, and exact scoped security events.
 - Patched the audited production graph for `fast-uri`, `find-my-way`, `@fastify/static`, and `brace-expansion` advisories while retaining frozen-lockfile reproducibility.
 - Made release archives fail closed on missing, duplicate, unexpected, mismatched, or workspace-bound package metadata; the installed-consumer check disables lifecycle scripts, forbids network resolution and workspace/link dependencies, and cleans only a pre-validated OS-temporary path.

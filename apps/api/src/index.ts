@@ -1,3 +1,4 @@
+import { ConfiguredPlacementAdapter } from '@gridstory/core';
 import { loadConfig } from './config.js';
 import { createGracefulShutdownController, installShutdownSignals } from './graceful-shutdown.js';
 import { startObservability } from './observability.js';
@@ -20,6 +21,14 @@ const server = await buildServer({
   logger: true,
   observability,
   identity: config.identity,
+  governance: {
+    placementAdapter: new ConfiguredPlacementAdapter({
+      content: config.dataRegions,
+      asset: config.dataRegions,
+      identity: config.dataRegions,
+      plugin: config.dataRegions,
+    }),
+  },
 });
 
 const shutdown = createGracefulShutdownController({

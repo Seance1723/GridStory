@@ -4,8 +4,8 @@ import type {
   ContentPerspective,
   ContentQualityReport,
   ContentRevision,
-  ContentScope,
   ContentSchemaDefinition,
+  ContentScope,
   SchemaIrDocument,
 } from '@gridstory/schema';
 
@@ -40,6 +40,14 @@ export interface ContentPublishGate {
     channel?: string;
     roles?: string[];
   }): Awaitable<ContentQualityReport>;
+}
+
+export interface GovernedWriteGate {
+  assertWrite(
+    scope: ContentScope,
+    resourceType: 'content' | 'asset' | 'identity' | 'plugin',
+    resourceId?: string,
+  ): Awaitable<void>;
 }
 
 export interface AuditEvent extends ContentScope {
@@ -215,6 +223,7 @@ export interface ContentRepository {
   listRevisions(input: { scope: ContentScope; id: string }): Awaitable<ContentRevision[]>;
   listAuditEvents(input: { scope: ContentScope; id: string }): Awaitable<AuditEvent[]>;
   listScopeAuditEvents(input: { scope: ContentScope }): Awaitable<AuditEvent[]>;
+  deleteEntry(input: { scope: ContentScope; id: string }): Awaitable<boolean>;
   getTranslationGroup(input: { scope: ContentScope; id: string }): Awaitable<string | null>;
   listTranslationVariants(input: {
     scope: ContentScope;
@@ -311,6 +320,7 @@ export interface ContentServiceOptions {
   componentManifests: ComponentManifest[];
   qualityGate?: ContentPublishGate;
   workflowGate?: ContentWorkflowGate;
+  governanceGate?: GovernedWriteGate;
 }
 
 export type {

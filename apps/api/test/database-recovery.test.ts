@@ -5,8 +5,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   backupPostgres,
   backupSqlite,
-  recoveryManifestPath,
   type RecoveryCommandRunner,
+  recoveryManifestPath,
   restorePostgres,
   restoreSqlite,
   verifyBackup,
@@ -62,6 +62,14 @@ describe('database recovery', () => {
           payload: { contentType: 'page', data: page },
         })
       ).json();
+      const governedSubject = (
+        await server.inject({
+          method: 'POST',
+          url: '/api/v1/governance/subjects',
+          headers,
+          payload: { reference: 'recovery-subject-before-backup' },
+        })
+      ).json();
 
       const manifest = await backupSqlite({
         sourcePath,
@@ -87,6 +95,12 @@ describe('database recovery', () => {
         },
       });
       expect(update.statusCode).toBe(200);
+      await server.inject({
+        method: 'POST',
+        url: '/api/v1/governance/subjects',
+        headers,
+        payload: { reference: 'recovery-subject-after-backup' },
+      });
 
       await expect(restoreSqlite({ backupPath, targetPath: restoredPath })).resolves.toEqual(
         manifest,
@@ -99,6 +113,18 @@ describe('database recovery', () => {
       });
       expect(recovered.statusCode).toBe(200);
       expect(recovered.json().data.title).toBe('Recovery snapshot');
+      const recoveredGovernance = await restored.inject({
+        method: 'GET',
+        url: '/api/v1/governance',
+        headers,
+      });
+      expect(recoveredGovernance.statusCode).toBe(200);
+      expect(recoveredGovernance.json().subjects).toEqual([
+        expect.objectContaining({
+          id: governedSubject.id,
+          reference: 'recovery-subject-before-backup',
+        }),
+      ]);
     } finally {
       await restored?.close();
       await server.close();
