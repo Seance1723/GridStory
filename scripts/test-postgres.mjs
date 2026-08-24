@@ -209,8 +209,26 @@ function runPostgresRecoveryDrill(containerName) {
     if (restoredRegional.stdout.trim() !== '1') {
       throw new Error('PostgreSQL restore did not recover the regional topology policy.');
     }
+    const restoredFederation = run(
+      'docker',
+      [
+        'exec',
+        containerName,
+        'psql',
+        '--username=gridstory',
+        `--dbname=${targetDatabase}`,
+        '--tuples-only',
+        '--no-align',
+        '--command',
+        "SELECT count(*) FROM gridstory.gridstory_content_federation_documents WHERE tenant_id = 'postgres-tenant' AND payload->>'version' = '1' AND payload->>'updatedBy' = 'postgres-federation-admin';",
+      ],
+      { capture: true },
+    );
+    if (restoredFederation.stdout.trim() !== '1') {
+      throw new Error('PostgreSQL restore did not recover the content federation state.');
+    }
     console.log(
-      'PostgreSQL logical backup/restore drill passed (published content, targeting, experiment lifecycle, analytics aggregate, governed AI policy, reviewed AI authoring policy, and regional topology recovered).',
+      'PostgreSQL logical backup/restore drill passed (published content, targeting, experiment lifecycle, analytics aggregate, governed AI policy, reviewed AI authoring policy, regional topology, and content federation state recovered).',
     );
   } finally {
     run(

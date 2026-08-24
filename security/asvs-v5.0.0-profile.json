@@ -1170,6 +1170,55 @@
         "tests/e2e/accessibility.spec.ts"
       ],
       "taskIds": ["M8-001"]
+    },
+    {
+      "id": "GS-SEC-040",
+      "title": "Signed published-only federation with pinned attribution and reviewed read-only mirrors",
+      "status": "verified",
+      "owner": "Platform, security, content governance, legal, and delivery owner",
+      "statement": "Federation offers, agreements, mirror plans, records, tombstones, and receipts SHALL be completely tenant scoped, bounded, optimistic, private for management, no-store for public delivery, disabled by default, and governed by distinct federation read/manage/consume/sync permissions; producers SHALL allowlist exact supported deployed schema versions and emit only signed published revisions without drafts, previews, assets, components, relations, rich text, credentials, or workflow state; consumers SHALL pin and verify Ed25519 key, request/time, source instance/scope, offer version/digest, schema fingerprints, requested identity, monotonic revision, checksum, snapshot checkpoint, and mandatory canonical/license/credit/agent attribution; HTTP sources SHALL be configured credential-free HTTPS origins with no redirects, same-origin response validation, complete source scope, bounded time/bytes/records, and generic failures; live delivery SHALL retain no record, mirrors SHALL remain separate/read-only and require an expiring digest-reviewed source-revalidated atomic idempotent plan with blockers and withdrawal tombstones, and public output SHALL omit remote scope, adapter/key configuration, credentials, and diagnostics while source rights, key rotation, egress, and availability remain external evidence.",
+      "asvsRefs": [
+        "v5.0.0-2.2.2",
+        "v5.0.0-8.1.1",
+        "v5.0.0-11.2.1",
+        "v5.0.0-14.1.1",
+        "v5.0.0-14.2.1",
+        "v5.0.0-16.5.3"
+      ],
+      "threatRefs": [
+        "THREAT-0001",
+        "THREAT-0004",
+        "THREAT-0013",
+        "THREAT-0019",
+        "THREAT-0024",
+        "THREAT-0026",
+        "THREAT-0036"
+      ],
+      "evidence": [
+        "packages/schema/src/content-federation.ts",
+        "packages/core/src/content-federation-repository.ts",
+        "packages/core/src/content-federation-service.ts",
+        "packages/core/src/authorization.ts",
+        "apps/api/src/content-federation-adapter.ts",
+        "apps/api/src/content-federation-routes.ts",
+        "apps/api/src/server.ts",
+        "packages/client/src/index.ts",
+        "apps/studio/src/App.tsx",
+        "docs/content-federation-and-syndication.md",
+        "docs/adr/0023-contract-bound-content-federation.md"
+      ],
+      "verification": [
+        "packages/schema/test/content-federation.test.ts",
+        "packages/core/test/content-federation-service.test.ts",
+        "packages/core/test/postgres-conformance.test.ts",
+        "apps/api/test/content-federation.test.ts",
+        "apps/api/test/database-recovery.test.ts",
+        "apps/api/test/postgres-server.test.ts",
+        "packages/client/test/client.test.ts",
+        "apps/studio/test/App.test.tsx",
+        "tests/e2e/accessibility.spec.ts"
+      ],
+      "taskIds": ["M8-002"]
     }
   ]
 }

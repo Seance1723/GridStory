@@ -11,10 +11,10 @@ import {
   AiGatewayService,
   type AiProviderAdapter,
   type AiSemanticAdapter,
-  type AssetContentInspector,
   type AnalyticsAdapter,
   type AnalyticsRepository,
   AnalyticsService,
+  type AssetContentInspector,
   AssetDeliveryService,
   AssetGovernanceProcessor,
   type AssetMalwareScanner,
@@ -29,6 +29,10 @@ import {
   CollaborationService,
   ComponentLifecycleService,
   type ContentEventType,
+  type ContentFederationRepository,
+  ContentFederationService,
+  type ContentFederationSigner,
+  type ContentFederationSourceAdapter,
   ContentGovernanceProcessor,
   type ContentPerspective,
   ContentQualityService,
@@ -60,8 +64,8 @@ import {
   type MarketplaceRepository,
   MarketplaceService,
   type MigrationRepository,
-  type MigrationSourceAdapter,
   MigrationService,
+  type MigrationSourceAdapter,
   OperationsService,
   type PersonalizationRepository,
   PersonalizationService,
@@ -69,10 +73,11 @@ import {
   type PluginRuntimeAdapter,
   PluginService,
   PortabilityService,
-  PostgresCollaborationRepository,
   PostgresAiAuthoringRepository,
   PostgresAiGatewayRepository,
   PostgresAnalyticsRepository,
+  PostgresCollaborationRepository,
+  PostgresContentFederationRepository,
   PostgresContentRepository,
   PostgresGovernanceRepository,
   PostgresIdentityRepository,
@@ -84,21 +89,22 @@ import {
   PostgresReleaseRepository,
   PostgresWorkflowRepository,
   PreviewSessionService,
+  parseLogicalArchive,
   type RegionalFailoverAdapter,
   type RegionalReadAdapter,
   type RegionalRepository,
   RegionalService,
-  parseLogicalArchive,
   type ReleaseRepository,
   ReleaseService,
   SchemaLifecycleService,
   type SearchAdapter,
   SearchService,
-  SqliteAssetRepository,
   SqliteAiAuthoringRepository,
   SqliteAiGatewayRepository,
   SqliteAnalyticsRepository,
+  SqliteAssetRepository,
   SqliteCollaborationRepository,
+  SqliteContentFederationRepository,
   SqliteContentRepository,
   SqliteGovernanceRepository,
   SqliteIdentityRepository,
@@ -123,6 +129,7 @@ import {
   assetRenditionPresetSchema,
   type CollaborationOperation,
   type ContentQualityPolicy,
+  type ContentSchemaDefinition,
   collaborationOperationInputSchema,
   collaborationTargetSchema,
   completeAssetUploadSchema,
@@ -155,10 +162,11 @@ import {
   workflowDefinitionInputSchema,
 } from '@gridstory/schema';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
-import { parseContentQuery } from './content-query.js';
 import { registerAiRoutes } from './ai-routes.js';
-import { defaultPageQualityPolicies, defaultWorkflowDefinitions } from './defaults.js';
 import { registerAnalyticsRoutes } from './analytics-routes.js';
+import { registerContentFederationRoutes } from './content-federation-routes.js';
+import { parseContentQuery } from './content-query.js';
+import { defaultPageQualityPolicies, defaultWorkflowDefinitions } from './defaults.js';
 import { registerExperimentRoutes } from './experiment-routes.js';
 import { registerGovernanceRoutes } from './governance-routes.js';
 import { registerGridStoryGraphql } from './graphql.js';
@@ -180,6 +188,7 @@ export interface BuildServerOptions {
   databasePath?: string;
   databaseUrl?: string;
   allowedOrigins?: string[];
+  contentSchemas?: ContentSchemaDefinition[];
   seed?: boolean;
   logger?: boolean;
   redirects?: RedirectDefinition[];
@@ -250,6 +259,11 @@ export interface BuildServerOptions {
     localRegion?: string;
     readAdapters?: RegionalReadAdapter[];
     failoverAdapters?: RegionalFailoverAdapter[];
+  };
+  contentFederation?: {
+    repository?: ContentFederationRepository;
+    signer?: ContentFederationSigner;
+    sources?: ContentFederationSourceAdapter[];
   };
 }
 
@@ -474,6 +488,7 @@ export async function buildServer({
   databasePath = '.gridstory/gridstory.db',
   databaseUrl,
   allowedOrigins = ['http://localhost:5173', 'http://localhost:5174'],
+  contentSchemas = [pageSchema],
   seed = true,
   logger = false,
   redirects = [],
@@ -521,6 +536,7 @@ export async function buildServer({
   analytics: analyticsOptions,
   ai: aiOptions,
   regional: regionalOptions,
+  contentFederation: contentFederationOptions,
 }: BuildServerOptions): Promise<FastifyInstance> {
   if (!databaseUrl && databasePath !== ':memory:') {
     mkdirSync(dirname(resolve(databasePath)), { recursive: true });
@@ -599,6 +615,11 @@ export async function buildServer({
     (databaseUrl
       ? new PostgresRegionalRepository({ connectionString: databaseUrl })
       : new SqliteRegionalRepository({ filename: databasePath }));
+  const resolvedContentFederationRepository: ContentFederationRepository =
+    contentFederationOptions?.repository ??
+    (databaseUrl
+      ? new PostgresContentFederationRepository({ connectionString: databaseUrl })
+      : new SqliteContentFederationRepository({ filename: databasePath }));
   const governance = new GovernanceService({
     repository: resolvedGovernanceRepository,
     ...(governanceOptions?.keyAdapter ? { keyAdapter: governanceOptions.keyAdapter } : {}),
@@ -634,17 +655,24 @@ export async function buildServer({
   });
   const quality = new ContentQualityService({
     repository,
-    schemas: [pageSchema],
+    schemas: contentSchemas,
     policies: qualityPolicies,
     ...(externalLinkChecker ? { externalLinkChecker } : {}),
   });
   const service = new ContentService({
     repository,
-    schemas: [pageSchema],
+    schemas: contentSchemas,
     componentManifests,
     qualityGate: quality,
     workflowGate: workflows,
     governanceGate: governance,
+  });
+  const contentFederation = new ContentFederationService({
+    repository: resolvedContentFederationRepository,
+    contentRepository: repository,
+    contentService: service,
+    ...(contentFederationOptions?.signer ? { signer: contentFederationOptions.signer } : {}),
+    sources: contentFederationOptions?.sources ?? [],
   });
   const analytics = new AnalyticsService({
     repository: resolvedAnalyticsRepository,
@@ -750,7 +778,7 @@ export async function buildServer({
   const contentQueries = new ContentQueryService({ repository, cursorSecret });
   const search = new SearchService({
     repository,
-    schemas: [pageSchema],
+    schemas: contentSchemas,
     ...(searchAdapter ? { adapter: searchAdapter } : {}),
     ...(resolvedTenantTelemetry ? { telemetry: resolvedTenantTelemetry } : {}),
   });
@@ -791,7 +819,7 @@ export async function buildServer({
   });
   const lifecycle = new SchemaLifecycleService({
     repository,
-    schemas: [pageSchema],
+    schemas: contentSchemas,
     componentManifests,
   });
   const policy = new AuthorizationPolicy();
@@ -873,6 +901,7 @@ export async function buildServer({
   await registerAnalyticsRoutes(server, { service: analytics, policy });
   await registerAiRoutes(server, { service: ai, authoring, content: service, policy });
   await registerRegionalRoutes(server, { service: regional, policy });
+  await registerContentFederationRoutes(server, { service: contentFederation, policy });
 
   server.addHook('onClose', async () => {
     await repository.close();
@@ -890,6 +919,7 @@ export async function buildServer({
     await resolvedAiGatewayRepository.close();
     await resolvedAiAuthoringRepository.close();
     await resolvedRegionalRepository.close();
+    await resolvedContentFederationRepository.close();
   });
   server.addHook('onSend', async (request, reply, payload) => {
     if (request.url.startsWith('/api/v1/delivery/')) {

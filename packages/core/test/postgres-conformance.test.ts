@@ -10,24 +10,26 @@ import { Pool } from 'pg';
 import { describe, expect, it } from 'vitest';
 import {
   CollaborationService,
+  EnterpriseIdentityService,
   emptyAiAuthoringDocument,
   emptyAiGatewayDocument,
   emptyAnalyticsDocument,
+  emptyContentFederationDocument,
   emptyMarketplaceDocument,
+  emptyMigrationDocument,
   emptyPersonalizationDocument,
   emptyRegionalDocument,
-  EnterpriseIdentityService,
-  emptyMigrationDocument,
   GovernanceService,
-  PostgresCollaborationRepository,
   PostgresAiAuthoringRepository,
   PostgresAiGatewayRepository,
   PostgresAnalyticsRepository,
+  PostgresCollaborationRepository,
+  PostgresContentFederationRepository,
   PostgresContentRepository,
   PostgresGovernanceRepository,
   PostgresIdentityRepository,
-  PostgresMigrationRepository,
   PostgresMarketplaceRepository,
+  PostgresMigrationRepository,
   PostgresPersonalizationRepository,
   PostgresPluginRepository,
   PostgresRegionalRepository,
@@ -607,6 +609,48 @@ if (connectionString) {
       }
     });
   });
+  describe('PostgreSQL content federation repository conformance', () => {
+    it('persists optimistic state under the complete scope key', async () => {
+      const schema = `gridstory_federation_test_${process.pid}_${schemaSequence++}`;
+      const pool = new Pool({ connectionString });
+      const scope: ContentScope = {
+        organizationId: 'organization-a',
+        tenantId: 'federation-tenant-a',
+        workspaceId: 'workspace-a',
+        siteId: 'site-a',
+        environmentId: 'production',
+        locale: 'en',
+      };
+      const first = new PostgresContentFederationRepository({ pool, schema });
+      try {
+        const initial = emptyContentFederationDocument(scope, '2026-08-24T00:00:00.000Z');
+        await first.save(initial, null);
+        await first.close();
+
+        const second = new PostgresContentFederationRepository({ pool, schema });
+        await expect(second.get(scope)).resolves.toEqual(initial);
+        await expect(second.get({ ...scope, tenantId: 'other-tenant' })).resolves.toBeNull();
+        const next = {
+          ...initial,
+          version: 1,
+          updatedBy: 'federation-admin',
+          updatedAt: '2026-08-24T00:01:00.000Z',
+        };
+        await second.save(next, 0);
+        await expect(second.get(scope)).resolves.toMatchObject({
+          version: 1,
+          updatedBy: 'federation-admin',
+        });
+        await expect(second.save(next, 0)).rejects.toMatchObject({
+          code: 'content_federation_write_conflict',
+        });
+        await second.close();
+      } finally {
+        await pool.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);
+        await pool.end();
+      }
+    });
+  });
 } else {
   describe.skip('PostgreSQL repository conformance', () => {
     it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
@@ -642,6 +686,9 @@ if (connectionString) {
     it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
   });
   describe.skip('PostgreSQL regional repository conformance', () => {
+    it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
+  });
+  describe.skip('PostgreSQL content federation repository conformance', () => {
     it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
   });
 }

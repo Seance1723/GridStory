@@ -13,6 +13,89 @@ afterEach(() => {
 });
 
 describe('GridStoryClient browser compatibility', () => {
+  it('routes contract-bound federation management, sync, and public delivery with encoded IDs', async () => {
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    const client = createGridStoryClient({
+      baseUrl: 'https://cms.example.test',
+      tenantId: 'consumer',
+      fetch: async (input, init) => {
+        requests.push({ url: String(input), ...(init ? { init } : {}) });
+        return new Response(JSON.stringify({}), {
+          headers: { 'content-type': 'application/json' },
+        });
+      },
+    });
+    const sourceScope = {
+      organizationId: 'source-org',
+      tenantId: 'source-tenant',
+      workspaceId: 'source-workspace',
+      siteId: 'source-site',
+      environmentId: 'production',
+      locale: 'en',
+    };
+
+    await client.getContentFederation();
+    await client.upsertFederationOffer('news/offer', {
+      expectedVersion: 0,
+      id: 'news/offer',
+      state: 'disabled',
+      sourceInstance: 'https://source.example.test',
+      canonicalBaseUrl: 'https://source.example.test/content/',
+      contentTypes: [{ id: 'page', version: 1 }],
+      attribution: {
+        licenseUrl: 'https://source.example.test/license',
+        creditText: 'Source newsroom',
+        attributedTo: [{ name: 'Source newsroom' }],
+      },
+    });
+    await client.inspectFederationAgreement('news/agreement', {
+      expectedVersion: 1,
+      adapter: 'source',
+      sourceScope,
+      sourceInstance: 'https://source.example.test',
+      canonicalBaseUrl: 'https://source.example.test/content/',
+      offerId: 'news-offer',
+      mode: 'mirror',
+      trustedKey: {
+        keyId: 'source-key',
+        algorithm: 'ed25519',
+        publicKey: '-----BEGIN PUBLIC KEY-----source-----END PUBLIC KEY-----',
+      },
+    });
+    await client.setFederationAgreementState('news/agreement', {
+      expectedVersion: 2,
+      state: 'active',
+    });
+    await client.planFederationSync('news/agreement', { expectedVersion: 3 });
+    await client.executeFederationSync('plan/id', {
+      expectedVersion: 4,
+      digest: 'a'.repeat(64),
+    });
+    await client.getFederatedContent('news/agreement', 'news:page', 'entry/id');
+
+    expect(requests.map((request) => [request.url, request.init?.method])).toEqual([
+      ['https://cms.example.test/api/v1/federation', undefined],
+      ['https://cms.example.test/api/v1/federation/offers/news%2Foffer', 'PUT'],
+      ['https://cms.example.test/api/v1/federation/agreements/news%2Fagreement/inspect', 'POST'],
+      ['https://cms.example.test/api/v1/federation/agreements/news%2Fagreement/state', 'POST'],
+      ['https://cms.example.test/api/v1/federation/agreements/news%2Fagreement/plans', 'POST'],
+      ['https://cms.example.test/api/v1/federation/plans/plan%2Fid/execute', 'POST'],
+      [
+        'https://cms.example.test/api/v1/federation/delivery/news%2Fagreement/news%3Apage/entry%2Fid',
+        undefined,
+      ],
+    ]);
+    expect(JSON.parse(String(requests[2]?.init?.body))).toMatchObject({
+      sourceScope,
+      mode: 'mirror',
+      offerId: 'news-offer',
+    });
+    expect(JSON.parse(String(requests[5]?.init?.body))).toEqual({
+      expectedVersion: 4,
+      digest: 'a'.repeat(64),
+    });
+  });
+
   it('sends typed governed AI policy, prompt, activation, switch, and generation contracts', async () => {
     const requests: Array<{ url: string; init?: RequestInit }> = [];
     const client = createGridStoryClient({

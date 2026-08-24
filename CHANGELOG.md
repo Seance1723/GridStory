@@ -8,6 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Added strict signed content-federation contracts, bounded immutable producer offers, pinned consumer agreements, published-only live external records, reviewed read-only mirror synchronization, explicit withdrawal tombstones, mandatory attribution, and complete-scope optimistic memory/SQLite/PostgreSQL persistence (M8-002).
+- Added separately authorized private federation management and source routes, no-store minimized public delivery, a bounded same-origin HTTPS adapter, typed client methods, a neutral-palette Studio Federation panel, recovery/PostgreSQL/browser coverage, operator guidance, accepted ADR 0023, and verified `THREAT-0036`/`GS-SEC-040` evidence (M8-002).
 - Added provider-neutral regional published delivery with strict topology/read evidence, explicit strong or bounded-staleness policy, trusted-local least-authority readers, response-bound cache partitions, digest-safe consistency headers, exact scope/revision/result validation, residency gating, and explicit primary fallback while remaining disabled and strong-primary by default (M8-001).
 - Added complete-scope optimistic memory/SQLite/PostgreSQL regional persistence; distinct private read/manage/failover authorization; typed REST/client controls; a neutral Studio Regions panel; planned zero-loss and accepted bounded-loss emergency preflight; expiring digest-bound different-human approval; persisted idempotent execution; ambiguous reconciliation; single-writer result proof; recovery/PostgreSQL/browser coverage; the regional operator guide; accepted ADR 0022; and verified `THREAT-0035`/`GS-SEC-039` evidence (M8-001).
 - Added strict fixed-contract AI authoring schemas, bounded actions and deterministic evaluation, complete-scope optimistic memory/SQLite/PostgreSQL proposal and review persistence, exact prompt/model/source/target provenance, and a separate human-only one-time `ai.review` transition that never writes content (M7-005).
@@ -19,6 +21,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- Accepted the M8-002 contract-bound content-federation boundary in ADR 0023: disabled complete-scope producer offers and pinned consumer agreements, signed published-only live reads, reviewed read-only mirror synchronization, explicit withdrawal tombstones, and mandatory source/version/license/credit attribution without remote or local editorial mutation.
 - Accepted the M8-001 single-writer regional-delivery boundary in ADR 0022: only published reads may use evidence-bearing regional adapters, while drafts, preview, control reads, and writes remain strong-primary and failover remains a reviewed external-adapter operation.
 - Accepted the M7-005 boundary for fixed-contract AI field suggestions, provenance, deterministic evaluation, human-only review, unsaved-editor handoff, and private allowlisted semantic search through derived adapter indexes.
 - Recorded the accepted M7-004 governed AI gateway boundary: injected text-only providers, immutable active prompts, explicit allowlisted scoped retrieval, conservative usage/cost reservations, deterministic redaction, generic external failures, and rechecked kill switches without tools, raw histories, automatic fallback, or content mutation.
@@ -29,6 +32,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Made the federation recovery fixture's timestamp deterministic and its direct SQLite handle unconditionally closable; the full recovery suite passes (BUG-0361).
+- Removed stale federation-service imports and aligned equivalent state guards with the repository's optional-chain quality contract (BUG-0360).
+- Made the API's deployed schema inventory injectable across schema-aware services so producers can explicitly offer supported text-only contracts, and aligned the API regression with durable source IDs and canonical attribution paths (BUG-0358, BUG-0359).
+- Passed authenticated federation sync actor identity and validated execution input to the service in its exact contract order, restoring strict API compilation (BUG-0357).
+- Preserved exact federation signing-key identity through strict parsing and aligned the external-type schema fixture with canonical default materialization (BUG-0354, BUG-0355).
+- Calculated federated type fingerprints from the canonical parsed schema so producer signatures and consumer verification bind the same representation (BUG-0356).
+- Reran the M8-002 focused schema/core TypeScript build through the approved Windows child-process path after the restricted sandbox denied compiler spawning (BUG-0353).
 - Corrected regional schema initialization, hostile adapter error normalization, draft-result rejection, localized fallback scope, exact response-bound cache attestation, lint/browser fixtures, Windows worker/Docker verification paths, and stale README/security narratives found during M8-001; all defects BUG-0341 through BUG-0352 are resolved.
 - Restored the AI workbench to the established neutral Studio page/content palette and prevented its broad supporting-text rule from overriding safety-warning colors; browser regressions now pin the computed surface, copy, input, boundary, and warning colors (BUG-0340, STUDIO-008).
 - Preserved exact immutable AI action/evaluation provenance without retaining evaluation-failed suggested values, rebuilt the current package boundary for API verification, corrected Studio lint/accessibility and security-document drift, and used supported Windows formatting, child-process, config-inventory, and network verification paths (BUG-0332 through BUG-0339, M7-005).

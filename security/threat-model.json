@@ -278,6 +278,22 @@
         "accountability",
         "recoverability"
       ]
+    },
+    {
+      "id": "ASSET-024",
+      "name": "Federation offers, pinned agreements, signed published records, attribution, mirror plans, tombstones, and receipts",
+      "securityProperties": [
+        "integrity",
+        "availability",
+        "tenant isolation",
+        "publication separation",
+        "schema and revision binding",
+        "source authenticity",
+        "attribution integrity",
+        "idempotency",
+        "accountability",
+        "recoverability"
+      ]
     }
   ],
   "trustBoundaries": [
@@ -467,6 +483,20 @@
         "current residency and backup evidence plus planned zero-loss or explicit emergency data-loss bounds",
         "digest-bound preview, different recent-human approval, persisted executing/ambiguous state, stable idempotency key, and reconciliation",
         "single-writer result validation, topology increment, primary-only reset, bounded diagnostics, and no provider position disclosure"
+      ]
+    },
+    {
+      "id": "BOUNDARY-019",
+      "name": "Producer and consumer installations through signed published federation contracts",
+      "controls": [
+        "complete source and consumer scope with distinct read, manage, consume, and sync authorization",
+        "disabled versioned producer offers and consumer agreements with exact schema fingerprints and mandatory attribution",
+        "injected Ed25519 signing with private keys outside schema, persistence, browsers, logs, and responses",
+        "credential-free configured HTTPS origins, no redirects, same-origin response validation, bounded timeout/bytes/records, and generic failures",
+        "request-, time-, source-instance-, scope-, offer-version/digest-, type-, revision-sequence-, checksum-, and attribution-bound signed envelopes",
+        "published-only producer reads with no drafts, previews, assets, components, relations, rich text, credentials, or workflow state",
+        "live no-retention reads and expiring digest-reviewed mirror plans with source revalidation, persisted execution, atomic idempotent effects, blockers, and withdrawal tombstones",
+        "no-store public projection without remote scope, adapter configuration, key body, credentials, or raw diagnostics"
       ]
     }
   ],
@@ -688,6 +718,27 @@
       "to": "ACTOR-007",
       "data": "credential-free scoped regional read or failover operation and bounded validated evidence without preview credentials, draft content, provider diagnostics, or raw replication positions",
       "assets": ["ASSET-002", "ASSET-003", "ASSET-012", "ASSET-023"]
+    },
+    {
+      "id": "FLOW-031",
+      "from": "ACTOR-003",
+      "to": "BOUNDARY-019",
+      "data": "private complete-scope producer offer or consumer agreement, reviewed key and attribution terms, and exact mirror plan digest",
+      "assets": ["ASSET-003", "ASSET-004", "ASSET-009", "ASSET-012", "ASSET-024"]
+    },
+    {
+      "id": "FLOW-032",
+      "from": "BOUNDARY-019",
+      "to": "ACTOR-007",
+      "data": "configured same-origin HTTPS request and Ed25519 signed published offer, record, or complete snapshot without private signing key or draft/preview authority",
+      "assets": ["ASSET-002", "ASSET-003", "ASSET-012", "ASSET-024"]
+    },
+    {
+      "id": "FLOW-033",
+      "from": "ACTOR-001",
+      "to": "BOUNDARY-019",
+      "data": "no-store local agreement, namespaced type, and source-entry lookup returning validated published data with mandatory attribution",
+      "assets": ["ASSET-002", "ASSET-003", "ASSET-010", "ASSET-024"]
     }
   ],
   "assumptions": [
@@ -702,7 +753,8 @@
     "Applications create and, when permitted, retain an unpredictable token separately for each experiment after consent; external experiment analytics still owns attribution, statistical validity, and retained evidence integrity.",
     "Applications send only anonymous allowlisted analytics events after a valid configured-purpose decision; deployments own public rate controls and provider adapter credentials, retention, deletion, egress, and independently protected diagnostics.",
     "AI provider adapters are composed only in the trusted server runtime, preserve structured instruction/data separation and output limits, honor abort signals where supported, and keep credentials, provider diagnostics, retention, regional processing, and egress policy outside browser, schema, core, persistence, and logs.",
-    "Regional read and failover adapters are composed only in the trusted server runtime, truthfully attest deployment-controlled topology and residency, enforce provider fencing and idempotency, and keep credentials, raw replication positions, DNS/control-plane details, and protected diagnostics outside browser, schema, core persistence, delivery bodies, and public logs."
+    "Regional read and failover adapters are composed only in the trusted server runtime, truthfully attest deployment-controlled topology and residency, enforce provider fencing and idempotency, and keep credentials, raw replication positions, DNS/control-plane details, and protected diagnostics outside browser, schema, core persistence, delivery bodies, and public logs.",
+    "Federation signers and source adapters are composed only in the trusted server runtime; operators independently obtain and review source scopes, instances, public keys, schema allowlists, attribution terms, credentials, legal authority, and egress policy, while source availability, license truth, key rotation, revocation, and required attribution placement remain external obligations."
   ],
   "threats": [
     {
@@ -1822,6 +1874,66 @@
         "tests/e2e/accessibility.spec.ts",
         "docs/regional-delivery-and-failover.md",
         "docs/adr/0022-regional-delivery-and-failover.md"
+      ]
+    },
+    {
+      "id": "THREAT-0036",
+      "title": "Federation source spoofing, scope/schema/revision substitution, draft leakage, attribution tampering, SSRF, replay, or unsafe mirror overwrite",
+      "stride": [
+        "Spoofing",
+        "Tampering",
+        "Repudiation",
+        "Information Disclosure",
+        "Denial of Service",
+        "Elevation of Privilege"
+      ],
+      "scenario": "A caller selects an arbitrary source or credential; a source/adapter redirects, changes origin, overflows bounds, leaks diagnostics, signs for another scope/instance/request/time/offer/type/revision, serves draft or unsupported content, regresses or mutates a revision sequence, tampers with attribution or snapshot completeness, withdraws content without review, replays a plan, or causes a mirror to become editable/authoritative local content; or public delivery leaks remote scope, key/configuration, credentials, or source failures.",
+      "actors": ["ACTOR-001", "ACTOR-003", "ACTOR-004", "ACTOR-007", "ACTOR-008"],
+      "assets": [
+        "ASSET-001",
+        "ASSET-002",
+        "ASSET-003",
+        "ASSET-004",
+        "ASSET-009",
+        "ASSET-010",
+        "ASSET-012",
+        "ASSET-024"
+      ],
+      "boundaries": [
+        "BOUNDARY-001",
+        "BOUNDARY-002",
+        "BOUNDARY-003",
+        "BOUNDARY-004",
+        "BOUNDARY-006",
+        "BOUNDARY-011",
+        "BOUNDARY-019"
+      ],
+      "likelihood": 4,
+      "impact": 5,
+      "risk": 20,
+      "response": "mitigate",
+      "owner": "Platform, security, content governance, legal, and delivery owner",
+      "mitigations": [
+        "Keep complete-scope offers/agreements private, optimistic, bounded, disabled by default, and governed by distinct federation read/manage/consume/sync permissions; public callers select only a local active agreement and namespaced record identity.",
+        "Allowlist exact supported deployed schema versions/fingerprints; producer reads only exact published revisions and excludes drafts, preview grants, assets, components, relations, rich text, credentials, workflow state, and unsupported types.",
+        "Inject Ed25519 signing at trusted composition, retain only public keys, and validate canonical signatures plus exact request ID, time window, source instance/scope, offer version/digest, type fingerprint, requested identity, revision sequence, record checksum, attribution, and complete-snapshot checkpoint.",
+        "Use credential-free configured HTTPS bases, disabled redirects, same-origin response checks, complete source scope headers, bounded time/bytes/records, JSON-only responses, generic failures, and no caller-selected egress or credential input.",
+        "Require canonical URL, license, credit, attributed agents, and exact source/offer/type/revision identities on every record; describe them as source assertions and require independent operator/legal review rather than claiming rights validation.",
+        "Persist no live record; keep mirrors separate and read-only; require an expiring exact-effect digest, revalidate the source before execution, persist executing before effects, apply atomically/idempotently, block sequence regression/same-sequence mutation, and tombstone reviewed withdrawal.",
+        "Keep all public federation delivery no-store and omit remote scope, adapter configuration, public-key body, credentials, raw evidence, and diagnostics; include federation state in native recovery while treating external source/key/license/availability as deployment obligations."
+      ],
+      "verification": [
+        "packages/schema/test/content-federation.test.ts",
+        "packages/core/test/content-federation-service.test.ts",
+        "packages/core/test/postgres-conformance.test.ts",
+        "apps/api/test/content-federation.test.ts",
+        "apps/api/test/database-recovery.test.ts",
+        "apps/api/test/postgres-server.test.ts",
+        "packages/client/test/client.test.ts",
+        "apps/studio/test/App.test.tsx",
+        "tests/e2e/accessibility.spec.ts",
+        "docs/content-federation-and-syndication.md",
+        "docs/adr/0023-contract-bound-content-federation.md"
       ]
     }
   ],

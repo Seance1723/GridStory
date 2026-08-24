@@ -11,9 +11,9 @@ import type {
   AiPromptVersionInput,
   AiSemanticQuery,
   AiSemanticSearchResponse,
-  AssetDeliveryGrant,
   AnalyticsIngestionResult,
   AnalyticsReport,
+  AssetDeliveryGrant,
   AssetRecord,
   AssetRendition,
   AssetRenditionPreset,
@@ -33,6 +33,7 @@ import type {
   ComponentManifest,
   ContentConnection,
   ContentEntry,
+  ContentFederationDocument,
   ContentFilter,
   ContentFilterOperator,
   ContentPerspective,
@@ -52,6 +53,16 @@ import type {
   ExperimentOverview,
   ExperimentPromotionRequest,
   ExperimentTransitionRequest,
+  FederatedContentRecord,
+  FederationAgreement,
+  FederationAgreementInspectionInput,
+  FederationAgreementStateInput,
+  FederationExpectedVersionInput,
+  FederationOffer,
+  FederationOfferInput,
+  FederationSyncPlan,
+  FederationSyncPlanExecutionInput,
+  FederationSyncReceipt,
   GovernanceBackupEvidence,
   GovernanceExportEnvelope,
   GovernanceExportPackage,
@@ -71,12 +82,6 @@ import type {
   MarketplacePublisherSummary,
   MarketplaceReleaseSubmission,
   MarketplaceReleaseSummary,
-  PersonalizationConfiguration,
-  PersonalizationDecisionRequest,
-  PersonalizationDecisionResult,
-  PersonalizationPreviewRequest,
-  PersonalizationPreviewResult,
-  PersonalizationSnapshot,
   MigrationCutoverReport,
   MigrationPlanSummary,
   MigrationProjectInput,
@@ -85,25 +90,31 @@ import type {
   MigrationRecipeInput,
   MigrationRun,
   MigrationSourceDescriptor,
+  PersonalizationConfiguration,
+  PersonalizationDecisionRequest,
+  PersonalizationDecisionResult,
+  PersonalizationPreviewRequest,
+  PersonalizationPreviewResult,
+  PersonalizationSnapshot,
   PluginCapabilityGrant,
   PluginCapabilityName,
   PluginInstallation,
   PluginInvocationResult,
   PluginUninstallPreview,
-  PublicAnalyticsEventInput,
   PresenceParticipant,
   PreviewMessage,
   PreviewMode,
   PreviewSessionGrant,
-  RelatedContentRecord,
-  Release,
-  ReleaseInput,
-  ReleasePreview,
+  PublicAnalyticsEventInput,
   RegionalDocument,
   RegionalExpectedVersionInput,
   RegionalFailoverApprovalInput,
   RegionalFailoverPreflightInput,
   RegionalPolicyInput,
+  RelatedContentRecord,
+  Release,
+  ReleaseInput,
+  ReleasePreview,
   RequestContext,
   ResidencyStatus,
   ResolvedComponentManifest,
@@ -2021,6 +2032,85 @@ export class GridStoryClient {
     });
   }
 
+  getContentFederation(signal?: AbortSignal): Promise<ContentFederationDocument> {
+    return this.#request('/api/v1/federation', { ...(signal ? { signal } : {}) });
+  }
+
+  upsertFederationOffer(
+    offerId: string,
+    input: FederationOfferInput,
+    signal?: AbortSignal,
+  ): Promise<FederationOffer> {
+    return this.#request(`/api/v1/federation/offers/${encodeURIComponent(offerId)}`, {
+      method: 'PUT',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  inspectFederationAgreement(
+    agreementId: string,
+    input: FederationAgreementInspectionInput,
+    signal?: AbortSignal,
+  ): Promise<FederationAgreement> {
+    return this.#request(
+      `/api/v1/federation/agreements/${encodeURIComponent(agreementId)}/inspect`,
+      {
+        method: 'POST',
+        body: JSON.stringify(input),
+        ...(signal ? { signal } : {}),
+      },
+    );
+  }
+
+  setFederationAgreementState(
+    agreementId: string,
+    input: FederationAgreementStateInput,
+    signal?: AbortSignal,
+  ): Promise<FederationAgreement> {
+    return this.#request(`/api/v1/federation/agreements/${encodeURIComponent(agreementId)}/state`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  planFederationSync(
+    agreementId: string,
+    input: FederationExpectedVersionInput,
+    signal?: AbortSignal,
+  ): Promise<FederationSyncPlan> {
+    return this.#request(`/api/v1/federation/agreements/${encodeURIComponent(agreementId)}/plans`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  executeFederationSync(
+    planId: string,
+    input: FederationSyncPlanExecutionInput,
+    signal?: AbortSignal,
+  ): Promise<FederationSyncReceipt> {
+    return this.#request(`/api/v1/federation/plans/${encodeURIComponent(planId)}/execute`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  getFederatedContent(
+    agreementId: string,
+    namespace: string,
+    sourceEntryId: string,
+    signal?: AbortSignal,
+  ): Promise<FederatedContentRecord> {
+    return this.#request(
+      `/api/v1/federation/delivery/${encodeURIComponent(agreementId)}/${encodeURIComponent(namespace)}/${encodeURIComponent(sourceEntryId)}`,
+      { ...(signal ? { signal } : {}) },
+    );
+  }
+
   getRegionalTopology(signal?: AbortSignal): Promise<RegionalDocument> {
     return this.#request('/api/v1/regional', { ...(signal ? { signal } : {}) });
   }
@@ -2399,6 +2489,7 @@ export type {
   ComponentManifest,
   ContentConnection,
   ContentEntry,
+  ContentFederationDocument,
   ContentFilter,
   ContentFilterOperator,
   ContentPerspective,
@@ -2417,6 +2508,16 @@ export type {
   ExperimentOverview,
   ExperimentPromotionRequest,
   ExperimentTransitionRequest,
+  FederatedContentRecord,
+  FederationAgreement,
+  FederationAgreementInspectionInput,
+  FederationAgreementStateInput,
+  FederationExpectedVersionInput,
+  FederationOffer,
+  FederationOfferInput,
+  FederationSyncPlan,
+  FederationSyncPlanExecutionInput,
+  FederationSyncReceipt,
   GovernanceBackupEvidence,
   GovernanceExportEnvelope,
   GovernanceExportPackage,
@@ -2449,15 +2550,15 @@ export type {
   PreviewMode,
   PreviewSessionGrant,
   PublicAnalyticsEventInput,
-  RelatedContentRecord,
-  Release,
-  ReleaseInput,
-  ReleasePreview,
   RegionalDocument,
   RegionalExpectedVersionInput,
   RegionalFailoverApprovalInput,
   RegionalFailoverPreflightInput,
   RegionalPolicyInput,
+  RelatedContentRecord,
+  Release,
+  ReleaseInput,
+  ReleasePreview,
   ResidencyStatus,
   ResolvedComponentManifest,
   SchemaDriftReport,

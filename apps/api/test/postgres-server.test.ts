@@ -1,4 +1,8 @@
-import { PostgresCollaborationRepository } from '@gridstory/core';
+import {
+  emptyContentFederationDocument,
+  PostgresCollaborationRepository,
+  PostgresContentFederationRepository,
+} from '@gridstory/core';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
 import { checkRollingUpgrade } from '../src/rolling-upgrade.js';
@@ -236,6 +240,22 @@ describe.skipIf(!connectionString)('GridStory API with PostgreSQL', () => {
       },
     });
     expect(regionalSaved.statusCode, regionalSaved.body).toBe(200);
+    const federationRepository = new PostgresContentFederationRepository({ connectionString });
+    const federationDocument = emptyContentFederationDocument(
+      {
+        organizationId: 'local',
+        tenantId: 'postgres-tenant',
+        workspaceId: 'default',
+        siteId: 'default',
+        environmentId: 'development',
+        locale: 'en',
+      },
+      new Date().toISOString(),
+    );
+    federationDocument.version = 1;
+    federationDocument.updatedBy = 'postgres-federation-admin';
+    await federationRepository.save(federationDocument, null);
+    await federationRepository.close();
 
     expect(
       await server.inject({
@@ -370,6 +390,18 @@ describe.skipIf(!connectionString)('GridStory API with PostgreSQL', () => {
       state: 'enabled',
       activeControlRegion: 'local',
       readPolicy: { mode: 'primary-only' },
+    });
+    const federation = await server.inject({
+      method: 'GET',
+      url: '/api/v1/federation',
+      headers,
+    });
+    expect(federation.statusCode, federation.body).toBe(200);
+    expect(federation.json()).toMatchObject({
+      version: 1,
+      updatedBy: 'postgres-federation-admin',
+      agreements: [],
+      mirrors: [],
     });
     const allocation = await server.inject({
       method: 'POST',

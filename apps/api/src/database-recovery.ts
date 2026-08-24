@@ -1,11 +1,11 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
-  constants as fileConstants,
   chmodSync,
   copyFileSync,
   createReadStream,
   existsSync,
+  constants as fileConstants,
   mkdirSync,
   readFileSync,
   rmSync,
@@ -50,6 +50,7 @@ const requiredSqliteTables = [
   'audit_events',
   'durable_jobs',
   'entries',
+  'gridstory_content_federation_documents',
   'gridstory_regional_documents',
   'revisions',
   'schema_deployments',
@@ -58,6 +59,7 @@ const postgresGridStoryProbe = `SELECT CASE
   WHEN to_regclass('gridstory.entries') IS NOT NULL
    AND to_regclass('gridstory.revisions') IS NOT NULL
    AND to_regclass('gridstory.schema_deployments') IS NOT NULL
+   AND to_regclass('gridstory.gridstory_content_federation_documents') IS NOT NULL
    AND to_regclass('gridstory.gridstory_regional_documents') IS NOT NULL
   THEN 'ok' ELSE 'missing' END;`;
 const postgresUserRelationCount = `SELECT count(*)

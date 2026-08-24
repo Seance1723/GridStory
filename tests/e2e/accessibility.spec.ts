@@ -40,6 +40,7 @@ test('Studio critical authoring states have no detectable WCAG 2.2 A/AA violatio
     ['Marketplace', 'Plugin marketplace workbench'],
     ['Experiments', 'Content experiments workbench'],
     ['AI gateway', 'Governed AI gateway workbench'],
+    ['Federation', 'Content federation and syndication'],
     ['Regions', 'Regional delivery and failover controls'],
     ['Workflows', 'Workflow action designer'],
     ['Releases', 'Release manager'],
@@ -73,6 +74,23 @@ test('Studio critical authoring states have no detectable WCAG 2.2 A/AA violatio
     'rgb(203, 213, 225)',
   );
   await expect(aiWorkbench.getByRole('note')).toHaveCSS('color', 'rgb(154, 52, 18)');
+
+  const federationControls = page.getByRole('region', {
+    name: 'Content federation and syndication',
+  });
+  await expect(federationControls.getByLabel('Offer JSON')).toBeVisible();
+  await expect(federationControls.getByLabel('Agreement JSON')).toBeVisible();
+  await expect(federationControls).toHaveCSS('background-color', 'rgb(248, 250, 252)');
+  await expect(federationControls.locator('.section-heading p')).toHaveCSS(
+    'color',
+    'rgb(71, 85, 105)',
+  );
+  await expect(federationControls.getByLabel('Offer JSON')).toHaveCSS('color', 'rgb(24, 33, 47)');
+  await expect(federationControls.locator('fieldset').first()).toHaveCSS(
+    'border-color',
+    'rgb(203, 213, 225)',
+  );
+  await expect(federationControls.getByRole('note')).toHaveCSS('color', 'rgb(124, 45, 18)');
 
   const regionalControls = page.getByRole('region', {
     name: 'Regional delivery and failover controls',

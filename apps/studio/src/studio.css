@@ -820,6 +820,83 @@ button:disabled {
   border-bottom: 1px solid #cbd5e1;
   padding: 1rem 1.25rem 1.25rem;
 }
+.federation-panel {
+  background: #f8fafc;
+  border-bottom: 1px solid #cbd5e1;
+  padding: 1rem 1.25rem 1.25rem;
+}
+.federation-panel :where(p, span, small) {
+  color: #475569;
+  font-size: 0.76rem;
+}
+.federation-panel__warning {
+  background: #fff7ed;
+  border: 1px solid #c2410c;
+  border-radius: 0.55rem;
+  color: #7c2d12;
+  font-weight: 700;
+  padding: 0.7rem;
+}
+.federation-panel__grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 1rem;
+}
+.federation-panel fieldset,
+.federation-panel__records article {
+  border: 1px solid #cbd5e1;
+  border-radius: 0.65rem;
+  display: grid;
+  gap: 0.7rem;
+  margin: 0;
+  min-width: 0;
+  padding: 0.85rem;
+}
+.federation-panel legend,
+.federation-panel__records h3 {
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+.federation-panel label {
+  display: grid;
+  font-size: 0.72rem;
+  font-weight: 700;
+  gap: 0.25rem;
+}
+.federation-panel input,
+.federation-panel textarea {
+  background: #fff;
+  border: 1px solid #64748b;
+  border-radius: 0.45rem;
+  color: #18212f;
+  font: inherit;
+  min-width: 0;
+  padding: 0.6rem;
+}
+.federation-panel textarea {
+  min-height: 9rem;
+  resize: vertical;
+}
+.federation-panel__records {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+.federation-panel__records article {
+  background: #fff;
+  grid-template-columns: minmax(14rem, 1fr) auto;
+}
+.federation-panel__records article > div {
+  display: grid;
+  gap: 0.35rem;
+}
+.federation-panel .federation-panel__actions {
+  align-content: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
 .regional-panel :where(p, span, small) {
   color: #475569;
   font-size: 0.76rem;
@@ -988,9 +1065,11 @@ button:disabled {
 
 @media (max-width: 900px) {
   .ai-panel__workbench,
+  .federation-panel__grid,
   .regional-panel__grid {
     grid-template-columns: 1fr;
   }
+  .federation-panel__records article,
   .regional-panel__operations article {
     grid-template-columns: 1fr;
   }

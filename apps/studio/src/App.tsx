@@ -7,15 +7,16 @@ import {
   type AiGenerateResult,
   type AiPromptVersionInput,
   type AiSemanticSearchResponse,
+  type AnalyticsReport,
   type AssetRecord,
   type AssetUsageReport,
-  type AnalyticsReport,
   type BacklinkRecord,
   type CollaborationSnapshot,
   type ComponentManifest,
   type ComponentMigrationPlanResponse,
   type ComponentVisualRegressionPlan,
   type ContentEntry,
+  type ContentFederationDocument,
   type ContentQualityReport,
   type ContentRevision,
   createGridStoryClient,
@@ -23,6 +24,8 @@ import {
   type ExperimentDesign,
   type ExperimentMetricSnapshotInput,
   type ExperimentOverview,
+  type FederationAgreementInspectionInput,
+  type FederationOfferInput,
   type GovernancePlan,
   type GovernanceSnapshot,
   GridStoryApiError,
@@ -38,12 +41,12 @@ import {
   type PersonalizationPreviewResult,
   type PersonalizationSnapshot,
   type PreviewSessionGrant,
-  type RelatedContentRecord,
-  type Release,
-  type ReleasePreview,
   type RegionalDocument,
   type RegionalFailoverPreflightInput,
   type RegionalPolicyInput,
+  type RelatedContentRecord,
+  type Release,
+  type ReleasePreview,
   type SearchIndexStatus,
   type SearchResponse,
   type TaxonomyDefinition,
@@ -299,6 +302,49 @@ const defaultRegionalFailover = JSON.stringify(
       verifiedAt: new Date().toISOString(),
     },
   } satisfies Omit<RegionalFailoverPreflightInput, 'expectedVersion'>,
+  null,
+  2,
+);
+
+const defaultFederationOffer = JSON.stringify(
+  {
+    id: 'published-pages',
+    state: 'disabled',
+    sourceInstance: 'https://cms.example.com/',
+    canonicalBaseUrl: 'https://www.example.com/content/',
+    contentTypes: [{ id: 'replace-with-supported-type', version: 1 }],
+    attribution: {
+      licenseUrl: 'https://www.example.com/license',
+      creditText: 'Provided by Example Publisher',
+      attributedTo: [{ name: 'Example Publisher', url: 'https://www.example.com/' }],
+    },
+  } satisfies Omit<FederationOfferInput, 'expectedVersion'>,
+  null,
+  2,
+);
+
+const defaultFederationAgreement = JSON.stringify(
+  {
+    adapter: 'configured-source',
+    sourceScope: {
+      organizationId: 'source-organization',
+      tenantId: 'source-tenant',
+      workspaceId: 'source-workspace',
+      siteId: 'source-site',
+      environmentId: 'production',
+      locale: 'en',
+    },
+    sourceInstance: 'https://source.example.com/',
+    canonicalBaseUrl: 'https://source.example.com/content/',
+    offerId: 'published-pages',
+    mode: 'live',
+    trustedKey: {
+      keyId: 'replace-with-reviewed-key-id',
+      algorithm: 'ed25519',
+      publicKey:
+        '-----BEGIN PUBLIC KEY-----\nreplace-with-reviewed-ed25519-key\n-----END PUBLIC KEY-----\n',
+    },
+  } satisfies Omit<FederationAgreementInspectionInput, 'expectedVersion'>,
   null,
   2,
 );
@@ -727,6 +773,15 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   );
   const [regionalAcceptDataLoss, setRegionalAcceptDataLoss] = useState(false);
   const [regionalBusy, setRegionalBusy] = useState(false);
+  const [contentFederation, setContentFederation] = useState<ContentFederationDocument | null>(
+    null,
+  );
+  const [federationOfferJson, setFederationOfferJson] = useState(defaultFederationOffer);
+  const [federationAgreementId, setFederationAgreementId] = useState('source-pages');
+  const [federationAgreementJson, setFederationAgreementJson] = useState(
+    defaultFederationAgreement,
+  );
+  const [federationBusy, setFederationBusy] = useState(false);
   const [identitySnapshot, setIdentitySnapshot] = useState<IdentitySnapshot | null>(null);
   const [identityProviderId, setIdentityProviderId] = useState('');
   const [identityProviderIssuer, setIdentityProviderIssuer] = useState('');
@@ -2012,6 +2067,126 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
       setAnalyticsReport(analytics);
     } catch (error) {
       setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
+  const refreshContentFederation = async () => {
+    setContentFederation(await client.getContentFederation());
+  };
+  const toggleContentFederation = async () => {
+    if (contentFederation) {
+      setContentFederation(null);
+      return;
+    }
+    setFederationBusy(true);
+    try {
+      await refreshContentFederation();
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    } finally {
+      setFederationBusy(false);
+    }
+  };
+  const saveFederationOffer = async () => {
+    if (!contentFederation) return;
+    setFederationBusy(true);
+    try {
+      const input = JSON.parse(federationOfferJson) as Omit<
+        FederationOfferInput,
+        'expectedVersion'
+      >;
+      await client.upsertFederationOffer(input.id, {
+        ...input,
+        expectedVersion: contentFederation.version,
+      });
+      await refreshContentFederation();
+      setNotice({ tone: 'success', message: 'Published-only federation offer saved.' });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    } finally {
+      setFederationBusy(false);
+    }
+  };
+  const inspectFederationAgreement = async () => {
+    if (!contentFederation) return;
+    setFederationBusy(true);
+    try {
+      const input = JSON.parse(federationAgreementJson) as Omit<
+        FederationAgreementInspectionInput,
+        'expectedVersion'
+      >;
+      await client.inspectFederationAgreement(federationAgreementId, {
+        ...input,
+        expectedVersion: contentFederation.version,
+      });
+      await refreshContentFederation();
+      setNotice({
+        tone: 'info',
+        message: 'Signed offer inspected and pinned. Activate it only after independent review.',
+      });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    } finally {
+      setFederationBusy(false);
+    }
+  };
+  const changeFederationAgreementState = async (
+    agreementId: string,
+    state: 'disabled' | 'active',
+  ) => {
+    if (!contentFederation) return;
+    setFederationBusy(true);
+    try {
+      await client.setFederationAgreementState(agreementId, {
+        expectedVersion: contentFederation.version,
+        state,
+      });
+      await refreshContentFederation();
+      setNotice({
+        tone: 'success',
+        message: `Federation agreement ${state === 'active' ? 'activated' : 'disabled'}.`,
+      });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    } finally {
+      setFederationBusy(false);
+    }
+  };
+  const planFederationSync = async (agreementId: string) => {
+    if (!contentFederation) return;
+    setFederationBusy(true);
+    try {
+      await client.planFederationSync(agreementId, {
+        expectedVersion: contentFederation.version,
+      });
+      await refreshContentFederation();
+      setNotice({
+        tone: 'info',
+        message: 'Mirror synchronization preview recorded. Review every effect before execution.',
+      });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    } finally {
+      setFederationBusy(false);
+    }
+  };
+  const executeFederationSync = async (planId: string, digest: string) => {
+    if (!contentFederation) return;
+    setFederationBusy(true);
+    try {
+      const receipt = await client.executeFederationSync(planId, {
+        expectedVersion: contentFederation.version,
+        digest,
+      });
+      await refreshContentFederation();
+      setNotice({
+        tone: 'success',
+        message: `Mirror sync completed: ${receipt.created} created, ${receipt.updated} updated, ${receipt.withdrawn} withdrawn.`,
+      });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+      await refreshContentFederation().catch(() => undefined);
+    } finally {
+      setFederationBusy(false);
     }
   };
   const applyRegional = (document: RegionalDocument, synchronizePolicy = false) => {
@@ -3449,6 +3624,15 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
           <button
             type="button"
             className="button button--secondary"
+            onClick={() => void toggleContentFederation()}
+            aria-expanded={contentFederation !== null}
+            disabled={federationBusy}
+          >
+            Federation
+          </button>{' '}
+          <button
+            type="button"
+            className="button button--secondary"
             onClick={() => void toggleRegional()}
             aria-expanded={regional !== null}
             disabled={regionalBusy}
@@ -4289,6 +4473,164 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               </dd>
             </div>
           </dl>
+        </section>
+      ) : null}
+      {contentFederation ? (
+        <section className="federation-panel" aria-label="Content federation and syndication">
+          <div className="section-heading">
+            <div>
+              <span className="kicker">Contract-bound published content</span>
+              <h2>Federation offers, agreements, and reviewed mirrors</h2>
+              <p>
+                State r{contentFederation.version} · {contentFederation.offers.length} offers ·{' '}
+                {contentFederation.agreements.length} agreements ·{' '}
+                {contentFederation.mirrors.length} retained mirrors
+              </p>
+            </div>
+            <button
+              type="button"
+              className="button button--secondary"
+              onClick={() => void refreshContentFederation()}
+              disabled={federationBusy}
+            >
+              Refresh federation state
+            </button>
+          </div>
+          <p className="federation-panel__warning" role="note">
+            Only exact published schemas may cross this boundary. Source scope, instance, offer
+            digest, Ed25519 key, attribution, and mode are pinned; preview credentials, drafts,
+            components, assets, relations, rich text, and automatic editorial writes stay out.
+          </p>
+          <div className="federation-panel__grid">
+            <fieldset>
+              <legend>Producer offer</legend>
+              <label>
+                <span>Offer JSON</span>
+                <textarea
+                  value={federationOfferJson}
+                  onChange={(event) => setFederationOfferJson(event.target.value)}
+                />
+              </label>
+              <button
+                type="button"
+                className="button button--secondary"
+                onClick={() => void saveFederationOffer()}
+                disabled={federationBusy}
+              >
+                Save exact offer version
+              </button>
+              <small>A server-side Ed25519 signer is required before an offer can be saved.</small>
+            </fieldset>
+            <fieldset>
+              <legend>Consumer trust inspection</legend>
+              <label>
+                <span>Local agreement ID</span>
+                <input
+                  value={federationAgreementId}
+                  onChange={(event) => setFederationAgreementId(event.target.value)}
+                />
+              </label>
+              <label>
+                <span>Agreement JSON</span>
+                <textarea
+                  value={federationAgreementJson}
+                  onChange={(event) => setFederationAgreementJson(event.target.value)}
+                />
+              </label>
+              <button
+                type="button"
+                className="button button--secondary"
+                onClick={() => void inspectFederationAgreement()}
+                disabled={federationBusy || !federationAgreementId.trim()}
+              >
+                Inspect and pin signed offer
+              </button>
+            </fieldset>
+          </div>
+          <div className="federation-panel__records" aria-live="polite">
+            <h3>Pinned agreements</h3>
+            {contentFederation.agreements.map((agreement) => (
+              <article key={agreement.id}>
+                <div>
+                  <strong>
+                    {agreement.id} · {agreement.mode} · {agreement.state}
+                  </strong>
+                  <span>
+                    {agreement.sourceInstance} · offer {agreement.offerId} r{agreement.offerVersion}
+                  </span>
+                  <small>
+                    {agreement.types.length} exact type(s) · key {agreement.trustedKey.keyId} ·{' '}
+                    {agreement.attribution.creditText}
+                  </small>
+                </div>
+                <div className="federation-panel__actions">
+                  <button
+                    type="button"
+                    className="button button--secondary"
+                    onClick={() =>
+                      void changeFederationAgreementState(
+                        agreement.id,
+                        agreement.state === 'active' ? 'disabled' : 'active',
+                      )
+                    }
+                    disabled={federationBusy}
+                  >
+                    {agreement.state === 'active' ? 'Disable agreement' : 'Activate agreement'}
+                  </button>
+                  {agreement.mode === 'mirror' && agreement.state === 'active' ? (
+                    <button
+                      type="button"
+                      className="button button--secondary"
+                      onClick={() => void planFederationSync(agreement.id)}
+                      disabled={federationBusy}
+                    >
+                      Preview mirror sync
+                    </button>
+                  ) : null}
+                </div>
+              </article>
+            ))}
+            {contentFederation.agreements.length === 0 ? (
+              <p className="empty-copy">No source offer has been inspected and pinned.</p>
+            ) : null}
+          </div>
+          <div className="federation-panel__records" aria-live="polite">
+            <h3>Reviewed mirror plans</h3>
+            {contentFederation.plans
+              .slice()
+              .reverse()
+              .map((plan) => (
+                <article key={plan.id}>
+                  <div>
+                    <strong>
+                      {plan.agreementId} · {plan.state} · {plan.effects.length} effect(s)
+                    </strong>
+                    <span>
+                      {plan.effects.map((effect) => effect.action).join(', ') || 'No changes'}
+                    </span>
+                    <small>Expires {plan.expiresAt}</small>
+                  </div>
+                  <div className="federation-panel__actions">
+                    {plan.state === 'preview' ? (
+                      <button
+                        type="button"
+                        className="button button--danger"
+                        onClick={() => void executeFederationSync(plan.id, plan.digest)}
+                        disabled={
+                          federationBusy ||
+                          plan.effects.some((effect) => effect.action === 'blocked')
+                        }
+                      >
+                        Execute reviewed sync
+                      </button>
+                    ) : null}
+                  </div>
+                </article>
+              ))}
+            {contentFederation.plans.length === 0 ? (
+              <p className="empty-copy">No mirror synchronization preview has been retained.</p>
+            ) : null}
+          </div>
         </section>
       ) : null}
       {regional ? (

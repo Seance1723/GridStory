@@ -6,6 +6,7 @@ import {
   type AssetRecord,
   type AssetUploadSession,
   type ContentEntry,
+  type ContentFederationDocument,
   createGridStoryClient,
   type ExperimentDesign,
   type ExperimentMetricSnapshotInput,
@@ -18,8 +19,8 @@ import {
   type MigrationRun,
   type MigrationSourceDescriptor,
   type PersonalizationSnapshot,
-  type Release,
   type RegionalDocument,
+  type Release,
 } from '@gridstory/client';
 import { exampleDesignSystem } from '@gridstory/example-kit/design-system';
 import { componentManifests } from '@gridstory/example-kit/manifests';
@@ -2161,6 +2162,46 @@ describe('GridStory Studio', () => {
     await user.click(within(panel).getByRole('button', { name: 'Execute approved transition' }));
     await screen.findByText(/regional reads were reset to primary-only/i);
     expect(panel.textContent).toContain('active control eu-west-1');
+  });
+
+  it('shows neutral contract-bound federation controls and saves an exact producer offer', async () => {
+    const user = userEvent.setup();
+    const client = createTestClient();
+    const document: ContentFederationDocument = {
+      organizationId: 'local',
+      tenantId: 'default',
+      workspaceId: 'default',
+      siteId: 'default',
+      environmentId: 'development',
+      locale: 'en',
+      schemaVersion: 1,
+      version: 0,
+      offers: [],
+      agreements: [],
+      mirrors: [],
+      plans: [],
+      receipts: [],
+      updatedBy: 'system',
+      updatedAt: now,
+    };
+    vi.spyOn(client, 'getContentFederation').mockResolvedValue(document);
+    const save = vi.spyOn(client, 'upsertFederationOffer').mockResolvedValue(undefined as never);
+    render(<App client={client} />);
+
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Federation' }));
+    const panel = await screen.findByRole('region', {
+      name: 'Content federation and syndication',
+    });
+    expect(panel.textContent).toContain('Only exact published schemas may cross this boundary');
+    expect(panel.textContent).toContain('No source offer has been inspected and pinned.');
+    expect(within(panel).getByRole('textbox', { name: 'Offer JSON' })).toBeTruthy();
+    await user.click(within(panel).getByRole('button', { name: 'Save exact offer version' }));
+    await screen.findByText('Published-only federation offer saved.');
+    expect(save).toHaveBeenCalledWith(
+      'published-pages',
+      expect.objectContaining({ expectedVersion: 0, state: 'disabled' }),
+    );
   });
 
   it('shows enterprise identity policy, providers, security events, and one-time credentials', async () => {

@@ -2,7 +2,11 @@ import { generateKeyPairSync } from 'node:crypto';
 import { appendFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { MigrationSourceAdapter } from '@gridstory/core';
+import {
+  emptyContentFederationDocument,
+  type MigrationSourceAdapter,
+  SqliteContentFederationRepository,
+} from '@gridstory/core';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   backupPostgres,
@@ -330,6 +334,25 @@ describe('database recovery', () => {
           },
         }),
       ).toMatchObject({ statusCode: 200 });
+      const federationRepository = new SqliteContentFederationRepository({ filename: sourcePath });
+      try {
+        const federationDocument = emptyContentFederationDocument(
+          {
+            organizationId: 'local',
+            tenantId: 'recovery-tenant',
+            workspaceId: 'default',
+            siteId: 'default',
+            environmentId: 'development',
+            locale: 'en',
+          },
+          '2026-08-21T11:59:00.000Z',
+        );
+        federationDocument.version = 1;
+        federationDocument.updatedBy = 'recovery-federation-admin';
+        federationRepository.save(federationDocument, null);
+      } finally {
+        federationRepository.close();
+      }
 
       const manifest = await backupSqlite({
         sourcePath,
@@ -561,6 +584,18 @@ describe('database recovery', () => {
         state: 'enabled',
         activeControlRegion: 'local',
         readPolicy: { mode: 'primary-only' },
+      });
+      const recoveredFederation = await restored.inject({
+        method: 'GET',
+        url: '/api/v1/federation',
+        headers,
+      });
+      expect(recoveredFederation.statusCode, recoveredFederation.body).toBe(200);
+      expect(recoveredFederation.json()).toMatchObject({
+        version: 1,
+        updatedBy: 'recovery-federation-admin',
+        agreements: [],
+        mirrors: [],
       });
     } finally {
       await restored?.close();
