@@ -734,6 +734,51 @@ export interface AppProps {
   client?: GridStoryClient;
 }
 
+type StudioTheme = 'light' | 'dark';
+
+const studioNavigationIconPaths = {
+  pages: 'M4 4h16v16H4zM8 4v16',
+  workflows: 'M5 5h5v5H5zM14 14h5v5h-5zM10 7h4a3 3 0 0 1 3 3v4',
+  releases: 'M5 19V5h14v14zM8 9h8M8 13h5',
+  search: 'm20 20-4.4-4.4M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15z',
+  operations: 'M4 18V9m6 9V4m6 14v-6m4 6H2',
+  identity: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0',
+  governance: 'M12 3 4 6v5c0 5 3.4 8.2 8 10 4.6-1.8 8-5 8-10V6zM9 12l2 2 4-5',
+  migrations: 'M7 7h10M7 7l3-3M7 7l3 3M17 17H7m10 0-3-3m3 3-3 3',
+  marketplace: 'M4 8h16l-1 12H5zM8 8a4 4 0 0 1 8 0',
+  targeting:
+    'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2z',
+  experiments: 'M9 3v5l-5 9a3 3 0 0 0 3 4h10a3 3 0 0 0 3-4l-5-9V3M7 15h10',
+  ai: 'M12 3l1.4 4.1L17 5l-2.1 3.6L19 10l-4.1 1.4L17 15l-3.6-2.1L12 17l-1.4-4.1L7 15l2.1-3.6L5 10l4.1-1.4L7 5l3.6 2.1z',
+  knowledge: 'M4 5h6a3 3 0 0 1 3 3v12a3 3 0 0 0-3-3H4zM20 5h-6a3 3 0 0 0-3 3v12a3 3 0 0 1 3-3h6z',
+  federation: 'M8 7h8M8 12h8M8 17h8M4 4h16v16H4z',
+  fleet: 'M5 6h14v12H5zM8 18v3m8-3v3M9 10h.01M12 10h.01M15 10h.01',
+  regions:
+    'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18',
+  components: 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z',
+  assets: 'M4 5h16v14H4zM4 15l4-4 4 4 3-3 5 5M16 9h.01',
+  quality: 'M12 3l2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z',
+} as const;
+
+type StudioNavigationIconName = keyof typeof studioNavigationIconPaths;
+
+function StudioNavigationIcon({ name }: { name: StudioNavigationIconName }): ReactNode {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24">
+      <path d={studioNavigationIconPaths[name]} />
+    </svg>
+  );
+}
+
+function initialStudioTheme(): StudioTheme {
+  if (typeof window === 'undefined') return 'light';
+  try {
+    return window.localStorage.getItem('gridstory-studio-theme') === 'dark' ? 'dark' : 'light';
+  } catch {
+    return 'light';
+  }
+}
+
 export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   const [entries, setEntries] = useState<ContentEntry[]>([]);
   const [selected, setSelected] = useState<ContentEntry | null>(null);
@@ -750,6 +795,12 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
 
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(true);
+  const [studioTheme, setStudioTheme] = useState<StudioTheme>(initialStudioTheme);
+  const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
+  const [navigationCondensed, setNavigationCondensed] = useState(false);
+  const [mobileViewport, setMobileViewport] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth <= 900,
+  );
   const [notice, setNotice] = useState<Notice>(null);
   const [qualityReport, setQualityReport] = useState<ContentQualityReport | null>(null);
   const [fatalError, setFatalError] = useState<string | null>(null);
@@ -924,6 +975,33 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   const [releaseTimeZone, setReleaseTimeZone] = useState(
     () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
   );
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('gridstory-studio-theme', studioTheme);
+    } catch {
+      // Theme persistence is best-effort and never blocks authoring.
+    }
+  }, [studioTheme]);
+
+  useEffect(() => {
+    const updateViewport = () => {
+      const nextMobileViewport = window.innerWidth <= 900;
+      setMobileViewport(nextMobileViewport);
+      if (!nextMobileViewport) setMobileNavigationOpen(false);
+    };
+    window.addEventListener('resize', updateViewport);
+    return () => window.removeEventListener('resize', updateViewport);
+  }, []);
+
+  useEffect(() => {
+    if (!mobileNavigationOpen) return undefined;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMobileNavigationOpen(false);
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [mobileNavigationOpen]);
 
   const activeExperiment = useMemo(
     () => experimentOverview?.experiments.find(({ id }) => id === activeExperimentId) ?? null,
@@ -3788,4449 +3866,4652 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
     [client],
   );
 
+  const anyManagementPanelOpen = Boolean(
+    workflowDesignerOpen ||
+      releasePanelOpen ||
+      searchPanelOpen ||
+      operationsDashboard ||
+      identitySnapshot ||
+      dataGovernance ||
+      migrationOverview ||
+      marketplaceOverview ||
+      personalization ||
+      experimentOverview ||
+      aiGateway ||
+      knowledge ||
+      contentFederation ||
+      fleet ||
+      regional ||
+      componentGovernance ||
+      assetLibraryOpen ||
+      qualityReport,
+  );
+
+  const navigationGroups: Array<{
+    label: string;
+    items: Array<{
+      label: string;
+      icon: StudioNavigationIconName;
+      active: boolean;
+      disabled?: boolean;
+      onSelect: () => void;
+    }>;
+  }> = [
+    {
+      label: 'Workspace',
+      items: [
+        {
+          label: 'Pages',
+          icon: 'pages',
+          active: !anyManagementPanelOpen,
+          onSelect: () => document.getElementById('studio-editor')?.focus(),
+        },
+        {
+          label: 'Workflows',
+          icon: 'workflows',
+          active: workflowDesignerOpen,
+          onSelect: () => void toggleWorkflowDesigner(),
+        },
+        {
+          label: 'Releases',
+          icon: 'releases',
+          active: releasePanelOpen,
+          onSelect: () => setReleasePanelOpen((current) => !current),
+        },
+        {
+          label: 'Search',
+          icon: 'search',
+          active: searchPanelOpen,
+          onSelect: () => void toggleSearchPanel(),
+        },
+      ],
+    },
+    {
+      label: 'Control plane',
+      items: [
+        {
+          label: 'Operations',
+          icon: 'operations',
+          active: operationsDashboard !== null,
+          onSelect: () => void toggleOperations(),
+        },
+        {
+          label: 'Identity',
+          icon: 'identity',
+          active: identitySnapshot !== null,
+          onSelect: () => void toggleIdentity(),
+        },
+        {
+          label: 'Data governance',
+          icon: 'governance',
+          active: dataGovernance !== null,
+          onSelect: () => void toggleDataGovernance(),
+        },
+        {
+          label: 'Migrations',
+          icon: 'migrations',
+          active: migrationOverview !== null,
+          onSelect: () => void toggleMigrations(),
+        },
+        {
+          label: 'Marketplace',
+          icon: 'marketplace',
+          active: marketplaceOverview !== null,
+          onSelect: () => void toggleMarketplace(),
+        },
+      ],
+    },
+    {
+      label: 'Experience',
+      items: [
+        {
+          label: 'Targeting',
+          icon: 'targeting',
+          active: personalization !== null,
+          onSelect: () => void togglePersonalization(),
+        },
+        {
+          label: 'Experiments',
+          icon: 'experiments',
+          active: experimentOverview !== null,
+          onSelect: () => void toggleExperiments(),
+        },
+        {
+          label: 'AI gateway',
+          icon: 'ai',
+          active: aiGateway !== null,
+          onSelect: () => void toggleAiGateway(),
+        },
+        {
+          label: 'Knowledge',
+          icon: 'knowledge',
+          active: knowledge !== null,
+          disabled: knowledgeBusy,
+          onSelect: () => void toggleKnowledge(),
+        },
+        {
+          label: 'Quality',
+          icon: 'quality',
+          active: qualityReport !== null,
+          disabled: !selected || busy,
+          onSelect: () => void toggleQuality(),
+        },
+      ],
+    },
+    {
+      label: 'Delivery',
+      items: [
+        {
+          label: 'Federation',
+          icon: 'federation',
+          active: contentFederation !== null,
+          disabled: federationBusy,
+          onSelect: () => void toggleContentFederation(),
+        },
+        {
+          label: 'Fleet',
+          icon: 'fleet',
+          active: fleet !== null,
+          disabled: fleetBusy,
+          onSelect: () => void toggleFleet(),
+        },
+        {
+          label: 'Regions',
+          icon: 'regions',
+          active: regional !== null,
+          disabled: regionalBusy,
+          onSelect: () => void toggleRegional(),
+        },
+        {
+          label: 'Components',
+          icon: 'components',
+          active: componentGovernance !== null,
+          onSelect: () => void toggleComponentGovernance(),
+        },
+        {
+          label: 'Assets',
+          icon: 'assets',
+          active: assetLibraryOpen,
+          onSelect: () => setAssetLibraryOpen((current) => !current),
+        },
+      ],
+    },
+  ];
+
+  const selectNavigationItem = (onSelect: () => void) => {
+    onSelect();
+    setMobileNavigationOpen(false);
+  };
+
+  const toggleNavigation = () => {
+    if (mobileViewport) {
+      setMobileNavigationOpen((current) => !current);
+      return;
+    }
+    setNavigationCondensed((current) => !current);
+  };
+
   return (
-    <div className="studio-shell">
+    <div
+      className={`studio-shell${navigationCondensed ? ' studio-shell--navigation-condensed' : ''}`}
+      data-theme={studioTheme}
+    >
       <a className="skip-link" href="#studio-editor" tabIndex={0}>
         Skip to page editor
       </a>
-      <header className="studio-header">
-        <div className="brand-mark" aria-hidden="true">
-          <span />
-          <span />
-          <span />
+      {mobileNavigationOpen ? (
+        <button
+          type="button"
+          className="studio-navigation-backdrop"
+          aria-label="Close navigation"
+          onClick={() => setMobileNavigationOpen(false)}
+        />
+      ) : null}
+      <aside
+        className={`studio-navigation${mobileNavigationOpen ? ' studio-navigation--open' : ''}`}
+        aria-label="Primary Studio navigation"
+      >
+        <div className="studio-navigation__brand">
+          <div className="brand-mark" aria-hidden="true">
+            <span />
+            <span />
+            <span />
+          </div>
+          <div className="brand-copy">
+            <p>GridStory</p>
+            <span>Local Studio</span>
+          </div>
+          <button
+            type="button"
+            className="studio-icon-button studio-navigation__close"
+            aria-label="Close navigation"
+            onClick={() => setMobileNavigationOpen(false)}
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="m6 6 12 12M18 6 6 18" />
+            </svg>
+          </button>
         </div>
-        <div className="brand-copy">
-          <p>GridStory</p>
-          <span>Local Studio · default tenant</span>
-        </div>
-        <div className="header-actions">
-          <span className={`save-state ${dirty ? 'save-state--dirty' : ''}`}>
-            {dirty ? 'Unsaved changes' : 'All changes saved'}
+        <nav className="studio-navigation__scroll" aria-label="Studio sections">
+          {navigationGroups.map((group) => (
+            <section className="studio-navigation__group" key={group.label}>
+              <p className="studio-navigation__caption">{group.label}</p>
+              {group.items.map((item) => (
+                <button
+                  type="button"
+                  className={`studio-navigation__item${item.active ? ' studio-navigation__item--active' : ''}`}
+                  key={item.label}
+                  aria-current={item.active ? 'page' : undefined}
+                  aria-expanded={item.active}
+                  disabled={item.disabled}
+                  onClick={() => selectNavigationItem(item.onSelect)}
+                  title={navigationCondensed ? item.label : undefined}
+                >
+                  <span className="studio-navigation__icon">
+                    <StudioNavigationIcon name={item.icon} />
+                  </span>
+                  <span className="studio-navigation__label">{item.label}</span>
+                </button>
+              ))}
+            </section>
+          ))}
+        </nav>
+        <div className="studio-navigation__footer">
+          <span className="studio-navigation__footer-icon" aria-hidden="true">
+            ?
           </span>
-          <button
-            type="button"
-            className="button button--secondary"
-            onClick={() => void toggleWorkflowDesigner()}
-            aria-expanded={workflowDesignerOpen}
-          >
-            Workflows
-          </button>{' '}
-          <button
-            type="button"
-            className="button button--secondary"
-            onClick={() => setReleasePanelOpen((current) => !current)}
-            aria-expanded={releasePanelOpen}
-          >
-            Releases
-          </button>{' '}
-          <button
-            type="button"
-            className="button button--secondary"
-            onClick={() => void toggleSearchPanel()}
-            aria-expanded={searchPanelOpen}
-          >
-            Search
-          </button>{' '}
-          <button
-            type="button"
-            className="button button--secondary"
-            onClick={() => void toggleOperations()}
-            aria-expanded={operationsDashboard !== null}
-          >
-            Operations
-          </button>{' '}
-          <button
-            type="button"
-            className="button button--secondary"
-            onClick={() => void toggleIdentity()}
-            aria-expanded={identitySnapshot !== null}
-          >
-            Identity
-          </button>{' '}
-          <button
-            type="button"
-            className="button button--secondary"
-            onClick={() => void toggleDataGovernance()}
-            aria-expanded={dataGovernance !== null}
-          >
-            Data governance
-          </button>{' '}
-          <button
-            type="button"
-            className="button button--secondary"
-            onClick={() => void toggleMigrations()}
-            aria-expanded={migrationOverview !== null}
-          >
-            Migrations
-          </button>{' '}
-          <button
-            type="button"
-            className="button button--secondary"
-            onClick={() => void toggleMarketplace()}
-            aria-expanded={marketplaceOverview !== null}
-          >
-            Marketplace
-          </button>{' '}
-          <button
-            type="button"
-            className="button button--secondary"
-            onClick={() => void togglePersonalization()}
-            aria-expanded={personalization !== null}
-          >
-            Targeting
-          </button>{' '}
-          <button
-            type="button"
-            className="button button--secondary"
-            onClick={() => void toggleExperiments()}
-            aria-expanded={experimentOverview !== null}
-          >
-            Experiments
-          </button>{' '}
-          <button
-            type="button"
-            className="button button--secondary"
-            onClick={() => void toggleAiGateway()}
-            aria-expanded={aiGateway !== null}
-          >
-            AI gateway
-          </button>{' '}
-          <button
-            type="button"
-            className="button button--secondary"
-            onClick={() => void toggleKnowledge()}
-            aria-expanded={knowledge !== null}
-            disabled={knowledgeBusy}
-          >
-            Knowledge
-          </button>{' '}
-          <button
-            type="button"
-            className="button button--secondary"
-            onClick={() => void toggleContentFederation()}
-            aria-expanded={contentFederation !== null}
-            disabled={federationBusy}
-          >
-            Federation
-          </button>{' '}
-          <button
-            type="button"
-            className="button button--secondary"
-            onClick={() => void toggleFleet()}
-            aria-expanded={fleet !== null}
-            disabled={fleetBusy}
-          >
-            Fleet
-          </button>{' '}
-          <button
-            type="button"
-            className="button button--secondary"
-            onClick={() => void toggleRegional()}
-            aria-expanded={regional !== null}
-            disabled={regionalBusy}
-          >
-            Regions
-          </button>{' '}
-          <button
-            type="button"
-            className="button button--secondary"
-            onClick={() => void toggleComponentGovernance()}
-            aria-expanded={componentGovernance !== null}
-          >
-            Components
-          </button>{' '}
-          <button
-            type="button"
-            className="button button--secondary"
-            onClick={() => setAssetLibraryOpen((current) => !current)}
-            aria-expanded={assetLibraryOpen}
-          >
-            Assets
-          </button>{' '}
-          <button
-            type="button"
-            className="button button--secondary"
-            onClick={() => void toggleQuality()}
-            aria-expanded={qualityReport !== null}
-            disabled={!selected || busy}
-          >
-            Quality
-          </button>
-          <button
-            type="button"
-            className="button button--secondary"
-            onClick={() => void save()}
-            disabled={!dirty || busy}
-          >
-            Save draft
-          </button>
-          <button
-            type="button"
-            className="button button--primary"
-            onClick={() => void publish()}
-            disabled={!selected || busy || !publishWorkflowTransition}
-          >
-            Publish
-          </button>
+          <div>
+            <strong>Need a hand?</strong>
+            <span>Review delivery health in Operations.</span>
+          </div>
         </div>
-      </header>
-      {workflowDesignerOpen ? (
-        <section className="workflow-designer" aria-label="Workflow action designer">
-          <div className="section-heading">
-            <div>
-              <span className="kicker">Durable automation</span>
-              <h2>Workflow action designer</h2>
-              <p>
-                Attach scoped side effects to completed transitions, then inspect every leased
-                delivery, retry, and dead letter.
-              </p>
-            </div>
+      </aside>
+      <div className="studio-content">
+        <header className="studio-header">
+          <div className="studio-header__leading">
+            <button
+              type="button"
+              className="studio-icon-button studio-menu-button"
+              aria-label="Toggle navigation"
+              aria-expanded={mobileViewport ? mobileNavigationOpen : !navigationCondensed}
+              onClick={toggleNavigation}
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M4 7h16M4 12h16M4 17h16" />
+              </svg>
+            </button>
+            <search className="studio-search">
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void (searchPanelOpen ? runSearch() : toggleSearchPanel());
+                }}
+              >
+                <StudioNavigationIcon name="search" />
+                <input
+                  aria-label="Search Studio"
+                  placeholder="Search content..."
+                  value={searchText}
+                  onChange={(event) => setSearchText(event.target.value)}
+                />
+              </form>
+            </search>
+            <button
+              type="button"
+              className="studio-icon-button studio-mobile-search"
+              aria-label="Open search"
+              aria-expanded={searchPanelOpen}
+              onClick={() => void toggleSearchPanel()}
+            >
+              <StudioNavigationIcon name="search" />
+            </button>
+          </div>
+          <div className="header-actions">
+            <span className={`save-state ${dirty ? 'save-state--dirty' : ''}`}>
+              <span aria-hidden="true" />
+              {dirty ? 'Unsaved changes' : 'Saved'}
+            </span>
+            <button
+              type="button"
+              className="studio-icon-button studio-theme-toggle"
+              aria-label={`Switch to ${studioTheme === 'light' ? 'dark' : 'light'} theme`}
+              aria-pressed={studioTheme === 'dark'}
+              onClick={() => setStudioTheme((current) => (current === 'light' ? 'dark' : 'light'))}
+            >
+              {studioTheme === 'light' ? (
+                <svg aria-hidden="true" viewBox="0 0 24 24">
+                  <path d="M20.2 15.3A8.2 8.2 0 0 1 8.7 3.8 8.2 8.2 0 1 0 20.2 15.3Z" />
+                </svg>
+              ) : (
+                <svg aria-hidden="true" viewBox="0 0 24 24">
+                  <path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4" />
+                  <circle cx="12" cy="12" r="4" />
+                </svg>
+              )}
+            </button>
             <button
               type="button"
               className="button button--secondary"
-              disabled={busy}
-              onClick={() => void drainWorkflowActions()}
+              onClick={() => void save()}
+              disabled={!dirty || busy}
             >
-              Run due actions
+              Save draft
             </button>
+            <button
+              type="button"
+              className="button button--primary"
+              onClick={() => void publish()}
+              disabled={!selected || busy || !publishWorkflowTransition}
+            >
+              Publish
+            </button>
+            <span className="studio-avatar" role="img" aria-label="GridStory Studio user">
+              GS
+            </span>
           </div>
-
-          <div className="workflow-designer-layout">
-            <div className="workflow-definition-editor">
-              <div className="workflow-designer-toolbar">
-                <label className="gs-field">
-                  <span>Workflow</span>
-                  <select
-                    value={workflowDesign?.id ?? ''}
-                    onChange={(event) => {
-                      const definition = workflowDefinitions.find(
-                        (candidate) => candidate.id === event.target.value,
-                      );
-                      setWorkflowDesign(definition ? structuredClone(definition) : null);
-                    }}
-                  >
-                    {workflowDefinitions.map((definition) => (
-                      <option key={definition.id} value={definition.id}>
-                        {definition.name} · v{definition.version}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+        </header>
+        <div className="studio-page">
+          {workflowDesignerOpen ? (
+            <section className="workflow-designer" aria-label="Workflow action designer">
+              <div className="section-heading">
+                <div>
+                  <span className="kicker">Durable automation</span>
+                  <h2>Workflow action designer</h2>
+                  <p>
+                    Attach scoped side effects to completed transitions, then inspect every leased
+                    delivery, retry, and dead letter.
+                  </p>
+                </div>
                 <button
                   type="button"
-                  className="button button--primary"
-                  disabled={!workflowDesign || busy}
-                  onClick={() => void saveWorkflowDesign()}
+                  className="button button--secondary"
+                  disabled={busy}
+                  onClick={() => void drainWorkflowActions()}
                 >
-                  Save next version
+                  Run due actions
                 </button>
               </div>
 
-              {workflowDesign ? (
-                <>
-                  <ul className="workflow-state-map" aria-label="Workflow states">
-                    {workflowDesign.states.map((state) => (
-                      <li
-                        className={`workflow-state-node workflow-state-node--${state.kind}`}
-                        key={state.id}
-                      >
-                        <strong>{state.label}</strong>
-                        <code>{state.id}</code>
-                      </li>
-                    ))}
-                  </ul>
-                  <div className="workflow-transition-list">
-                    {workflowDesign.transitions.map((transition) => (
-                      <article className="workflow-transition-card" key={transition.id}>
-                        <div className="workflow-transition-heading">
-                          <div>
-                            <strong>{transition.label}</strong>
-                            <span>
-                              {transition.from} → {transition.to}
-                            </span>
-                          </div>
-                          <code>{transition.id}</code>
-                        </div>
-                        <fieldset className="workflow-action-adders">
-                          <legend>Add actions to {transition.label}</legend>
-                          <button
-                            type="button"
-                            onClick={() => addWorkflowAction(transition.id, 'notification')}
-                          >
-                            + Notification
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => addWorkflowAction(transition.id, 'webhook')}
-                          >
-                            + Webhook
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => addWorkflowAction(transition.id, 'cache-invalidate')}
-                          >
-                            + Cache tags
-                          </button>
-                        </fieldset>
-                        {transition.actions.length ? (
-                          <ul className="workflow-action-definitions">
-                            {transition.actions.map((action) => (
-                              <li key={action.id}>
-                                <div className="workflow-action-definition-heading">
-                                  <span className="workflow-action-kind">{action.type}</span>
-                                  <button
-                                    type="button"
-                                    className="text-button text-button--danger"
-                                    onClick={() => removeWorkflowAction(transition.id, action.id)}
-                                  >
-                                    Remove
-                                  </button>
-                                </div>
-                                <label className="gs-field">
-                                  <span>Action label</span>
-                                  <input
-                                    aria-label={`${transition.label} ${action.id} label`}
-                                    value={action.label}
-                                    onChange={(event) =>
-                                      updateWorkflowAction(transition.id, action.id, (current) => ({
-                                        ...current,
-                                        label: event.target.value,
-                                      }))
-                                    }
-                                  />
-                                </label>
-                                {action.type === 'notification' ? (
-                                  <>
-                                    <label className="gs-field">
-                                      <span>Message</span>
-                                      <input
-                                        value={action.message}
-                                        onChange={(event) =>
-                                          updateWorkflowAction(
-                                            transition.id,
-                                            action.id,
-                                            (current) =>
-                                              current.type === 'notification'
-                                                ? { ...current, message: event.target.value }
-                                                : current,
-                                          )
-                                        }
-                                      />
-                                    </label>
-                                    <label className="gs-field">
-                                      <span>Audience roles</span>
-                                      <input
-                                        value={action.audienceRoles.join(', ')}
-                                        onChange={(event) =>
-                                          updateWorkflowAction(
-                                            transition.id,
-                                            action.id,
-                                            (current) =>
-                                              current.type === 'notification'
-                                                ? {
-                                                    ...current,
-                                                    audienceRoles: event.target.value
-                                                      .split(',')
-                                                      .map((role) => role.trim())
-                                                      .filter(Boolean),
-                                                  }
-                                                : current,
-                                          )
-                                        }
-                                      />
-                                    </label>
-                                  </>
-                                ) : action.type === 'webhook' ? (
-                                  <>
-                                    <label className="gs-field">
-                                      <span>HTTPS endpoint</span>
-                                      <input
-                                        value={action.url}
-                                        onChange={(event) =>
-                                          updateWorkflowAction(
-                                            transition.id,
-                                            action.id,
-                                            (current) =>
-                                              current.type === 'webhook'
-                                                ? { ...current, url: event.target.value }
-                                                : current,
-                                          )
-                                        }
-                                      />
-                                    </label>
-                                    <label className="gs-field">
-                                      <span>Event name</span>
-                                      <input
-                                        value={action.eventName}
-                                        onChange={(event) =>
-                                          updateWorkflowAction(
-                                            transition.id,
-                                            action.id,
-                                            (current) =>
-                                              current.type === 'webhook'
-                                                ? { ...current, eventName: event.target.value }
-                                                : current,
-                                          )
-                                        }
-                                      />
-                                    </label>
-                                  </>
-                                ) : (
-                                  <label className="gs-field">
-                                    <span>Cache tags</span>
-                                    <input
-                                      value={action.tags.join(', ')}
-                                      onChange={(event) =>
-                                        updateWorkflowAction(transition.id, action.id, (current) =>
-                                          current.type === 'cache-invalidate'
-                                            ? {
-                                                ...current,
-                                                tags: event.target.value
-                                                  .split(',')
-                                                  .map((tag) => tag.trim())
-                                                  .filter(Boolean),
-                                              }
-                                            : current,
-                                        )
-                                      }
-                                    />
-                                  </label>
-                                )}
-                                <label className="gs-field workflow-attempt-field">
-                                  <span>Maximum attempts</span>
-                                  <input
-                                    type="number"
-                                    min="1"
-                                    max="20"
-                                    value={action.maxAttempts}
-                                    onChange={(event) =>
-                                      updateWorkflowAction(transition.id, action.id, (current) => ({
-                                        ...current,
-                                        maxAttempts: Number(event.target.value),
-                                      }))
-                                    }
-                                  />
-                                </label>
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p className="empty-copy">No durable actions on this transition.</p>
-                        )}
-                      </article>
-                    ))}
-                  </div>
-                </>
-              ) : (
-                <p className="empty-copy">No workflow definition is available.</p>
-              )}
-            </div>
-
-            <aside className="workflow-delivery-log" aria-label="Workflow action delivery log">
-              <div className="workflow-delivery-log-heading">
-                <div>
-                  <span className="kicker">Delivery log</span>
-                  <h3>Attempts and dead letters</h3>
-                </div>
-                <span>{workflowActionDeliveries.length}</span>
-              </div>
-              {workflowActionDeliveries.length ? (
-                <ol>
-                  {workflowActionDeliveries.map((delivery) => (
-                    <li key={delivery.id}>
-                      <div>
-                        <strong>
-                          {String(
-                            delivery.payload.action &&
-                              typeof delivery.payload.action === 'object' &&
-                              'label' in delivery.payload.action
-                              ? delivery.payload.action.label
-                              : 'Workflow action',
-                          )}
-                        </strong>
-                        <span
-                          className={`workflow-delivery-state workflow-delivery-state--${delivery.state}`}
-                        >
-                          {delivery.state}
-                        </span>
-                      </div>
-                      <code>{delivery.idempotencyKey}</code>
-                      <small>
-                        {delivery.attempts}/{delivery.maxAttempts} attempt(s) ·{' '}
-                        {new Date(delivery.updatedAt).toLocaleString()}
-                      </small>
-                      {delivery.lastError ? <p>{delivery.lastError}</p> : null}
-                      {delivery.state === 'dead' || delivery.state === 'succeeded' ? (
-                        <button
-                          type="button"
-                          className="text-button"
-                          disabled={busy}
-                          onClick={() => void replayWorkflowAction(delivery.id)}
-                        >
-                          Replay delivery
-                        </button>
-                      ) : null}
-                    </li>
-                  ))}
-                </ol>
-              ) : (
-                <p className="empty-copy">No workflow action deliveries yet.</p>
-              )}
-            </aside>
-          </div>
-        </section>
-      ) : null}
-      {releasePanelOpen ? (
-        <section className="release-panel" aria-label="Release manager">
-          <div className="section-heading">
-            <div>
-              <span className="kicker">Coordinated delivery</span>
-              <h2>Atomic releases</h2>
-              <p>
-                Pin saved drafts, validate their future state, then publish every entry together.
-              </p>
-            </div>
-            <span className={`release-state release-state--${activeRelease?.state ?? 'draft'}`}>
-              {activeRelease?.state ?? 'No release selected'}
-            </span>
-          </div>
-
-          <div className="release-layout">
-            <div className="release-builder">
-              <h3>Compose release</h3>
-              <label className="gs-field">
-                <span>Release name</span>
-                <input
-                  value={releaseName}
-                  placeholder="Campaign launch"
-                  onChange={(event) => setReleaseName(event.target.value)}
-                />
-              </label>
-              <fieldset className="release-entry-picker">
-                <legend>Saved entries</legend>
-                {entries.map((entry) => (
-                  <label key={entry.id}>
-                    <input
-                      type="checkbox"
-                      checked={releaseEntryIds.includes(entry.id)}
-                      onChange={(event) =>
-                        setReleaseEntryIds((current) =>
-                          event.target.checked
-                            ? [...current, entry.id]
-                            : current.filter((id) => id !== entry.id),
-                        )
-                      }
-                    />
-                    <span>
-                      {String(entry.data.title ?? entry.data.headline ?? entry.id)}
-                      <small>{entry.draftRevisionId}</small>
-                    </span>
-                  </label>
-                ))}
-              </fieldset>
-              <button
-                type="button"
-                className="button button--primary"
-                disabled={busy || !releaseName.trim() || releaseEntryIds.length < 2}
-                onClick={() => void createRelease()}
-              >
-                Create release
-              </button>
-            </div>
-
-            <div className="release-workbench">
-              <h3>Release workbench</h3>
-              {releases.length ? (
-                <ul className="release-selector" aria-label="Scoped releases">
-                  {releases.map((release) => (
-                    <li key={release.id}>
-                      <button
-                        type="button"
-                        className={release.id === activeRelease?.id ? 'active' : ''}
-                        onClick={() => {
-                          setActiveReleaseId(release.id);
-                          setReleasePreview(null);
+              <div className="workflow-designer-layout">
+                <div className="workflow-definition-editor">
+                  <div className="workflow-designer-toolbar">
+                    <label className="gs-field">
+                      <span>Workflow</span>
+                      <select
+                        value={workflowDesign?.id ?? ''}
+                        onChange={(event) => {
+                          const definition = workflowDefinitions.find(
+                            (candidate) => candidate.id === event.target.value,
+                          );
+                          setWorkflowDesign(definition ? structuredClone(definition) : null);
                         }}
                       >
-                        <strong>{release.name}</strong>
-                        <small>{release.state}</small>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="empty-copy">No releases in this tenant scope yet.</p>
-              )}
-
-              {activeRelease ? (
-                <article className="release-card">
-                  <div className="release-card-heading">
-                    <div>
-                      <strong>{activeRelease.name}</strong>
-                      <small>
-                        {activeRelease.entries.length} pinned revisions ·{' '}
-                        {activeRelease.rollbackPolicy.mode} rollback
-                      </small>
-                    </div>
-                    <code>{activeRelease.id}</code>
-                  </div>
-                  <ul className="release-member-list">
-                    {activeRelease.entries.map((member) => (
-                      <li key={member.entryId}>
-                        <span>
-                          {String(
-                            entries.find((entry) => entry.id === member.entryId)?.data.title ??
-                              entries.find((entry) => entry.id === member.entryId)?.data.headline ??
-                              member.entryId,
-                          )}
-                        </span>
-                        <code>{member.revisionId}</code>
-                      </li>
-                    ))}
-                  </ul>
-                  {activeRelease.validation ? (
-                    <div
-                      className={`release-validation ${activeRelease.validation.valid ? 'release-validation--valid' : ''}`}
-                    >
-                      <strong>
-                        {activeRelease.validation.valid
-                          ? 'Validation passed'
-                          : 'Validation blocked'}
-                      </strong>
-                      <span>{activeRelease.validation.issues.length} issue(s)</span>
-                      {activeRelease.validation.issues.length ? (
-                        <ul>
-                          {activeRelease.validation.issues.map((issue) => (
-                            <li
-                              key={`${issue.code}-${issue.entryId ?? 'release'}-${issue.path?.join('.') ?? 'root'}-${issue.message}`}
-                            >
-                              {issue.severity}: {issue.message}
-                            </li>
-                          ))}
-                        </ul>
-                      ) : null}
-                    </div>
-                  ) : null}
-                  <div className="release-actions">
-                    <button
-                      type="button"
-                      className="button button--secondary"
-                      disabled={
-                        busy ||
-                        ['executing', 'published', 'rolled-back'].includes(activeRelease.state)
-                      }
-                      onClick={() => void validateActiveRelease()}
-                    >
-                      Validate release
-                    </button>
-                    <button
-                      type="button"
-                      className="button button--secondary"
-                      disabled={busy}
-                      onClick={() => void previewActiveRelease()}
-                    >
-                      Preview future state
-                    </button>
+                        {workflowDefinitions.map((definition) => (
+                          <option key={definition.id} value={definition.id}>
+                            {definition.name} · v{definition.version}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
                     <button
                       type="button"
                       className="button button--primary"
-                      disabled={
-                        busy ||
-                        !activeRelease.validation?.valid ||
-                        ['executing', 'published', 'rolled-back'].includes(activeRelease.state)
-                      }
-                      onClick={() => void executeActiveRelease()}
+                      disabled={!workflowDesign || busy}
+                      onClick={() => void saveWorkflowDesign()}
                     >
-                      Publish release
+                      Save next version
                     </button>
-                    {activeRelease.state === 'published' ? (
-                      <button
-                        type="button"
-                        className="button button--secondary"
-                        disabled={
-                          busy ||
-                          activeRelease.rollbackPolicy.mode === 'disabled' ||
-                          activeRelease.entries.some(
-                            (entry) => entry.previousPublishedRevisionId === null,
-                          )
-                        }
-                        onClick={() => void rollbackActiveRelease()}
-                      >
-                        Roll back release
-                      </button>
-                    ) : null}
                   </div>
 
-                  {activeRelease.state === 'validated' || activeRelease.state === 'scheduled' ? (
-                    <div className="release-scheduler">
-                      <label className="gs-field">
-                        <span>Date and time</span>
+                  {workflowDesign ? (
+                    <>
+                      {/* biome-ignore lint/a11y/noNoninteractiveTabindex: Safari keyboard users need a focus target for this labelled horizontal overflow region. */}
+                      <ul className="workflow-state-map" aria-label="Workflow states" tabIndex={0}>
+                        {workflowDesign.states.map((state) => (
+                          <li
+                            className={`workflow-state-node workflow-state-node--${state.kind}`}
+                            key={state.id}
+                          >
+                            <strong>{state.label}</strong>
+                            <code>{state.id}</code>
+                          </li>
+                        ))}
+                      </ul>
+                      <div className="workflow-transition-list">
+                        {workflowDesign.transitions.map((transition) => (
+                          <article className="workflow-transition-card" key={transition.id}>
+                            <div className="workflow-transition-heading">
+                              <div>
+                                <strong>{transition.label}</strong>
+                                <span>
+                                  {transition.from} → {transition.to}
+                                </span>
+                              </div>
+                              <code>{transition.id}</code>
+                            </div>
+                            <fieldset className="workflow-action-adders">
+                              <legend>Add actions to {transition.label}</legend>
+                              <button
+                                type="button"
+                                onClick={() => addWorkflowAction(transition.id, 'notification')}
+                              >
+                                + Notification
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => addWorkflowAction(transition.id, 'webhook')}
+                              >
+                                + Webhook
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => addWorkflowAction(transition.id, 'cache-invalidate')}
+                              >
+                                + Cache tags
+                              </button>
+                            </fieldset>
+                            {transition.actions.length ? (
+                              <ul className="workflow-action-definitions">
+                                {transition.actions.map((action) => (
+                                  <li key={action.id}>
+                                    <div className="workflow-action-definition-heading">
+                                      <span className="workflow-action-kind">{action.type}</span>
+                                      <button
+                                        type="button"
+                                        className="text-button text-button--danger"
+                                        onClick={() =>
+                                          removeWorkflowAction(transition.id, action.id)
+                                        }
+                                      >
+                                        Remove
+                                      </button>
+                                    </div>
+                                    <label className="gs-field">
+                                      <span>Action label</span>
+                                      <input
+                                        aria-label={`${transition.label} ${action.id} label`}
+                                        value={action.label}
+                                        onChange={(event) =>
+                                          updateWorkflowAction(
+                                            transition.id,
+                                            action.id,
+                                            (current) => ({
+                                              ...current,
+                                              label: event.target.value,
+                                            }),
+                                          )
+                                        }
+                                      />
+                                    </label>
+                                    {action.type === 'notification' ? (
+                                      <>
+                                        <label className="gs-field">
+                                          <span>Message</span>
+                                          <input
+                                            value={action.message}
+                                            onChange={(event) =>
+                                              updateWorkflowAction(
+                                                transition.id,
+                                                action.id,
+                                                (current) =>
+                                                  current.type === 'notification'
+                                                    ? { ...current, message: event.target.value }
+                                                    : current,
+                                              )
+                                            }
+                                          />
+                                        </label>
+                                        <label className="gs-field">
+                                          <span>Audience roles</span>
+                                          <input
+                                            value={action.audienceRoles.join(', ')}
+                                            onChange={(event) =>
+                                              updateWorkflowAction(
+                                                transition.id,
+                                                action.id,
+                                                (current) =>
+                                                  current.type === 'notification'
+                                                    ? {
+                                                        ...current,
+                                                        audienceRoles: event.target.value
+                                                          .split(',')
+                                                          .map((role) => role.trim())
+                                                          .filter(Boolean),
+                                                      }
+                                                    : current,
+                                              )
+                                            }
+                                          />
+                                        </label>
+                                      </>
+                                    ) : action.type === 'webhook' ? (
+                                      <>
+                                        <label className="gs-field">
+                                          <span>HTTPS endpoint</span>
+                                          <input
+                                            value={action.url}
+                                            onChange={(event) =>
+                                              updateWorkflowAction(
+                                                transition.id,
+                                                action.id,
+                                                (current) =>
+                                                  current.type === 'webhook'
+                                                    ? { ...current, url: event.target.value }
+                                                    : current,
+                                              )
+                                            }
+                                          />
+                                        </label>
+                                        <label className="gs-field">
+                                          <span>Event name</span>
+                                          <input
+                                            value={action.eventName}
+                                            onChange={(event) =>
+                                              updateWorkflowAction(
+                                                transition.id,
+                                                action.id,
+                                                (current) =>
+                                                  current.type === 'webhook'
+                                                    ? { ...current, eventName: event.target.value }
+                                                    : current,
+                                              )
+                                            }
+                                          />
+                                        </label>
+                                      </>
+                                    ) : (
+                                      <label className="gs-field">
+                                        <span>Cache tags</span>
+                                        <input
+                                          value={action.tags.join(', ')}
+                                          onChange={(event) =>
+                                            updateWorkflowAction(
+                                              transition.id,
+                                              action.id,
+                                              (current) =>
+                                                current.type === 'cache-invalidate'
+                                                  ? {
+                                                      ...current,
+                                                      tags: event.target.value
+                                                        .split(',')
+                                                        .map((tag) => tag.trim())
+                                                        .filter(Boolean),
+                                                    }
+                                                  : current,
+                                            )
+                                          }
+                                        />
+                                      </label>
+                                    )}
+                                    <label className="gs-field workflow-attempt-field">
+                                      <span>Maximum attempts</span>
+                                      <input
+                                        type="number"
+                                        min="1"
+                                        max="20"
+                                        value={action.maxAttempts}
+                                        onChange={(event) =>
+                                          updateWorkflowAction(
+                                            transition.id,
+                                            action.id,
+                                            (current) => ({
+                                              ...current,
+                                              maxAttempts: Number(event.target.value),
+                                            }),
+                                          )
+                                        }
+                                      />
+                                    </label>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p className="empty-copy">No durable actions on this transition.</p>
+                            )}
+                          </article>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <p className="empty-copy">No workflow definition is available.</p>
+                  )}
+                </div>
+
+                <aside className="workflow-delivery-log" aria-label="Workflow action delivery log">
+                  <div className="workflow-delivery-log-heading">
+                    <div>
+                      <span className="kicker">Delivery log</span>
+                      <h3>Attempts and dead letters</h3>
+                    </div>
+                    <span>{workflowActionDeliveries.length}</span>
+                  </div>
+                  {workflowActionDeliveries.length ? (
+                    <ol>
+                      {workflowActionDeliveries.map((delivery) => (
+                        <li key={delivery.id}>
+                          <div>
+                            <strong>
+                              {String(
+                                delivery.payload.action &&
+                                  typeof delivery.payload.action === 'object' &&
+                                  'label' in delivery.payload.action
+                                  ? delivery.payload.action.label
+                                  : 'Workflow action',
+                              )}
+                            </strong>
+                            <span
+                              className={`workflow-delivery-state workflow-delivery-state--${delivery.state}`}
+                            >
+                              {delivery.state}
+                            </span>
+                          </div>
+                          <code>{delivery.idempotencyKey}</code>
+                          <small>
+                            {delivery.attempts}/{delivery.maxAttempts} attempt(s) ·{' '}
+                            {new Date(delivery.updatedAt).toLocaleString()}
+                          </small>
+                          {delivery.lastError ? <p>{delivery.lastError}</p> : null}
+                          {delivery.state === 'dead' || delivery.state === 'succeeded' ? (
+                            <button
+                              type="button"
+                              className="text-button"
+                              disabled={busy}
+                              onClick={() => void replayWorkflowAction(delivery.id)}
+                            >
+                              Replay delivery
+                            </button>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ol>
+                  ) : (
+                    <p className="empty-copy">No workflow action deliveries yet.</p>
+                  )}
+                </aside>
+              </div>
+            </section>
+          ) : null}
+          {releasePanelOpen ? (
+            <section className="release-panel" aria-label="Release manager">
+              <div className="section-heading">
+                <div>
+                  <span className="kicker">Coordinated delivery</span>
+                  <h2>Atomic releases</h2>
+                  <p>
+                    Pin saved drafts, validate their future state, then publish every entry
+                    together.
+                  </p>
+                </div>
+                <span className={`release-state release-state--${activeRelease?.state ?? 'draft'}`}>
+                  {activeRelease?.state ?? 'No release selected'}
+                </span>
+              </div>
+
+              <div className="release-layout">
+                <div className="release-builder">
+                  <h3>Compose release</h3>
+                  <label className="gs-field">
+                    <span>Release name</span>
+                    <input
+                      value={releaseName}
+                      placeholder="Campaign launch"
+                      onChange={(event) => setReleaseName(event.target.value)}
+                    />
+                  </label>
+                  <fieldset className="release-entry-picker">
+                    <legend>Saved entries</legend>
+                    {entries.map((entry) => (
+                      <label key={entry.id}>
                         <input
-                          type="datetime-local"
-                          value={releaseScheduleAt}
-                          onChange={(event) => setReleaseScheduleAt(event.target.value)}
+                          type="checkbox"
+                          checked={releaseEntryIds.includes(entry.id)}
+                          onChange={(event) =>
+                            setReleaseEntryIds((current) =>
+                              event.target.checked
+                                ? [...current, entry.id]
+                                : current.filter((id) => id !== entry.id),
+                            )
+                          }
                         />
+                        <span>
+                          {String(entry.data.title ?? entry.data.headline ?? entry.id)}
+                          <small>{entry.draftRevisionId}</small>
+                        </span>
                       </label>
-                      <label className="gs-field">
-                        <span>IANA time zone</span>
-                        <input
-                          value={releaseTimeZone}
-                          onChange={(event) => setReleaseTimeZone(event.target.value)}
-                        />
-                      </label>
-                      {activeRelease.schedule?.state === 'pending' ? (
+                    ))}
+                  </fieldset>
+                  <button
+                    type="button"
+                    className="button button--primary"
+                    disabled={busy || !releaseName.trim() || releaseEntryIds.length < 2}
+                    onClick={() => void createRelease()}
+                  >
+                    Create release
+                  </button>
+                </div>
+
+                <div className="release-workbench">
+                  <h3>Release workbench</h3>
+                  {releases.length ? (
+                    <ul className="release-selector" aria-label="Scoped releases">
+                      {releases.map((release) => (
+                        <li key={release.id}>
+                          <button
+                            type="button"
+                            className={release.id === activeRelease?.id ? 'active' : ''}
+                            onClick={() => {
+                              setActiveReleaseId(release.id);
+                              setReleasePreview(null);
+                            }}
+                          >
+                            <strong>{release.name}</strong>
+                            <small>{release.state}</small>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="empty-copy">No releases in this tenant scope yet.</p>
+                  )}
+
+                  {activeRelease ? (
+                    <article className="release-card">
+                      <div className="release-card-heading">
+                        <div>
+                          <strong>{activeRelease.name}</strong>
+                          <small>
+                            {activeRelease.entries.length} pinned revisions ·{' '}
+                            {activeRelease.rollbackPolicy.mode} rollback
+                          </small>
+                        </div>
+                        <code>{activeRelease.id}</code>
+                      </div>
+                      <ul className="release-member-list">
+                        {activeRelease.entries.map((member) => (
+                          <li key={member.entryId}>
+                            <span>
+                              {String(
+                                entries.find((entry) => entry.id === member.entryId)?.data.title ??
+                                  entries.find((entry) => entry.id === member.entryId)?.data
+                                    .headline ??
+                                  member.entryId,
+                              )}
+                            </span>
+                            <code>{member.revisionId}</code>
+                          </li>
+                        ))}
+                      </ul>
+                      {activeRelease.validation ? (
+                        <div
+                          className={`release-validation ${activeRelease.validation.valid ? 'release-validation--valid' : ''}`}
+                        >
+                          <strong>
+                            {activeRelease.validation.valid
+                              ? 'Validation passed'
+                              : 'Validation blocked'}
+                          </strong>
+                          <span>{activeRelease.validation.issues.length} issue(s)</span>
+                          {activeRelease.validation.issues.length ? (
+                            <ul>
+                              {activeRelease.validation.issues.map((issue) => (
+                                <li
+                                  key={`${issue.code}-${issue.entryId ?? 'release'}-${issue.path?.join('.') ?? 'root'}-${issue.message}`}
+                                >
+                                  {issue.severity}: {issue.message}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : null}
+                        </div>
+                      ) : null}
+                      <div className="release-actions">
+                        <button
+                          type="button"
+                          className="button button--secondary"
+                          disabled={
+                            busy ||
+                            ['executing', 'published', 'rolled-back'].includes(activeRelease.state)
+                          }
+                          onClick={() => void validateActiveRelease()}
+                        >
+                          Validate release
+                        </button>
                         <button
                           type="button"
                           className="button button--secondary"
                           disabled={busy}
-                          onClick={() => void cancelActiveReleaseSchedule()}
+                          onClick={() => void previewActiveRelease()}
                         >
-                          Cancel release schedule
+                          Preview future state
                         </button>
-                      ) : (
-                        <button
-                          type="button"
-                          className="button button--secondary"
-                          disabled={busy || !releaseScheduleAt}
-                          onClick={() => void scheduleActiveRelease()}
-                        >
-                          Schedule release
-                        </button>
-                      )}
-                    </div>
-                  ) : null}
-
-                  {releasePreview?.releaseId === activeRelease.id ? (
-                    <div className="release-preview">
-                      <h3>Future state</h3>
-                      <ul>
-                        {releasePreview.entries.map((entry) => (
-                          <li key={entry.entryId}>
-                            <strong>
-                              {String(entry.data.title ?? entry.data.headline ?? entry.entryId)}
-                            </strong>
-                            <span>{entry.route ?? 'No canonical route'}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ) : null}
-                </article>
-              ) : null}
-            </div>
-          </div>
-        </section>
-      ) : null}{' '}
-      {assetLibraryOpen ? (
-        <section className="asset-library-panel" aria-label="Asset library">
-          <div className="section-heading">
-            <div>
-              <span className="kicker">Digital assets</span>
-              <h2>Asset library</h2>
-              <p>Verified uploads, quarantine status, governed metadata, and scoped usage.</p>
-            </div>
-            <label className="button button--primary asset-upload-button">
-              {assetUploading ? 'Uploading...' : 'Upload asset'}
-              <input
-                type="file"
-                disabled={assetUploading}
-                onChange={(event) => {
-                  const file = event.currentTarget.files?.[0];
-                  event.currentTarget.value = '';
-                  if (file) void uploadAssetFile(file);
-                }}
-              />
-            </label>
-          </div>
-          <div className="asset-library-grid">
-            {assets.length > 0 ? (
-              assets.map((asset) => {
-                const revision = asset.revisions.find(
-                  (candidate) => candidate.id === asset.currentRevisionId,
-                );
-                if (!revision) return null;
-                return (
-                  <article className="asset-library-card" key={asset.id}>
-                    <div>
-                      <div className="asset-library-title-row">
-                        <strong>{revision.metadata.title}</strong>
-                        <span
-                          className={`asset-security-badge asset-security-badge--${revision.security?.status ?? 'unverified'}`}
-                        >
-                          {revision.security?.status === 'verified'
-                            ? 'Verified'
-                            : revision.security?.status === 'quarantined'
-                              ? 'Quarantined'
-                              : 'Unverified'}
-                        </span>
-                      </div>
-                      <span>
-                        {asset.kind} - {revision.original.mediaType}
-                      </span>
-                      {revision.security ? (
-                        <small>
-                          Detected {revision.security.detectedMediaType} - malware{' '}
-                          {revision.security.malware.status}
-                          {revision.security.sanitized ? ' - sanitized' : ''}
-                        </small>
-                      ) : null}
-                    </div>
-                    <dl>
-                      <div>
-                        <dt>Version</dt>
-                        <dd>{revision.version}</dd>
-                      </div>
-                      <div>
-                        <dt>Renditions</dt>
-                        <dd>{asset.renditions.length}</dd>
-                      </div>
-                      <div>
-                        <dt>Size</dt>
-                        <dd>{revision.original.size} B</dd>
-                      </div>
-                    </dl>
-                    {revision.focalPoint ? (
-                      <small>
-                        Focal point {revision.focalPoint.x.toFixed(2)},{' '}
-                        {revision.focalPoint.y.toFixed(2)}
-                      </small>
-                    ) : null}
-                    <button
-                      type="button"
-                      className="button button--secondary"
-                      onClick={() => void inspectAssetUsage(asset.id)}
-                    >
-                      Inspect usage
-                    </button>
-                  </article>
-                );
-              })
-            ) : (
-              <p className="empty-state">Upload the first asset for this tenant and locale.</p>
-            )}
-          </div>
-          {assetUsage ? (
-            <p className="asset-usage-summary" role="status">
-              {assetUsage.totalReferences} references across {assetUsage.entries} entries -{' '}
-              {assetUsage.byPerspective.draft} draft - {assetUsage.byPerspective.published}{' '}
-              published
-            </p>
-          ) : null}
-        </section>
-      ) : null}
-      {searchPanelOpen ? (
-        <section className="search-panel" aria-label="Search and discovery">
-          <div className="search-panel__query">
-            <div>
-              <span className="kicker">Discovery</span>
-              <h2>Search content</h2>
-              <p>
-                Search draft content, inspect taxonomy facets, and follow content relationships.
-              </p>
-            </div>
-            <form
-              onSubmit={(event) => {
-                event.preventDefault();
-                void runSearch();
-              }}
-            >
-              <label htmlFor="studio-search">Search terms</label>
-              <div>
-                <input
-                  id="studio-search"
-                  type="search"
-                  value={searchText}
-                  onChange={(event) => setSearchText(event.target.value)}
-                  placeholder="Title, body, slug…"
-                />
-                <button className="button button--primary" type="submit" disabled={searchBusy}>
-                  Search
-                </button>
-              </div>
-            </form>
-            <fieldset className="search-taxonomies">
-              <legend>Available taxonomies</legend>
-              {searchTaxonomies.map((taxonomy) => (
-                <span key={taxonomy.id}>
-                  {taxonomy.name} · {taxonomy.terms.length} terms
-                </span>
-              ))}
-            </fieldset>
-          </div>
-          <div className="search-panel__results" aria-live="polite">
-            <strong>{searchResponse?.total ?? 0} result(s)</strong>
-            <ul>
-              {searchResponse?.hits.map((hit) => (
-                <li key={hit.entry.id}>
-                  <button type="button" onClick={() => void selectEntry(hit.entry.id)}>
-                    {entryTitle(hit.entry, schemas)}
-                  </button>
-                  <span>Score {hit.score}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <aside className="search-panel__context">
-            <div className="search-index-summary">
-              <span className="kicker">Index</span>
-              <strong>{searchIndexStatus?.adapter ?? 'Loading…'}</strong>
-              <span>
-                {searchIndexStatus?.draftDocuments ?? 0} drafts ·{' '}
-                {searchIndexStatus?.pendingJobs ?? 0} pending · {searchIndexStatus?.deadJobs ?? 0}{' '}
-                dead
-              </span>
-              <button
-                type="button"
-                className="button button--secondary"
-                disabled={searchBusy}
-                onClick={() => void rebuildSearchIndex()}
-              >
-                Rebuild draft index
-              </button>
-            </div>
-            <div>
-              <strong>Backlinks to selected entry</strong>
-              <ul>
-                {backlinks.map((backlink) => (
-                  <li key={backlink.source.id}>{entryTitle(backlink.source, schemas)}</li>
-                ))}
-                {backlinks.length === 0 ? <li>None</li> : null}
-              </ul>
-            </div>
-            <div>
-              <strong>Related content</strong>
-              <ul>
-                {relatedContent.map((related) => (
-                  <li key={related.entry.id}>
-                    {entryTitle(related.entry, schemas)} · {related.reasons.join(', ')}
-                  </li>
-                ))}
-                {relatedContent.length === 0 ? <li>None</li> : null}
-              </ul>
-            </div>
-          </aside>
-        </section>
-      ) : null}{' '}
-      {operationsDashboard && analyticsReport ? (
-        <section className="operations-panel" aria-label="Administrator operations">
-          <div>
-            <span className="kicker">Administrator</span>
-            <h2>System integrity</h2>
-            <p>
-              Audit chain {operationsDashboard.audit.valid ? 'verified' : 'requires attention'} ·{' '}
-              {operationsDashboard.audit.eventCount} audit events ·{' '}
-              {analyticsReport.adapterDeliveries.length} analytics adapters
-            </p>
-          </div>
-          <dl>
-            <div className="operation-metric">
-              <dt>Content</dt>
-              <dd>{operationsDashboard.content.total}</dd>
-            </div>
-            <div className="operation-metric">
-              <dt>Pending events</dt>
-              <dd>{operationsDashboard.outbox.pending}</dd>
-            </div>
-            <div className="operation-metric">
-              <dt>Dead jobs</dt>
-              <dd>{operationsDashboard.jobs.dead}</dd>
-            </div>
-            <div className="operation-metric">
-              <dt>Active webhooks</dt>
-              <dd>{operationsDashboard.webhooks.active}</dd>
-            </div>
-            <div className="operation-metric">
-              <dt>Content views</dt>
-              <dd>{analyticsReport.eventCounts['content.viewed']}</dd>
-            </div>
-            <div className="operation-metric">
-              <dt>Component views</dt>
-              <dd>{analyticsReport.eventCounts['component.viewed']}</dd>
-            </div>
-            <div className="operation-metric">
-              <dt>Interactions</dt>
-              <dd>{analyticsReport.eventCounts['component.interacted']}</dd>
-            </div>
-            <div className="operation-metric">
-              <dt>Release markers</dt>
-              <dd>{analyticsReport.releaseAnnotations.length}</dd>
-            </div>
-            <div className="operation-metric">
-              <dt>Dead deliveries</dt>
-              <dd>
-                {analyticsReport.adapterDeliveries.reduce(
-                  (total, adapter) => total + adapter.dead,
-                  0,
-                )}
-              </dd>
-            </div>
-          </dl>
-        </section>
-      ) : null}
-      {knowledge ? (
-        <section className="knowledge-panel" aria-label="Knowledge graph and reviewed agents">
-          <div className="section-heading">
-            <div>
-              <span className="kicker">Private bounded knowledge</span>
-              <h2>Graph exploration, explained recommendations, and reviewed draft plans</h2>
-              <p>
-                Agent {knowledge.policy.enabled ? 'enabled' : 'disabled'} · policy r
-                {knowledge.version} · {knowledge.plans.length} retained plans ·{' '}
-                {knowledge.receipts.length} receipts
-              </p>
-            </div>
-            <button
-              type="button"
-              className="button button--secondary"
-              onClick={() => void refreshKnowledge(true)}
-              disabled={knowledgeBusy}
-            >
-              Refresh knowledge state
-            </button>
-          </div>
-          <p className="knowledge-panel__warning" role="note">
-            Graphs and recommendations are private, derived, and bounded. Agent runtimes receive
-            only mediated draft reads and can produce one expiring text/slug patch; a human must
-            review it, and execution can update only the saved draft—never publish it.
-          </p>
-          <div className="knowledge-panel__grid">
-            <fieldset>
-              <legend>Selected entry knowledge</legend>
-              <p>
-                {selected ? `${selected.contentType} · ${selected.id}` : 'Select an entry first.'}
-              </p>
-              <div className="knowledge-panel__actions">
-                <button
-                  type="button"
-                  className="button button--secondary"
-                  onClick={() => void exploreSelectedKnowledge()}
-                  disabled={knowledgeBusy || !selected}
-                >
-                  Explore graph
-                </button>
-                <button
-                  type="button"
-                  className="button button--secondary"
-                  onClick={() => void recommendSelectedKnowledge()}
-                  disabled={knowledgeBusy || !selected}
-                >
-                  Explain recommendations
-                </button>
-              </div>
-              <small aria-live="polite">
-                {knowledgeGraph
-                  ? `${knowledgeGraph.nodes.length} nodes · ${knowledgeGraph.edges.length} edges · ${knowledgeGraph.paths.length} paths${knowledgeGraph.truncated ? ' · truncated' : ''}`
-                  : 'No graph exploration result yet.'}
-              </small>
-              <div className="knowledge-panel__records" aria-live="polite">
-                {knowledgeRecommendations?.recommendations.map((recommendation) => (
-                  <article key={recommendation.entry.id}>
-                    <strong>
-                      {recommendation.entry.id} · score {recommendation.score}
-                    </strong>
-                    <small>
-                      {recommendation.contributions
-                        .map((contribution) => `${contribution.ruleId} +${contribution.weight}`)
-                        .join(' · ')}
-                    </small>
-                  </article>
-                ))}
-              </div>
-            </fieldset>
-            <fieldset>
-              <legend>Disabled-by-default agent policy</legend>
-              <label>
-                <span>Policy JSON</span>
-                <textarea
-                  value={knowledgePolicyJson}
-                  onChange={(event) => setKnowledgePolicyJson(event.target.value)}
-                />
-              </label>
-              <button
-                type="button"
-                className="button button--secondary"
-                onClick={() => void saveKnowledgePolicy()}
-                disabled={knowledgeBusy}
-              >
-                Save bounded agent policy
-              </button>
-            </fieldset>
-            <fieldset>
-              <legend>Plan and human review</legend>
-              <label>
-                <span>Goal for the selected saved draft</span>
-                <textarea
-                  value={knowledgeGoal}
-                  onChange={(event) => setKnowledgeGoal(event.target.value)}
-                />
-              </label>
-              <button
-                type="button"
-                className="button button--secondary"
-                onClick={() => void createKnowledgePlan()}
-                disabled={
-                  knowledgeBusy || !selected || !knowledge.policy.enabled || !knowledgeGoal.trim()
-                }
-              >
-                Create reviewable draft plan
-              </button>
-              <label>
-                <span>Human review reason</span>
-                <textarea
-                  value={knowledgeReviewReason}
-                  onChange={(event) => setKnowledgeReviewReason(event.target.value)}
-                />
-              </label>
-            </fieldset>
-          </div>
-          <div className="knowledge-panel__records" aria-live="polite">
-            <h3>Bounded plan history</h3>
-            {knowledge.plans
-              .slice()
-              .reverse()
-              .map((plan) => (
-                <article key={plan.id}>
-                  <div>
-                    <strong>
-                      {plan.target.contentType}/{plan.target.entryId} · {plan.status}
-                    </strong>
-                    <span>{plan.summary}</span>
-                    <ul>
-                      {plan.changes.map((change) => (
-                        <li key={change.fieldPath}>
-                          <code>{change.fieldPath}</code>: {change.value} — {change.rationale}
-                        </li>
-                      ))}
-                    </ul>
-                    <small>
-                      {plan.toolTrace.length} mediated tool call(s) · expires {plan.expiresAt}
-                    </small>
-                  </div>
-                  <div className="knowledge-panel__actions">
-                    {plan.status === 'pending-review' ? (
-                      <>
-                        <button
-                          type="button"
-                          className="button button--secondary"
-                          onClick={() => void reviewKnowledgePlan(plan.id, plan.digest, 'approved')}
-                          disabled={knowledgeBusy}
-                        >
-                          Approve exact plan
-                        </button>
-                        <button
-                          type="button"
-                          className="button button--secondary"
-                          onClick={() => void reviewKnowledgePlan(plan.id, plan.digest, 'rejected')}
-                          disabled={knowledgeBusy}
-                        >
-                          Reject plan
-                        </button>
-                      </>
-                    ) : null}
-                    {plan.status === 'approved' ? (
-                      <button
-                        type="button"
-                        className="button button--danger"
-                        onClick={() => void executeKnowledgePlan(plan.id, plan.digest)}
-                        disabled={knowledgeBusy || selected?.id !== plan.target.entryId}
-                      >
-                        Execute approved draft patch
-                      </button>
-                    ) : null}
-                  </div>
-                </article>
-              ))}
-            {knowledge.plans.length === 0 ? (
-              <p className="empty-copy">No knowledge-agent plan has been retained.</p>
-            ) : null}
-          </div>
-        </section>
-      ) : null}
-      {fleet ? (
-        <section className="fleet-panel" aria-label="Self-hosted fleet observations">
-          <div className="section-heading">
-            <div>
-              <span className="kicker">Private pull-only operations</span>
-              <h2>Self-hosted fleet compatibility</h2>
-              <p>
-                State r{fleet.version} · {fleet.members.length} configured members ·{' '}
-                {fleet.observations.length} retained observations
-              </p>
-            </div>
-            <button
-              type="button"
-              className="button button--secondary"
-              onClick={() => void refreshFleet()}
-              disabled={fleetBusy}
-            >
-              Refresh fleet state
-            </button>
-          </div>
-          <p className="fleet-panel__warning" role="note">
-            GridStory observes only preconfigured adapters. Browser input never supplies a target
-            URL or credential, checks perform GET requests only, and this panel cannot provision,
-            deploy, upgrade, roll back, or mutate another instance.
-          </p>
-          <div className="fleet-panel__grid">
-            <fieldset>
-              <legend>Register configured member</legend>
-              <label>
-                <span>Member ID</span>
-                <input
-                  value={fleetMemberId}
-                  onChange={(event) => setFleetMemberId(event.target.value)}
-                />
-              </label>
-              <label>
-                <span>Display label</span>
-                <input
-                  value={fleetMemberLabel}
-                  onChange={(event) => setFleetMemberLabel(event.target.value)}
-                />
-              </label>
-              <label>
-                <span>Configured adapter ID</span>
-                <input
-                  value={fleetAdapterId}
-                  onChange={(event) => setFleetAdapterId(event.target.value)}
-                />
-              </label>
-              <label>
-                <span>Expected instance ID</span>
-                <input
-                  value={fleetExpectedInstanceId}
-                  onChange={(event) => setFleetExpectedInstanceId(event.target.value)}
-                />
-              </label>
-              <label>
-                <span>Expected service version (optional)</span>
-                <input
-                  value={fleetExpectedServiceVersion}
-                  onChange={(event) => setFleetExpectedServiceVersion(event.target.value)}
-                />
-              </label>
-              <button
-                type="button"
-                className="button button--secondary"
-                onClick={() => void registerFleetMember()}
-                disabled={
-                  fleetBusy ||
-                  !fleetMemberId.trim() ||
-                  !fleetMemberLabel.trim() ||
-                  !fleetAdapterId.trim() ||
-                  !fleetExpectedInstanceId.trim()
-                }
-              >
-                Register fleet member
-              </button>
-            </fieldset>
-            <div className="fleet-panel__records" aria-live="polite">
-              <h3>Configured members and latest evidence</h3>
-              {fleet.members.map((member) => {
-                const observation = fleet.observations
-                  .slice()
-                  .reverse()
-                  .find(
-                    (candidate) =>
-                      candidate.memberId === member.id &&
-                      candidate.memberGeneration === member.generation,
-                  );
-                return (
-                  <article key={member.id}>
-                    <div>
-                      <strong>
-                        {member.label} · {member.state} · generation {member.generation}
-                      </strong>
-                      <span>
-                        {member.id} · adapter {member.adapterId} · expects{' '}
-                        {member.expectedInstanceId}
-                        {member.expectedServiceVersion ? ` @ ${member.expectedServiceVersion}` : ''}
-                      </span>
-                      <small>
-                        {observation
-                          ? observation.conditions
-                              .map(
-                                (candidate) =>
-                                  `${candidate.type} ${candidate.status} (${candidate.reason})`,
-                              )
-                              .join(' · ')
-                          : 'No current-generation observation has been recorded.'}
-                      </small>
-                    </div>
-                    <div className="fleet-panel__actions">
-                      <button
-                        type="button"
-                        className="button button--secondary"
-                        onClick={() => void checkFleetMember(member.id)}
-                        disabled={fleetBusy || member.state !== 'active'}
-                      >
-                        Check compatibility
-                      </button>
-                      <button
-                        type="button"
-                        className="button button--secondary"
-                        onClick={() =>
-                          void setFleetState(
-                            member.id,
-                            member.state === 'active' ? 'paused' : 'active',
-                          )
-                        }
-                        disabled={fleetBusy}
-                      >
-                        {member.state === 'active' ? 'Pause member' : 'Resume member'}
-                      </button>
-                      <button
-                        type="button"
-                        className="button button--danger"
-                        onClick={() => void removeFleetMember(member.id)}
-                        disabled={fleetBusy}
-                      >
-                        Remove member
-                      </button>
-                    </div>
-                  </article>
-                );
-              })}
-              {fleet.members.length === 0 ? (
-                <p className="empty-copy">No self-hosted instance is configured in this scope.</p>
-              ) : null}
-            </div>
-          </div>
-        </section>
-      ) : null}
-      {contentFederation ? (
-        <section className="federation-panel" aria-label="Content federation and syndication">
-          <div className="section-heading">
-            <div>
-              <span className="kicker">Contract-bound published content</span>
-              <h2>Federation offers, agreements, and reviewed mirrors</h2>
-              <p>
-                State r{contentFederation.version} · {contentFederation.offers.length} offers ·{' '}
-                {contentFederation.agreements.length} agreements ·{' '}
-                {contentFederation.mirrors.length} retained mirrors
-              </p>
-            </div>
-            <button
-              type="button"
-              className="button button--secondary"
-              onClick={() => void refreshContentFederation()}
-              disabled={federationBusy}
-            >
-              Refresh federation state
-            </button>
-          </div>
-          <p className="federation-panel__warning" role="note">
-            Only exact published schemas may cross this boundary. Source scope, instance, offer
-            digest, Ed25519 key, attribution, and mode are pinned; preview credentials, drafts,
-            components, assets, relations, rich text, and automatic editorial writes stay out.
-          </p>
-          <div className="federation-panel__grid">
-            <fieldset>
-              <legend>Producer offer</legend>
-              <label>
-                <span>Offer JSON</span>
-                <textarea
-                  value={federationOfferJson}
-                  onChange={(event) => setFederationOfferJson(event.target.value)}
-                />
-              </label>
-              <button
-                type="button"
-                className="button button--secondary"
-                onClick={() => void saveFederationOffer()}
-                disabled={federationBusy}
-              >
-                Save exact offer version
-              </button>
-              <small>A server-side Ed25519 signer is required before an offer can be saved.</small>
-            </fieldset>
-            <fieldset>
-              <legend>Consumer trust inspection</legend>
-              <label>
-                <span>Local agreement ID</span>
-                <input
-                  value={federationAgreementId}
-                  onChange={(event) => setFederationAgreementId(event.target.value)}
-                />
-              </label>
-              <label>
-                <span>Agreement JSON</span>
-                <textarea
-                  value={federationAgreementJson}
-                  onChange={(event) => setFederationAgreementJson(event.target.value)}
-                />
-              </label>
-              <button
-                type="button"
-                className="button button--secondary"
-                onClick={() => void inspectFederationAgreement()}
-                disabled={federationBusy || !federationAgreementId.trim()}
-              >
-                Inspect and pin signed offer
-              </button>
-            </fieldset>
-          </div>
-          <div className="federation-panel__records" aria-live="polite">
-            <h3>Pinned agreements</h3>
-            {contentFederation.agreements.map((agreement) => (
-              <article key={agreement.id}>
-                <div>
-                  <strong>
-                    {agreement.id} · {agreement.mode} · {agreement.state}
-                  </strong>
-                  <span>
-                    {agreement.sourceInstance} · offer {agreement.offerId} r{agreement.offerVersion}
-                  </span>
-                  <small>
-                    {agreement.types.length} exact type(s) · key {agreement.trustedKey.keyId} ·{' '}
-                    {agreement.attribution.creditText}
-                  </small>
-                </div>
-                <div className="federation-panel__actions">
-                  <button
-                    type="button"
-                    className="button button--secondary"
-                    onClick={() =>
-                      void changeFederationAgreementState(
-                        agreement.id,
-                        agreement.state === 'active' ? 'disabled' : 'active',
-                      )
-                    }
-                    disabled={federationBusy}
-                  >
-                    {agreement.state === 'active' ? 'Disable agreement' : 'Activate agreement'}
-                  </button>
-                  {agreement.mode === 'mirror' && agreement.state === 'active' ? (
-                    <button
-                      type="button"
-                      className="button button--secondary"
-                      onClick={() => void planFederationSync(agreement.id)}
-                      disabled={federationBusy}
-                    >
-                      Preview mirror sync
-                    </button>
-                  ) : null}
-                </div>
-              </article>
-            ))}
-            {contentFederation.agreements.length === 0 ? (
-              <p className="empty-copy">No source offer has been inspected and pinned.</p>
-            ) : null}
-          </div>
-          <div className="federation-panel__records" aria-live="polite">
-            <h3>Reviewed mirror plans</h3>
-            {contentFederation.plans
-              .slice()
-              .reverse()
-              .map((plan) => (
-                <article key={plan.id}>
-                  <div>
-                    <strong>
-                      {plan.agreementId} · {plan.state} · {plan.effects.length} effect(s)
-                    </strong>
-                    <span>
-                      {plan.effects.map((effect) => effect.action).join(', ') || 'No changes'}
-                    </span>
-                    <small>Expires {plan.expiresAt}</small>
-                  </div>
-                  <div className="federation-panel__actions">
-                    {plan.state === 'preview' ? (
-                      <button
-                        type="button"
-                        className="button button--danger"
-                        onClick={() => void executeFederationSync(plan.id, plan.digest)}
-                        disabled={
-                          federationBusy ||
-                          plan.effects.some((effect) => effect.action === 'blocked')
-                        }
-                      >
-                        Execute reviewed sync
-                      </button>
-                    ) : null}
-                  </div>
-                </article>
-              ))}
-            {contentFederation.plans.length === 0 ? (
-              <p className="empty-copy">No mirror synchronization preview has been retained.</p>
-            ) : null}
-          </div>
-        </section>
-      ) : null}
-      {regional ? (
-        <section className="regional-panel" aria-label="Regional delivery and failover controls">
-          <div className="section-heading">
-            <div>
-              <span className="kicker">Single-writer regional control</span>
-              <h2>Regional reads, consistency, and failover</h2>
-              <p>
-                {regional.state} · policy r{regional.version} · topology r{regional.topologyVersion}{' '}
-                · active control {regional.activeControlRegion} · reads {regional.readPolicy.mode}
-              </p>
-            </div>
-            <button
-              type="button"
-              className="button button--secondary"
-              onClick={() => void refreshRegional(true)}
-              disabled={regionalBusy}
-            >
-              Refresh regional state
-            </button>
-          </div>
-          <p className="regional-panel__warning" role="note">
-            GridStory validates provider evidence but does not provision replicas, databases, DNS,
-            traffic, or backups. Planned switchovers require caught-up zero-loss evidence; emergency
-            failover requires explicit acceptance of the observed nonzero loss bound.
-          </p>
-          <div className="regional-panel__grid">
-            <fieldset>
-              <legend>Topology and published-read policy</legend>
-              <label>
-                <span>Policy JSON</span>
-                <textarea
-                  value={regionalPolicyJson}
-                  onChange={(event) => setRegionalPolicyJson(event.target.value)}
-                />
-              </label>
-              <button
-                type="button"
-                className="button button--secondary"
-                onClick={() => void saveRegionalPolicy()}
-                disabled={regionalBusy}
-              >
-                Save topology policy
-              </button>
-            </fieldset>
-            <fieldset>
-              <legend>Expiring failover preflight</legend>
-              <label>
-                <span>Preflight JSON</span>
-                <textarea
-                  value={regionalFailoverJson}
-                  onChange={(event) => setRegionalFailoverJson(event.target.value)}
-                />
-              </label>
-              <button
-                type="button"
-                className="button button--secondary"
-                onClick={() => void preflightRegionalFailover()}
-                disabled={regionalBusy || regional.state !== 'enabled'}
-              >
-                Record provider preflight
-              </button>
-            </fieldset>
-            <fieldset>
-              <legend>Independent approval</legend>
-              <label>
-                <span>Review reason</span>
-                <textarea
-                  value={regionalApprovalReason}
-                  onChange={(event) => setRegionalApprovalReason(event.target.value)}
-                />
-              </label>
-              <label className="regional-panel__checkbox">
-                <input
-                  type="checkbox"
-                  checked={regionalAcceptDataLoss}
-                  onChange={(event) => setRegionalAcceptDataLoss(event.target.checked)}
-                />
-                <span>Accept the emergency plan's observed nonzero data-loss bound</span>
-              </label>
-              <p>
-                Approval must come from a different recently reauthenticated human. Execution is
-                idempotent and ambiguous outcomes must be reconciled before another transition.
-              </p>
-            </fieldset>
-          </div>
-          <div className="regional-panel__operations" aria-live="polite">
-            <h3>Bounded operation history</h3>
-            {regional.operations
-              .slice()
-              .reverse()
-              .slice(0, 10)
-              .map((operation) => (
-                <article key={operation.id}>
-                  <div>
-                    <strong>
-                      {operation.mode} · {operation.sourceRegion} → {operation.targetRegion}
-                    </strong>
-                    <span>
-                      {operation.state} · RPO {operation.expectedRpoSeconds}s · RTO{' '}
-                      {operation.expectedRtoSeconds}s · expires {operation.expiresAt}
-                    </span>
-                    <small>
-                      Readiness {operation.readiness.ready ? 'ready' : 'blocked'} · lag{' '}
-                      {operation.readiness.replicationLagMs}ms · estimated loss{' '}
-                      {operation.readiness.estimatedDataLossMs}ms
-                    </small>
-                  </div>
-                  <div className="regional-panel__actions">
-                    {operation.state === 'preview' ? (
-                      <button
-                        type="button"
-                        className="button button--secondary"
-                        onClick={() => void approveRegionalFailover(operation.id, operation.digest)}
-                        disabled={regionalBusy || !regionalApprovalReason.trim()}
-                      >
-                        Approve as second human
-                      </button>
-                    ) : null}
-                    {operation.state === 'approved' ? (
-                      <button
-                        type="button"
-                        className="button button--danger"
-                        onClick={() => void executeRegionalFailover(operation.id)}
-                        disabled={regionalBusy}
-                      >
-                        Execute approved transition
-                      </button>
-                    ) : null}
-                    {operation.state === 'executing' || operation.state === 'ambiguous' ? (
-                      <button
-                        type="button"
-                        className="button button--danger"
-                        onClick={() => void reconcileRegionalFailover(operation.id)}
-                        disabled={regionalBusy}
-                      >
-                        Reconcile provider state
-                      </button>
-                    ) : null}
-                  </div>
-                </article>
-              ))}
-            {regional.operations.length === 0 ? (
-              <p className="empty-copy">No failover preflight has been retained.</p>
-            ) : null}
-          </div>
-        </section>
-      ) : null}
-      {aiGateway ? (
-        <section className="ai-panel" aria-label="Governed AI gateway workbench">
-          <div className="section-heading">
-            <div>
-              <span className="kicker">Provider-neutral control plane</span>
-              <h2>AI policy, prompts, budgets, and kill switch</h2>
-              <p>
-                Gateway {aiGateway.state} · policy r{aiGateway.version} ·{' '}
-                {aiGateway.activePrompts.length} active prompts · {aiGateway.models.length} models
-              </p>
-            </div>
-            <button
-              type="button"
-              className="button button--secondary"
-              onClick={() => void refreshAiWorkbench(true)}
-              disabled={aiBusy}
-            >
-              Refresh AI policy
-            </button>
-          </div>
-          <p className="ai-panel__warning" role="note">
-            Provider credentials stay in trusted server composition. Retrieved fields and AI output
-            are untrusted, redacted, and never written to content automatically. Do not paste
-            secrets into policy, prompt, or test input JSON.
-          </p>
-          <div className="ai-panel__workbench">
-            <fieldset>
-              <legend>Models and daily budgets</legend>
-              <label>
-                <span>Policy JSON</span>
-                <textarea
-                  value={aiPolicyJson}
-                  onChange={(event) => setAiPolicyJson(event.target.value)}
-                />
-              </label>
-              <button
-                type="button"
-                className="button button--secondary"
-                onClick={() => void saveAiPolicy()}
-                disabled={aiBusy}
-              >
-                Save AI policy
-              </button>
-            </fieldset>
-            <fieldset>
-              <legend>Immutable prompt and retrieval policy</legend>
-              <label>
-                <span>Prompt version JSON</span>
-                <textarea
-                  value={aiPromptJson}
-                  onChange={(event) => setAiPromptJson(event.target.value)}
-                />
-              </label>
-              <div className="ai-panel__actions">
-                <button
-                  type="button"
-                  className="button button--secondary"
-                  onClick={() => void createAiPrompt()}
-                  disabled={aiBusy}
-                >
-                  Create prompt version
-                </button>
-                <button
-                  type="button"
-                  className="button button--secondary"
-                  onClick={() => void activateAiPrompt()}
-                  disabled={aiBusy}
-                >
-                  Activate exact prompt
-                </button>
-              </div>
-            </fieldset>
-            <fieldset>
-              <legend>Emergency state</legend>
-              <label>
-                <span>Accountable reason</span>
-                <input
-                  value={aiSwitchReason}
-                  onChange={(event) => setAiSwitchReason(event.target.value)}
-                />
-              </label>
-              <button
-                type="button"
-                className={
-                  aiGateway.state === 'enabled' ? 'button button--danger' : 'button button--primary'
-                }
-                onClick={() => void changeAiGatewayState()}
-                disabled={aiBusy}
-              >
-                {aiGateway.state === 'enabled' ? 'Disable AI gateway' : 'Enable AI gateway'}
-              </button>
-              <p>{aiGateway.stateEvents.length} bounded state events retained.</p>
-            </fieldset>
-            <fieldset>
-              <legend>Non-mutating test request</legend>
-              <label>
-                <span>Generation request JSON</span>
-                <textarea
-                  value={aiRequestJson}
-                  onChange={(event) => setAiRequestJson(event.target.value)}
-                />
-              </label>
-              <button
-                type="button"
-                className="button button--secondary"
-                onClick={() => void generateAiTest()}
-                disabled={aiBusy || aiGateway.state !== 'enabled'}
-              >
-                Generate untrusted output
-              </button>
-              {aiResult ? (
-                <section className="ai-result" aria-label="Untrusted AI result">
-                  <strong>Untrusted output · review required</strong>
-                  <pre>{aiResult.output}</pre>
-                  <span>
-                    {aiResult.providerId}/{aiResult.modelId} · {aiResult.usage.inputTokens} input ·{' '}
-                    {aiResult.usage.outputTokens} output tokens
-                  </span>
-                </section>
-              ) : (
-                <p className="empty-copy">No AI output has been requested.</p>
-              )}
-            </fieldset>
-            {aiAuthoring ? (
-              <fieldset>
-                <legend>Reviewed authoring and semantic policy</legend>
-                <p>
-                  Authoring {aiAuthoring.state} · policy r{aiAuthoring.version} ·{' '}
-                  {aiAuthoring.actions.filter((action) => action.enabled).length} enabled actions ·
-                  semantic {aiAuthoring.semantic.enabled ? 'enabled' : 'disabled'}
-                </p>
-                <label>
-                  <span>Authoring policy JSON</span>
-                  <textarea
-                    value={aiAuthoringPolicyJson}
-                    onChange={(event) => setAiAuthoringPolicyJson(event.target.value)}
-                  />
-                </label>
-                <button
-                  type="button"
-                  className="button button--secondary"
-                  onClick={() => void saveAiAuthoringPolicy()}
-                  disabled={aiBusy}
-                >
-                  Save authoring policy
-                </button>
-              </fieldset>
-            ) : null}
-            {aiAuthoring ? (
-              <fieldset>
-                <legend>Field proposals and human review</legend>
-                <p>
-                  Target:{' '}
-                  {selected
-                    ? `${entryTitle(selected, schemas)} · r${selected.draftRevisionId}`
-                    : 'none'}
-                </p>
-                <button
-                  type="button"
-                  className="button button--secondary"
-                  onClick={() => void createAiAuthoringProposal()}
-                  disabled={
-                    aiBusy ||
-                    dirty ||
-                    !selected ||
-                    aiAuthoring.state !== 'enabled' ||
-                    aiGateway.state !== 'enabled'
-                  }
-                >
-                  Generate evaluated proposal
-                </button>
-                <label>
-                  <span>Human review reason</span>
-                  <input
-                    value={aiReviewReason}
-                    onChange={(event) => setAiReviewReason(event.target.value)}
-                  />
-                </label>
-                <section className="ai-proposal-list" aria-label="AI authoring proposals">
-                  {aiAuthoring.proposals
-                    .filter((proposal) => !selected || proposal.target.entryId === selected.id)
-                    .map((proposal) => (
-                      <section className="ai-proposal" key={proposal.id}>
-                        <strong>
-                          {proposal.status} · {proposal.action.id}
-                        </strong>
-                        <small>
-                          {proposal.provenance.providerId}/{proposal.provenance.modelId} · prompt{' '}
-                          {proposal.provenance.promptId} v{proposal.provenance.promptVersion} ·
-                          target {proposal.target.revisionId}
-                        </small>
-                        <ul>
-                          {proposal.changes.map((change) => (
-                            <li key={change.fieldPath}>
-                              <code>{change.fieldPath}</code>: {change.value}
-                            </li>
-                          ))}
-                        </ul>
-                        <small>
-                          Evaluation {proposal.evaluation.outcome} ·{' '}
-                          {proposal.evaluation.results.length} declared checks ·{' '}
-                          {proposal.provenance.sources.length} exact sources
-                        </small>
-                        <div className="ai-panel__actions">
-                          {proposal.status === 'pending-review' ? (
-                            <>
-                              <button
-                                type="button"
-                                className="button button--primary"
-                                onClick={() =>
-                                  void reviewAiAuthoringProposal(proposal.id, 'approved')
-                                }
-                                disabled={aiBusy}
-                              >
-                                Approve proposal
-                              </button>
-                              <button
-                                type="button"
-                                className="button button--secondary"
-                                onClick={() =>
-                                  void reviewAiAuthoringProposal(proposal.id, 'rejected')
-                                }
-                                disabled={aiBusy}
-                              >
-                                Reject proposal
-                              </button>
-                            </>
-                          ) : null}
-                          {proposal.status === 'approved' ? (
-                            <button
-                              type="button"
-                              className="button button--secondary"
-                              onClick={() => applyAiProposalToEditor(proposal.id)}
-                              disabled={
-                                !selected ||
-                                proposal.target.entryId !== selected.id ||
-                                proposal.target.revisionId !== selected.draftRevisionId
-                              }
-                            >
-                              Use as unsaved editor changes
-                            </button>
-                          ) : null}
-                        </div>
-                      </section>
-                    ))}
-                  {aiAuthoring.proposals.length === 0 ? (
-                    <p className="empty-copy">No evaluated proposals have been retained.</p>
-                  ) : null}
-                </section>
-              </fieldset>
-            ) : null}
-            {aiAuthoring ? (
-              <fieldset>
-                <legend>Private semantic search</legend>
-                <label>
-                  <span>Bounded semantic query</span>
-                  <input
-                    value={aiSemanticText}
-                    onChange={(event) => setAiSemanticText(event.target.value)}
-                    placeholder="Find related saved drafts"
-                  />
-                </label>
-                <button
-                  type="button"
-                  className="button button--secondary"
-                  onClick={() => void searchAiSemantically()}
-                  disabled={aiBusy || !aiSemanticText.trim() || !aiAuthoring.semantic.enabled}
-                >
-                  Search private semantic index
-                </button>
-                {aiSemanticResult ? (
-                  <section className="ai-result" aria-label="Semantic search results">
-                    <strong>
-                      {aiSemanticResult.adapterId}/{aiSemanticResult.modelId} · index{' '}
-                      {aiSemanticResult.indexVersion}
-                    </strong>
-                    <ul>
-                      {aiSemanticResult.hits.map((hit) => (
-                        <li key={hit.entryId}>
-                          {hit.contentType}/{hit.entryId} · {hit.score.toFixed(3)} · r
-                          {hit.revisionId} · {hit.fieldPaths.join(', ')}
-                        </li>
-                      ))}
-                      {aiSemanticResult.hits.length === 0 ? <li>No authorized matches.</li> : null}
-                    </ul>
-                  </section>
-                ) : (
-                  <p className="empty-copy">No semantic search has run.</p>
-                )}
-              </fieldset>
-            ) : null}
-          </div>
-        </section>
-      ) : null}
-      {identitySnapshot ? (
-        <section className="identity-panel" aria-label="Enterprise identity administration">
-          <div className="section-heading">
-            <div>
-              <span className="kicker">Enterprise identity</span>
-              <h2>Federation and access controls</h2>
-              <p>
-                {identitySnapshot.providers.length} providers · {identitySnapshot.users.length}{' '}
-                users · {identitySnapshot.sessions.filter((session) => !session.revokedAt).length}{' '}
-                active sessions
-              </p>
-            </div>
-            <button
-              type="button"
-              className="button button--secondary"
-              onClick={() => void refreshIdentity()}
-            >
-              Refresh identity state
-            </button>
-          </div>
-          <div className="identity-panel__grid">
-            <fieldset>
-              <legend>Trusted provider</legend>
-              <label>
-                <span>Adapter ID</span>
-                <input
-                  value={identityProviderId}
-                  onChange={(event) => setIdentityProviderId(event.target.value)}
-                  placeholder="workforce-oidc"
-                />
-              </label>
-              <label>
-                <span>Protocol</span>
-                <select
-                  value={identityProviderProtocol}
-                  onChange={(event) =>
-                    setIdentityProviderProtocol(event.target.value as 'oidc' | 'saml')
-                  }
-                >
-                  <option value="oidc">OIDC</option>
-                  <option value="saml">SAML 2.0</option>
-                </select>
-              </label>
-              <label>
-                <span>Issuer</span>
-                <input
-                  value={identityProviderIssuer}
-                  onChange={(event) => setIdentityProviderIssuer(event.target.value)}
-                  placeholder="https://identity.example.com"
-                />
-              </label>
-              <label>
-                <span>Display name</span>
-                <input
-                  value={identityProviderName}
-                  onChange={(event) => setIdentityProviderName(event.target.value)}
-                  placeholder="Workforce identity"
-                />
-              </label>
-              <button
-                type="button"
-                className="button button--secondary"
-                onClick={() => void configureIdentityProvider()}
-              >
-                Save trusted provider
-              </button>
-              <ul>
-                {identitySnapshot.providers.map((provider) => (
-                  <li key={provider.id}>
-                    {provider.displayName} · {provider.protocol.toUpperCase()} ·{' '}
-                    {provider.enabled ? 'enabled' : 'disabled'}
-                  </li>
-                ))}
-              </ul>
-            </fieldset>
-
-            <fieldset>
-              <legend>Session policy</legend>
-              {(
-                [
-                  ['idleTtlSeconds', 'Idle lifetime'],
-                  ['absoluteTtlSeconds', 'Absolute lifetime'],
-                  ['reauthenticationSeconds', 'Reauthentication'],
-                  ['maximumConcurrentSessions', 'Concurrent sessions'],
-                ] as const
-              ).map(([field, label]) => (
-                <label key={field}>
-                  <span>{label}</span>
-                  <input
-                    type="number"
-                    min={1}
-                    value={identitySnapshot.policy[field]}
-                    onChange={(event) =>
-                      setIdentitySnapshot((current) =>
-                        current
-                          ? {
-                              ...current,
-                              policy: {
-                                ...current.policy,
-                                [field]: Number(event.target.value),
-                              },
-                            }
-                          : current,
-                      )
-                    }
-                  />
-                </label>
-              ))}
-              <label className="identity-panel__checkbox">
-                <input
-                  type="checkbox"
-                  checked={identitySnapshot.policy.privilegedStepUpRequired}
-                  onChange={(event) =>
-                    setIdentitySnapshot((current) =>
-                      current
-                        ? {
-                            ...current,
-                            policy: {
-                              ...current.policy,
-                              privilegedStepUpRequired: event.target.checked,
-                            },
-                          }
-                        : current,
-                    )
-                  }
-                />
-                <span>Require WebAuthn step-up for privileged operations</span>
-              </label>
-              <button
-                type="button"
-                className="button button--secondary"
-                onClick={() => void saveIdentityPolicy()}
-              >
-                Save session policy
-              </button>
-            </fieldset>
-
-            <fieldset>
-              <legend>Group role mapping</legend>
-              <label>
-                <span>External group</span>
-                <input
-                  value={identityGroup}
-                  onChange={(event) => setIdentityGroup(event.target.value)}
-                  placeholder="cms-editors"
-                />
-              </label>
-              <label>
-                <span>GridStory role</span>
-                <input
-                  value={identityRole}
-                  onChange={(event) => setIdentityRole(event.target.value)}
-                  placeholder="author"
-                />
-              </label>
-              <button
-                type="button"
-                className="button button--secondary"
-                onClick={() => void createIdentityMapping()}
-              >
-                Add mapping
-              </button>
-              <ul>
-                {identitySnapshot.mappings.map((mapping) => (
-                  <li key={mapping.id}>
-                    {mapping.externalGroup} → {mapping.roleId}
-                  </li>
-                ))}
-              </ul>
-            </fieldset>
-
-            <fieldset>
-              <legend>Emergency and directory access</legend>
-              <button
-                type="button"
-                className="button button--secondary"
-                onClick={() => void issueDirectoryCredential()}
-              >
-                Issue SCIM credential
-              </button>
-              <label>
-                <span>Incident ID</span>
-                <input
-                  value={identityIncident}
-                  onChange={(event) => setIdentityIncident(event.target.value)}
-                  placeholder="INC-2026-001"
-                />
-              </label>
-              <button
-                type="button"
-                className="button button--secondary"
-                onClick={() => void issueBreakGlassCredential()}
-              >
-                Issue one-time break-glass credential
-              </button>
-              {identityOneTimeSecret ? (
-                <div className="identity-panel__secret" role="status">
-                  <strong>Copy this secret now. It will not be shown again.</strong>
-                  <code>{identityOneTimeSecret}</code>
-                  <button
-                    type="button"
-                    className="button button--secondary"
-                    onClick={() => setIdentityOneTimeSecret(null)}
-                  >
-                    I saved it
-                  </button>
-                </div>
-              ) : null}
-            </fieldset>
-          </div>
-          <div className="identity-panel__events">
-            <h3>Recent security events</h3>
-            <ol>
-              {identitySnapshot.securityEvents
-                .slice(-8)
-                .reverse()
-                .map((event) => (
-                  <li key={event.id}>
-                    <strong>{event.action}</strong> · {event.outcome} · {event.occurredAt}
-                  </li>
-                ))}
-            </ol>
-          </div>
-        </section>
-      ) : null}
-      {dataGovernance ? (
-        <section className="data-governance-panel" aria-label="Data governance administration">
-          <div className="section-heading">
-            <div>
-              <span className="kicker">Guarded lifecycle</span>
-              <h2>Retention, privacy requests, and legal holds</h2>
-              <p>
-                {dataGovernance.subjects.length} subjects ·{' '}
-                {dataGovernance.holds.filter((hold) => hold.status === 'active').length} active
-                holds · {dataGovernance.plans.length} plans
-              </p>
-            </div>
-            <button
-              type="button"
-              className="button button--secondary"
-              onClick={() => void refreshDataGovernance()}
-            >
-              Refresh governance state
-            </button>
-          </div>
-          <p className="data-governance-panel__warning" role="note">
-            Erasure is irreversible: a code rollback cannot restore erased records or external
-            objects. Verify a recoverable backup before approval.
-          </p>
-          <div className="data-governance-panel__grid">
-            <fieldset>
-              <legend>Data subjects</legend>
-              <label>
-                <span>Customer reference</span>
-                <input
-                  value={governanceSubjectReference}
-                  onChange={(event) => setGovernanceSubjectReference(event.target.value)}
-                  placeholder="customer-123"
-                />
-              </label>
-              <button
-                type="button"
-                className="button button--secondary"
-                onClick={() => void registerDataSubject()}
-              >
-                Register subject
-              </button>
-              <ul>
-                {dataGovernance.subjects.map((subject) => (
-                  <li key={subject.id}>
-                    {subject.reference} · {subject.status}
-                  </li>
-                ))}
-                {dataGovernance.subjects.length === 0 ? <li>No subjects in this scope.</li> : null}
-              </ul>
-            </fieldset>
-            <fieldset>
-              <legend>Legal holds</legend>
-              <label>
-                <span>Matter</span>
-                <input
-                  value={governanceHoldMatter}
-                  onChange={(event) => setGovernanceHoldMatter(event.target.value)}
-                  placeholder="CASE-2026-001"
-                />
-              </label>
-              <label>
-                <span>Reason</span>
-                <textarea
-                  value={governanceHoldReason}
-                  onChange={(event) => setGovernanceHoldReason(event.target.value)}
-                />
-              </label>
-              <button
-                type="button"
-                className="button button--secondary"
-                onClick={() => void createScopeHold()}
-              >
-                Activate scope hold
-              </button>
-              <ul>
-                {dataGovernance.holds.map((hold) => (
-                  <li key={hold.id}>
-                    {hold.matter} · {hold.status}
-                  </li>
-                ))}
-              </ul>
-            </fieldset>
-            <fieldset>
-              <legend>Retention execution</legend>
-              <button
-                type="button"
-                className="button button--secondary"
-                onClick={() => void previewRetention()}
-              >
-                Preview retention plan
-              </button>
-              <label>
-                <span>Independent approval reason</span>
-                <textarea
-                  value={governanceApprovalReason}
-                  onChange={(event) => setGovernanceApprovalReason(event.target.value)}
-                />
-              </label>
-              <label>
-                <span>Verified backup reference</span>
-                <input
-                  value={governanceBackupReference}
-                  onChange={(event) => setGovernanceBackupReference(event.target.value)}
-                  placeholder="backup://tenant/date"
-                />
-              </label>
-              <label>
-                <span>Backup SHA-256</span>
-                <input
-                  value={governanceBackupSha}
-                  onChange={(event) => setGovernanceBackupSha(event.target.value)}
-                  placeholder="64 lowercase hex characters"
-                />
-              </label>
-            </fieldset>
-          </div>
-          <div className="data-governance-panel__plans">
-            <h3>Plan effects and blockers</h3>
-            {dataGovernance.plans
-              .slice()
-              .reverse()
-              .map((plan) => (
-                <article key={plan.id}>
-                  <div>
-                    <strong>
-                      {plan.kind} · {plan.state}
-                    </strong>
-                    <code>{plan.digest}</code>
-                  </div>
-                  <ul>
-                    {plan.candidates.map((candidate) => (
-                      <li key={candidate.id}>
-                        {candidate.action} {candidate.resource.type}:{candidate.resource.id} ·{' '}
-                        {candidate.state}
-                        {candidate.blockers.length > 0 ? ` · ${candidate.blockers.join(', ')}` : ''}
-                      </li>
-                    ))}
-                    {plan.candidates.length === 0 ? <li>No eligible resources.</li> : null}
-                  </ul>
-                  {plan.state === 'preview' ? (
-                    <button
-                      type="button"
-                      className="button button--danger"
-                      onClick={() => void approveGovernancePlan(plan)}
-                    >
-                      Approve irreversible plan
-                    </button>
-                  ) : null}
-                </article>
-              ))}
-          </div>
-        </section>
-      ) : null}
-      {migrationOverview ? (
-        <section className="migration-panel" aria-label="CMS migration workbench">
-          <div className="section-heading">
-            <div>
-              <span className="kicker">Read-only source bridge</span>
-              <h2>CMS migration and cutover evidence</h2>
-              <p>
-                {migrationOverview.sources.length} configured sources ·{' '}
-                {migrationOverview.projects.length} projects · {migrationOverview.runs.length} runs
-              </p>
-            </div>
-            <button
-              type="button"
-              className="button button--secondary"
-              onClick={() => void refreshMigrations()}
-            >
-              Refresh migration state
-            </button>
-          </div>
-          <p className="migration-panel__warning" role="note">
-            Source adapters are read-only. A ready report proves only the observed content checks;
-            it does not switch traffic, migrate media binaries, decommission the source, or replace
-            a verified backup.
-          </p>
-          <div className="migration-panel__setup">
-            <fieldset>
-              <legend>Versioned mapping recipe</legend>
-              <label>
-                <span>Configured source</span>
-                <select
-                  value={migrationSourceId}
-                  onChange={(event) => setMigrationSourceId(event.target.value)}
-                >
-                  <option value="">Select a source</option>
-                  {migrationOverview.sources.map((source) => (
-                    <option key={source.id} value={source.id}>
-                      {source.name} · {source.provider}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {migrationOverview.sources.length === 0 ? (
-                <p className="empty-copy">Configure a trusted server-side source adapter first.</p>
-              ) : null}
-              <div className="migration-panel__fields">
-                <label>
-                  <span>Recipe ID</span>
-                  <input
-                    value={migrationRecipeId}
-                    onChange={(event) => setMigrationRecipeId(event.target.value)}
-                    placeholder="contentful-page"
-                  />
-                </label>
-                <label>
-                  <span>Recipe name</span>
-                  <input
-                    value={migrationRecipeName}
-                    onChange={(event) => setMigrationRecipeName(event.target.value)}
-                    placeholder="Contentful pages"
-                  />
-                </label>
-                <label>
-                  <span>Source type</span>
-                  <input
-                    value={migrationSourceType}
-                    onChange={(event) => setMigrationSourceType(event.target.value)}
-                    placeholder="contentful.Entry.page"
-                  />
-                </label>
-                <label>
-                  <span>Target content type</span>
-                  <input
-                    value={migrationTargetType}
-                    onChange={(event) => setMigrationTargetType(event.target.value)}
-                  />
-                </label>
-              </div>
-              <label>
-                <span>Field mappings, one per line</span>
-                <textarea
-                  value={migrationMappings}
-                  onChange={(event) => setMigrationMappings(event.target.value)}
-                  aria-describedby="migration-mapping-help"
-                />
-                <small id="migration-mapping-help">
-                  source.path -&gt; targetField -&gt; copy|string|number|boolean|slug
-                </small>
-              </label>
-              <label>
-                <span>Publication behavior</span>
-                <select
-                  value={migrationPublicationMode}
-                  onChange={(event) =>
-                    setMigrationPublicationMode(event.target.value as 'draft' | 'mirror-source')
-                  }
-                >
-                  <option value="draft">Import drafts; publish through normal workflow</option>
-                  <option value="mirror-source">
-                    Mirror source status through all publish gates
-                  </option>
-                </select>
-              </label>
-              <button
-                type="button"
-                className="button button--secondary"
-                onClick={() => void saveMigrationRecipe()}
-              >
-                Save next recipe version
-              </button>
-            </fieldset>
-            <fieldset>
-              <legend>Dual-run project</legend>
-              <label>
-                <span>Project ID</span>
-                <input
-                  value={migrationProjectId}
-                  onChange={(event) => setMigrationProjectId(event.target.value)}
-                  placeholder="contentful-cutover"
-                />
-              </label>
-              <label>
-                <span>Project name</span>
-                <input
-                  value={migrationProjectName}
-                  onChange={(event) => setMigrationProjectName(event.target.value)}
-                  placeholder="Website cutover"
-                />
-              </label>
-              <button
-                type="button"
-                className="button button--secondary"
-                onClick={() => void createMigrationProject()}
-              >
-                Create dual-run project
-              </button>
-              <label>
-                <span>Active project</span>
-                <select
-                  value={activeMigrationProjectId}
-                  onChange={(event) => {
-                    setActiveMigrationProjectId(event.target.value);
-                    setMigrationPlanReviewed(false);
-                  }}
-                >
-                  <option value="">Select a project</option>
-                  {migrationOverview.projects.map((project) => (
-                    <option key={project.id} value={project.id}>
-                      {project.name} · {project.state}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {activeMigrationProjectId ? (
-                <div className="migration-panel__actions">
-                  <button
-                    type="button"
-                    className="button button--secondary"
-                    onClick={() => void previewMigrationSync()}
-                    disabled={
-                      migrationOverview.projects.find(
-                        (project) => project.id === activeMigrationProjectId,
-                      )?.state !== 'active'
-                    }
-                  >
-                    Preview next sync
-                  </button>
-                  <button
-                    type="button"
-                    className="button button--secondary"
-                    onClick={() =>
-                      void setMigrationProjectState(
-                        migrationOverview.projects.find(
-                          (project) => project.id === activeMigrationProjectId,
-                        )?.state === 'paused'
-                          ? 'active'
-                          : 'paused',
-                      )
-                    }
-                  >
-                    {migrationOverview.projects.find(
-                      (project) => project.id === activeMigrationProjectId,
-                    )?.state === 'paused'
-                      ? 'Resume project'
-                      : 'Pause project'}
-                  </button>
-                  <button
-                    type="button"
-                    className="button button--primary"
-                    onClick={() => void validateMigrationCutover()}
-                  >
-                    Validate cutover
-                  </button>
-                </div>
-              ) : null}
-            </fieldset>
-          </div>
-          <div className="migration-panel__evidence">
-            <section aria-label="Migration sync plans">
-              <h3>Sync plans and exact effects</h3>
-              {migrationOverview.plans
-                .filter((plan) => plan.projectId === activeMigrationProjectId)
-                .slice()
-                .reverse()
-                .map((plan) => (
-                  <article key={plan.id} className="migration-plan-card">
-                    <div>
-                      <strong>
-                        {plan.snapshotKind} · {plan.state}
-                      </strong>
-                      <code>{plan.digest}</code>
-                    </div>
-                    <p>
-                      {plan.counts.create} create · {plan.counts.update} update ·{' '}
-                      {plan.counts.publish} publish · {plan.counts.noop} unchanged ·{' '}
-                      {plan.counts.sourceDeleted} deleted at source · {plan.counts.blocked} blocked
-                    </p>
-                    <ul>
-                      {plan.effects.map((effect) => (
-                        <li key={`${plan.id}-${effect.externalId}`}>
-                          <strong>{effect.externalId}</strong> · {effect.action}
-                          {effect.publish ? ' · publish' : ''}
-                          {effect.blockers.map((blocker) => ` · ${blocker.code}`).join('')}
-                        </li>
-                      ))}
-                    </ul>
-                    {plan.state === 'preview' ? (
-                      <>
-                        <label className="migration-panel__review">
-                          <input
-                            type="checkbox"
-                            checked={migrationPlanReviewed}
-                            onChange={(event) => setMigrationPlanReviewed(event.target.checked)}
-                          />
-                          <span>I reviewed this exact digest, every effect, and all blockers.</span>
-                        </label>
                         <button
                           type="button"
                           className="button button--primary"
                           disabled={
-                            !migrationPlanReviewed ||
-                            plan.counts.blocked > 0 ||
-                            plan.counts.sourceDeleted > 0
+                            busy ||
+                            !activeRelease.validation?.valid ||
+                            ['executing', 'published', 'rolled-back'].includes(activeRelease.state)
                           }
-                          onClick={() => void executeMigrationPlan(plan)}
+                          onClick={() => void executeActiveRelease()}
                         >
-                          Execute reviewed plan
+                          Publish release
                         </button>
-                      </>
-                    ) : null}
-                  </article>
-                ))}
-              {migrationOverview.plans.every(
-                (plan) => plan.projectId !== activeMigrationProjectId,
-              ) ? (
-                <p className="empty-copy">No sync plan for the selected project.</p>
-              ) : null}
-            </section>
-            <section aria-label="Migration cutover reports">
-              <h3>Cutover readiness reports</h3>
-              {migrationOverview.cutoverReports
-                .filter((report) => report.projectId === activeMigrationProjectId)
-                .slice()
-                .reverse()
-                .map((report) => (
-                  <article
-                    key={report.id}
-                    className={`migration-cutover-card migration-cutover-card--${report.ready ? 'ready' : 'blocked'}`}
-                  >
-                    <strong>{report.ready ? 'Content checks ready' : 'Cutover blocked'}</strong>
-                    <span>
-                      {report.currentCount}/{report.sourceCount} current · {report.publishedCount}{' '}
-                      published
-                    </span>
-                    <code>{report.digest}</code>
-                    <ul>
-                      {report.blockers.map((blocker, index) => (
-                        <li key={`${report.id}-${blocker.externalId ?? index}-${blocker.code}`}>
-                          {blocker.externalId ? `${blocker.externalId} · ` : ''}
-                          {blocker.code}: {blocker.message}
-                        </li>
-                      ))}
-                    </ul>
-                  </article>
-                ))}
-              {migrationOverview.cutoverReports.every(
-                (report) => report.projectId !== activeMigrationProjectId,
-              ) ? (
-                <p className="empty-copy">No cutover report for the selected project.</p>
-              ) : null}
-            </section>
-          </div>
-        </section>
-      ) : null}
-      {marketplaceOverview ? (
-        <section className="marketplace-panel" aria-label="Plugin marketplace workbench">
-          <div className="section-heading">
-            <div>
-              <span className="kicker">Evidence-bound extensions</span>
-              <h2>Verified publishers and reviewed packages</h2>
-              <p>
-                {marketplaceOverview.publishers.length} publishers ·{' '}
-                {marketplaceOverview.releases.length} immutable releases
-              </p>
-            </div>
-            <button
-              type="button"
-              className="button button--secondary"
-              onClick={() => void refreshMarketplace()}
-            >
-              Refresh marketplace
-            </button>
-          </div>
-          <p className="marketplace-panel__warning" role="note">
-            A verified badge means domain possession plus accountable human review. A passing scan
-            and provenance identify observed evidence; neither proves package safety. Installed
-            plugins remain disabled, ungranted, and dependent on a separately hardened runtime.
-          </p>
-          <div className="marketplace-panel__setup">
-            <fieldset>
-              <legend>Register publisher identity</legend>
-              <div className="marketplace-panel__fields">
-                <label>
-                  <span>Publisher ID</span>
-                  <input
-                    value={marketplacePublisherId}
-                    onChange={(event) => setMarketplacePublisherId(event.target.value)}
-                    placeholder="example"
-                  />
-                </label>
-                <label>
-                  <span>Display name</span>
-                  <input
-                    value={marketplacePublisherName}
-                    onChange={(event) => setMarketplacePublisherName(event.target.value)}
-                    placeholder="Example"
-                  />
-                </label>
-                <label>
-                  <span>Verified domain</span>
-                  <input
-                    value={marketplacePublisherDomain}
-                    onChange={(event) => setMarketplacePublisherDomain(event.target.value)}
-                    placeholder="example.com"
-                  />
-                </label>
-                <label>
-                  <span>Signing key ID</span>
-                  <input
-                    value={marketplacePublisherKeyId}
-                    onChange={(event) => setMarketplacePublisherKeyId(event.target.value)}
-                  />
-                </label>
-              </div>
-              <label>
-                <span>Ed25519 public key (PEM)</span>
-                <textarea
-                  value={marketplacePublisherPublicKey}
-                  onChange={(event) => setMarketplacePublisherPublicKey(event.target.value)}
-                  aria-describedby="marketplace-key-help"
-                />
-                <small id="marketplace-key-help">
-                  Public verification material only. Never paste a private signing key.
-                </small>
-              </label>
-              <button
-                type="button"
-                className="button button--secondary"
-                onClick={() => void registerMarketplacePublisher()}
-              >
-                Register pending publisher
-              </button>
-            </fieldset>
-            <fieldset>
-              <legend>Submit immutable signed release</legend>
-              <label>
-                <span>Signed Plugin SDK manifest JSON</span>
-                <textarea
-                  value={marketplaceManifestJson}
-                  onChange={(event) => setMarketplaceManifestJson(event.target.value)}
-                  aria-describedby="marketplace-manifest-help"
-                />
-                <small id="marketplace-manifest-help">
-                  Compatibility, support links, permissions, digest, and size must already be inside
-                  the publisher signature.
-                </small>
-              </label>
-              <label>
-                <span>Opaque artifact scanner reference</span>
-                <input
-                  value={marketplaceArtifactReference}
-                  onChange={(event) => setMarketplaceArtifactReference(event.target.value)}
-                  placeholder="scanner://review-system/package-version"
-                />
-              </label>
-              <button
-                type="button"
-                className="button button--secondary"
-                onClick={() => void submitMarketplaceRelease()}
-              >
-                Submit release for review
-              </button>
-            </fieldset>
-          </div>
-          {marketplaceChallenge ? (
-            <div className="marketplace-challenge" role="status">
-              <strong>Pending DNS TXT proof</strong>
-              <span>{marketplaceChallenge.recordName}</span>
-              <code>{marketplaceChallenge.token}</code>
-              <small>Expires {new Date(marketplaceChallenge.expiresAt).toLocaleString()}</small>
-            </div>
-          ) : null}
-          <fieldset className="marketplace-panel__review-inputs">
-            <legend>Accountable review decision</legend>
-            <label>
-              <span>Evidence reference</span>
-              <input
-                value={marketplaceEvidenceReference}
-                onChange={(event) => setMarketplaceEvidenceReference(event.target.value)}
-                placeholder="publisher-review:ticket-123"
-              />
-            </label>
-            <label>
-              <span>Reason</span>
-              <input
-                value={marketplaceReason}
-                onChange={(event) => setMarketplaceReason(event.target.value)}
-                placeholder="What was reviewed and why this decision is safe"
-              />
-            </label>
-            <small>
-              Publisher owners, automated-review operators, and release approvers must be distinct
-              authenticated principals where required.
-            </small>
-          </fieldset>
-          <div className="marketplace-panel__catalog">
-            <section aria-label="Marketplace publishers">
-              <h3>Publisher identity</h3>
-              {marketplaceOverview.publishers.map((publisher) => (
-                <article key={publisher.id} className="marketplace-card">
-                  <div className="marketplace-card__heading">
-                    <div>
-                      <strong>{publisher.displayName}</strong>
-                      <span>{publisher.domain}</span>
-                    </div>
-                    <span className={`status-pill status-pill--${publisher.state}`}>
-                      {publisher.state}
-                    </span>
-                  </div>
-                  <dl>
-                    <div>
-                      <dt>Domain proof</dt>
-                      <dd>{publisher.domainVerifiedAt ? 'observed' : 'pending'}</dd>
-                    </div>
-                    <div>
-                      <dt>Key</dt>
-                      <dd>{publisher.key.keyId}</dd>
-                    </div>
-                    <div>
-                      <dt>Fingerprint</dt>
-                      <dd>
-                        <code>{publisher.key.fingerprint}</code>
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Human reviewer</dt>
-                      <dd>{publisher.verifiedBy ?? 'pending'}</dd>
-                    </div>
-                  </dl>
-                  <div className="marketplace-card__actions">
-                    {publisher.state === 'pending' ? (
-                      <>
-                        <button
-                          type="button"
-                          className="button button--secondary"
-                          onClick={() => void issueMarketplaceChallenge(publisher.id)}
-                        >
-                          Issue DNS challenge
-                        </button>
-                        <button
-                          type="button"
-                          className="button button--secondary"
-                          onClick={() => void verifyMarketplaceDomain(publisher.id)}
-                        >
-                          Verify TXT proof
-                        </button>
-                        <button
-                          type="button"
-                          className="button button--primary"
-                          disabled={!publisher.domainVerifiedAt}
-                          onClick={() => void approveMarketplacePublisher(publisher.id)}
-                        >
-                          Approve publisher
-                        </button>
-                      </>
-                    ) : null}
-                    {publisher.state === 'verified' ? (
-                      <button
-                        type="button"
-                        className="button button--danger"
-                        onClick={() => void suspendMarketplacePublisher(publisher.id)}
-                      >
-                        Suspend trust
-                      </button>
-                    ) : null}
-                  </div>
-                </article>
-              ))}
-              {marketplaceOverview.publishers.length === 0 ? (
-                <p className="empty-copy">No publisher identity has been registered.</p>
-              ) : null}
-            </section>
-            <section aria-label="Marketplace releases">
-              <h3>Signed package releases</h3>
-              {marketplaceOverview.releases.map((release) => {
-                const metadata = release.manifest.marketplace;
-                const review = release.reviews.at(-1);
-                return (
-                  <article key={release.id} className="marketplace-card marketplace-release-card">
-                    <div className="marketplace-card__heading">
-                      <div>
-                        <strong>{release.manifest.name}</strong>
-                        <span>
-                          {release.pluginId} · v{release.version}
-                        </span>
-                      </div>
-                      <span className={`status-pill status-pill--${release.state}`}>
-                        {release.state}
-                      </span>
-                    </div>
-                    <p>{release.manifest.description}</p>
-                    <dl>
-                      <div>
-                        <dt>Publisher</dt>
-                        <dd>{release.publisherId}</dd>
-                      </div>
-                      <div>
-                        <dt>Compatibility</dt>
-                        <dd>
-                          {metadata
-                            ? `${metadata.compatibility.gridstory.minVersion}–${metadata.compatibility.gridstory.maxVersionExclusive}`
-                            : 'missing'}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt>Support</dt>
-                        <dd>{metadata?.support.status ?? 'missing'}</dd>
-                      </div>
-                      <div>
-                        <dt>Artifact digest</dt>
-                        <dd>
-                          <code>{release.manifest.package.sha256}</code>
-                        </dd>
-                      </div>
-                    </dl>
-                    <div>
-                      <strong>Transparent permissions</strong>
-                      {release.manifest.requestedCapabilities.length > 0 ? (
-                        <ul>
-                          {release.manifest.requestedCapabilities.map((grant) => (
-                            <li key={grant.capability}>{grant.capability}</li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p>No capability requested.</p>
-                      )}
-                    </div>
-                    {review ? (
-                      <section
-                        className="marketplace-review"
-                        aria-label={`Review for ${release.pluginId}`}
-                      >
-                        <strong>
-                          Automated evidence · {review.status} · {review.inspector.id}{' '}
-                          {review.inspector.version}
-                        </strong>
-                        <ul>
-                          {review.checks.map((check) => (
-                            <li key={check.id} data-status={check.status}>
-                              {check.status} · {check.category}: {check.summary}
-                            </li>
-                          ))}
-                        </ul>
-                      </section>
-                    ) : (
-                      <p className="empty-copy">No automated review evidence recorded.</p>
-                    )}
-                    <div className="marketplace-card__actions">
-                      {release.state === 'submitted' ? (
-                        <button
-                          type="button"
-                          className="button button--secondary"
-                          onClick={() => void reviewMarketplaceRelease(release.id)}
-                        >
-                          Run trusted review
-                        </button>
-                      ) : null}
-                      {release.state === 'reviewed' ? (
-                        <>
-                          <button
-                            type="button"
-                            className="button button--primary"
-                            onClick={() => void decideMarketplaceRelease(release.id, 'approve')}
-                          >
-                            Approve exact release
-                          </button>
-                          <button
-                            type="button"
-                            className="button button--danger"
-                            onClick={() => void decideMarketplaceRelease(release.id, 'reject')}
-                          >
-                            Reject
-                          </button>
-                        </>
-                      ) : null}
-                      {release.state === 'approved' ? (
-                        <>
+                        {activeRelease.state === 'published' ? (
                           <button
                             type="button"
                             className="button button--secondary"
-                            onClick={() => void installMarketplaceRelease(release.id)}
+                            disabled={
+                              busy ||
+                              activeRelease.rollbackPolicy.mode === 'disabled' ||
+                              activeRelease.entries.some(
+                                (entry) => entry.previousPublishedRevisionId === null,
+                              )
+                            }
+                            onClick={() => void rollbackActiveRelease()}
                           >
-                            Install disabled · no grants
+                            Roll back release
                           </button>
-                          <button
-                            type="button"
-                            className="button button--danger"
-                            onClick={() => void decideMarketplaceRelease(release.id, 'yank')}
-                          >
-                            Yank release
-                          </button>
-                        </>
+                        ) : null}
+                      </div>
+
+                      {activeRelease.state === 'validated' ||
+                      activeRelease.state === 'scheduled' ? (
+                        <div className="release-scheduler">
+                          <label className="gs-field">
+                            <span>Date and time</span>
+                            <input
+                              type="datetime-local"
+                              value={releaseScheduleAt}
+                              onChange={(event) => setReleaseScheduleAt(event.target.value)}
+                            />
+                          </label>
+                          <label className="gs-field">
+                            <span>IANA time zone</span>
+                            <input
+                              value={releaseTimeZone}
+                              onChange={(event) => setReleaseTimeZone(event.target.value)}
+                            />
+                          </label>
+                          {activeRelease.schedule?.state === 'pending' ? (
+                            <button
+                              type="button"
+                              className="button button--secondary"
+                              disabled={busy}
+                              onClick={() => void cancelActiveReleaseSchedule()}
+                            >
+                              Cancel release schedule
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="button button--secondary"
+                              disabled={busy || !releaseScheduleAt}
+                              onClick={() => void scheduleActiveRelease()}
+                            >
+                              Schedule release
+                            </button>
+                          )}
+                        </div>
                       ) : null}
-                    </div>
-                  </article>
-                );
-              })}
-              {marketplaceOverview.releases.length === 0 ? (
-                <p className="empty-copy">No signed release has been submitted.</p>
+
+                      {releasePreview?.releaseId === activeRelease.id ? (
+                        <div className="release-preview">
+                          <h3>Future state</h3>
+                          <ul>
+                            {releasePreview.entries.map((entry) => (
+                              <li key={entry.entryId}>
+                                <strong>
+                                  {String(entry.data.title ?? entry.data.headline ?? entry.entryId)}
+                                </strong>
+                                <span>{entry.route ?? 'No canonical route'}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
+                    </article>
+                  ) : null}
+                </div>
+              </div>
+            </section>
+          ) : null}{' '}
+          {assetLibraryOpen ? (
+            <section className="asset-library-panel" aria-label="Asset library">
+              <div className="section-heading">
+                <div>
+                  <span className="kicker">Digital assets</span>
+                  <h2>Asset library</h2>
+                  <p>Verified uploads, quarantine status, governed metadata, and scoped usage.</p>
+                </div>
+                <label className="button button--primary asset-upload-button">
+                  {assetUploading ? 'Uploading...' : 'Upload asset'}
+                  <input
+                    type="file"
+                    disabled={assetUploading}
+                    onChange={(event) => {
+                      const file = event.currentTarget.files?.[0];
+                      event.currentTarget.value = '';
+                      if (file) void uploadAssetFile(file);
+                    }}
+                  />
+                </label>
+              </div>
+              <div className="asset-library-grid">
+                {assets.length > 0 ? (
+                  assets.map((asset) => {
+                    const revision = asset.revisions.find(
+                      (candidate) => candidate.id === asset.currentRevisionId,
+                    );
+                    if (!revision) return null;
+                    return (
+                      <article className="asset-library-card" key={asset.id}>
+                        <div>
+                          <div className="asset-library-title-row">
+                            <strong>{revision.metadata.title}</strong>
+                            <span
+                              className={`asset-security-badge asset-security-badge--${revision.security?.status ?? 'unverified'}`}
+                            >
+                              {revision.security?.status === 'verified'
+                                ? 'Verified'
+                                : revision.security?.status === 'quarantined'
+                                  ? 'Quarantined'
+                                  : 'Unverified'}
+                            </span>
+                          </div>
+                          <span>
+                            {asset.kind} - {revision.original.mediaType}
+                          </span>
+                          {revision.security ? (
+                            <small>
+                              Detected {revision.security.detectedMediaType} - malware{' '}
+                              {revision.security.malware.status}
+                              {revision.security.sanitized ? ' - sanitized' : ''}
+                            </small>
+                          ) : null}
+                        </div>
+                        <dl>
+                          <div>
+                            <dt>Version</dt>
+                            <dd>{revision.version}</dd>
+                          </div>
+                          <div>
+                            <dt>Renditions</dt>
+                            <dd>{asset.renditions.length}</dd>
+                          </div>
+                          <div>
+                            <dt>Size</dt>
+                            <dd>{revision.original.size} B</dd>
+                          </div>
+                        </dl>
+                        {revision.focalPoint ? (
+                          <small>
+                            Focal point {revision.focalPoint.x.toFixed(2)},{' '}
+                            {revision.focalPoint.y.toFixed(2)}
+                          </small>
+                        ) : null}
+                        <button
+                          type="button"
+                          className="button button--secondary"
+                          onClick={() => void inspectAssetUsage(asset.id)}
+                        >
+                          Inspect usage
+                        </button>
+                      </article>
+                    );
+                  })
+                ) : (
+                  <p className="empty-state">Upload the first asset for this tenant and locale.</p>
+                )}
+              </div>
+              {assetUsage ? (
+                <p className="asset-usage-summary" role="status">
+                  {assetUsage.totalReferences} references across {assetUsage.entries} entries -{' '}
+                  {assetUsage.byPerspective.draft} draft - {assetUsage.byPerspective.published}{' '}
+                  published
+                </p>
               ) : null}
             </section>
-          </div>
-        </section>
-      ) : null}
-      {personalization ? (
-        <section className="personalization-panel" aria-label="Personalization targeting workbench">
-          <div className="section-heading">
-            <div>
-              <span className="kicker">Consent-aware decisions</span>
-              <h2>Audiences, variants, and edge cache guidance</h2>
-              <p>
-                Draft r{personalization.draft.revision} ·{' '}
-                {personalization.draft.configuration.audiences.length} audiences ·{' '}
-                {personalization.draft.configuration.decisions.length} decisions · published{' '}
-                {personalization.published ? `r${personalization.published.revision}` : 'never'}
-              </p>
-            </div>
-            <button
-              type="button"
-              className="button button--secondary"
-              onClick={() => void refreshPersonalization()}
-            >
-              Refresh targeting
-            </button>
-          </div>
-          <p className="personalization-panel__warning" role="note">
-            Use only bounded declared traits. Do not paste names, email addresses, account IDs,
-            cookies, IP addresses, or raw referral URLs. Preview is hypothetical and private;
-            published decisions never read this draft.
-          </p>
-          <div className="personalization-panel__workbench">
-            <fieldset>
-              <legend>Versioned targeting configuration</legend>
-              <label>
-                <span>Targeting configuration JSON</span>
-                <textarea
-                  value={personalizationConfigurationJson}
-                  onChange={(event) => {
-                    setPersonalizationConfigurationJson(event.target.value);
-                    setPersonalizationConfigurationDirty(true);
+          ) : null}
+          {searchPanelOpen ? (
+            <section className="search-panel" aria-label="Search and discovery">
+              <div className="search-panel__query">
+                <div>
+                  <span className="kicker">Discovery</span>
+                  <h2>Search content</h2>
+                  <p>
+                    Search draft content, inspect taxonomy facets, and follow content relationships.
+                  </p>
+                </div>
+                <form
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void runSearch();
                   }}
-                  aria-describedby="personalization-configuration-help"
-                />
-              </label>
-              <small id="personalization-configuration-help">
-                Every personal attribute needs explicit purposes; priorities and resource keys must
-                be unique, and every decision needs a fallback variant.
-              </small>
-              <div className="personalization-panel__actions">
-                <button
-                  type="button"
-                  className="button button--secondary"
-                  onClick={() => void savePersonalizationDraft()}
                 >
-                  Save targeting draft
-                </button>
-                <button
-                  type="button"
-                  className="button button--primary"
-                  onClick={() => void publishPersonalization()}
-                  disabled={personalizationConfigurationDirty}
-                >
-                  Publish exact draft
-                </button>
+                  <label htmlFor="studio-search">Search terms</label>
+                  <div>
+                    <input
+                      id="studio-search"
+                      type="search"
+                      value={searchText}
+                      onChange={(event) => setSearchText(event.target.value)}
+                      placeholder="Title, body, slug…"
+                    />
+                    <button className="button button--primary" type="submit" disabled={searchBusy}>
+                      Search
+                    </button>
+                  </div>
+                </form>
+                <fieldset className="search-taxonomies">
+                  <legend>Available taxonomies</legend>
+                  {searchTaxonomies.map((taxonomy) => (
+                    <span key={taxonomy.id}>
+                      {taxonomy.name} · {taxonomy.terms.length} terms
+                    </span>
+                  ))}
+                </fieldset>
               </div>
-            </fieldset>
-            <fieldset>
-              <legend>Hypothetical audience or variant preview</legend>
-              <label>
-                <span>Hypothetical decision JSON</span>
-                <textarea
-                  value={personalizationPreviewJson}
-                  onChange={(event) => setPersonalizationPreviewJson(event.target.value)}
-                  aria-describedby="personalization-preview-help"
-                />
-              </label>
-              <small id="personalization-preview-help">
-                Supply declared finite values and consent signals, or add an audience/variant
-                override. No protected user is searched for or impersonated.
-              </small>
-              <button
-                type="button"
-                className="button button--secondary"
-                onClick={() => void previewPersonalizationDecision()}
-              >
-                Preview draft decision
-              </button>
-              {personalizationPreview ? (
-                <section
-                  className="personalization-preview-result"
-                  aria-label="Personalization decision explanation"
-                >
-                  <strong>
-                    {personalizationPreview.variant} · {personalizationPreview.reason}
-                  </strong>
+              <div className="search-panel__results" aria-live="polite">
+                <strong>{searchResponse?.total ?? 0} result(s)</strong>
+                <ul>
+                  {searchResponse?.hits.map((hit) => (
+                    <li key={hit.entry.id}>
+                      <button type="button" onClick={() => void selectEntry(hit.entry.id)}>
+                        {entryTitle(hit.entry, schemas)}
+                      </button>
+                      <span>Score {hit.score}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <aside className="search-panel__context">
+                <div className="search-index-summary">
+                  <span className="kicker">Index</span>
+                  <strong>{searchIndexStatus?.adapter ?? 'Loading…'}</strong>
                   <span>
-                    {personalizationPreview.audienceId ?? 'fallback audience'} · draft r
-                    {personalizationPreview.draftRevision}
+                    {searchIndexStatus?.draftDocuments ?? 0} drafts ·{' '}
+                    {searchIndexStatus?.pendingJobs ?? 0} pending ·{' '}
+                    {searchIndexStatus?.deadJobs ?? 0} dead
                   </span>
-                  <span>
-                    Cache: {personalizationPreview.cache.mode} ·{' '}
-                    {personalizationPreview.cache.reason}
-                  </span>
+                  <button
+                    type="button"
+                    className="button button--secondary"
+                    disabled={searchBusy}
+                    onClick={() => void rebuildSearchIndex()}
+                  >
+                    Rebuild draft index
+                  </button>
+                </div>
+                <div>
+                  <strong>Backlinks to selected entry</strong>
                   <ul>
-                    {personalizationPreview.trace.map((audience) => (
-                      <li key={audience.audienceId}>
-                        <strong>
-                          {audience.audienceId} · {audience.matched ? 'matched' : 'not matched'}
-                        </strong>
-                        <span>
-                          {audience.conditions
-                            .map((condition) => `${condition.attributeKey}: ${condition.reason}`)
-                            .join(' · ')}
-                        </span>
+                    {backlinks.map((backlink) => (
+                      <li key={backlink.source.id}>{entryTitle(backlink.source, schemas)}</li>
+                    ))}
+                    {backlinks.length === 0 ? <li>None</li> : null}
+                  </ul>
+                </div>
+                <div>
+                  <strong>Related content</strong>
+                  <ul>
+                    {relatedContent.map((related) => (
+                      <li key={related.entry.id}>
+                        {entryTitle(related.entry, schemas)} · {related.reasons.join(', ')}
                       </li>
                     ))}
+                    {relatedContent.length === 0 ? <li>None</li> : null}
                   </ul>
-                </section>
-              ) : (
-                <p className="empty-copy">No draft decision has been previewed.</p>
-              )}
-            </fieldset>
-          </div>
-        </section>
-      ) : null}
-      {experimentOverview ? (
-        <section className="experiment-panel" aria-label="Content experiments workbench">
-          <div className="section-heading">
-            <div>
-              <span className="kicker">Governed experimentation</span>
-              <h2>Weighted variants, guardrails, and evidence-backed promotion</h2>
-              <p>
-                {experimentOverview.experiments.length} experiments · targeting draft r
-                {experimentOverview.targetingDraftRevision} · published{' '}
-                {experimentOverview.targetingPublishedRevision
-                  ? `r${experimentOverview.targetingPublishedRevision}`
-                  : 'never'}
-              </p>
-            </div>
-            <button
-              type="button"
-              className="button button--secondary"
-              onClick={() => void refreshExperiments()}
-            >
-              Refresh experiments
-            </button>
-          </div>
-          <p className="experiment-panel__warning" role="note">
-            Submit aggregate metrics and a SHA-256 evidence digest only. Do not paste assignment
-            tokens, user rows, cookies, raw events, or provider credentials. Starting pins the
-            published targeting revision; promotion changes the targeting draft only.
-          </p>
-          <div className="experiment-panel__workbench">
-            <fieldset>
-              <legend>Immutable experiment design</legend>
-              <label>
-                <span>Managed experiment</span>
-                <select
-                  value={activeExperimentId}
-                  onChange={(event) => selectExperiment(event.target.value)}
-                >
-                  <option value="">New draft</option>
-                  {experimentOverview.experiments.map((experiment) => (
-                    <option key={experiment.id} value={experiment.id}>
-                      {experiment.name} · {experiment.state}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                <span>Experiment design JSON</span>
-                <textarea
-                  value={experimentDesignJson}
-                  onChange={(event) => setExperimentDesignJson(event.target.value)}
-                  disabled={activeExperiment !== null && activeExperiment.state !== 'draft'}
-                  aria-describedby="experiment-design-help"
-                />
-              </label>
-              <small id="experiment-design-help">
-                Weights total 10,000 basis points. Exactly one primary metric is required; active
-                experiments cannot overlap the same resource and audience placement.
-              </small>
-              <button
-                type="button"
-                className="button button--secondary"
-                onClick={() => void saveExperimentDraft()}
-                disabled={activeExperiment !== null && activeExperiment.state !== 'draft'}
-              >
-                Save experiment draft
-              </button>
-              <label>
-                <span>Lifecycle or promotion reason</span>
-                <input
-                  value={experimentReason}
-                  onChange={(event) => setExperimentReason(event.target.value)}
-                />
-              </label>
-              <div className="experiment-panel__actions">
-                <button
-                  type="button"
-                  className="button button--primary"
-                  onClick={() => void transitionExperiment('start')}
-                  disabled={activeExperiment?.state !== 'draft'}
-                >
-                  Start experiment
-                </button>
+                </div>
+              </aside>
+            </section>
+          ) : null}{' '}
+          {operationsDashboard && analyticsReport ? (
+            <section className="operations-panel" aria-label="Administrator operations">
+              <div>
+                <span className="kicker">Administrator</span>
+                <h2>System integrity</h2>
+                <p>
+                  Audit chain {operationsDashboard.audit.valid ? 'verified' : 'requires attention'}{' '}
+                  · {operationsDashboard.audit.eventCount} audit events ·{' '}
+                  {analyticsReport.adapterDeliveries.length} analytics adapters
+                </p>
+              </div>
+              <dl>
+                <div className="operation-metric">
+                  <dt>Content</dt>
+                  <dd>{operationsDashboard.content.total}</dd>
+                </div>
+                <div className="operation-metric">
+                  <dt>Pending events</dt>
+                  <dd>{operationsDashboard.outbox.pending}</dd>
+                </div>
+                <div className="operation-metric">
+                  <dt>Dead jobs</dt>
+                  <dd>{operationsDashboard.jobs.dead}</dd>
+                </div>
+                <div className="operation-metric">
+                  <dt>Active webhooks</dt>
+                  <dd>{operationsDashboard.webhooks.active}</dd>
+                </div>
+                <div className="operation-metric">
+                  <dt>Content views</dt>
+                  <dd>{analyticsReport.eventCounts['content.viewed']}</dd>
+                </div>
+                <div className="operation-metric">
+                  <dt>Component views</dt>
+                  <dd>{analyticsReport.eventCounts['component.viewed']}</dd>
+                </div>
+                <div className="operation-metric">
+                  <dt>Interactions</dt>
+                  <dd>{analyticsReport.eventCounts['component.interacted']}</dd>
+                </div>
+                <div className="operation-metric">
+                  <dt>Release markers</dt>
+                  <dd>{analyticsReport.releaseAnnotations.length}</dd>
+                </div>
+                <div className="operation-metric">
+                  <dt>Dead deliveries</dt>
+                  <dd>
+                    {analyticsReport.adapterDeliveries.reduce(
+                      (total, adapter) => total + adapter.dead,
+                      0,
+                    )}
+                  </dd>
+                </div>
+              </dl>
+            </section>
+          ) : null}
+          {knowledge ? (
+            <section className="knowledge-panel" aria-label="Knowledge graph and reviewed agents">
+              <div className="section-heading">
+                <div>
+                  <span className="kicker">Private bounded knowledge</span>
+                  <h2>Graph exploration, explained recommendations, and reviewed draft plans</h2>
+                  <p>
+                    Agent {knowledge.policy.enabled ? 'enabled' : 'disabled'} · policy r
+                    {knowledge.version} · {knowledge.plans.length} retained plans ·{' '}
+                    {knowledge.receipts.length} receipts
+                  </p>
+                </div>
                 <button
                   type="button"
                   className="button button--secondary"
-                  onClick={() => void transitionExperiment('pause')}
-                  disabled={activeExperiment?.state !== 'running'}
+                  onClick={() => void refreshKnowledge(true)}
+                  disabled={knowledgeBusy}
                 >
-                  Pause experiment
-                </button>
-                <button
-                  type="button"
-                  className="button button--secondary"
-                  onClick={() => void transitionExperiment('resume')}
-                  disabled={activeExperiment?.state !== 'paused'}
-                >
-                  Resume experiment
-                </button>
-                <button
-                  type="button"
-                  className="button button--secondary"
-                  onClick={() => void transitionExperiment('complete')}
-                  disabled={
-                    !activeExperiment || !['running', 'paused'].includes(activeExperiment.state)
-                  }
-                >
-                  Complete experiment
-                </button>
-                <button
-                  type="button"
-                  className="button button--danger"
-                  onClick={() => void transitionExperiment('cancel')}
-                  disabled={
-                    !activeExperiment ||
-                    !['draft', 'running', 'paused'].includes(activeExperiment.state)
-                  }
-                >
-                  Cancel experiment
+                  Refresh knowledge state
                 </button>
               </div>
-            </fieldset>
-            <fieldset>
-              <legend>Aggregate metric evidence and promotion</legend>
-              <label>
-                <span>Aggregate metric snapshot JSON</span>
-                <textarea
-                  value={experimentMetricSnapshotJson}
-                  onChange={(event) => setExperimentMetricSnapshotJson(event.target.value)}
-                  aria-describedby="experiment-metric-help"
-                />
-              </label>
-              <small id="experiment-metric-help">
-                Every variant and declared metric must be present. Sample sizes and exposure totals
-                are bounded aggregates; the digest links the retained external evidence.
-              </small>
-              <button
-                type="button"
-                className="button button--secondary"
-                onClick={() => void recordExperimentMetrics()}
-                disabled={
-                  !activeExperiment ||
-                  !['running', 'paused', 'completed'].includes(activeExperiment.state)
-                }
-              >
-                Record aggregate snapshot
-              </button>
-              <label>
-                <span>Promotion snapshot ID</span>
-                <input
-                  value={experimentPromotionSnapshotId}
-                  onChange={(event) => setExperimentPromotionSnapshotId(event.target.value)}
-                />
-              </label>
-              <label>
-                <span>Supported winner variant</span>
-                <input
-                  value={experimentWinnerVariant}
-                  onChange={(event) => setExperimentWinnerVariant(event.target.value)}
-                />
-              </label>
-              <button
-                type="button"
-                className="button button--primary"
-                onClick={() => void promoteExperimentWinner()}
-                disabled={activeExperiment?.state !== 'completed'}
-              >
-                Promote winner to draft
-              </button>
-              {activeExperiment ? (
-                <article className="experiment-status" aria-label="Selected experiment status">
-                  <strong>
-                    {activeExperiment.name} · {activeExperiment.state} · r
-                    {activeExperiment.revision}
-                  </strong>
-                  <span>
-                    {activeExperiment.target.resourceKey} ·{' '}
-                    {activeExperiment.target.audienceId ?? 'fallback placement'} · control{' '}
-                    {activeExperiment.controlVariant}
-                  </span>
-                  <span>
-                    Pinned targeting:{' '}
-                    {activeExperiment.targetingRevision
-                      ? `r${activeExperiment.targetingRevision}`
-                      : 'not started'}
-                  </span>
-                  <span>
-                    Guardrails:{' '}
-                    {activeExperiment.lastGuardrailEvaluation
-                      ? `${activeExperiment.lastGuardrailEvaluation.status} (${activeExperiment.lastGuardrailEvaluation.snapshotId})`
-                      : 'not evaluated'}
-                  </span>
-                  <span>
-                    {activeExperiment.metricSnapshots.length} aggregate snapshots retained
-                  </span>
-                  {activeExperiment.promotion ? (
-                    <span>
-                      Draft promotion: {activeExperiment.promotion.winnerVariant} via{' '}
-                      {activeExperiment.promotion.snapshotId}
-                    </span>
-                  ) : null}
-                </article>
-              ) : (
-                <p className="empty-copy">Save a draft to begin the governed lifecycle.</p>
-              )}
-            </fieldset>
-          </div>
-        </section>
-      ) : null}
-      {componentGovernance ? (
-        <section className="governance-panel" aria-label="Component governance">
-          <div className="governance-panel__heading">
-            <span className="kicker">Component governance</span>
-            <label>
-              <span>Inspect component</span>
-              <select
-                value={componentGovernance.componentId}
-                onChange={(event) => void inspectComponent(event.target.value)}
-              >
-                {manifests.map((manifest) => (
-                  <option key={manifest.id} value={manifest.id}>
-                    {manifest.name} · v{manifest.version}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <div>
-            <strong>
-              {componentGovernance.migration.component.name} ·{' '}
-              {componentGovernance.migration.component.status}
-            </strong>
-            {componentGovernance.migration.component.deprecation ? (
-              <p>
-                {componentGovernance.migration.component.deprecation.reason}
-                {componentGovernance.migration.component.deprecation.replacementId
-                  ? ` Replace with ${componentGovernance.migration.component.deprecation.replacementId}.`
-                  : ''}
+              <p className="knowledge-panel__warning" role="note">
+                Graphs and recommendations are private, derived, and bounded. Agent runtimes receive
+                only mediated draft reads and can produce one expiring text/slug patch; a human must
+                review it, and execution can update only the saved draft—never publish it.
               </p>
-            ) : null}
-            <p>
-              {componentGovernance.migration.usage.totalInstances} scoped usages across{' '}
-              {componentGovernance.migration.usage.entries} entries ·{' '}
-              {componentGovernance.migration.outdatedInstances} outdated
-            </p>
-          </div>
-          <div>
-            <strong>Visual regression hooks</strong>
-            <p>
-              {componentGovernance.visual.scenarios.length} code-owned scenarios ·{' '}
-              {componentGovernance.visual.usageHooks.length} content hooks
-            </p>
-            <code>{componentGovernance.visual.selector}</code>
-          </div>
-          <div className="governance-panel__migrations">
-            {[
-              ...new Map(
-                componentGovernance.migration.usage.locations
-                  .filter(
-                    (location) =>
-                      location.perspective === 'draft' &&
-                      location.version !== componentGovernance.migration.component.version,
-                  )
-                  .map((location) => [location.entryId, location]),
-              ).values(),
-            ].map((location) => (
-              <button
-                type="button"
-                className="button button--secondary"
-                key={location.entryId}
-                disabled={!componentGovernance.migration.ready || busy}
-                onClick={() =>
-                  void migrateComponentEntry(
-                    location.entryId,
-                    componentGovernance.componentId,
-                    location.revisionId,
-                  )
-                }
-              >
-                Migrate {location.entryId} from v{location.version}
-              </button>
-            ))}
-          </div>
-        </section>
-      ) : null}
-      {qualityReport ? (
-        <section className="quality-panel" aria-label="Content quality report">
-          <div className="quality-panel__score">
-            <span className="kicker">Publish quality</span>
-            <strong>{qualityReport.score}</strong>
-            <span>{qualityReport.passed ? 'Ready to publish' : 'Gate blocked'}</span>
-          </div>
-          <div className="quality-panel__summary">
-            <p>
-              {qualityReport.summary.error} errors · {qualityReport.summary.warning} warnings ·{' '}
-              {qualityReport.summary.info} notes
-            </p>
-            <p>
-              Policy {qualityReport.policyId ?? 'none'} · {qualityReport.channel}
-              {qualityReport.bypassed ? ' · role bypass applied' : ''}
-            </p>
-            <button
-              type="button"
-              className="button button--secondary"
-              onClick={() => void runQuality()}
-              disabled={busy}
-            >
-              Re-run checks
-            </button>
-          </div>
-          {qualityReport.findings.length > 0 ? (
-            <ol className="quality-findings">
-              {qualityReport.findings.map((finding) => (
-                <li
-                  key={finding.id}
-                  className={`quality-finding quality-finding--${finding.severity}`}
-                >
-                  <span>
-                    {finding.category} · {finding.severity}
-                  </span>
-                  <strong>{finding.message}</strong>
-                  <code>{finding.path.length > 0 ? finding.path.join('.') : 'document'}</code>
-                  <p>{finding.remediation}</p>
-                </li>
-              ))}
-            </ol>
-          ) : (
-            <p className="quality-panel__empty">No findings for this policy and channel.</p>
-          )}
-        </section>
-      ) : null}{' '}
-      <div className="studio-workspace" aria-busy={busy}>
-        <aside className="content-sidebar" aria-label="Content entries">
-          <div className="sidebar-heading">
-            <div>
-              <span className="kicker">Content</span>
-              <h1>Pages</h1>
-            </div>
-            <button
-              type="button"
-              className="icon-button"
-              onClick={() => void createPage()}
-              aria-label="Create page"
-            >
-              +
-            </button>
-          </div>
-          <nav>
-            {entries.map((entry) => (
-              <button
-                type="button"
-                className={`entry-card ${selected?.id === entry.id ? 'entry-card--active' : ''}`}
-                key={entry.id}
-                onClick={() => requestSelectEntry(entry.id)}
-              >
-                <span className="entry-card__title">{entryTitle(entry, schemas)}</span>
-                <span className="entry-card__meta">/{entrySlug(entry, schemas)}</span>
-                <span className={`status status--${entry.status}`}>{entry.status}</span>
-              </button>
-            ))}
-          </nav>
-          {entries.length === 0 && !busy ? (
-            <p className="empty-copy">No pages yet. Create the first one.</p>
-          ) : null}
-        </aside>
-
-        <main className="editor-panel" id="studio-editor" tabIndex={-1}>
-          {notice ? (
-            <div className={`notice notice--${notice.tone}`} role="status">
-              {notice.message}
-            </div>
-          ) : null}
-          {busy && !draft ? (
-            <div className="loading-state" role="status" aria-live="polite">
-              Loading GridStory…
-            </div>
-          ) : null}
-          {fatalError && !draft ? (
-            <div className="loading-state" role="alert">
-              <p>GridStory could not load: {fatalError}</p>
-              <button
-                type="button"
-                className="button button--secondary"
-                onClick={() => setReloadToken((current) => current + 1)}
-              >
-                Try again
-              </button>
-            </div>
-          ) : null}
-          {draft && selected ? (
-            <>
-              <section className="document-heading">
-                <div>
-                  <span className="kicker">Page entry</span>
-                  <h2>{String(draft[activeSchema?.titleField ?? 'title'] || 'Untitled page')}</h2>
-                </div>
-                <span className={`status status--${selected.status}`}>{selected.status}</span>
-              </section>
-              <section className="document-fields" aria-label="Page fields">
-                {activeSchema?.fields.map((field) => {
-                  if (field.type === 'component-tree') return null;
-                  return (
-                    <SchemaFieldControl
-                      key={field.id}
-                      definition={field}
-                      value={draft[field.name]}
-                      entries={entries}
-                      assets={assetChoices}
-                      onChange={(value) =>
-                        changeDraft((current) => ({ ...current, [field.name]: value }))
-                      }
-                    />
-                  );
-                })}
-              </section>
-
-              <section className="workflow-panel" aria-label="Editorial workflow">
-                <div className="section-heading">
-                  <div>
-                    <span className="kicker">Governance</span>
-                    <h2>Editorial workflow</h2>
-                    <p>
-                      {activeWorkflow?.name ?? 'Configured workflow'} · version{' '}
-                      {workflowInstance?.workflowVersion ?? '—'}
-                    </p>
+              <div className="knowledge-panel__grid">
+                <fieldset>
+                  <legend>Selected entry knowledge</legend>
+                  <p>
+                    {selected
+                      ? `${selected.contentType} · ${selected.id}`
+                      : 'Select an entry first.'}
+                  </p>
+                  <div className="knowledge-panel__actions">
+                    <button
+                      type="button"
+                      className="button button--secondary"
+                      onClick={() => void exploreSelectedKnowledge()}
+                      disabled={knowledgeBusy || !selected}
+                    >
+                      Explore graph
+                    </button>
+                    <button
+                      type="button"
+                      className="button button--secondary"
+                      onClick={() => void recommendSelectedKnowledge()}
+                      disabled={knowledgeBusy || !selected}
+                    >
+                      Explain recommendations
+                    </button>
                   </div>
-                  <span
-                    className={`workflow-state workflow-state--${workflowState?.kind ?? 'draft'}`}
-                  >
-                    {workflowState?.label ?? workflowInstance?.stateId ?? 'Loading'}
-                  </span>
-                </div>
-
-                <div className="workflow-grid">
-                  <div className="workflow-actions">
-                    <h3>Available actions</h3>
-                    <div className="workflow-action-row">
-                      {availableWorkflowTransitions
-                        .filter((transition) => transition.id !== publishWorkflowTransition?.id)
-                        .map((transition) => (
-                          <button
-                            key={transition.id}
-                            type="button"
-                            className="button button--secondary"
-                            disabled={busy || workflowInstance?.pendingApproval !== undefined}
-                            onClick={() => void runWorkflowTransition(transition.id)}
-                          >
-                            {transition.label}
-                          </button>
-                        ))}
-                      {availableWorkflowTransitions.length === 0 ? (
-                        <span className="empty-copy">
-                          Save a new draft to restart editorial review.
-                        </span>
-                      ) : null}
-                    </div>
-
-                    {workflowInstance?.pendingApproval ? (
-                      <article className="approval-card">
-                        <div>
-                          <strong>Approval pending</strong>
-                          <p>
-                            Requested by {workflowInstance.pendingApproval.requestedBy}
-                            {workflowInstance.pendingApproval.dueAt
-                              ? ` · due ${new Date(
-                                  workflowInstance.pendingApproval.dueAt,
-                                ).toLocaleString()}`
-                              : ''}
-                          </p>
-                          <small>
-                            {
-                              workflowInstance.pendingApproval.decisions.filter(
-                                (decision) => decision.decision === 'approved',
-                              ).length
-                            }{' '}
-                            approvals recorded
-                            {workflowInstance.pendingApproval.escalatedAt ? ' · escalated' : ''}
-                          </small>
-                        </div>
-                        <div className="workflow-action-row">
-                          <button
-                            type="button"
-                            className="button button--primary"
-                            disabled={busy || dirty}
-                            onClick={() => void decideWorkflow('approved')}
-                          >
-                            Approve
-                          </button>
-                          <button
-                            type="button"
-                            className="button button--secondary"
-                            disabled={busy || dirty}
-                            onClick={() => void decideWorkflow('rejected')}
-                          >
-                            Reject and request changes
-                          </button>
-                        </div>
+                  <small aria-live="polite">
+                    {knowledgeGraph
+                      ? `${knowledgeGraph.nodes.length} nodes · ${knowledgeGraph.edges.length} edges · ${knowledgeGraph.paths.length} paths${knowledgeGraph.truncated ? ' · truncated' : ''}`
+                      : 'No graph exploration result yet.'}
+                  </small>
+                  <div className="knowledge-panel__records" aria-live="polite">
+                    {knowledgeRecommendations?.recommendations.map((recommendation) => (
+                      <article key={recommendation.entry.id}>
+                        <strong>
+                          {recommendation.entry.id} · score {recommendation.score}
+                        </strong>
+                        <small>
+                          {recommendation.contributions
+                            .map((contribution) => `${contribution.ruleId} +${contribution.weight}`)
+                            .join(' · ')}
+                        </small>
                       </article>
-                    ) : null}
-
-                    {publishWorkflowTransition ? (
-                      <div className="workflow-scheduler">
-                        <h3>Schedule publication</h3>
-                        <label className="gs-field">
-                          <span>Date and time</span>
-                          <input
-                            type="datetime-local"
-                            value={workflowScheduleAt}
-                            onChange={(event) => setWorkflowScheduleAt(event.target.value)}
-                          />
-                        </label>
-                        <label className="gs-field">
-                          <span>IANA time zone</span>
-                          <input
-                            value={workflowTimeZone}
-                            onChange={(event) => setWorkflowTimeZone(event.target.value)}
-                          />
-                        </label>
-                        <button
-                          type="button"
-                          className="button button--secondary"
-                          disabled={!workflowScheduleAt || busy}
-                          onClick={() =>
-                            void scheduleWorkflowTransition(publishWorkflowTransition.id)
-                          }
-                        >
-                          Schedule publish
-                        </button>
-                      </div>
-                    ) : null}
+                    ))}
                   </div>
-
-                  <div className="workflow-activity">
-                    <h3>Schedules and notifications</h3>
-                    {workflowInstance?.schedules.length ? (
-                      <ul className="workflow-list">
-                        {workflowInstance.schedules
-                          .slice()
-                          .reverse()
-                          .slice(0, 4)
-                          .map((schedule) => (
-                            <li key={schedule.id}>
-                              <div>
-                                <strong>{schedule.transitionId}</strong>
-                                <small>
-                                  {new Date(schedule.runAt).toLocaleString()} · {schedule.timeZone}{' '}
-                                  · {schedule.state}
-                                </small>
-                              </div>
-                              {schedule.state === 'pending' ? (
-                                <button
-                                  type="button"
-                                  disabled={busy}
-                                  onClick={() => void cancelWorkflowSchedule(schedule.id)}
-                                >
-                                  Cancel
-                                </button>
-                              ) : null}
-                            </li>
-                          ))}
-                      </ul>
-                    ) : null}
-                    {workflowInstance?.notifications.length ? (
-                      <ol className="workflow-list workflow-notifications">
-                        {workflowInstance.notifications
-                          .slice()
-                          .reverse()
-                          .slice(0, 5)
-                          .map((notification) => (
-                            <li key={notification.id}>
-                              <div>
-                                <strong>{notification.message}</strong>
-                                <small>
-                                  {new Date(notification.createdAt).toLocaleString()}
-                                  {notification.audienceRoles.length
-                                    ? ` · ${notification.audienceRoles.join(', ')}`
-                                    : ''}
-                                </small>
-                              </div>
-                            </li>
-                          ))}
-                      </ol>
-                    ) : (
-                      <p className="empty-copy">No workflow activity yet.</p>
-                    )}
-                  </div>
-                </div>
-              </section>
-
-              <section className="collaboration-panel" aria-label="Collaboration workspace">
-                <div className="section-heading">
-                  <div>
-                    <span className="kicker">Collaboration</span>
-                    <h2>Branches, suggestions, and comments</h2>
-                  </div>
-                  <ul className="presence-list" aria-label="Active editors">
-                    {collaboration.presence.length > 0 ? (
-                      collaboration.presence.map((participant) => (
-                        <li className="presence-chip" key={participant.actorId}>
-                          {participant.displayName}
-                          {participant.field ? ` · ${participant.field}` : ''}
-                        </li>
-                      ))
-                    ) : (
-                      <li className="presence-chip presence-chip--idle">No active editors</li>
-                    )}
-                  </ul>
-                </div>
-                <div className="collaboration-workbench">
-                  <div className="collaboration-controls">
-                    <label className="gs-field">
-                      <span>Working branch</span>
-                      <select
-                        value={collaborationBranchId}
-                        onChange={(event) => setCollaborationBranchId(event.target.value)}
-                      >
-                        {collaboration.branches.map((candidate) => (
-                          <option key={candidate.id} value={candidate.id}>
-                            {candidate.name} · {candidate.status}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="gs-field">
-                      <span>Shared field or block</span>
-                      <select
-                        value={collaborationTargetField}
-                        onChange={(event) => setCollaborationTargetField(event.target.value)}
-                      >
-                        <option value="">Choose a field</option>
-                        {activeSchema?.fields.map((field) => (
-                          <option key={field.id} value={field.name}>
-                            {field.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <button
-                      type="button"
-                      className="button button--secondary"
-                      disabled={
-                        !collaborationTargetField || selectedCollaborationValue === undefined
-                      }
-                      onClick={() => void shareCollaborationValue()}
-                    >
-                      Share current value
-                    </button>
-                    <span className="collaboration-version">
-                      {collaboration.operations.length} operations · document v
-                      {collaboration.version}
-                    </span>
-                  </div>
-
-                  <div className="collaboration-create-row">
-                    <label className="gs-field">
-                      <span>New branch from current</span>
-                      <input
-                        placeholder="Campaign revision"
-                        value={collaborationBranchName}
-                        onChange={(event) => setCollaborationBranchName(event.target.value)}
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      className="button button--secondary"
-                      disabled={!collaborationBranchName.trim()}
-                      onClick={() => void createCollaborationBranch()}
-                    >
-                      Create branch
-                    </button>
-                    <button
-                      type="button"
-                      className="button button--primary"
-                      disabled={
-                        collaborationBranchId === 'main' ||
-                        collaboration.branches.find(
-                          (candidate) => candidate.id === collaborationBranchId,
-                        )?.status !== 'open'
-                      }
-                      onClick={() => void mergeCollaborationBranch()}
-                    >
-                      Merge into Main
-                    </button>
-                  </div>
-
-                  <div className="collaboration-create-row collaboration-suggestion-composer">
-                    <label className="gs-field">
-                      <span>Proposed value</span>
-                      <textarea
-                        rows={2}
-                        placeholder="Suggest a replacement value for the selected field or block"
-                        value={collaborationSuggestionValue}
-                        onChange={(event) => setCollaborationSuggestionValue(event.target.value)}
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      className="button button--secondary"
-                      disabled={!collaborationTargetField || !collaborationSuggestionValue.trim()}
-                      onClick={() => void createCollaborationSuggestion()}
-                    >
-                      Open suggestion
-                    </button>
-                  </div>
-
-                  {collaboration.suggestions.length > 0 ? (
-                    <section className="collaboration-review-list" aria-label="Suggestions">
-                      <h3>Suggestions</h3>
-                      {collaboration.suggestions.map((suggestion) => (
-                        <article key={suggestion.id} className="collaboration-review-card">
-                          <div>
-                            <strong>{suggestion.target.field}</strong>
-                            {suggestion.target.nodeId ? ` · ${suggestion.target.nodeId}` : ''}
-                            <p>{collaborationValueLabel(suggestion.value)}</p>
-                            <small>
-                              {suggestion.createdBy} · {suggestion.status}
-                            </small>
-                          </div>
-                          {suggestion.status === 'open' ? (
-                            <div className="collaboration-card-actions">
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  void reviewCollaborationSuggestion(suggestion.id, 'accept')
-                                }
-                              >
-                                Accept
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  void reviewCollaborationSuggestion(suggestion.id, 'reject')
-                                }
-                              >
-                                Reject
-                              </button>
-                            </div>
-                          ) : null}
-                        </article>
-                      ))}
-                    </section>
-                  ) : null}
-
-                  {collaboration.conflicts.some((conflict) => conflict.status === 'open') ? (
-                    <section className="collaboration-review-list" aria-label="Merge conflicts">
-                      <h3>Merge conflicts</h3>
-                      {collaboration.conflicts
-                        .filter((conflict) => conflict.status === 'open')
-                        .map((conflict) => (
-                          <article
-                            key={conflict.id}
-                            className="collaboration-review-card collaboration-conflict-card"
-                          >
-                            <div>
-                              <strong>{conflict.target.field}</strong>
-                              {conflict.target.nodeId ? ` · ${conflict.target.nodeId}` : ''}
-                              <p>Choose the value that should become the causal successor.</p>
-                            </div>
-                            <div className="collaboration-conflict-variants">
-                              {conflict.variants.map((variant) => (
-                                <button
-                                  type="button"
-                                  key={variant.operationId}
-                                  onClick={() =>
-                                    void resolveCollaborationConflict(
-                                      conflict.id,
-                                      variant.operationId,
-                                    )
-                                  }
-                                >
-                                  <strong>{variant.branchId}</strong>
-                                  <span>{collaborationValueLabel(variant.value)}</span>
-                                  <small>{variant.actorId}</small>
-                                </button>
-                              ))}
-                            </div>
-                          </article>
-                        ))}
-                    </section>
-                  ) : null}
-                </div>
-                <h3 className="collaboration-comments-heading">Comments</h3>
-                <div className="comment-composer">
-                  <label className="gs-field">
-                    <span>Comment target</span>
-                    <select
-                      value={commentTargetField}
-                      onChange={(event) => setCommentTargetField(event.target.value)}
-                    >
-                      <option value="">Whole entry</option>
-                      {activeSchema?.fields.map((field) => (
-                        <option key={field.id} value={field.name}>
-                          {field.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="gs-field comment-body-field">
-                    <span>New comment</span>
+                </fieldset>
+                <fieldset>
+                  <legend>Disabled-by-default agent policy</legend>
+                  <label>
+                    <span>Policy JSON</span>
                     <textarea
-                      rows={3}
-                      placeholder="Write a comment and mention @reviewer"
-                      value={commentBody}
-                      onChange={(event) => setCommentBody(event.target.value)}
-                    />
-                  </label>
-                  <label className="gs-field">
-                    <span>Assign to</span>
-                    <input
-                      placeholder="actor-id"
-                      value={commentAssignee}
-                      onChange={(event) => setCommentAssignee(event.target.value)}
-                    />
-                  </label>
-                  <label className="gs-field">
-                    <span>Due date</span>
-                    <input
-                      type="datetime-local"
-                      value={commentDueAt}
-                      onChange={(event) => setCommentDueAt(event.target.value)}
+                      value={knowledgePolicyJson}
+                      onChange={(event) => setKnowledgePolicyJson(event.target.value)}
                     />
                   </label>
                   <button
                     type="button"
                     className="button button--secondary"
-                    disabled={!commentBody.trim()}
-                    onClick={() => void createComment()}
+                    onClick={() => void saveKnowledgePolicy()}
+                    disabled={knowledgeBusy}
                   >
-                    Add comment
+                    Save bounded agent policy
                   </button>
-                </div>
-                <div className="comment-thread-list">
-                  {collaboration.threads.map((thread) => (
-                    <article
-                      className={`comment-thread${thread.resolvedAt ? ' comment-thread--resolved' : ''}`}
-                      key={thread.id}
-                    >
-                      <header>
-                        <div>
-                          <strong>
-                            {thread.target.field ?? 'Entry'}
-                            {thread.target.nodeId ? ` · ${thread.target.nodeId}` : ''}
-                          </strong>
-                          <small>
-                            {thread.assigneeId ? `Assigned to ${thread.assigneeId}` : 'Unassigned'}
-                            {thread.dueAt
-                              ? ` · due ${new Date(thread.dueAt).toLocaleDateString()}`
-                              : ''}
-                          </small>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => void setThreadResolved(thread.id, !thread.resolvedAt)}
-                        >
-                          {thread.resolvedAt ? 'Reopen' : 'Resolve'}
-                        </button>
-                      </header>
-                      <ol>
-                        {thread.messages.map((message) => (
-                          <li key={message.id}>
-                            <strong>{message.actorId}</strong>
-                            <p>{message.body}</p>
-                            {message.mentions.length > 0 ? (
-                              <small>Mentioned: {message.mentions.join(', ')}</small>
-                            ) : null}
-                          </li>
-                        ))}
-                      </ol>
-                      <div className="comment-reply">
-                        <input
-                          aria-label={`Reply to comment ${thread.id}`}
-                          placeholder="Reply…"
-                          value={replyBodies[thread.id] ?? ''}
-                          onChange={(event) =>
-                            setReplyBodies((current) => ({
-                              ...current,
-                              [thread.id]: event.target.value,
-                            }))
-                          }
-                        />
-                        <button type="button" onClick={() => void replyToThread(thread.id)}>
-                          Reply
-                        </button>
+                </fieldset>
+                <fieldset>
+                  <legend>Plan and human review</legend>
+                  <label>
+                    <span>Goal for the selected saved draft</span>
+                    <textarea
+                      value={knowledgeGoal}
+                      onChange={(event) => setKnowledgeGoal(event.target.value)}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="button button--secondary"
+                    onClick={() => void createKnowledgePlan()}
+                    disabled={
+                      knowledgeBusy ||
+                      !selected ||
+                      !knowledge.policy.enabled ||
+                      !knowledgeGoal.trim()
+                    }
+                  >
+                    Create reviewable draft plan
+                  </button>
+                  <label>
+                    <span>Human review reason</span>
+                    <textarea
+                      value={knowledgeReviewReason}
+                      onChange={(event) => setKnowledgeReviewReason(event.target.value)}
+                    />
+                  </label>
+                </fieldset>
+              </div>
+              <div className="knowledge-panel__records" aria-live="polite">
+                <h3>Bounded plan history</h3>
+                {knowledge.plans
+                  .slice()
+                  .reverse()
+                  .map((plan) => (
+                    <article key={plan.id}>
+                      <div>
+                        <strong>
+                          {plan.target.contentType}/{plan.target.entryId} · {plan.status}
+                        </strong>
+                        <span>{plan.summary}</span>
+                        <ul>
+                          {plan.changes.map((change) => (
+                            <li key={change.fieldPath}>
+                              <code>{change.fieldPath}</code>: {change.value} — {change.rationale}
+                            </li>
+                          ))}
+                        </ul>
+                        <small>
+                          {plan.toolTrace.length} mediated tool call(s) · expires {plan.expiresAt}
+                        </small>
+                      </div>
+                      <div className="knowledge-panel__actions">
+                        {plan.status === 'pending-review' ? (
+                          <>
+                            <button
+                              type="button"
+                              className="button button--secondary"
+                              onClick={() =>
+                                void reviewKnowledgePlan(plan.id, plan.digest, 'approved')
+                              }
+                              disabled={knowledgeBusy}
+                            >
+                              Approve exact plan
+                            </button>
+                            <button
+                              type="button"
+                              className="button button--secondary"
+                              onClick={() =>
+                                void reviewKnowledgePlan(plan.id, plan.digest, 'rejected')
+                              }
+                              disabled={knowledgeBusy}
+                            >
+                              Reject plan
+                            </button>
+                          </>
+                        ) : null}
+                        {plan.status === 'approved' ? (
+                          <button
+                            type="button"
+                            className="button button--danger"
+                            onClick={() => void executeKnowledgePlan(plan.id, plan.digest)}
+                            disabled={knowledgeBusy || selected?.id !== plan.target.entryId}
+                          >
+                            Execute approved draft patch
+                          </button>
+                        ) : null}
                       </div>
                     </article>
                   ))}
-                  {collaboration.threads.length === 0 ? (
-                    <p className="empty-copy">No comment threads for this entry.</p>
-                  ) : null}
-                </div>
-              </section>
-
-              <section className="blocks-section">
-                <div className="section-heading">
-                  <div>
-                    <span className="kicker">Composition</span>
-                    <h2>{componentField?.label ?? 'Page blocks'}</h2>
-                  </div>
-                  <div className="composition-toolbar">
-                    <span>{layers.length} components</span>
-                    <button
-                      type="button"
-                      onClick={() => restoreComposition('undo')}
-                      disabled={compositionHistory.past.length === 0}
-                      aria-label="Undo composition change"
-                    >
-                      Undo
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => restoreComposition('redo')}
-                      disabled={compositionHistory.future.length === 0}
-                      aria-label="Redo composition change"
-                    >
-                      Redo
-                    </button>
-                  </div>
-                </div>
-                <section className="layers-panel" aria-label="Composition layers">
-                  <span>Layers</span>
-                  <p className="composition-help" id="composition-keyboard-help">
-                    Select a layer, then use arrow keys to reorder or nest it. Press Delete to
-                    remove it.
+                {knowledge.plans.length === 0 ? (
+                  <p className="empty-copy">No knowledge-agent plan has been retained.</p>
+                ) : null}
+              </div>
+            </section>
+          ) : null}
+          {fleet ? (
+            <section className="fleet-panel" aria-label="Self-hosted fleet observations">
+              <div className="section-heading">
+                <div>
+                  <span className="kicker">Private pull-only operations</span>
+                  <h2>Self-hosted fleet compatibility</h2>
+                  <p>
+                    State r{fleet.version} · {fleet.members.length} configured members ·{' '}
+                    {fleet.observations.length} retained observations
                   </p>
+                </div>
+                <button
+                  type="button"
+                  className="button button--secondary"
+                  onClick={() => void refreshFleet()}
+                  disabled={fleetBusy}
+                >
+                  Refresh fleet state
+                </button>
+              </div>
+              <p className="fleet-panel__warning" role="note">
+                GridStory observes only preconfigured adapters. Browser input never supplies a
+                target URL or credential, checks perform GET requests only, and this panel cannot
+                provision, deploy, upgrade, roll back, or mutate another instance.
+              </p>
+              <div className="fleet-panel__grid">
+                <fieldset>
+                  <legend>Register configured member</legend>
+                  <label>
+                    <span>Member ID</span>
+                    <input
+                      value={fleetMemberId}
+                      onChange={(event) => setFleetMemberId(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    <span>Display label</span>
+                    <input
+                      value={fleetMemberLabel}
+                      onChange={(event) => setFleetMemberLabel(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    <span>Configured adapter ID</span>
+                    <input
+                      value={fleetAdapterId}
+                      onChange={(event) => setFleetAdapterId(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    <span>Expected instance ID</span>
+                    <input
+                      value={fleetExpectedInstanceId}
+                      onChange={(event) => setFleetExpectedInstanceId(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    <span>Expected service version (optional)</span>
+                    <input
+                      value={fleetExpectedServiceVersion}
+                      onChange={(event) => setFleetExpectedServiceVersion(event.target.value)}
+                    />
+                  </label>
                   <button
                     type="button"
-                    className="layer-root-drop"
-                    onClick={() => {
-                      if (compositionHistory.selectedId) {
-                        applyComposition(
-                          moveNode(
-                            draftBlocks,
-                            compositionHistory.selectedId,
-                            { index: draftBlocks.length },
-                            compositionRules,
-                          ),
-                          compositionHistory.selectedId,
-                        );
-                      }
-                    }}
-                    onDragOver={(event) => event.preventDefault()}
-                    onDrop={() => {
-                      if (draggedNodeId) {
-                        applyComposition(
-                          moveNode(
-                            draftBlocks,
-                            draggedNodeId,
-                            { index: draftBlocks.length },
-                            compositionRules,
-                          ),
-                          draggedNodeId,
-                        );
-                      }
-                      setDraggedNodeId(null);
-                    }}
+                    className="button button--secondary"
+                    onClick={() => void registerFleetMember()}
+                    disabled={
+                      fleetBusy ||
+                      !fleetMemberId.trim() ||
+                      !fleetMemberLabel.trim() ||
+                      !fleetAdapterId.trim() ||
+                      !fleetExpectedInstanceId.trim()
+                    }
                   >
-                    Move selected to root
+                    Register fleet member
                   </button>
-                  {layers.map((layer) => (
-                    <button
-                      type="button"
-                      className={`layer-row ${compositionHistory.selectedId === layer.node.id ? 'layer-row--selected' : ''}`}
-                      key={layer.node.id}
-                      aria-describedby="composition-keyboard-help"
-                      style={{ paddingLeft: `${0.75 + layer.depth * 1.1}rem` }}
-                      draggable
-                      onDragStart={() => setDraggedNodeId(layer.node.id)}
-                      onDragEnd={() => setDraggedNodeId(null)}
-                      onDragOver={(event) => event.preventDefault()}
-                      onDrop={(event) => {
-                        event.preventDefault();
-                        if (draggedNodeId && draggedNodeId !== layer.node.id) {
-                          applyComposition(
-                            moveNode(
-                              draftBlocks,
-                              draggedNodeId,
-                              targetAt(layer.location, layer.location.index),
-                              compositionRules,
-                            ),
-                            draggedNodeId,
-                          );
-                        }
-                        setDraggedNodeId(null);
-                      }}
-                      onClick={() =>
-                        setCompositionHistory((current) => ({
-                          ...current,
-                          selectedId: layer.node.id,
-                        }))
-                      }
-                      onKeyDown={(event) => {
-                        if (
-                          ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Delete'].includes(
-                            event.key,
-                          )
-                        ) {
-                          event.preventDefault();
-                          moveByKeyboard(layer.node.id, event.key);
-                        }
-                      }}
-                    >
-                      <span>
-                        {manifestById.get(layer.node.component)?.name ?? layer.node.component}
-                      </span>
-                      <small>
-                        {layer.location.slotName ? `${layer.location.slotName} · ` : ''}
-                        {layer.node.id}
-                      </small>
-                    </button>
-                  ))}
-                </section>
-                <div className="block-list">
-                  {draftBlocks.map((node, index) => {
-                    const manifest = manifestById.get(node.component);
+                </fieldset>
+                <div className="fleet-panel__records" aria-live="polite">
+                  <h3>Configured members and latest evidence</h3>
+                  {fleet.members.map((member) => {
+                    const observation = fleet.observations
+                      .slice()
+                      .reverse()
+                      .find(
+                        (candidate) =>
+                          candidate.memberId === member.id &&
+                          candidate.memberGeneration === member.generation,
+                      );
                     return (
-                      <article
-                        className={`block-editor ${compositionHistory.selectedId === node.id ? 'block-editor--selected' : ''}`}
-                        key={node.id}
-                      >
-                        <header>
+                      <article key={member.id}>
+                        <div>
+                          <strong>
+                            {member.label} · {member.state} · generation {member.generation}
+                          </strong>
+                          <span>
+                            {member.id} · adapter {member.adapterId} · expects{' '}
+                            {member.expectedInstanceId}
+                            {member.expectedServiceVersion
+                              ? ` @ ${member.expectedServiceVersion}`
+                              : ''}
+                          </span>
+                          <small>
+                            {observation
+                              ? observation.conditions
+                                  .map(
+                                    (candidate) =>
+                                      `${candidate.type} ${candidate.status} (${candidate.reason})`,
+                                  )
+                                  .join(' · ')
+                              : 'No current-generation observation has been recorded.'}
+                          </small>
+                        </div>
+                        <div className="fleet-panel__actions">
                           <button
                             type="button"
-                            className="block-select"
-                            onClick={() =>
-                              setCompositionHistory((current) => ({
-                                ...current,
-                                selectedId: node.id,
-                              }))
-                            }
+                            className="button button--secondary"
+                            onClick={() => void checkFleetMember(member.id)}
+                            disabled={fleetBusy || member.state !== 'active'}
                           >
-                            <span className="block-number">
-                              {String(index + 1).padStart(2, '0')}
-                            </span>
-                            <span>
-                              <strong>{manifest?.name ?? node.component}</strong>
-                              <small>{manifest?.description}</small>
-                            </span>
+                            Check compatibility
                           </button>
-                          <div className="block-actions">
-                            <button
-                              type="button"
-                              aria-label="Move block up"
-                              disabled={index === 0}
-                              onClick={() =>
-                                applyComposition(
-                                  moveNode(
-                                    draftBlocks,
-                                    node.id,
-                                    { index: index - 1 },
-                                    compositionRules,
-                                  ),
-                                  node.id,
-                                )
-                              }
-                            >
-                              ↑
-                            </button>
-                            <button
-                              type="button"
-                              aria-label="Move block down"
-                              disabled={index === draftBlocks.length - 1}
-                              onClick={() =>
-                                applyComposition(
-                                  moveNode(
-                                    draftBlocks,
-                                    node.id,
-                                    { index: index + 2 },
-                                    compositionRules,
-                                  ),
-                                  node.id,
-                                )
-                              }
-                            >
-                              ↓
-                            </button>
-                            <button
-                              type="button"
-                              className="danger"
-                              aria-label="Remove block"
-                              disabled={draftBlocks.length <= (componentField?.minimum ?? 0)}
-                              onClick={() =>
-                                applyComposition(removeNode(draftBlocks, node.id, compositionRules))
-                              }
-                            >
-                              ×
-                            </button>
-                          </div>
-                        </header>
-                        <div className="block-fields">
-                          {manifest
-                            ? editablePropsFor(node, manifest).map((prop) => (
-                                <FieldControl
-                                  key={prop.id}
-                                  idPrefix={node.id}
-                                  definition={prop}
-                                  value={node.props[prop.name]}
-                                  onChange={(value) =>
-                                    changeBlocks(
-                                      (current) =>
-                                        updateNodeProps(current, node.id, {
-                                          ...node.props,
-                                          [prop.name]: value,
-                                        }),
-                                      node.id,
-                                    )
-                                  }
-                                />
-                              ))
-                            : null}
+                          <button
+                            type="button"
+                            className="button button--secondary"
+                            onClick={() =>
+                              void setFleetState(
+                                member.id,
+                                member.state === 'active' ? 'paused' : 'active',
+                              )
+                            }
+                            disabled={fleetBusy}
+                          >
+                            {member.state === 'active' ? 'Pause member' : 'Resume member'}
+                          </button>
+                          <button
+                            type="button"
+                            className="button button--danger"
+                            onClick={() => void removeFleetMember(member.id)}
+                            disabled={fleetBusy}
+                          >
+                            Remove member
+                          </button>
                         </div>
                       </article>
                     );
                   })}
+                  {fleet.members.length === 0 ? (
+                    <p className="empty-copy">
+                      No self-hosted instance is configured in this scope.
+                    </p>
+                  ) : null}
                 </div>
-                <div className="component-palette">
-                  <span>Add at root</span>
-                  {manifests
-                    .filter(
-                      (manifest) => rootAccepts.length === 0 || rootAccepts.includes(manifest.id),
-                    )
-                    .map((manifest) => (
-                      <button
-                        type="button"
-                        key={manifest.id}
-                        onClick={() => {
-                          const node = newNode(manifest);
-                          applyComposition(
-                            addNode(
-                              draftBlocks,
-                              node,
-                              { index: draftBlocks.length },
-                              compositionRules,
-                            ),
-                            node.id,
-                          );
-                        }}
-                      >
-                        + {manifest.name}
-                      </button>
-                    ))}
+              </div>
+            </section>
+          ) : null}
+          {contentFederation ? (
+            <section className="federation-panel" aria-label="Content federation and syndication">
+              <div className="section-heading">
+                <div>
+                  <span className="kicker">Contract-bound published content</span>
+                  <h2>Federation offers, agreements, and reviewed mirrors</h2>
+                  <p>
+                    State r{contentFederation.version} · {contentFederation.offers.length} offers ·{' '}
+                    {contentFederation.agreements.length} agreements ·{' '}
+                    {contentFederation.mirrors.length} retained mirrors
+                  </p>
                 </div>
-                <div className="design-library">
-                  <fieldset className="component-palette">
-                    <legend>Reusable symbols</legend>
-                    {designSystem.symbols.map((symbol) => (
-                      <button
-                        type="button"
-                        key={symbol.id}
-                        onClick={() => addSymbolAtRoot(symbol.id)}
-                      >
-                        + {symbol.name}
-                      </button>
-                    ))}
-                  </fieldset>
-                  <fieldset className="component-palette">
-                    <legend>Page templates</legend>
-                    {designSystem.templates.map((template) => (
-                      <button
-                        type="button"
-                        key={template.id}
-                        onClick={() => addTemplateAtRoot(template.id)}
-                      >
-                        Apply {template.name}
-                      </button>
-                    ))}
-                  </fieldset>
-                </div>
-                {selectedNode && selectedManifest ? (
-                  <section
-                    className="component-inspector"
-                    aria-label="Selected component inspector"
+                <button
+                  type="button"
+                  className="button button--secondary"
+                  onClick={() => void refreshContentFederation()}
+                  disabled={federationBusy}
+                >
+                  Refresh federation state
+                </button>
+              </div>
+              <p className="federation-panel__warning" role="note">
+                Only exact published schemas may cross this boundary. Source scope, instance, offer
+                digest, Ed25519 key, attribution, and mode are pinned; preview credentials, drafts,
+                components, assets, relations, rich text, and automatic editorial writes stay out.
+              </p>
+              <div className="federation-panel__grid">
+                <fieldset>
+                  <legend>Producer offer</legend>
+                  <label>
+                    <span>Offer JSON</span>
+                    <textarea
+                      value={federationOfferJson}
+                      onChange={(event) => setFederationOfferJson(event.target.value)}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="button button--secondary"
+                    onClick={() => void saveFederationOffer()}
+                    disabled={federationBusy}
                   >
-                    <header>
-                      <div>
-                        <span className="kicker">Selected component</span>
-                        <h3>{selectedManifest.name}</h3>
-                        <code>{selectedNode.id}</code>
-                      </div>
+                    Save exact offer version
+                  </button>
+                  <small>
+                    A server-side Ed25519 signer is required before an offer can be saved.
+                  </small>
+                </fieldset>
+                <fieldset>
+                  <legend>Consumer trust inspection</legend>
+                  <label>
+                    <span>Local agreement ID</span>
+                    <input
+                      value={federationAgreementId}
+                      onChange={(event) => setFederationAgreementId(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    <span>Agreement JSON</span>
+                    <textarea
+                      value={federationAgreementJson}
+                      onChange={(event) => setFederationAgreementJson(event.target.value)}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="button button--secondary"
+                    onClick={() => void inspectFederationAgreement()}
+                    disabled={federationBusy || !federationAgreementId.trim()}
+                  >
+                    Inspect and pin signed offer
+                  </button>
+                </fieldset>
+              </div>
+              <div className="federation-panel__records" aria-live="polite">
+                <h3>Pinned agreements</h3>
+                {contentFederation.agreements.map((agreement) => (
+                  <article key={agreement.id}>
+                    <div>
+                      <strong>
+                        {agreement.id} · {agreement.mode} · {agreement.state}
+                      </strong>
+                      <span>
+                        {agreement.sourceInstance} · offer {agreement.offerId} r
+                        {agreement.offerVersion}
+                      </span>
+                      <small>
+                        {agreement.types.length} exact type(s) · key {agreement.trustedKey.keyId} ·{' '}
+                        {agreement.attribution.creditText}
+                      </small>
+                    </div>
+                    <div className="federation-panel__actions">
                       <button
                         type="button"
-                        className="danger-link"
+                        className="button button--secondary"
                         onClick={() =>
-                          applyComposition(
-                            removeNode(draftBlocks, selectedNode.id, compositionRules),
+                          void changeFederationAgreementState(
+                            agreement.id,
+                            agreement.state === 'active' ? 'disabled' : 'active',
+                          )
+                        }
+                        disabled={federationBusy}
+                      >
+                        {agreement.state === 'active' ? 'Disable agreement' : 'Activate agreement'}
+                      </button>
+                      {agreement.mode === 'mirror' && agreement.state === 'active' ? (
+                        <button
+                          type="button"
+                          className="button button--secondary"
+                          onClick={() => void planFederationSync(agreement.id)}
+                          disabled={federationBusy}
+                        >
+                          Preview mirror sync
+                        </button>
+                      ) : null}
+                    </div>
+                  </article>
+                ))}
+                {contentFederation.agreements.length === 0 ? (
+                  <p className="empty-copy">No source offer has been inspected and pinned.</p>
+                ) : null}
+              </div>
+              <div className="federation-panel__records" aria-live="polite">
+                <h3>Reviewed mirror plans</h3>
+                {contentFederation.plans
+                  .slice()
+                  .reverse()
+                  .map((plan) => (
+                    <article key={plan.id}>
+                      <div>
+                        <strong>
+                          {plan.agreementId} · {plan.state} · {plan.effects.length} effect(s)
+                        </strong>
+                        <span>
+                          {plan.effects.map((effect) => effect.action).join(', ') || 'No changes'}
+                        </span>
+                        <small>Expires {plan.expiresAt}</small>
+                      </div>
+                      <div className="federation-panel__actions">
+                        {plan.state === 'preview' ? (
+                          <button
+                            type="button"
+                            className="button button--danger"
+                            onClick={() => void executeFederationSync(plan.id, plan.digest)}
+                            disabled={
+                              federationBusy ||
+                              plan.effects.some((effect) => effect.action === 'blocked')
+                            }
+                          >
+                            Execute reviewed sync
+                          </button>
+                        ) : null}
+                      </div>
+                    </article>
+                  ))}
+                {contentFederation.plans.length === 0 ? (
+                  <p className="empty-copy">No mirror synchronization preview has been retained.</p>
+                ) : null}
+              </div>
+            </section>
+          ) : null}
+          {regional ? (
+            <section
+              className="regional-panel"
+              aria-label="Regional delivery and failover controls"
+            >
+              <div className="section-heading">
+                <div>
+                  <span className="kicker">Single-writer regional control</span>
+                  <h2>Regional reads, consistency, and failover</h2>
+                  <p>
+                    {regional.state} · policy r{regional.version} · topology r
+                    {regional.topologyVersion} · active control {regional.activeControlRegion} ·
+                    reads {regional.readPolicy.mode}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="button button--secondary"
+                  onClick={() => void refreshRegional(true)}
+                  disabled={regionalBusy}
+                >
+                  Refresh regional state
+                </button>
+              </div>
+              <p className="regional-panel__warning" role="note">
+                GridStory validates provider evidence but does not provision replicas, databases,
+                DNS, traffic, or backups. Planned switchovers require caught-up zero-loss evidence;
+                emergency failover requires explicit acceptance of the observed nonzero loss bound.
+              </p>
+              <div className="regional-panel__grid">
+                <fieldset>
+                  <legend>Topology and published-read policy</legend>
+                  <label>
+                    <span>Policy JSON</span>
+                    <textarea
+                      value={regionalPolicyJson}
+                      onChange={(event) => setRegionalPolicyJson(event.target.value)}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="button button--secondary"
+                    onClick={() => void saveRegionalPolicy()}
+                    disabled={regionalBusy}
+                  >
+                    Save topology policy
+                  </button>
+                </fieldset>
+                <fieldset>
+                  <legend>Expiring failover preflight</legend>
+                  <label>
+                    <span>Preflight JSON</span>
+                    <textarea
+                      value={regionalFailoverJson}
+                      onChange={(event) => setRegionalFailoverJson(event.target.value)}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="button button--secondary"
+                    onClick={() => void preflightRegionalFailover()}
+                    disabled={regionalBusy || regional.state !== 'enabled'}
+                  >
+                    Record provider preflight
+                  </button>
+                </fieldset>
+                <fieldset>
+                  <legend>Independent approval</legend>
+                  <label>
+                    <span>Review reason</span>
+                    <textarea
+                      value={regionalApprovalReason}
+                      onChange={(event) => setRegionalApprovalReason(event.target.value)}
+                    />
+                  </label>
+                  <label className="regional-panel__checkbox">
+                    <input
+                      type="checkbox"
+                      checked={regionalAcceptDataLoss}
+                      onChange={(event) => setRegionalAcceptDataLoss(event.target.checked)}
+                    />
+                    <span>Accept the emergency plan's observed nonzero data-loss bound</span>
+                  </label>
+                  <p>
+                    Approval must come from a different recently reauthenticated human. Execution is
+                    idempotent and ambiguous outcomes must be reconciled before another transition.
+                  </p>
+                </fieldset>
+              </div>
+              <div className="regional-panel__operations" aria-live="polite">
+                <h3>Bounded operation history</h3>
+                {regional.operations
+                  .slice()
+                  .reverse()
+                  .slice(0, 10)
+                  .map((operation) => (
+                    <article key={operation.id}>
+                      <div>
+                        <strong>
+                          {operation.mode} · {operation.sourceRegion} → {operation.targetRegion}
+                        </strong>
+                        <span>
+                          {operation.state} · RPO {operation.expectedRpoSeconds}s · RTO{' '}
+                          {operation.expectedRtoSeconds}s · expires {operation.expiresAt}
+                        </span>
+                        <small>
+                          Readiness {operation.readiness.ready ? 'ready' : 'blocked'} · lag{' '}
+                          {operation.readiness.replicationLagMs}ms · estimated loss{' '}
+                          {operation.readiness.estimatedDataLossMs}ms
+                        </small>
+                      </div>
+                      <div className="regional-panel__actions">
+                        {operation.state === 'preview' ? (
+                          <button
+                            type="button"
+                            className="button button--secondary"
+                            onClick={() =>
+                              void approveRegionalFailover(operation.id, operation.digest)
+                            }
+                            disabled={regionalBusy || !regionalApprovalReason.trim()}
+                          >
+                            Approve as second human
+                          </button>
+                        ) : null}
+                        {operation.state === 'approved' ? (
+                          <button
+                            type="button"
+                            className="button button--danger"
+                            onClick={() => void executeRegionalFailover(operation.id)}
+                            disabled={regionalBusy}
+                          >
+                            Execute approved transition
+                          </button>
+                        ) : null}
+                        {operation.state === 'executing' || operation.state === 'ambiguous' ? (
+                          <button
+                            type="button"
+                            className="button button--danger"
+                            onClick={() => void reconcileRegionalFailover(operation.id)}
+                            disabled={regionalBusy}
+                          >
+                            Reconcile provider state
+                          </button>
+                        ) : null}
+                      </div>
+                    </article>
+                  ))}
+                {regional.operations.length === 0 ? (
+                  <p className="empty-copy">No failover preflight has been retained.</p>
+                ) : null}
+              </div>
+            </section>
+          ) : null}
+          {aiGateway ? (
+            <section className="ai-panel" aria-label="Governed AI gateway workbench">
+              <div className="section-heading">
+                <div>
+                  <span className="kicker">Provider-neutral control plane</span>
+                  <h2>AI policy, prompts, budgets, and kill switch</h2>
+                  <p>
+                    Gateway {aiGateway.state} · policy r{aiGateway.version} ·{' '}
+                    {aiGateway.activePrompts.length} active prompts · {aiGateway.models.length}{' '}
+                    models
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="button button--secondary"
+                  onClick={() => void refreshAiWorkbench(true)}
+                  disabled={aiBusy}
+                >
+                  Refresh AI policy
+                </button>
+              </div>
+              <p className="ai-panel__warning" role="note">
+                Provider credentials stay in trusted server composition. Retrieved fields and AI
+                output are untrusted, redacted, and never written to content automatically. Do not
+                paste secrets into policy, prompt, or test input JSON.
+              </p>
+              <div className="ai-panel__workbench">
+                <fieldset>
+                  <legend>Models and daily budgets</legend>
+                  <label>
+                    <span>Policy JSON</span>
+                    <textarea
+                      value={aiPolicyJson}
+                      onChange={(event) => setAiPolicyJson(event.target.value)}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="button button--secondary"
+                    onClick={() => void saveAiPolicy()}
+                    disabled={aiBusy}
+                  >
+                    Save AI policy
+                  </button>
+                </fieldset>
+                <fieldset>
+                  <legend>Immutable prompt and retrieval policy</legend>
+                  <label>
+                    <span>Prompt version JSON</span>
+                    <textarea
+                      value={aiPromptJson}
+                      onChange={(event) => setAiPromptJson(event.target.value)}
+                    />
+                  </label>
+                  <div className="ai-panel__actions">
+                    <button
+                      type="button"
+                      className="button button--secondary"
+                      onClick={() => void createAiPrompt()}
+                      disabled={aiBusy}
+                    >
+                      Create prompt version
+                    </button>
+                    <button
+                      type="button"
+                      className="button button--secondary"
+                      onClick={() => void activateAiPrompt()}
+                      disabled={aiBusy}
+                    >
+                      Activate exact prompt
+                    </button>
+                  </div>
+                </fieldset>
+                <fieldset>
+                  <legend>Emergency state</legend>
+                  <label>
+                    <span>Accountable reason</span>
+                    <input
+                      value={aiSwitchReason}
+                      onChange={(event) => setAiSwitchReason(event.target.value)}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className={
+                      aiGateway.state === 'enabled'
+                        ? 'button button--danger'
+                        : 'button button--primary'
+                    }
+                    onClick={() => void changeAiGatewayState()}
+                    disabled={aiBusy}
+                  >
+                    {aiGateway.state === 'enabled' ? 'Disable AI gateway' : 'Enable AI gateway'}
+                  </button>
+                  <p>{aiGateway.stateEvents.length} bounded state events retained.</p>
+                </fieldset>
+                <fieldset>
+                  <legend>Non-mutating test request</legend>
+                  <label>
+                    <span>Generation request JSON</span>
+                    <textarea
+                      value={aiRequestJson}
+                      onChange={(event) => setAiRequestJson(event.target.value)}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="button button--secondary"
+                    onClick={() => void generateAiTest()}
+                    disabled={aiBusy || aiGateway.state !== 'enabled'}
+                  >
+                    Generate untrusted output
+                  </button>
+                  {aiResult ? (
+                    <section className="ai-result" aria-label="Untrusted AI result">
+                      <strong>Untrusted output · review required</strong>
+                      <pre>{aiResult.output}</pre>
+                      <span>
+                        {aiResult.providerId}/{aiResult.modelId} · {aiResult.usage.inputTokens}{' '}
+                        input · {aiResult.usage.outputTokens} output tokens
+                      </span>
+                    </section>
+                  ) : (
+                    <p className="empty-copy">No AI output has been requested.</p>
+                  )}
+                </fieldset>
+                {aiAuthoring ? (
+                  <fieldset>
+                    <legend>Reviewed authoring and semantic policy</legend>
+                    <p>
+                      Authoring {aiAuthoring.state} · policy r{aiAuthoring.version} ·{' '}
+                      {aiAuthoring.actions.filter((action) => action.enabled).length} enabled
+                      actions · semantic {aiAuthoring.semantic.enabled ? 'enabled' : 'disabled'}
+                    </p>
+                    <label>
+                      <span>Authoring policy JSON</span>
+                      <textarea
+                        value={aiAuthoringPolicyJson}
+                        onChange={(event) => setAiAuthoringPolicyJson(event.target.value)}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="button button--secondary"
+                      onClick={() => void saveAiAuthoringPolicy()}
+                      disabled={aiBusy}
+                    >
+                      Save authoring policy
+                    </button>
+                  </fieldset>
+                ) : null}
+                {aiAuthoring ? (
+                  <fieldset>
+                    <legend>Field proposals and human review</legend>
+                    <p>
+                      Target:{' '}
+                      {selected
+                        ? `${entryTitle(selected, schemas)} · r${selected.draftRevisionId}`
+                        : 'none'}
+                    </p>
+                    <button
+                      type="button"
+                      className="button button--secondary"
+                      onClick={() => void createAiAuthoringProposal()}
+                      disabled={
+                        aiBusy ||
+                        dirty ||
+                        !selected ||
+                        aiAuthoring.state !== 'enabled' ||
+                        aiGateway.state !== 'enabled'
+                      }
+                    >
+                      Generate evaluated proposal
+                    </button>
+                    <label>
+                      <span>Human review reason</span>
+                      <input
+                        value={aiReviewReason}
+                        onChange={(event) => setAiReviewReason(event.target.value)}
+                      />
+                    </label>
+                    <section className="ai-proposal-list" aria-label="AI authoring proposals">
+                      {aiAuthoring.proposals
+                        .filter((proposal) => !selected || proposal.target.entryId === selected.id)
+                        .map((proposal) => (
+                          <section className="ai-proposal" key={proposal.id}>
+                            <strong>
+                              {proposal.status} · {proposal.action.id}
+                            </strong>
+                            <small>
+                              {proposal.provenance.providerId}/{proposal.provenance.modelId} ·
+                              prompt {proposal.provenance.promptId} v
+                              {proposal.provenance.promptVersion} · target{' '}
+                              {proposal.target.revisionId}
+                            </small>
+                            <ul>
+                              {proposal.changes.map((change) => (
+                                <li key={change.fieldPath}>
+                                  <code>{change.fieldPath}</code>: {change.value}
+                                </li>
+                              ))}
+                            </ul>
+                            <small>
+                              Evaluation {proposal.evaluation.outcome} ·{' '}
+                              {proposal.evaluation.results.length} declared checks ·{' '}
+                              {proposal.provenance.sources.length} exact sources
+                            </small>
+                            <div className="ai-panel__actions">
+                              {proposal.status === 'pending-review' ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="button button--primary"
+                                    onClick={() =>
+                                      void reviewAiAuthoringProposal(proposal.id, 'approved')
+                                    }
+                                    disabled={aiBusy}
+                                  >
+                                    Approve proposal
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="button button--secondary"
+                                    onClick={() =>
+                                      void reviewAiAuthoringProposal(proposal.id, 'rejected')
+                                    }
+                                    disabled={aiBusy}
+                                  >
+                                    Reject proposal
+                                  </button>
+                                </>
+                              ) : null}
+                              {proposal.status === 'approved' ? (
+                                <button
+                                  type="button"
+                                  className="button button--secondary"
+                                  onClick={() => applyAiProposalToEditor(proposal.id)}
+                                  disabled={
+                                    !selected ||
+                                    proposal.target.entryId !== selected.id ||
+                                    proposal.target.revisionId !== selected.draftRevisionId
+                                  }
+                                >
+                                  Use as unsaved editor changes
+                                </button>
+                              ) : null}
+                            </div>
+                          </section>
+                        ))}
+                      {aiAuthoring.proposals.length === 0 ? (
+                        <p className="empty-copy">No evaluated proposals have been retained.</p>
+                      ) : null}
+                    </section>
+                  </fieldset>
+                ) : null}
+                {aiAuthoring ? (
+                  <fieldset>
+                    <legend>Private semantic search</legend>
+                    <label>
+                      <span>Bounded semantic query</span>
+                      <input
+                        value={aiSemanticText}
+                        onChange={(event) => setAiSemanticText(event.target.value)}
+                        placeholder="Find related saved drafts"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="button button--secondary"
+                      onClick={() => void searchAiSemantically()}
+                      disabled={aiBusy || !aiSemanticText.trim() || !aiAuthoring.semantic.enabled}
+                    >
+                      Search private semantic index
+                    </button>
+                    {aiSemanticResult ? (
+                      <section className="ai-result" aria-label="Semantic search results">
+                        <strong>
+                          {aiSemanticResult.adapterId}/{aiSemanticResult.modelId} · index{' '}
+                          {aiSemanticResult.indexVersion}
+                        </strong>
+                        <ul>
+                          {aiSemanticResult.hits.map((hit) => (
+                            <li key={hit.entryId}>
+                              {hit.contentType}/{hit.entryId} · {hit.score.toFixed(3)} · r
+                              {hit.revisionId} · {hit.fieldPaths.join(', ')}
+                            </li>
+                          ))}
+                          {aiSemanticResult.hits.length === 0 ? (
+                            <li>No authorized matches.</li>
+                          ) : null}
+                        </ul>
+                      </section>
+                    ) : (
+                      <p className="empty-copy">No semantic search has run.</p>
+                    )}
+                  </fieldset>
+                ) : null}
+              </div>
+            </section>
+          ) : null}
+          {identitySnapshot ? (
+            <section className="identity-panel" aria-label="Enterprise identity administration">
+              <div className="section-heading">
+                <div>
+                  <span className="kicker">Enterprise identity</span>
+                  <h2>Federation and access controls</h2>
+                  <p>
+                    {identitySnapshot.providers.length} providers · {identitySnapshot.users.length}{' '}
+                    users ·{' '}
+                    {identitySnapshot.sessions.filter((session) => !session.revokedAt).length}{' '}
+                    active sessions
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="button button--secondary"
+                  onClick={() => void refreshIdentity()}
+                >
+                  Refresh identity state
+                </button>
+              </div>
+              <div className="identity-panel__grid">
+                <fieldset>
+                  <legend>Trusted provider</legend>
+                  <label>
+                    <span>Adapter ID</span>
+                    <input
+                      value={identityProviderId}
+                      onChange={(event) => setIdentityProviderId(event.target.value)}
+                      placeholder="workforce-oidc"
+                    />
+                  </label>
+                  <label>
+                    <span>Protocol</span>
+                    <select
+                      value={identityProviderProtocol}
+                      onChange={(event) =>
+                        setIdentityProviderProtocol(event.target.value as 'oidc' | 'saml')
+                      }
+                    >
+                      <option value="oidc">OIDC</option>
+                      <option value="saml">SAML 2.0</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>Issuer</span>
+                    <input
+                      value={identityProviderIssuer}
+                      onChange={(event) => setIdentityProviderIssuer(event.target.value)}
+                      placeholder="https://identity.example.com"
+                    />
+                  </label>
+                  <label>
+                    <span>Display name</span>
+                    <input
+                      value={identityProviderName}
+                      onChange={(event) => setIdentityProviderName(event.target.value)}
+                      placeholder="Workforce identity"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="button button--secondary"
+                    onClick={() => void configureIdentityProvider()}
+                  >
+                    Save trusted provider
+                  </button>
+                  <ul>
+                    {identitySnapshot.providers.map((provider) => (
+                      <li key={provider.id}>
+                        {provider.displayName} · {provider.protocol.toUpperCase()} ·{' '}
+                        {provider.enabled ? 'enabled' : 'disabled'}
+                      </li>
+                    ))}
+                  </ul>
+                </fieldset>
+
+                <fieldset>
+                  <legend>Session policy</legend>
+                  {(
+                    [
+                      ['idleTtlSeconds', 'Idle lifetime'],
+                      ['absoluteTtlSeconds', 'Absolute lifetime'],
+                      ['reauthenticationSeconds', 'Reauthentication'],
+                      ['maximumConcurrentSessions', 'Concurrent sessions'],
+                    ] as const
+                  ).map(([field, label]) => (
+                    <label key={field}>
+                      <span>{label}</span>
+                      <input
+                        type="number"
+                        min={1}
+                        value={identitySnapshot.policy[field]}
+                        onChange={(event) =>
+                          setIdentitySnapshot((current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  policy: {
+                                    ...current.policy,
+                                    [field]: Number(event.target.value),
+                                  },
+                                }
+                              : current,
+                          )
+                        }
+                      />
+                    </label>
+                  ))}
+                  <label className="identity-panel__checkbox">
+                    <input
+                      type="checkbox"
+                      checked={identitySnapshot.policy.privilegedStepUpRequired}
+                      onChange={(event) =>
+                        setIdentitySnapshot((current) =>
+                          current
+                            ? {
+                                ...current,
+                                policy: {
+                                  ...current.policy,
+                                  privilegedStepUpRequired: event.target.checked,
+                                },
+                              }
+                            : current,
+                        )
+                      }
+                    />
+                    <span>Require WebAuthn step-up for privileged operations</span>
+                  </label>
+                  <button
+                    type="button"
+                    className="button button--secondary"
+                    onClick={() => void saveIdentityPolicy()}
+                  >
+                    Save session policy
+                  </button>
+                </fieldset>
+
+                <fieldset>
+                  <legend>Group role mapping</legend>
+                  <label>
+                    <span>External group</span>
+                    <input
+                      value={identityGroup}
+                      onChange={(event) => setIdentityGroup(event.target.value)}
+                      placeholder="cms-editors"
+                    />
+                  </label>
+                  <label>
+                    <span>GridStory role</span>
+                    <input
+                      value={identityRole}
+                      onChange={(event) => setIdentityRole(event.target.value)}
+                      placeholder="author"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="button button--secondary"
+                    onClick={() => void createIdentityMapping()}
+                  >
+                    Add mapping
+                  </button>
+                  <ul>
+                    {identitySnapshot.mappings.map((mapping) => (
+                      <li key={mapping.id}>
+                        {mapping.externalGroup} → {mapping.roleId}
+                      </li>
+                    ))}
+                  </ul>
+                </fieldset>
+
+                <fieldset>
+                  <legend>Emergency and directory access</legend>
+                  <button
+                    type="button"
+                    className="button button--secondary"
+                    onClick={() => void issueDirectoryCredential()}
+                  >
+                    Issue SCIM credential
+                  </button>
+                  <label>
+                    <span>Incident ID</span>
+                    <input
+                      value={identityIncident}
+                      onChange={(event) => setIdentityIncident(event.target.value)}
+                      placeholder="INC-2026-001"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="button button--secondary"
+                    onClick={() => void issueBreakGlassCredential()}
+                  >
+                    Issue one-time break-glass credential
+                  </button>
+                  {identityOneTimeSecret ? (
+                    <div className="identity-panel__secret" role="status">
+                      <strong>Copy this secret now. It will not be shown again.</strong>
+                      <code>{identityOneTimeSecret}</code>
+                      <button
+                        type="button"
+                        className="button button--secondary"
+                        onClick={() => setIdentityOneTimeSecret(null)}
+                      >
+                        I saved it
+                      </button>
+                    </div>
+                  ) : null}
+                </fieldset>
+              </div>
+              <div className="identity-panel__events">
+                <h3>Recent security events</h3>
+                <ol>
+                  {identitySnapshot.securityEvents
+                    .slice(-8)
+                    .reverse()
+                    .map((event) => (
+                      <li key={event.id}>
+                        <strong>{event.action}</strong> · {event.outcome} · {event.occurredAt}
+                      </li>
+                    ))}
+                </ol>
+              </div>
+            </section>
+          ) : null}
+          {dataGovernance ? (
+            <section className="data-governance-panel" aria-label="Data governance administration">
+              <div className="section-heading">
+                <div>
+                  <span className="kicker">Guarded lifecycle</span>
+                  <h2>Retention, privacy requests, and legal holds</h2>
+                  <p>
+                    {dataGovernance.subjects.length} subjects ·{' '}
+                    {dataGovernance.holds.filter((hold) => hold.status === 'active').length} active
+                    holds · {dataGovernance.plans.length} plans
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="button button--secondary"
+                  onClick={() => void refreshDataGovernance()}
+                >
+                  Refresh governance state
+                </button>
+              </div>
+              <p className="data-governance-panel__warning" role="note">
+                Erasure is irreversible: a code rollback cannot restore erased records or external
+                objects. Verify a recoverable backup before approval.
+              </p>
+              <div className="data-governance-panel__grid">
+                <fieldset>
+                  <legend>Data subjects</legend>
+                  <label>
+                    <span>Customer reference</span>
+                    <input
+                      value={governanceSubjectReference}
+                      onChange={(event) => setGovernanceSubjectReference(event.target.value)}
+                      placeholder="customer-123"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="button button--secondary"
+                    onClick={() => void registerDataSubject()}
+                  >
+                    Register subject
+                  </button>
+                  <ul>
+                    {dataGovernance.subjects.map((subject) => (
+                      <li key={subject.id}>
+                        {subject.reference} · {subject.status}
+                      </li>
+                    ))}
+                    {dataGovernance.subjects.length === 0 ? (
+                      <li>No subjects in this scope.</li>
+                    ) : null}
+                  </ul>
+                </fieldset>
+                <fieldset>
+                  <legend>Legal holds</legend>
+                  <label>
+                    <span>Matter</span>
+                    <input
+                      value={governanceHoldMatter}
+                      onChange={(event) => setGovernanceHoldMatter(event.target.value)}
+                      placeholder="CASE-2026-001"
+                    />
+                  </label>
+                  <label>
+                    <span>Reason</span>
+                    <textarea
+                      value={governanceHoldReason}
+                      onChange={(event) => setGovernanceHoldReason(event.target.value)}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="button button--secondary"
+                    onClick={() => void createScopeHold()}
+                  >
+                    Activate scope hold
+                  </button>
+                  <ul>
+                    {dataGovernance.holds.map((hold) => (
+                      <li key={hold.id}>
+                        {hold.matter} · {hold.status}
+                      </li>
+                    ))}
+                  </ul>
+                </fieldset>
+                <fieldset>
+                  <legend>Retention execution</legend>
+                  <button
+                    type="button"
+                    className="button button--secondary"
+                    onClick={() => void previewRetention()}
+                  >
+                    Preview retention plan
+                  </button>
+                  <label>
+                    <span>Independent approval reason</span>
+                    <textarea
+                      value={governanceApprovalReason}
+                      onChange={(event) => setGovernanceApprovalReason(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    <span>Verified backup reference</span>
+                    <input
+                      value={governanceBackupReference}
+                      onChange={(event) => setGovernanceBackupReference(event.target.value)}
+                      placeholder="backup://tenant/date"
+                    />
+                  </label>
+                  <label>
+                    <span>Backup SHA-256</span>
+                    <input
+                      value={governanceBackupSha}
+                      onChange={(event) => setGovernanceBackupSha(event.target.value)}
+                      placeholder="64 lowercase hex characters"
+                    />
+                  </label>
+                </fieldset>
+              </div>
+              <div className="data-governance-panel__plans">
+                <h3>Plan effects and blockers</h3>
+                {dataGovernance.plans
+                  .slice()
+                  .reverse()
+                  .map((plan) => (
+                    <article key={plan.id}>
+                      <div>
+                        <strong>
+                          {plan.kind} · {plan.state}
+                        </strong>
+                        <code>{plan.digest}</code>
+                      </div>
+                      <ul>
+                        {plan.candidates.map((candidate) => (
+                          <li key={candidate.id}>
+                            {candidate.action} {candidate.resource.type}:{candidate.resource.id} ·{' '}
+                            {candidate.state}
+                            {candidate.blockers.length > 0
+                              ? ` · ${candidate.blockers.join(', ')}`
+                              : ''}
+                          </li>
+                        ))}
+                        {plan.candidates.length === 0 ? <li>No eligible resources.</li> : null}
+                      </ul>
+                      {plan.state === 'preview' ? (
+                        <button
+                          type="button"
+                          className="button button--danger"
+                          onClick={() => void approveGovernancePlan(plan)}
+                        >
+                          Approve irreversible plan
+                        </button>
+                      ) : null}
+                    </article>
+                  ))}
+              </div>
+            </section>
+          ) : null}
+          {migrationOverview ? (
+            <section className="migration-panel" aria-label="CMS migration workbench">
+              <div className="section-heading">
+                <div>
+                  <span className="kicker">Read-only source bridge</span>
+                  <h2>CMS migration and cutover evidence</h2>
+                  <p>
+                    {migrationOverview.sources.length} configured sources ·{' '}
+                    {migrationOverview.projects.length} projects · {migrationOverview.runs.length}{' '}
+                    runs
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="button button--secondary"
+                  onClick={() => void refreshMigrations()}
+                >
+                  Refresh migration state
+                </button>
+              </div>
+              <p className="migration-panel__warning" role="note">
+                Source adapters are read-only. A ready report proves only the observed content
+                checks; it does not switch traffic, migrate media binaries, decommission the source,
+                or replace a verified backup.
+              </p>
+              <div className="migration-panel__setup">
+                <fieldset>
+                  <legend>Versioned mapping recipe</legend>
+                  <label>
+                    <span>Configured source</span>
+                    <select
+                      value={migrationSourceId}
+                      onChange={(event) => setMigrationSourceId(event.target.value)}
+                    >
+                      <option value="">Select a source</option>
+                      {migrationOverview.sources.map((source) => (
+                        <option key={source.id} value={source.id}>
+                          {source.name} · {source.provider}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {migrationOverview.sources.length === 0 ? (
+                    <p className="empty-copy">
+                      Configure a trusted server-side source adapter first.
+                    </p>
+                  ) : null}
+                  <div className="migration-panel__fields">
+                    <label>
+                      <span>Recipe ID</span>
+                      <input
+                        value={migrationRecipeId}
+                        onChange={(event) => setMigrationRecipeId(event.target.value)}
+                        placeholder="contentful-page"
+                      />
+                    </label>
+                    <label>
+                      <span>Recipe name</span>
+                      <input
+                        value={migrationRecipeName}
+                        onChange={(event) => setMigrationRecipeName(event.target.value)}
+                        placeholder="Contentful pages"
+                      />
+                    </label>
+                    <label>
+                      <span>Source type</span>
+                      <input
+                        value={migrationSourceType}
+                        onChange={(event) => setMigrationSourceType(event.target.value)}
+                        placeholder="contentful.Entry.page"
+                      />
+                    </label>
+                    <label>
+                      <span>Target content type</span>
+                      <input
+                        value={migrationTargetType}
+                        onChange={(event) => setMigrationTargetType(event.target.value)}
+                      />
+                    </label>
+                  </div>
+                  <label>
+                    <span>Field mappings, one per line</span>
+                    <textarea
+                      value={migrationMappings}
+                      onChange={(event) => setMigrationMappings(event.target.value)}
+                      aria-describedby="migration-mapping-help"
+                    />
+                    <small id="migration-mapping-help">
+                      source.path -&gt; targetField -&gt; copy|string|number|boolean|slug
+                    </small>
+                  </label>
+                  <label>
+                    <span>Publication behavior</span>
+                    <select
+                      value={migrationPublicationMode}
+                      onChange={(event) =>
+                        setMigrationPublicationMode(event.target.value as 'draft' | 'mirror-source')
+                      }
+                    >
+                      <option value="draft">Import drafts; publish through normal workflow</option>
+                      <option value="mirror-source">
+                        Mirror source status through all publish gates
+                      </option>
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    className="button button--secondary"
+                    onClick={() => void saveMigrationRecipe()}
+                  >
+                    Save next recipe version
+                  </button>
+                </fieldset>
+                <fieldset>
+                  <legend>Dual-run project</legend>
+                  <label>
+                    <span>Project ID</span>
+                    <input
+                      value={migrationProjectId}
+                      onChange={(event) => setMigrationProjectId(event.target.value)}
+                      placeholder="contentful-cutover"
+                    />
+                  </label>
+                  <label>
+                    <span>Project name</span>
+                    <input
+                      value={migrationProjectName}
+                      onChange={(event) => setMigrationProjectName(event.target.value)}
+                      placeholder="Website cutover"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="button button--secondary"
+                    onClick={() => void createMigrationProject()}
+                  >
+                    Create dual-run project
+                  </button>
+                  <label>
+                    <span>Active project</span>
+                    <select
+                      value={activeMigrationProjectId}
+                      onChange={(event) => {
+                        setActiveMigrationProjectId(event.target.value);
+                        setMigrationPlanReviewed(false);
+                      }}
+                    >
+                      <option value="">Select a project</option>
+                      {migrationOverview.projects.map((project) => (
+                        <option key={project.id} value={project.id}>
+                          {project.name} · {project.state}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {activeMigrationProjectId ? (
+                    <div className="migration-panel__actions">
+                      <button
+                        type="button"
+                        className="button button--secondary"
+                        onClick={() => void previewMigrationSync()}
+                        disabled={
+                          migrationOverview.projects.find(
+                            (project) => project.id === activeMigrationProjectId,
+                          )?.state !== 'active'
+                        }
+                      >
+                        Preview next sync
+                      </button>
+                      <button
+                        type="button"
+                        className="button button--secondary"
+                        onClick={() =>
+                          void setMigrationProjectState(
+                            migrationOverview.projects.find(
+                              (project) => project.id === activeMigrationProjectId,
+                            )?.state === 'paused'
+                              ? 'active'
+                              : 'paused',
                           )
                         }
                       >
-                        Remove
+                        {migrationOverview.projects.find(
+                          (project) => project.id === activeMigrationProjectId,
+                        )?.state === 'paused'
+                          ? 'Resume project'
+                          : 'Pause project'}
                       </button>
-                    </header>
-                    {selectedSymbol ? (
-                      <p className="symbol-notice">
-                        Linked to {selectedSymbol.name}. Only approved overrides are editable;
-                        governed values update from the design system.
-                      </p>
-                    ) : null}
-                    {editablePropsFor(selectedNode, selectedManifest).length > 0 ? (
-                      <div className="block-fields">
-                        {editablePropsFor(selectedNode, selectedManifest).map((prop) => (
-                          <FieldControl
-                            key={prop.id}
-                            idPrefix={`inspector-${selectedNode.id}`}
-                            definition={prop}
-                            value={selectedNode.props[prop.name]}
-                            onChange={(value) =>
-                              changeBlocks(
-                                (current) =>
-                                  updateNodeProps(current, selectedNode.id, {
-                                    ...selectedNode.props,
-                                    [prop.name]: value,
-                                  }),
-                                selectedNode.id,
-                              )
+                      <button
+                        type="button"
+                        className="button button--primary"
+                        onClick={() => void validateMigrationCutover()}
+                      >
+                        Validate cutover
+                      </button>
+                    </div>
+                  ) : null}
+                </fieldset>
+              </div>
+              <div className="migration-panel__evidence">
+                <section aria-label="Migration sync plans">
+                  <h3>Sync plans and exact effects</h3>
+                  {migrationOverview.plans
+                    .filter((plan) => plan.projectId === activeMigrationProjectId)
+                    .slice()
+                    .reverse()
+                    .map((plan) => (
+                      <article key={plan.id} className="migration-plan-card">
+                        <div>
+                          <strong>
+                            {plan.snapshotKind} · {plan.state}
+                          </strong>
+                          <code>{plan.digest}</code>
+                        </div>
+                        <p>
+                          {plan.counts.create} create · {plan.counts.update} update ·{' '}
+                          {plan.counts.publish} publish · {plan.counts.noop} unchanged ·{' '}
+                          {plan.counts.sourceDeleted} deleted at source · {plan.counts.blocked}{' '}
+                          blocked
+                        </p>
+                        <ul>
+                          {plan.effects.map((effect) => (
+                            <li key={`${plan.id}-${effect.externalId}`}>
+                              <strong>{effect.externalId}</strong> · {effect.action}
+                              {effect.publish ? ' · publish' : ''}
+                              {effect.blockers.map((blocker) => ` · ${blocker.code}`).join('')}
+                            </li>
+                          ))}
+                        </ul>
+                        {plan.state === 'preview' ? (
+                          <>
+                            <label className="migration-panel__review">
+                              <input
+                                type="checkbox"
+                                checked={migrationPlanReviewed}
+                                onChange={(event) => setMigrationPlanReviewed(event.target.checked)}
+                              />
+                              <span>
+                                I reviewed this exact digest, every effect, and all blockers.
+                              </span>
+                            </label>
+                            <button
+                              type="button"
+                              className="button button--primary"
+                              disabled={
+                                !migrationPlanReviewed ||
+                                plan.counts.blocked > 0 ||
+                                plan.counts.sourceDeleted > 0
+                              }
+                              onClick={() => void executeMigrationPlan(plan)}
+                            >
+                              Execute reviewed plan
+                            </button>
+                          </>
+                        ) : null}
+                      </article>
+                    ))}
+                  {migrationOverview.plans.every(
+                    (plan) => plan.projectId !== activeMigrationProjectId,
+                  ) ? (
+                    <p className="empty-copy">No sync plan for the selected project.</p>
+                  ) : null}
+                </section>
+                <section aria-label="Migration cutover reports">
+                  <h3>Cutover readiness reports</h3>
+                  {migrationOverview.cutoverReports
+                    .filter((report) => report.projectId === activeMigrationProjectId)
+                    .slice()
+                    .reverse()
+                    .map((report) => (
+                      <article
+                        key={report.id}
+                        className={`migration-cutover-card migration-cutover-card--${report.ready ? 'ready' : 'blocked'}`}
+                      >
+                        <strong>{report.ready ? 'Content checks ready' : 'Cutover blocked'}</strong>
+                        <span>
+                          {report.currentCount}/{report.sourceCount} current ·{' '}
+                          {report.publishedCount} published
+                        </span>
+                        <code>{report.digest}</code>
+                        <ul>
+                          {report.blockers.map((blocker, index) => (
+                            <li key={`${report.id}-${blocker.externalId ?? index}-${blocker.code}`}>
+                              {blocker.externalId ? `${blocker.externalId} · ` : ''}
+                              {blocker.code}: {blocker.message}
+                            </li>
+                          ))}
+                        </ul>
+                      </article>
+                    ))}
+                  {migrationOverview.cutoverReports.every(
+                    (report) => report.projectId !== activeMigrationProjectId,
+                  ) ? (
+                    <p className="empty-copy">No cutover report for the selected project.</p>
+                  ) : null}
+                </section>
+              </div>
+            </section>
+          ) : null}
+          {marketplaceOverview ? (
+            <section className="marketplace-panel" aria-label="Plugin marketplace workbench">
+              <div className="section-heading">
+                <div>
+                  <span className="kicker">Evidence-bound extensions</span>
+                  <h2>Verified publishers and reviewed packages</h2>
+                  <p>
+                    {marketplaceOverview.publishers.length} publishers ·{' '}
+                    {marketplaceOverview.releases.length} immutable releases
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="button button--secondary"
+                  onClick={() => void refreshMarketplace()}
+                >
+                  Refresh marketplace
+                </button>
+              </div>
+              <p className="marketplace-panel__warning" role="note">
+                A verified badge means domain possession plus accountable human review. A passing
+                scan and provenance identify observed evidence; neither proves package safety.
+                Installed plugins remain disabled, ungranted, and dependent on a separately hardened
+                runtime.
+              </p>
+              <div className="marketplace-panel__setup">
+                <fieldset>
+                  <legend>Register publisher identity</legend>
+                  <div className="marketplace-panel__fields">
+                    <label>
+                      <span>Publisher ID</span>
+                      <input
+                        value={marketplacePublisherId}
+                        onChange={(event) => setMarketplacePublisherId(event.target.value)}
+                        placeholder="example"
+                      />
+                    </label>
+                    <label>
+                      <span>Display name</span>
+                      <input
+                        value={marketplacePublisherName}
+                        onChange={(event) => setMarketplacePublisherName(event.target.value)}
+                        placeholder="Example"
+                      />
+                    </label>
+                    <label>
+                      <span>Verified domain</span>
+                      <input
+                        value={marketplacePublisherDomain}
+                        onChange={(event) => setMarketplacePublisherDomain(event.target.value)}
+                        placeholder="example.com"
+                      />
+                    </label>
+                    <label>
+                      <span>Signing key ID</span>
+                      <input
+                        value={marketplacePublisherKeyId}
+                        onChange={(event) => setMarketplacePublisherKeyId(event.target.value)}
+                      />
+                    </label>
+                  </div>
+                  <label>
+                    <span>Ed25519 public key (PEM)</span>
+                    <textarea
+                      value={marketplacePublisherPublicKey}
+                      onChange={(event) => setMarketplacePublisherPublicKey(event.target.value)}
+                      aria-describedby="marketplace-key-help"
+                    />
+                    <small id="marketplace-key-help">
+                      Public verification material only. Never paste a private signing key.
+                    </small>
+                  </label>
+                  <button
+                    type="button"
+                    className="button button--secondary"
+                    onClick={() => void registerMarketplacePublisher()}
+                  >
+                    Register pending publisher
+                  </button>
+                </fieldset>
+                <fieldset>
+                  <legend>Submit immutable signed release</legend>
+                  <label>
+                    <span>Signed Plugin SDK manifest JSON</span>
+                    <textarea
+                      value={marketplaceManifestJson}
+                      onChange={(event) => setMarketplaceManifestJson(event.target.value)}
+                      aria-describedby="marketplace-manifest-help"
+                    />
+                    <small id="marketplace-manifest-help">
+                      Compatibility, support links, permissions, digest, and size must already be
+                      inside the publisher signature.
+                    </small>
+                  </label>
+                  <label>
+                    <span>Opaque artifact scanner reference</span>
+                    <input
+                      value={marketplaceArtifactReference}
+                      onChange={(event) => setMarketplaceArtifactReference(event.target.value)}
+                      placeholder="scanner://review-system/package-version"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="button button--secondary"
+                    onClick={() => void submitMarketplaceRelease()}
+                  >
+                    Submit release for review
+                  </button>
+                </fieldset>
+              </div>
+              {marketplaceChallenge ? (
+                <div className="marketplace-challenge" role="status">
+                  <strong>Pending DNS TXT proof</strong>
+                  <span>{marketplaceChallenge.recordName}</span>
+                  <code>{marketplaceChallenge.token}</code>
+                  <small>Expires {new Date(marketplaceChallenge.expiresAt).toLocaleString()}</small>
+                </div>
+              ) : null}
+              <fieldset className="marketplace-panel__review-inputs">
+                <legend>Accountable review decision</legend>
+                <label>
+                  <span>Evidence reference</span>
+                  <input
+                    value={marketplaceEvidenceReference}
+                    onChange={(event) => setMarketplaceEvidenceReference(event.target.value)}
+                    placeholder="publisher-review:ticket-123"
+                  />
+                </label>
+                <label>
+                  <span>Reason</span>
+                  <input
+                    value={marketplaceReason}
+                    onChange={(event) => setMarketplaceReason(event.target.value)}
+                    placeholder="What was reviewed and why this decision is safe"
+                  />
+                </label>
+                <small>
+                  Publisher owners, automated-review operators, and release approvers must be
+                  distinct authenticated principals where required.
+                </small>
+              </fieldset>
+              <div className="marketplace-panel__catalog">
+                <section aria-label="Marketplace publishers">
+                  <h3>Publisher identity</h3>
+                  {marketplaceOverview.publishers.map((publisher) => (
+                    <article key={publisher.id} className="marketplace-card">
+                      <div className="marketplace-card__heading">
+                        <div>
+                          <strong>{publisher.displayName}</strong>
+                          <span>{publisher.domain}</span>
+                        </div>
+                        <span className={`status-pill status-pill--${publisher.state}`}>
+                          {publisher.state}
+                        </span>
+                      </div>
+                      <dl>
+                        <div>
+                          <dt>Domain proof</dt>
+                          <dd>{publisher.domainVerifiedAt ? 'observed' : 'pending'}</dd>
+                        </div>
+                        <div>
+                          <dt>Key</dt>
+                          <dd>{publisher.key.keyId}</dd>
+                        </div>
+                        <div>
+                          <dt>Fingerprint</dt>
+                          <dd>
+                            <code>{publisher.key.fingerprint}</code>
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Human reviewer</dt>
+                          <dd>{publisher.verifiedBy ?? 'pending'}</dd>
+                        </div>
+                      </dl>
+                      <div className="marketplace-card__actions">
+                        {publisher.state === 'pending' ? (
+                          <>
+                            <button
+                              type="button"
+                              className="button button--secondary"
+                              onClick={() => void issueMarketplaceChallenge(publisher.id)}
+                            >
+                              Issue DNS challenge
+                            </button>
+                            <button
+                              type="button"
+                              className="button button--secondary"
+                              onClick={() => void verifyMarketplaceDomain(publisher.id)}
+                            >
+                              Verify TXT proof
+                            </button>
+                            <button
+                              type="button"
+                              className="button button--primary"
+                              disabled={!publisher.domainVerifiedAt}
+                              onClick={() => void approveMarketplacePublisher(publisher.id)}
+                            >
+                              Approve publisher
+                            </button>
+                          </>
+                        ) : null}
+                        {publisher.state === 'verified' ? (
+                          <button
+                            type="button"
+                            className="button button--danger"
+                            onClick={() => void suspendMarketplacePublisher(publisher.id)}
+                          >
+                            Suspend trust
+                          </button>
+                        ) : null}
+                      </div>
+                    </article>
+                  ))}
+                  {marketplaceOverview.publishers.length === 0 ? (
+                    <p className="empty-copy">No publisher identity has been registered.</p>
+                  ) : null}
+                </section>
+                <section aria-label="Marketplace releases">
+                  <h3>Signed package releases</h3>
+                  {marketplaceOverview.releases.map((release) => {
+                    const metadata = release.manifest.marketplace;
+                    const review = release.reviews.at(-1);
+                    return (
+                      <article
+                        key={release.id}
+                        className="marketplace-card marketplace-release-card"
+                      >
+                        <div className="marketplace-card__heading">
+                          <div>
+                            <strong>{release.manifest.name}</strong>
+                            <span>
+                              {release.pluginId} · v{release.version}
+                            </span>
+                          </div>
+                          <span className={`status-pill status-pill--${release.state}`}>
+                            {release.state}
+                          </span>
+                        </div>
+                        <p>{release.manifest.description}</p>
+                        <dl>
+                          <div>
+                            <dt>Publisher</dt>
+                            <dd>{release.publisherId}</dd>
+                          </div>
+                          <div>
+                            <dt>Compatibility</dt>
+                            <dd>
+                              {metadata
+                                ? `${metadata.compatibility.gridstory.minVersion}–${metadata.compatibility.gridstory.maxVersionExclusive}`
+                                : 'missing'}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt>Support</dt>
+                            <dd>{metadata?.support.status ?? 'missing'}</dd>
+                          </div>
+                          <div>
+                            <dt>Artifact digest</dt>
+                            <dd>
+                              <code>{release.manifest.package.sha256}</code>
+                            </dd>
+                          </div>
+                        </dl>
+                        <div>
+                          <strong>Transparent permissions</strong>
+                          {release.manifest.requestedCapabilities.length > 0 ? (
+                            <ul>
+                              {release.manifest.requestedCapabilities.map((grant) => (
+                                <li key={grant.capability}>{grant.capability}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p>No capability requested.</p>
+                          )}
+                        </div>
+                        {review ? (
+                          <section
+                            className="marketplace-review"
+                            aria-label={`Review for ${release.pluginId}`}
+                          >
+                            <strong>
+                              Automated evidence · {review.status} · {review.inspector.id}{' '}
+                              {review.inspector.version}
+                            </strong>
+                            <ul>
+                              {review.checks.map((check) => (
+                                <li key={check.id} data-status={check.status}>
+                                  {check.status} · {check.category}: {check.summary}
+                                </li>
+                              ))}
+                            </ul>
+                          </section>
+                        ) : (
+                          <p className="empty-copy">No automated review evidence recorded.</p>
+                        )}
+                        <div className="marketplace-card__actions">
+                          {release.state === 'submitted' ? (
+                            <button
+                              type="button"
+                              className="button button--secondary"
+                              onClick={() => void reviewMarketplaceRelease(release.id)}
+                            >
+                              Run trusted review
+                            </button>
+                          ) : null}
+                          {release.state === 'reviewed' ? (
+                            <>
+                              <button
+                                type="button"
+                                className="button button--primary"
+                                onClick={() => void decideMarketplaceRelease(release.id, 'approve')}
+                              >
+                                Approve exact release
+                              </button>
+                              <button
+                                type="button"
+                                className="button button--danger"
+                                onClick={() => void decideMarketplaceRelease(release.id, 'reject')}
+                              >
+                                Reject
+                              </button>
+                            </>
+                          ) : null}
+                          {release.state === 'approved' ? (
+                            <>
+                              <button
+                                type="button"
+                                className="button button--secondary"
+                                onClick={() => void installMarketplaceRelease(release.id)}
+                              >
+                                Install disabled · no grants
+                              </button>
+                              <button
+                                type="button"
+                                className="button button--danger"
+                                onClick={() => void decideMarketplaceRelease(release.id, 'yank')}
+                              >
+                                Yank release
+                              </button>
+                            </>
+                          ) : null}
+                        </div>
+                      </article>
+                    );
+                  })}
+                  {marketplaceOverview.releases.length === 0 ? (
+                    <p className="empty-copy">No signed release has been submitted.</p>
+                  ) : null}
+                </section>
+              </div>
+            </section>
+          ) : null}
+          {personalization ? (
+            <section
+              className="personalization-panel"
+              aria-label="Personalization targeting workbench"
+            >
+              <div className="section-heading">
+                <div>
+                  <span className="kicker">Consent-aware decisions</span>
+                  <h2>Audiences, variants, and edge cache guidance</h2>
+                  <p>
+                    Draft r{personalization.draft.revision} ·{' '}
+                    {personalization.draft.configuration.audiences.length} audiences ·{' '}
+                    {personalization.draft.configuration.decisions.length} decisions · published{' '}
+                    {personalization.published ? `r${personalization.published.revision}` : 'never'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="button button--secondary"
+                  onClick={() => void refreshPersonalization()}
+                >
+                  Refresh targeting
+                </button>
+              </div>
+              <p className="personalization-panel__warning" role="note">
+                Use only bounded declared traits. Do not paste names, email addresses, account IDs,
+                cookies, IP addresses, or raw referral URLs. Preview is hypothetical and private;
+                published decisions never read this draft.
+              </p>
+              <div className="personalization-panel__workbench">
+                <fieldset>
+                  <legend>Versioned targeting configuration</legend>
+                  <label>
+                    <span>Targeting configuration JSON</span>
+                    <textarea
+                      value={personalizationConfigurationJson}
+                      onChange={(event) => {
+                        setPersonalizationConfigurationJson(event.target.value);
+                        setPersonalizationConfigurationDirty(true);
+                      }}
+                      aria-describedby="personalization-configuration-help"
+                    />
+                  </label>
+                  <small id="personalization-configuration-help">
+                    Every personal attribute needs explicit purposes; priorities and resource keys
+                    must be unique, and every decision needs a fallback variant.
+                  </small>
+                  <div className="personalization-panel__actions">
+                    <button
+                      type="button"
+                      className="button button--secondary"
+                      onClick={() => void savePersonalizationDraft()}
+                    >
+                      Save targeting draft
+                    </button>
+                    <button
+                      type="button"
+                      className="button button--primary"
+                      onClick={() => void publishPersonalization()}
+                      disabled={personalizationConfigurationDirty}
+                    >
+                      Publish exact draft
+                    </button>
+                  </div>
+                </fieldset>
+                <fieldset>
+                  <legend>Hypothetical audience or variant preview</legend>
+                  <label>
+                    <span>Hypothetical decision JSON</span>
+                    <textarea
+                      value={personalizationPreviewJson}
+                      onChange={(event) => setPersonalizationPreviewJson(event.target.value)}
+                      aria-describedby="personalization-preview-help"
+                    />
+                  </label>
+                  <small id="personalization-preview-help">
+                    Supply declared finite values and consent signals, or add an audience/variant
+                    override. No protected user is searched for or impersonated.
+                  </small>
+                  <button
+                    type="button"
+                    className="button button--secondary"
+                    onClick={() => void previewPersonalizationDecision()}
+                  >
+                    Preview draft decision
+                  </button>
+                  {personalizationPreview ? (
+                    <section
+                      className="personalization-preview-result"
+                      aria-label="Personalization decision explanation"
+                    >
+                      <strong>
+                        {personalizationPreview.variant} · {personalizationPreview.reason}
+                      </strong>
+                      <span>
+                        {personalizationPreview.audienceId ?? 'fallback audience'} · draft r
+                        {personalizationPreview.draftRevision}
+                      </span>
+                      <span>
+                        Cache: {personalizationPreview.cache.mode} ·{' '}
+                        {personalizationPreview.cache.reason}
+                      </span>
+                      <ul>
+                        {personalizationPreview.trace.map((audience) => (
+                          <li key={audience.audienceId}>
+                            <strong>
+                              {audience.audienceId} · {audience.matched ? 'matched' : 'not matched'}
+                            </strong>
+                            <span>
+                              {audience.conditions
+                                .map(
+                                  (condition) => `${condition.attributeKey}: ${condition.reason}`,
+                                )
+                                .join(' · ')}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </section>
+                  ) : (
+                    <p className="empty-copy">No draft decision has been previewed.</p>
+                  )}
+                </fieldset>
+              </div>
+            </section>
+          ) : null}
+          {experimentOverview ? (
+            <section className="experiment-panel" aria-label="Content experiments workbench">
+              <div className="section-heading">
+                <div>
+                  <span className="kicker">Governed experimentation</span>
+                  <h2>Weighted variants, guardrails, and evidence-backed promotion</h2>
+                  <p>
+                    {experimentOverview.experiments.length} experiments · targeting draft r
+                    {experimentOverview.targetingDraftRevision} · published{' '}
+                    {experimentOverview.targetingPublishedRevision
+                      ? `r${experimentOverview.targetingPublishedRevision}`
+                      : 'never'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="button button--secondary"
+                  onClick={() => void refreshExperiments()}
+                >
+                  Refresh experiments
+                </button>
+              </div>
+              <p className="experiment-panel__warning" role="note">
+                Submit aggregate metrics and a SHA-256 evidence digest only. Do not paste assignment
+                tokens, user rows, cookies, raw events, or provider credentials. Starting pins the
+                published targeting revision; promotion changes the targeting draft only.
+              </p>
+              <div className="experiment-panel__workbench">
+                <fieldset>
+                  <legend>Immutable experiment design</legend>
+                  <label>
+                    <span>Managed experiment</span>
+                    <select
+                      value={activeExperimentId}
+                      onChange={(event) => selectExperiment(event.target.value)}
+                    >
+                      <option value="">New draft</option>
+                      {experimentOverview.experiments.map((experiment) => (
+                        <option key={experiment.id} value={experiment.id}>
+                          {experiment.name} · {experiment.state}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <span>Experiment design JSON</span>
+                    <textarea
+                      value={experimentDesignJson}
+                      onChange={(event) => setExperimentDesignJson(event.target.value)}
+                      disabled={activeExperiment !== null && activeExperiment.state !== 'draft'}
+                      aria-describedby="experiment-design-help"
+                    />
+                  </label>
+                  <small id="experiment-design-help">
+                    Weights total 10,000 basis points. Exactly one primary metric is required;
+                    active experiments cannot overlap the same resource and audience placement.
+                  </small>
+                  <button
+                    type="button"
+                    className="button button--secondary"
+                    onClick={() => void saveExperimentDraft()}
+                    disabled={activeExperiment !== null && activeExperiment.state !== 'draft'}
+                  >
+                    Save experiment draft
+                  </button>
+                  <label>
+                    <span>Lifecycle or promotion reason</span>
+                    <input
+                      value={experimentReason}
+                      onChange={(event) => setExperimentReason(event.target.value)}
+                    />
+                  </label>
+                  <div className="experiment-panel__actions">
+                    <button
+                      type="button"
+                      className="button button--primary"
+                      onClick={() => void transitionExperiment('start')}
+                      disabled={activeExperiment?.state !== 'draft'}
+                    >
+                      Start experiment
+                    </button>
+                    <button
+                      type="button"
+                      className="button button--secondary"
+                      onClick={() => void transitionExperiment('pause')}
+                      disabled={activeExperiment?.state !== 'running'}
+                    >
+                      Pause experiment
+                    </button>
+                    <button
+                      type="button"
+                      className="button button--secondary"
+                      onClick={() => void transitionExperiment('resume')}
+                      disabled={activeExperiment?.state !== 'paused'}
+                    >
+                      Resume experiment
+                    </button>
+                    <button
+                      type="button"
+                      className="button button--secondary"
+                      onClick={() => void transitionExperiment('complete')}
+                      disabled={
+                        !activeExperiment || !['running', 'paused'].includes(activeExperiment.state)
+                      }
+                    >
+                      Complete experiment
+                    </button>
+                    <button
+                      type="button"
+                      className="button button--danger"
+                      onClick={() => void transitionExperiment('cancel')}
+                      disabled={
+                        !activeExperiment ||
+                        !['draft', 'running', 'paused'].includes(activeExperiment.state)
+                      }
+                    >
+                      Cancel experiment
+                    </button>
+                  </div>
+                </fieldset>
+                <fieldset>
+                  <legend>Aggregate metric evidence and promotion</legend>
+                  <label>
+                    <span>Aggregate metric snapshot JSON</span>
+                    <textarea
+                      value={experimentMetricSnapshotJson}
+                      onChange={(event) => setExperimentMetricSnapshotJson(event.target.value)}
+                      aria-describedby="experiment-metric-help"
+                    />
+                  </label>
+                  <small id="experiment-metric-help">
+                    Every variant and declared metric must be present. Sample sizes and exposure
+                    totals are bounded aggregates; the digest links the retained external evidence.
+                  </small>
+                  <button
+                    type="button"
+                    className="button button--secondary"
+                    onClick={() => void recordExperimentMetrics()}
+                    disabled={
+                      !activeExperiment ||
+                      !['running', 'paused', 'completed'].includes(activeExperiment.state)
+                    }
+                  >
+                    Record aggregate snapshot
+                  </button>
+                  <label>
+                    <span>Promotion snapshot ID</span>
+                    <input
+                      value={experimentPromotionSnapshotId}
+                      onChange={(event) => setExperimentPromotionSnapshotId(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    <span>Supported winner variant</span>
+                    <input
+                      value={experimentWinnerVariant}
+                      onChange={(event) => setExperimentWinnerVariant(event.target.value)}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="button button--primary"
+                    onClick={() => void promoteExperimentWinner()}
+                    disabled={activeExperiment?.state !== 'completed'}
+                  >
+                    Promote winner to draft
+                  </button>
+                  {activeExperiment ? (
+                    <article className="experiment-status" aria-label="Selected experiment status">
+                      <strong>
+                        {activeExperiment.name} · {activeExperiment.state} · r
+                        {activeExperiment.revision}
+                      </strong>
+                      <span>
+                        {activeExperiment.target.resourceKey} ·{' '}
+                        {activeExperiment.target.audienceId ?? 'fallback placement'} · control{' '}
+                        {activeExperiment.controlVariant}
+                      </span>
+                      <span>
+                        Pinned targeting:{' '}
+                        {activeExperiment.targetingRevision
+                          ? `r${activeExperiment.targetingRevision}`
+                          : 'not started'}
+                      </span>
+                      <span>
+                        Guardrails:{' '}
+                        {activeExperiment.lastGuardrailEvaluation
+                          ? `${activeExperiment.lastGuardrailEvaluation.status} (${activeExperiment.lastGuardrailEvaluation.snapshotId})`
+                          : 'not evaluated'}
+                      </span>
+                      <span>
+                        {activeExperiment.metricSnapshots.length} aggregate snapshots retained
+                      </span>
+                      {activeExperiment.promotion ? (
+                        <span>
+                          Draft promotion: {activeExperiment.promotion.winnerVariant} via{' '}
+                          {activeExperiment.promotion.snapshotId}
+                        </span>
+                      ) : null}
+                    </article>
+                  ) : (
+                    <p className="empty-copy">Save a draft to begin the governed lifecycle.</p>
+                  )}
+                </fieldset>
+              </div>
+            </section>
+          ) : null}
+          {componentGovernance ? (
+            <section className="governance-panel" aria-label="Component governance">
+              <div className="governance-panel__heading">
+                <span className="kicker">Component governance</span>
+                <label>
+                  <span>Inspect component</span>
+                  <select
+                    value={componentGovernance.componentId}
+                    onChange={(event) => void inspectComponent(event.target.value)}
+                  >
+                    {manifests.map((manifest) => (
+                      <option key={manifest.id} value={manifest.id}>
+                        {manifest.name} · v{manifest.version}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <div>
+                <strong>
+                  {componentGovernance.migration.component.name} ·{' '}
+                  {componentGovernance.migration.component.status}
+                </strong>
+                {componentGovernance.migration.component.deprecation ? (
+                  <p>
+                    {componentGovernance.migration.component.deprecation.reason}
+                    {componentGovernance.migration.component.deprecation.replacementId
+                      ? ` Replace with ${componentGovernance.migration.component.deprecation.replacementId}.`
+                      : ''}
+                  </p>
+                ) : null}
+                <p>
+                  {componentGovernance.migration.usage.totalInstances} scoped usages across{' '}
+                  {componentGovernance.migration.usage.entries} entries ·{' '}
+                  {componentGovernance.migration.outdatedInstances} outdated
+                </p>
+              </div>
+              <div>
+                <strong>Visual regression hooks</strong>
+                <p>
+                  {componentGovernance.visual.scenarios.length} code-owned scenarios ·{' '}
+                  {componentGovernance.visual.usageHooks.length} content hooks
+                </p>
+                <code>{componentGovernance.visual.selector}</code>
+              </div>
+              <div className="governance-panel__migrations">
+                {[
+                  ...new Map(
+                    componentGovernance.migration.usage.locations
+                      .filter(
+                        (location) =>
+                          location.perspective === 'draft' &&
+                          location.version !== componentGovernance.migration.component.version,
+                      )
+                      .map((location) => [location.entryId, location]),
+                  ).values(),
+                ].map((location) => (
+                  <button
+                    type="button"
+                    className="button button--secondary"
+                    key={location.entryId}
+                    disabled={!componentGovernance.migration.ready || busy}
+                    onClick={() =>
+                      void migrateComponentEntry(
+                        location.entryId,
+                        componentGovernance.componentId,
+                        location.revisionId,
+                      )
+                    }
+                  >
+                    Migrate {location.entryId} from v{location.version}
+                  </button>
+                ))}
+              </div>
+            </section>
+          ) : null}
+          {qualityReport ? (
+            <section className="quality-panel" aria-label="Content quality report">
+              <div className="quality-panel__score">
+                <span className="kicker">Publish quality</span>
+                <strong>{qualityReport.score}</strong>
+                <span>{qualityReport.passed ? 'Ready to publish' : 'Gate blocked'}</span>
+              </div>
+              <div className="quality-panel__summary">
+                <p>
+                  {qualityReport.summary.error} errors · {qualityReport.summary.warning} warnings ·{' '}
+                  {qualityReport.summary.info} notes
+                </p>
+                <p>
+                  Policy {qualityReport.policyId ?? 'none'} · {qualityReport.channel}
+                  {qualityReport.bypassed ? ' · role bypass applied' : ''}
+                </p>
+                <button
+                  type="button"
+                  className="button button--secondary"
+                  onClick={() => void runQuality()}
+                  disabled={busy}
+                >
+                  Re-run checks
+                </button>
+              </div>
+              {qualityReport.findings.length > 0 ? (
+                <ol className="quality-findings">
+                  {qualityReport.findings.map((finding) => (
+                    <li
+                      key={finding.id}
+                      className={`quality-finding quality-finding--${finding.severity}`}
+                    >
+                      <span>
+                        {finding.category} · {finding.severity}
+                      </span>
+                      <strong>{finding.message}</strong>
+                      <code>{finding.path.length > 0 ? finding.path.join('.') : 'document'}</code>
+                      <p>{finding.remediation}</p>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="quality-panel__empty">No findings for this policy and channel.</p>
+              )}
+            </section>
+          ) : null}{' '}
+          <div className="studio-workspace" aria-busy={busy}>
+            <aside className="content-sidebar" aria-label="Content entries">
+              <div className="sidebar-heading">
+                <div>
+                  <span className="kicker">Content</span>
+                  <h1>Pages</h1>
+                </div>
+                <button
+                  type="button"
+                  className="icon-button"
+                  onClick={() => void createPage()}
+                  aria-label="Create page"
+                >
+                  +
+                </button>
+              </div>
+              <nav>
+                {entries.map((entry) => (
+                  <button
+                    type="button"
+                    className={`entry-card ${selected?.id === entry.id ? 'entry-card--active' : ''}`}
+                    key={entry.id}
+                    onClick={() => requestSelectEntry(entry.id)}
+                  >
+                    <span className="entry-card__title">{entryTitle(entry, schemas)}</span>
+                    <span className="entry-card__meta">/{entrySlug(entry, schemas)}</span>
+                    <span className={`status status--${entry.status}`}>{entry.status}</span>
+                  </button>
+                ))}
+              </nav>
+              {entries.length === 0 && !busy ? (
+                <p className="empty-copy">No pages yet. Create the first one.</p>
+              ) : null}
+            </aside>
+
+            <main className="editor-panel" id="studio-editor" tabIndex={-1}>
+              {notice ? (
+                <div className={`notice notice--${notice.tone}`} role="status">
+                  {notice.message}
+                </div>
+              ) : null}
+              {busy && !draft ? (
+                <div className="loading-state" role="status" aria-live="polite">
+                  Loading GridStory…
+                </div>
+              ) : null}
+              {fatalError && !draft ? (
+                <div className="loading-state" role="alert">
+                  <p>GridStory could not load: {fatalError}</p>
+                  <button
+                    type="button"
+                    className="button button--secondary"
+                    onClick={() => setReloadToken((current) => current + 1)}
+                  >
+                    Try again
+                  </button>
+                </div>
+              ) : null}
+              {draft && selected ? (
+                <>
+                  <section className="document-heading">
+                    <div>
+                      <span className="kicker">Page entry</span>
+                      <h2>
+                        {String(draft[activeSchema?.titleField ?? 'title'] || 'Untitled page')}
+                      </h2>
+                    </div>
+                    <span className={`status status--${selected.status}`}>{selected.status}</span>
+                  </section>
+                  <section className="document-fields" aria-label="Page fields">
+                    {activeSchema?.fields.map((field) => {
+                      if (field.type === 'component-tree') return null;
+                      return (
+                        <SchemaFieldControl
+                          key={field.id}
+                          definition={field}
+                          value={draft[field.name]}
+                          entries={entries}
+                          assets={assetChoices}
+                          onChange={(value) =>
+                            changeDraft((current) => ({ ...current, [field.name]: value }))
+                          }
+                        />
+                      );
+                    })}
+                  </section>
+
+                  <section className="workflow-panel" aria-label="Editorial workflow">
+                    <div className="section-heading">
+                      <div>
+                        <span className="kicker">Governance</span>
+                        <h2>Editorial workflow</h2>
+                        <p>
+                          {activeWorkflow?.name ?? 'Configured workflow'} · version{' '}
+                          {workflowInstance?.workflowVersion ?? '—'}
+                        </p>
+                      </div>
+                      <span
+                        className={`workflow-state workflow-state--${workflowState?.kind ?? 'draft'}`}
+                      >
+                        {workflowState?.label ?? workflowInstance?.stateId ?? 'Loading'}
+                      </span>
+                    </div>
+
+                    <div className="workflow-grid">
+                      <div className="workflow-actions">
+                        <h3>Available actions</h3>
+                        <div className="workflow-action-row">
+                          {availableWorkflowTransitions
+                            .filter((transition) => transition.id !== publishWorkflowTransition?.id)
+                            .map((transition) => (
+                              <button
+                                key={transition.id}
+                                type="button"
+                                className="button button--secondary"
+                                disabled={busy || workflowInstance?.pendingApproval !== undefined}
+                                onClick={() => void runWorkflowTransition(transition.id)}
+                              >
+                                {transition.label}
+                              </button>
+                            ))}
+                          {availableWorkflowTransitions.length === 0 ? (
+                            <span className="empty-copy">
+                              Save a new draft to restart editorial review.
+                            </span>
+                          ) : null}
+                        </div>
+
+                        {workflowInstance?.pendingApproval ? (
+                          <article className="approval-card">
+                            <div>
+                              <strong>Approval pending</strong>
+                              <p>
+                                Requested by {workflowInstance.pendingApproval.requestedBy}
+                                {workflowInstance.pendingApproval.dueAt
+                                  ? ` · due ${new Date(
+                                      workflowInstance.pendingApproval.dueAt,
+                                    ).toLocaleString()}`
+                                  : ''}
+                              </p>
+                              <small>
+                                {
+                                  workflowInstance.pendingApproval.decisions.filter(
+                                    (decision) => decision.decision === 'approved',
+                                  ).length
+                                }{' '}
+                                approvals recorded
+                                {workflowInstance.pendingApproval.escalatedAt ? ' · escalated' : ''}
+                              </small>
+                            </div>
+                            <div className="workflow-action-row">
+                              <button
+                                type="button"
+                                className="button button--primary"
+                                disabled={busy || dirty}
+                                onClick={() => void decideWorkflow('approved')}
+                              >
+                                Approve
+                              </button>
+                              <button
+                                type="button"
+                                className="button button--secondary"
+                                disabled={busy || dirty}
+                                onClick={() => void decideWorkflow('rejected')}
+                              >
+                                Reject and request changes
+                              </button>
+                            </div>
+                          </article>
+                        ) : null}
+
+                        {publishWorkflowTransition ? (
+                          <div className="workflow-scheduler">
+                            <h3>Schedule publication</h3>
+                            <label className="gs-field">
+                              <span>Date and time</span>
+                              <input
+                                type="datetime-local"
+                                value={workflowScheduleAt}
+                                onChange={(event) => setWorkflowScheduleAt(event.target.value)}
+                              />
+                            </label>
+                            <label className="gs-field">
+                              <span>IANA time zone</span>
+                              <input
+                                value={workflowTimeZone}
+                                onChange={(event) => setWorkflowTimeZone(event.target.value)}
+                              />
+                            </label>
+                            <button
+                              type="button"
+                              className="button button--secondary"
+                              disabled={!workflowScheduleAt || busy}
+                              onClick={() =>
+                                void scheduleWorkflowTransition(publishWorkflowTransition.id)
+                              }
+                            >
+                              Schedule publish
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <div className="workflow-activity">
+                        <h3>Schedules and notifications</h3>
+                        {workflowInstance?.schedules.length ? (
+                          <ul className="workflow-list">
+                            {workflowInstance.schedules
+                              .slice()
+                              .reverse()
+                              .slice(0, 4)
+                              .map((schedule) => (
+                                <li key={schedule.id}>
+                                  <div>
+                                    <strong>{schedule.transitionId}</strong>
+                                    <small>
+                                      {new Date(schedule.runAt).toLocaleString()} ·{' '}
+                                      {schedule.timeZone} · {schedule.state}
+                                    </small>
+                                  </div>
+                                  {schedule.state === 'pending' ? (
+                                    <button
+                                      type="button"
+                                      disabled={busy}
+                                      onClick={() => void cancelWorkflowSchedule(schedule.id)}
+                                    >
+                                      Cancel
+                                    </button>
+                                  ) : null}
+                                </li>
+                              ))}
+                          </ul>
+                        ) : null}
+                        {workflowInstance?.notifications.length ? (
+                          <ol className="workflow-list workflow-notifications">
+                            {workflowInstance.notifications
+                              .slice()
+                              .reverse()
+                              .slice(0, 5)
+                              .map((notification) => (
+                                <li key={notification.id}>
+                                  <div>
+                                    <strong>{notification.message}</strong>
+                                    <small>
+                                      {new Date(notification.createdAt).toLocaleString()}
+                                      {notification.audienceRoles.length
+                                        ? ` · ${notification.audienceRoles.join(', ')}`
+                                        : ''}
+                                    </small>
+                                  </div>
+                                </li>
+                              ))}
+                          </ol>
+                        ) : (
+                          <p className="empty-copy">No workflow activity yet.</p>
+                        )}
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="collaboration-panel" aria-label="Collaboration workspace">
+                    <div className="section-heading">
+                      <div>
+                        <span className="kicker">Collaboration</span>
+                        <h2>Branches, suggestions, and comments</h2>
+                      </div>
+                      <ul className="presence-list" aria-label="Active editors">
+                        {collaboration.presence.length > 0 ? (
+                          collaboration.presence.map((participant) => (
+                            <li className="presence-chip" key={participant.actorId}>
+                              {participant.displayName}
+                              {participant.field ? ` · ${participant.field}` : ''}
+                            </li>
+                          ))
+                        ) : (
+                          <li className="presence-chip presence-chip--idle">No active editors</li>
+                        )}
+                      </ul>
+                    </div>
+                    <div className="collaboration-workbench">
+                      <div className="collaboration-controls">
+                        <label className="gs-field">
+                          <span>Working branch</span>
+                          <select
+                            value={collaborationBranchId}
+                            onChange={(event) => setCollaborationBranchId(event.target.value)}
+                          >
+                            {collaboration.branches.map((candidate) => (
+                              <option key={candidate.id} value={candidate.id}>
+                                {candidate.name} · {candidate.status}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="gs-field">
+                          <span>Shared field or block</span>
+                          <select
+                            value={collaborationTargetField}
+                            onChange={(event) => setCollaborationTargetField(event.target.value)}
+                          >
+                            <option value="">Choose a field</option>
+                            {activeSchema?.fields.map((field) => (
+                              <option key={field.id} value={field.name}>
+                                {field.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <button
+                          type="button"
+                          className="button button--secondary"
+                          disabled={
+                            !collaborationTargetField || selectedCollaborationValue === undefined
+                          }
+                          onClick={() => void shareCollaborationValue()}
+                        >
+                          Share current value
+                        </button>
+                        <span className="collaboration-version">
+                          {collaboration.operations.length} operations · document v
+                          {collaboration.version}
+                        </span>
+                      </div>
+
+                      <div className="collaboration-create-row">
+                        <label className="gs-field">
+                          <span>New branch from current</span>
+                          <input
+                            placeholder="Campaign revision"
+                            value={collaborationBranchName}
+                            onChange={(event) => setCollaborationBranchName(event.target.value)}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          className="button button--secondary"
+                          disabled={!collaborationBranchName.trim()}
+                          onClick={() => void createCollaborationBranch()}
+                        >
+                          Create branch
+                        </button>
+                        <button
+                          type="button"
+                          className="button button--primary"
+                          disabled={
+                            collaborationBranchId === 'main' ||
+                            collaboration.branches.find(
+                              (candidate) => candidate.id === collaborationBranchId,
+                            )?.status !== 'open'
+                          }
+                          onClick={() => void mergeCollaborationBranch()}
+                        >
+                          Merge into Main
+                        </button>
+                      </div>
+
+                      <div className="collaboration-create-row collaboration-suggestion-composer">
+                        <label className="gs-field">
+                          <span>Proposed value</span>
+                          <textarea
+                            rows={2}
+                            placeholder="Suggest a replacement value for the selected field or block"
+                            value={collaborationSuggestionValue}
+                            onChange={(event) =>
+                              setCollaborationSuggestionValue(event.target.value)
                             }
                           />
-                        ))}
-                      </div>
-                    ) : null}
-                    <section className="presentation-editor" aria-label="Design bindings">
-                      <label className="gs-field">
-                        <span>Component variant</span>
-                        <select
-                          value={selectedNode.presentation?.variantId ?? ''}
-                          onChange={(event) =>
-                            changePresentation(selectedNode, (current) => ({
-                              ...current,
-                              ...(event.target.value
-                                ? { variantId: event.target.value }
-                                : { variantId: undefined }),
-                            }))
+                        </label>
+                        <button
+                          type="button"
+                          className="button button--secondary"
+                          disabled={
+                            !collaborationTargetField || !collaborationSuggestionValue.trim()
                           }
+                          onClick={() => void createCollaborationSuggestion()}
                         >
-                          <option value="">Default</option>
-                          {selectedVariants.map((variant) => (
-                            <option key={variant.id} value={variant.id}>
-                              {variant.name}
+                          Open suggestion
+                        </button>
+                      </div>
+
+                      {collaboration.suggestions.length > 0 ? (
+                        <section className="collaboration-review-list" aria-label="Suggestions">
+                          <h3>Suggestions</h3>
+                          {collaboration.suggestions.map((suggestion) => (
+                            <article key={suggestion.id} className="collaboration-review-card">
+                              <div>
+                                <strong>{suggestion.target.field}</strong>
+                                {suggestion.target.nodeId ? ` · ${suggestion.target.nodeId}` : ''}
+                                <p>{collaborationValueLabel(suggestion.value)}</p>
+                                <small>
+                                  {suggestion.createdBy} · {suggestion.status}
+                                </small>
+                              </div>
+                              {suggestion.status === 'open' ? (
+                                <div className="collaboration-card-actions">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      void reviewCollaborationSuggestion(suggestion.id, 'accept')
+                                    }
+                                  >
+                                    Accept
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      void reviewCollaborationSuggestion(suggestion.id, 'reject')
+                                    }
+                                  >
+                                    Reject
+                                  </button>
+                                </div>
+                              ) : null}
+                            </article>
+                          ))}
+                        </section>
+                      ) : null}
+
+                      {collaboration.conflicts.some((conflict) => conflict.status === 'open') ? (
+                        <section className="collaboration-review-list" aria-label="Merge conflicts">
+                          <h3>Merge conflicts</h3>
+                          {collaboration.conflicts
+                            .filter((conflict) => conflict.status === 'open')
+                            .map((conflict) => (
+                              <article
+                                key={conflict.id}
+                                className="collaboration-review-card collaboration-conflict-card"
+                              >
+                                <div>
+                                  <strong>{conflict.target.field}</strong>
+                                  {conflict.target.nodeId ? ` · ${conflict.target.nodeId}` : ''}
+                                  <p>Choose the value that should become the causal successor.</p>
+                                </div>
+                                <div className="collaboration-conflict-variants">
+                                  {conflict.variants.map((variant) => (
+                                    <button
+                                      type="button"
+                                      key={variant.operationId}
+                                      onClick={() =>
+                                        void resolveCollaborationConflict(
+                                          conflict.id,
+                                          variant.operationId,
+                                        )
+                                      }
+                                    >
+                                      <strong>{variant.branchId}</strong>
+                                      <span>{collaborationValueLabel(variant.value)}</span>
+                                      <small>{variant.actorId}</small>
+                                    </button>
+                                  ))}
+                                </div>
+                              </article>
+                            ))}
+                        </section>
+                      ) : null}
+                    </div>
+                    <h3 className="collaboration-comments-heading">Comments</h3>
+                    <div className="comment-composer">
+                      <label className="gs-field">
+                        <span>Comment target</span>
+                        <select
+                          value={commentTargetField}
+                          onChange={(event) => setCommentTargetField(event.target.value)}
+                        >
+                          <option value="">Whole entry</option>
+                          {activeSchema?.fields.map((field) => (
+                            <option key={field.id} value={field.name}>
+                              {field.label}
                             </option>
                           ))}
                         </select>
                       </label>
-                      <div className="binding-list">
-                        {editablePropsFor(selectedNode, selectedManifest).map((prop) => {
-                          const tokens = designSystem.tokens.filter((token) =>
-                            tokenCompatible(prop, token.value),
-                          );
-                          return (
-                            <div className="binding-row" key={prop.id}>
-                              <label>
-                                <span>{prop.label} token</span>
-                                <select
-                                  value={
-                                    selectedNode.presentation?.tokenBindings?.[prop.name] ?? ''
-                                  }
-                                  onChange={(event) =>
-                                    changePresentation(selectedNode, (current) => {
-                                      const tokenBindings = {
-                                        ...current.tokenBindings,
-                                      };
-                                      if (event.target.value)
-                                        tokenBindings[prop.name] = event.target.value;
-                                      else delete tokenBindings[prop.name];
-                                      return { ...current, tokenBindings };
-                                    })
-                                  }
-                                >
-                                  <option value="">Unbound</option>
-                                  {tokens.map((token) => (
-                                    <option key={token.id} value={token.id}>
-                                      {token.name}
-                                    </option>
-                                  ))}
-                                </select>
-                              </label>
+                      <label className="gs-field comment-body-field">
+                        <span>New comment</span>
+                        <textarea
+                          rows={3}
+                          placeholder="Write a comment and mention @reviewer"
+                          value={commentBody}
+                          onChange={(event) => setCommentBody(event.target.value)}
+                        />
+                      </label>
+                      <label className="gs-field">
+                        <span>Assign to</span>
+                        <input
+                          placeholder="actor-id"
+                          value={commentAssignee}
+                          onChange={(event) => setCommentAssignee(event.target.value)}
+                        />
+                      </label>
+                      <label className="gs-field">
+                        <span>Due date</span>
+                        <input
+                          type="datetime-local"
+                          value={commentDueAt}
+                          onChange={(event) => setCommentDueAt(event.target.value)}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className="button button--secondary"
+                        disabled={!commentBody.trim()}
+                        onClick={() => void createComment()}
+                      >
+                        Add comment
+                      </button>
+                    </div>
+                    <div className="comment-thread-list">
+                      {collaboration.threads.map((thread) => (
+                        <article
+                          className={`comment-thread${thread.resolvedAt ? ' comment-thread--resolved' : ''}`}
+                          key={thread.id}
+                        >
+                          <header>
+                            <div>
+                              <strong>
+                                {thread.target.field ?? 'Entry'}
+                                {thread.target.nodeId ? ` · ${thread.target.nodeId}` : ''}
+                              </strong>
+                              <small>
+                                {thread.assigneeId
+                                  ? `Assigned to ${thread.assigneeId}`
+                                  : 'Unassigned'}
+                                {thread.dueAt
+                                  ? ` · due ${new Date(thread.dueAt).toLocaleDateString()}`
+                                  : ''}
+                              </small>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => void setThreadResolved(thread.id, !thread.resolvedAt)}
+                            >
+                              {thread.resolvedAt ? 'Reopen' : 'Resolve'}
+                            </button>
+                          </header>
+                          <ol>
+                            {thread.messages.map((message) => (
+                              <li key={message.id}>
+                                <strong>{message.actorId}</strong>
+                                <p>{message.body}</p>
+                                {message.mentions.length > 0 ? (
+                                  <small>Mentioned: {message.mentions.join(', ')}</small>
+                                ) : null}
+                              </li>
+                            ))}
+                          </ol>
+                          <div className="comment-reply">
+                            <input
+                              aria-label={`Reply to comment ${thread.id}`}
+                              placeholder="Reply…"
+                              value={replyBodies[thread.id] ?? ''}
+                              onChange={(event) =>
+                                setReplyBodies((current) => ({
+                                  ...current,
+                                  [thread.id]: event.target.value,
+                                }))
+                              }
+                            />
+                            <button type="button" onClick={() => void replyToThread(thread.id)}>
+                              Reply
+                            </button>
+                          </div>
+                        </article>
+                      ))}
+                      {collaboration.threads.length === 0 ? (
+                        <p className="empty-copy">No comment threads for this entry.</p>
+                      ) : null}
+                    </div>
+                  </section>
+
+                  <section className="blocks-section">
+                    <div className="section-heading">
+                      <div>
+                        <span className="kicker">Composition</span>
+                        <h2>{componentField?.label ?? 'Page blocks'}</h2>
+                      </div>
+                      <div className="composition-toolbar">
+                        <span>{layers.length} components</span>
+                        <button
+                          type="button"
+                          onClick={() => restoreComposition('undo')}
+                          disabled={compositionHistory.past.length === 0}
+                          aria-label="Undo composition change"
+                        >
+                          Undo
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => restoreComposition('redo')}
+                          disabled={compositionHistory.future.length === 0}
+                          aria-label="Redo composition change"
+                        >
+                          Redo
+                        </button>
+                      </div>
+                    </div>
+                    <section className="layers-panel" aria-label="Composition layers">
+                      <span>Layers</span>
+                      <p className="composition-help" id="composition-keyboard-help">
+                        Select a layer, then use arrow keys to reorder or nest it. Press Delete to
+                        remove it.
+                      </p>
+                      <button
+                        type="button"
+                        className="layer-root-drop"
+                        onClick={() => {
+                          if (compositionHistory.selectedId) {
+                            applyComposition(
+                              moveNode(
+                                draftBlocks,
+                                compositionHistory.selectedId,
+                                { index: draftBlocks.length },
+                                compositionRules,
+                              ),
+                              compositionHistory.selectedId,
+                            );
+                          }
+                        }}
+                        onDragOver={(event) => event.preventDefault()}
+                        onDrop={() => {
+                          if (draggedNodeId) {
+                            applyComposition(
+                              moveNode(
+                                draftBlocks,
+                                draggedNodeId,
+                                { index: draftBlocks.length },
+                                compositionRules,
+                              ),
+                              draggedNodeId,
+                            );
+                          }
+                          setDraggedNodeId(null);
+                        }}
+                      >
+                        Move selected to root
+                      </button>
+                      {layers.map((layer) => (
+                        <button
+                          type="button"
+                          className={`layer-row ${compositionHistory.selectedId === layer.node.id ? 'layer-row--selected' : ''}`}
+                          key={layer.node.id}
+                          aria-describedby="composition-keyboard-help"
+                          style={{ paddingLeft: `${0.75 + layer.depth * 1.1}rem` }}
+                          draggable
+                          onDragStart={() => setDraggedNodeId(layer.node.id)}
+                          onDragEnd={() => setDraggedNodeId(null)}
+                          onDragOver={(event) => event.preventDefault()}
+                          onDrop={(event) => {
+                            event.preventDefault();
+                            if (draggedNodeId && draggedNodeId !== layer.node.id) {
+                              applyComposition(
+                                moveNode(
+                                  draftBlocks,
+                                  draggedNodeId,
+                                  targetAt(layer.location, layer.location.index),
+                                  compositionRules,
+                                ),
+                                draggedNodeId,
+                              );
+                            }
+                            setDraggedNodeId(null);
+                          }}
+                          onClick={() =>
+                            setCompositionHistory((current) => ({
+                              ...current,
+                              selectedId: layer.node.id,
+                            }))
+                          }
+                          onKeyDown={(event) => {
+                            if (
+                              [
+                                'ArrowUp',
+                                'ArrowDown',
+                                'ArrowLeft',
+                                'ArrowRight',
+                                'Delete',
+                              ].includes(event.key)
+                            ) {
+                              event.preventDefault();
+                              moveByKeyboard(layer.node.id, event.key);
+                            }
+                          }}
+                        >
+                          <span>
+                            {manifestById.get(layer.node.component)?.name ?? layer.node.component}
+                          </span>
+                          <small>
+                            {layer.location.slotName ? `${layer.location.slotName} · ` : ''}
+                            {layer.node.id}
+                          </small>
+                        </button>
+                      ))}
+                    </section>
+                    <div className="block-list">
+                      {draftBlocks.map((node, index) => {
+                        const manifest = manifestById.get(node.component);
+                        return (
+                          <article
+                            className={`block-editor ${compositionHistory.selectedId === node.id ? 'block-editor--selected' : ''}`}
+                            key={node.id}
+                          >
+                            <header>
                               <button
                                 type="button"
+                                className="block-select"
                                 onClick={() =>
-                                  changePresentation(selectedNode, (current) => ({
+                                  setCompositionHistory((current) => ({
                                     ...current,
-                                    responsive: {
-                                      ...current.responsive,
-                                      [prop.name]: {
-                                        ...current.responsive?.[prop.name],
-                                        [previewBreakpoint]: selectedNode.props[prop.name],
-                                      },
-                                    },
+                                    selectedId: node.id,
                                   }))
                                 }
                               >
-                                Capture for {previewBreakpoint}
+                                <span className="block-number">
+                                  {String(index + 1).padStart(2, '0')}
+                                </span>
+                                <span>
+                                  <strong>{manifest?.name ?? node.component}</strong>
+                                  <small>{manifest?.description}</small>
+                                </span>
                               </button>
-                              {Object.hasOwn(
-                                selectedNode.presentation?.responsive?.[prop.name] ?? {},
-                                previewBreakpoint,
-                              ) ? (
+                              <div className="block-actions">
                                 <button
                                   type="button"
+                                  aria-label="Move block up"
+                                  disabled={index === 0}
                                   onClick={() =>
-                                    changePresentation(selectedNode, (current) => {
-                                      const values = { ...current.responsive?.[prop.name] };
-                                      delete values[previewBreakpoint];
-                                      return {
-                                        ...current,
-                                        responsive: {
-                                          ...current.responsive,
-                                          [prop.name]: values,
-                                        },
-                                      };
-                                    })
-                                  }
-                                >
-                                  Clear {previewBreakpoint}
-                                </button>
-                              ) : null}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </section>
-                    {selectedManifest.slots.length > 0 ? (
-                      <div className="slot-list">
-                        {selectedManifest.slots.map((slot) => {
-                          const children = selectedNode.slots?.[slot.name] ?? [];
-                          return (
-                            <section className="slot-editor" key={slot.id}>
-                              <header>
-                                <div>
-                                  <strong className="slot-title">{slot.label}</strong>
-                                  <span className="slot-count">
-                                    {children.length}
-                                    {slot.max === undefined ? '' : ` / ${slot.max}`} components
-                                  </span>
-                                </div>
-                                <small className="slot-rule">
-                                  Minimum {slot.min}; accepts{' '}
-                                  {slot.accepts.length > 0
-                                    ? slot.accepts.join(', ')
-                                    : 'any component'}
-                                </small>
-                              </header>
-                              <button
-                                type="button"
-                                className="slot-drop-zone"
-                                onClick={() =>
-                                  setNotice({
-                                    tone: 'info',
-                                    message:
-                                      'To nest without dragging, focus the layer after a compatible container and press ArrowRight.',
-                                  })
-                                }
-                                onDragOver={(event) => event.preventDefault()}
-                                onDrop={(event) => {
-                                  event.preventDefault();
-                                  if (draggedNodeId) {
                                     applyComposition(
                                       moveNode(
                                         draftBlocks,
-                                        draggedNodeId,
-                                        {
-                                          parentId: selectedNode.id,
-                                          slotName: slot.name,
-                                          index: children.length,
-                                        },
+                                        node.id,
+                                        { index: index - 1 },
                                         compositionRules,
                                       ),
-                                      draggedNodeId,
-                                    );
+                                      node.id,
+                                    )
                                   }
-                                  setDraggedNodeId(null);
-                                }}
-                              >
-                                Drop a layer into {slot.label} · keyboard help
-                              </button>
-                              <fieldset className="slot-palette">
-                                <legend>Add to {slot.label}</legend>
-                                {manifests
-                                  .filter(
-                                    (manifest) =>
-                                      slot.accepts.length === 0 ||
-                                      slot.accepts.includes(manifest.id),
+                                >
+                                  ↑
+                                </button>
+                                <button
+                                  type="button"
+                                  aria-label="Move block down"
+                                  disabled={index === draftBlocks.length - 1}
+                                  onClick={() =>
+                                    applyComposition(
+                                      moveNode(
+                                        draftBlocks,
+                                        node.id,
+                                        { index: index + 2 },
+                                        compositionRules,
+                                      ),
+                                      node.id,
+                                    )
+                                  }
+                                >
+                                  ↓
+                                </button>
+                                <button
+                                  type="button"
+                                  className="danger"
+                                  aria-label="Remove block"
+                                  disabled={draftBlocks.length <= (componentField?.minimum ?? 0)}
+                                  onClick={() =>
+                                    applyComposition(
+                                      removeNode(draftBlocks, node.id, compositionRules),
+                                    )
+                                  }
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            </header>
+                            <div className="block-fields">
+                              {manifest
+                                ? editablePropsFor(node, manifest).map((prop) => (
+                                    <FieldControl
+                                      key={prop.id}
+                                      idPrefix={node.id}
+                                      definition={prop}
+                                      value={node.props[prop.name]}
+                                      onChange={(value) =>
+                                        changeBlocks(
+                                          (current) =>
+                                            updateNodeProps(current, node.id, {
+                                              ...node.props,
+                                              [prop.name]: value,
+                                            }),
+                                          node.id,
+                                        )
+                                      }
+                                    />
+                                  ))
+                                : null}
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                    <div className="component-palette">
+                      <span>Add at root</span>
+                      {manifests
+                        .filter(
+                          (manifest) =>
+                            rootAccepts.length === 0 || rootAccepts.includes(manifest.id),
+                        )
+                        .map((manifest) => (
+                          <button
+                            type="button"
+                            key={manifest.id}
+                            onClick={() => {
+                              const node = newNode(manifest);
+                              applyComposition(
+                                addNode(
+                                  draftBlocks,
+                                  node,
+                                  { index: draftBlocks.length },
+                                  compositionRules,
+                                ),
+                                node.id,
+                              );
+                            }}
+                          >
+                            + {manifest.name}
+                          </button>
+                        ))}
+                    </div>
+                    <div className="design-library">
+                      <fieldset className="component-palette">
+                        <legend>Reusable symbols</legend>
+                        {designSystem.symbols.map((symbol) => (
+                          <button
+                            type="button"
+                            key={symbol.id}
+                            onClick={() => addSymbolAtRoot(symbol.id)}
+                          >
+                            + {symbol.name}
+                          </button>
+                        ))}
+                      </fieldset>
+                      <fieldset className="component-palette">
+                        <legend>Page templates</legend>
+                        {designSystem.templates.map((template) => (
+                          <button
+                            type="button"
+                            key={template.id}
+                            onClick={() => addTemplateAtRoot(template.id)}
+                          >
+                            Apply {template.name}
+                          </button>
+                        ))}
+                      </fieldset>
+                    </div>
+                    {selectedNode && selectedManifest ? (
+                      <section
+                        className="component-inspector"
+                        aria-label="Selected component inspector"
+                      >
+                        <header>
+                          <div>
+                            <span className="kicker">Selected component</span>
+                            <h3>{selectedManifest.name}</h3>
+                            <code>{selectedNode.id}</code>
+                          </div>
+                          <button
+                            type="button"
+                            className="danger-link"
+                            onClick={() =>
+                              applyComposition(
+                                removeNode(draftBlocks, selectedNode.id, compositionRules),
+                              )
+                            }
+                          >
+                            Remove
+                          </button>
+                        </header>
+                        {selectedSymbol ? (
+                          <p className="symbol-notice">
+                            Linked to {selectedSymbol.name}. Only approved overrides are editable;
+                            governed values update from the design system.
+                          </p>
+                        ) : null}
+                        {editablePropsFor(selectedNode, selectedManifest).length > 0 ? (
+                          <div className="block-fields">
+                            {editablePropsFor(selectedNode, selectedManifest).map((prop) => (
+                              <FieldControl
+                                key={prop.id}
+                                idPrefix={`inspector-${selectedNode.id}`}
+                                definition={prop}
+                                value={selectedNode.props[prop.name]}
+                                onChange={(value) =>
+                                  changeBlocks(
+                                    (current) =>
+                                      updateNodeProps(current, selectedNode.id, {
+                                        ...selectedNode.props,
+                                        [prop.name]: value,
+                                      }),
+                                    selectedNode.id,
                                   )
-                                  .map((manifest) => (
+                                }
+                              />
+                            ))}
+                          </div>
+                        ) : null}
+                        <section className="presentation-editor" aria-label="Design bindings">
+                          <label className="gs-field">
+                            <span>Component variant</span>
+                            <select
+                              value={selectedNode.presentation?.variantId ?? ''}
+                              onChange={(event) =>
+                                changePresentation(selectedNode, (current) => ({
+                                  ...current,
+                                  ...(event.target.value
+                                    ? { variantId: event.target.value }
+                                    : { variantId: undefined }),
+                                }))
+                              }
+                            >
+                              <option value="">Default</option>
+                              {selectedVariants.map((variant) => (
+                                <option key={variant.id} value={variant.id}>
+                                  {variant.name}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <div className="binding-list">
+                            {editablePropsFor(selectedNode, selectedManifest).map((prop) => {
+                              const tokens = designSystem.tokens.filter((token) =>
+                                tokenCompatible(prop, token.value),
+                              );
+                              return (
+                                <div className="binding-row" key={prop.id}>
+                                  <label>
+                                    <span>{prop.label} token</span>
+                                    <select
+                                      value={
+                                        selectedNode.presentation?.tokenBindings?.[prop.name] ?? ''
+                                      }
+                                      onChange={(event) =>
+                                        changePresentation(selectedNode, (current) => {
+                                          const tokenBindings = {
+                                            ...current.tokenBindings,
+                                          };
+                                          if (event.target.value)
+                                            tokenBindings[prop.name] = event.target.value;
+                                          else delete tokenBindings[prop.name];
+                                          return { ...current, tokenBindings };
+                                        })
+                                      }
+                                    >
+                                      <option value="">Unbound</option>
+                                      {tokens.map((token) => (
+                                        <option key={token.id} value={token.id}>
+                                          {token.name}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </label>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      changePresentation(selectedNode, (current) => ({
+                                        ...current,
+                                        responsive: {
+                                          ...current.responsive,
+                                          [prop.name]: {
+                                            ...current.responsive?.[prop.name],
+                                            [previewBreakpoint]: selectedNode.props[prop.name],
+                                          },
+                                        },
+                                      }))
+                                    }
+                                  >
+                                    Capture for {previewBreakpoint}
+                                  </button>
+                                  {Object.hasOwn(
+                                    selectedNode.presentation?.responsive?.[prop.name] ?? {},
+                                    previewBreakpoint,
+                                  ) ? (
                                     <button
                                       type="button"
-                                      key={manifest.id}
-                                      disabled={
-                                        slot.max !== undefined && children.length >= slot.max
+                                      onClick={() =>
+                                        changePresentation(selectedNode, (current) => {
+                                          const values = { ...current.responsive?.[prop.name] };
+                                          delete values[previewBreakpoint];
+                                          return {
+                                            ...current,
+                                            responsive: {
+                                              ...current.responsive,
+                                              [prop.name]: values,
+                                            },
+                                          };
+                                        })
                                       }
-                                      onClick={() => {
-                                        const node = newNode(manifest);
+                                    >
+                                      Clear {previewBreakpoint}
+                                    </button>
+                                  ) : null}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </section>
+                        {selectedManifest.slots.length > 0 ? (
+                          <div className="slot-list">
+                            {selectedManifest.slots.map((slot) => {
+                              const children = selectedNode.slots?.[slot.name] ?? [];
+                              return (
+                                <section className="slot-editor" key={slot.id}>
+                                  <header>
+                                    <div>
+                                      <strong className="slot-title">{slot.label}</strong>
+                                      <span className="slot-count">
+                                        {children.length}
+                                        {slot.max === undefined ? '' : ` / ${slot.max}`} components
+                                      </span>
+                                    </div>
+                                    <small className="slot-rule">
+                                      Minimum {slot.min}; accepts{' '}
+                                      {slot.accepts.length > 0
+                                        ? slot.accepts.join(', ')
+                                        : 'any component'}
+                                    </small>
+                                  </header>
+                                  <button
+                                    type="button"
+                                    className="slot-drop-zone"
+                                    onClick={() =>
+                                      setNotice({
+                                        tone: 'info',
+                                        message:
+                                          'To nest without dragging, focus the layer after a compatible container and press ArrowRight.',
+                                      })
+                                    }
+                                    onDragOver={(event) => event.preventDefault()}
+                                    onDrop={(event) => {
+                                      event.preventDefault();
+                                      if (draggedNodeId) {
                                         applyComposition(
-                                          addNode(
+                                          moveNode(
                                             draftBlocks,
-                                            node,
+                                            draggedNodeId,
                                             {
                                               parentId: selectedNode.id,
                                               slotName: slot.name,
@@ -8238,169 +8519,207 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                                             },
                                             compositionRules,
                                           ),
-                                          node.id,
+                                          draggedNodeId,
                                         );
-                                      }}
-                                    >
-                                      + {manifest.name}
-                                    </button>
-                                  ))}
-                              </fieldset>
-                            </section>
-                          );
-                        })}
-                      </div>
+                                      }
+                                      setDraggedNodeId(null);
+                                    }}
+                                  >
+                                    Drop a layer into {slot.label} · keyboard help
+                                  </button>
+                                  <fieldset className="slot-palette">
+                                    <legend>Add to {slot.label}</legend>
+                                    {manifests
+                                      .filter(
+                                        (manifest) =>
+                                          slot.accepts.length === 0 ||
+                                          slot.accepts.includes(manifest.id),
+                                      )
+                                      .map((manifest) => (
+                                        <button
+                                          type="button"
+                                          key={manifest.id}
+                                          disabled={
+                                            slot.max !== undefined && children.length >= slot.max
+                                          }
+                                          onClick={() => {
+                                            const node = newNode(manifest);
+                                            applyComposition(
+                                              addNode(
+                                                draftBlocks,
+                                                node,
+                                                {
+                                                  parentId: selectedNode.id,
+                                                  slotName: slot.name,
+                                                  index: children.length,
+                                                },
+                                                compositionRules,
+                                              ),
+                                              node.id,
+                                            );
+                                          }}
+                                        >
+                                          + {manifest.name}
+                                        </button>
+                                      ))}
+                                  </fieldset>
+                                </section>
+                              );
+                            })}
+                          </div>
+                        ) : null}
+                      </section>
                     ) : null}
                   </section>
-                ) : null}
-              </section>
 
-              <section className="history-section">
-                <div className="section-heading">
-                  <div>
-                    <span className="kicker">History</span>
-                    <h2>Immutable revisions</h2>
-                  </div>
-                  <span>{revisions.length} saved</span>
-                </div>
-                <ol>
-                  {revisions.map((revision) => (
-                    <li key={revision.id}>
-                      <strong>Revision {revision.sequence}</strong>
-                      <span>{new Date(revision.createdAt).toLocaleString()}</span>
-                      <code>{revision.actorId}</code>
-                    </li>
-                  ))}
-                </ol>
-              </section>
-            </>
-          ) : null}
-        </main>
-
-        <aside className="preview-panel" aria-label="Live page preview">
-          <div className="preview-toolbar">
-            <div>
-              <span className="kicker">Live React preview</span>
-              <strong>
-                {externalPreview
-                  ? `${externalPreview.mode} · ${externalPreview.ready ? 'connected' : 'connecting'}`
-                  : `${previewBreakpoint} · 100%`}
-              </strong>
-            </div>
-            <div className="preview-controls">
-              <fieldset className="segmented" aria-label="Preview breakpoint">
-                {designSystem.breakpoints.map((breakpoint) => (
-                  <button
-                    type="button"
-                    key={breakpoint.id}
-                    className={previewBreakpoint === breakpoint.id ? 'active' : ''}
-                    onClick={() => setPreviewBreakpoint(breakpoint.id)}
-                  >
-                    {breakpoint.name}
-                  </button>
-                ))}
-              </fieldset>
-              <fieldset className="segmented" aria-label="Preview perspective">
-                <button
-                  type="button"
-                  className={previewPerspective === 'draft' ? 'active' : ''}
-                  onClick={() => setPreviewPerspective('draft')}
-                >
-                  Draft
-                </button>
-                <button
-                  type="button"
-                  className={previewPerspective === 'published' ? 'active' : ''}
-                  onClick={() => setPreviewPerspective('published')}
-                  disabled={!published}
-                >
-                  Published
-                </button>
-              </fieldset>
-              <fieldset className="segmented" aria-label="Application preview">
-                <button
-                  type="button"
-                  className={externalPreview?.mode === 'iframe' ? 'active' : ''}
-                  onClick={() => void startExternalPreview('iframe')}
-                  disabled={!selected}
-                >
-                  App iframe
-                </button>
-                <button
-                  type="button"
-                  className={externalPreview?.mode === 'standalone' ? 'active' : ''}
-                  onClick={() => void startExternalPreview('standalone')}
-                  disabled={!selected}
-                >
-                  Standalone
-                </button>
-                {externalPreview ? (
-                  <button type="button" onClick={() => void closeExternalPreview()}>
-                    Close app preview
-                  </button>
-                ) : null}
-              </fieldset>
-            </div>
-          </div>
-          <div className="preview-canvas">
-            <div className="preview-browser-bar">
-              <span />
-              <span />
-              <span />
-              <div>{externalPreview?.route ?? `/${previewSlug}`}</div>
-            </div>
-            <div
-              className={`preview-page${externalPreview?.mode === 'iframe' ? ' preview-page--external' : ''}`}
-            >
-              {externalPreview?.mode === 'iframe' ? (
-                <iframe
-                  ref={previewFrameRef}
-                  src={externalPreview.grant.previewUrl}
-                  title="Application draft preview"
-                  sandbox="allow-scripts allow-same-origin"
-                  referrerPolicy="no-referrer"
-                />
-              ) : previewContent ? (
-                <>
-                  {previewPerspective === 'draft' && selectedNode && selectedManifest ? (
-                    <section className="inline-editor" aria-label="Inline component editor">
-                      <span className="kicker">Inline edit · {selectedManifest.name}</span>
+                  <section className="history-section">
+                    <div className="section-heading">
                       <div>
-                        {editablePropsFor(selectedNode, selectedManifest).map((prop) => (
-                          <FieldControl
-                            key={prop.id}
-                            idPrefix={`inline-${selectedNode.id}`}
-                            definition={prop}
-                            value={selectedNode.props[prop.name]}
-                            onChange={(value) =>
-                              changeBlocks(
-                                (current) =>
-                                  updateNodeProps(current, selectedNode.id, {
-                                    ...selectedNode.props,
-                                    [prop.name]: value,
-                                  }),
-                                selectedNode.id,
-                              )
-                            }
-                          />
-                        ))}
+                        <span className="kicker">History</span>
+                        <h2>Immutable revisions</h2>
                       </div>
-                    </section>
-                  ) : null}
-                  <GridStoryRenderer
-                    nodes={previewBlocks}
-                    registry={exampleComponentRegistry}
-                    designSystem={designSystem}
-                    breakpoint={previewBreakpoint}
-                    preview={previewPerspective === 'draft'}
-                  />
+                      <span>{revisions.length} saved</span>
+                    </div>
+                    <ol>
+                      {revisions.map((revision) => (
+                        <li key={revision.id}>
+                          <strong>Revision {revision.sequence}</strong>
+                          <span>{new Date(revision.createdAt).toLocaleString()}</span>
+                          <code>{revision.actorId}</code>
+                        </li>
+                      ))}
+                    </ol>
+                  </section>
                 </>
-              ) : (
-                <div className="preview-empty">This page has not been published yet.</div>
-              )}
-            </div>
+              ) : null}
+            </main>
+
+            <aside className="preview-panel" aria-label="Live page preview">
+              <div className="preview-toolbar">
+                <div>
+                  <span className="kicker">Live React preview</span>
+                  <strong>
+                    {externalPreview
+                      ? `${externalPreview.mode} · ${externalPreview.ready ? 'connected' : 'connecting'}`
+                      : `${previewBreakpoint} · 100%`}
+                  </strong>
+                </div>
+                <div className="preview-controls">
+                  <fieldset className="segmented" aria-label="Preview breakpoint">
+                    {designSystem.breakpoints.map((breakpoint) => (
+                      <button
+                        type="button"
+                        key={breakpoint.id}
+                        className={previewBreakpoint === breakpoint.id ? 'active' : ''}
+                        onClick={() => setPreviewBreakpoint(breakpoint.id)}
+                      >
+                        {breakpoint.name}
+                      </button>
+                    ))}
+                  </fieldset>
+                  <fieldset className="segmented" aria-label="Preview perspective">
+                    <button
+                      type="button"
+                      className={previewPerspective === 'draft' ? 'active' : ''}
+                      onClick={() => setPreviewPerspective('draft')}
+                    >
+                      Draft
+                    </button>
+                    <button
+                      type="button"
+                      className={previewPerspective === 'published' ? 'active' : ''}
+                      onClick={() => setPreviewPerspective('published')}
+                      disabled={!published}
+                    >
+                      Published
+                    </button>
+                  </fieldset>
+                  <fieldset className="segmented" aria-label="Application preview">
+                    <button
+                      type="button"
+                      className={externalPreview?.mode === 'iframe' ? 'active' : ''}
+                      onClick={() => void startExternalPreview('iframe')}
+                      disabled={!selected}
+                    >
+                      App iframe
+                    </button>
+                    <button
+                      type="button"
+                      className={externalPreview?.mode === 'standalone' ? 'active' : ''}
+                      onClick={() => void startExternalPreview('standalone')}
+                      disabled={!selected}
+                    >
+                      Standalone
+                    </button>
+                    {externalPreview ? (
+                      <button type="button" onClick={() => void closeExternalPreview()}>
+                        Close app preview
+                      </button>
+                    ) : null}
+                  </fieldset>
+                </div>
+              </div>
+              <div className="preview-canvas">
+                <div className="preview-browser-bar">
+                  <span />
+                  <span />
+                  <span />
+                  <div>{externalPreview?.route ?? `/${previewSlug}`}</div>
+                </div>
+                <div
+                  className={`preview-page${externalPreview?.mode === 'iframe' ? ' preview-page--external' : ''}`}
+                >
+                  {externalPreview?.mode === 'iframe' ? (
+                    <iframe
+                      ref={previewFrameRef}
+                      src={externalPreview.grant.previewUrl}
+                      title="Application draft preview"
+                      sandbox="allow-scripts allow-same-origin"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : previewContent ? (
+                    <>
+                      {previewPerspective === 'draft' && selectedNode && selectedManifest ? (
+                        <section className="inline-editor" aria-label="Inline component editor">
+                          <span className="kicker">Inline edit · {selectedManifest.name}</span>
+                          <div>
+                            {editablePropsFor(selectedNode, selectedManifest).map((prop) => (
+                              <FieldControl
+                                key={prop.id}
+                                idPrefix={`inline-${selectedNode.id}`}
+                                definition={prop}
+                                value={selectedNode.props[prop.name]}
+                                onChange={(value) =>
+                                  changeBlocks(
+                                    (current) =>
+                                      updateNodeProps(current, selectedNode.id, {
+                                        ...selectedNode.props,
+                                        [prop.name]: value,
+                                      }),
+                                    selectedNode.id,
+                                  )
+                                }
+                              />
+                            ))}
+                          </div>
+                        </section>
+                      ) : null}
+                      <GridStoryRenderer
+                        nodes={previewBlocks}
+                        registry={exampleComponentRegistry}
+                        designSystem={designSystem}
+                        breakpoint={previewBreakpoint}
+                        preview={previewPerspective === 'draft'}
+                      />
+                    </>
+                  ) : (
+                    <div className="preview-empty">This page has not been published yet.</div>
+                  )}
+                </div>
+              </div>
+            </aside>
           </div>
-        </aside>
+        </div>
       </div>
     </div>
   );

@@ -46,7 +46,7 @@ This repository is in active foundation development. The current vertical slice 
 - Framework-neutral typed client with matching management and published query methods.
 - Universal React component registry and tree renderer.
 - Versioned design-system delivery with governed tokens, variants, responsive overrides, reusable symbols, templates, and deterministic React resolution.
-- GridStory Studio with recursive layers, constrained slots/nesting, drag/drop and keyboard movement, undo/redo, live preview, history, and publishing.
+- GridStory Studio with a responsive categorized administration rail, local light/dark themes, recursive layers, constrained slots/nesting, drag/drop and keyboard movement, undo/redo, live preview, history, and publishing.
 - Vite + React example consuming the public published-content endpoint.
 
 ## Requirements

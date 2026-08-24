@@ -65,6 +65,7 @@ const schema: ContentSchemaDefinition = {
 };
 
 const now = '2026-07-17T00:00:00.000Z';
+const initialWindowWidth = window.innerWidth;
 
 function entry(id: string, headline: string, path: string): ContentEntry {
   return {
@@ -1969,10 +1970,39 @@ function createTestClient(
 
 afterEach(() => {
   cleanup();
+  window.localStorage.clear();
+  Object.defineProperty(window, 'innerWidth', { configurable: true, value: initialWindowWidth });
   vi.restoreAllMocks();
 });
 
 describe('GridStory Studio', () => {
+  it('provides the responsive Studio navigation and persistent light and dark themes', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+    const user = userEvent.setup();
+
+    render(<App client={createTestClient()} />);
+
+    const shell = document.querySelector('.studio-shell');
+    const navigation = screen.getByRole('complementary', {
+      name: 'Primary Studio navigation',
+    });
+    expect(shell?.getAttribute('data-theme')).toBe('light');
+    expect(screen.getByRole('button', { name: 'Pages' }).getAttribute('aria-current')).toBe('page');
+
+    await user.click(screen.getByRole('button', { name: 'Switch to dark theme' }));
+    expect(shell?.getAttribute('data-theme')).toBe('dark');
+    expect(window.localStorage.getItem('gridstory-studio-theme')).toBe('dark');
+
+    const navigationToggle = screen.getByRole('button', { name: 'Toggle navigation' });
+    expect(navigationToggle.getAttribute('aria-expanded')).toBe('false');
+    await user.click(navigationToggle);
+    expect(navigation.classList.contains('studio-navigation--open')).toBe(true);
+    expect(screen.getAllByRole('button', { name: 'Close navigation' })).toHaveLength(2);
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(navigation.classList.contains('studio-navigation--open')).toBe(false);
+  });
+
   it('derives content controls and composition storage from the active schema', async () => {
     render(<App client={createTestClient()} />);
 

@@ -26,6 +26,54 @@ async function expectNoDetectableWcagViolations(
   ).toEqual([]);
 }
 
+test('Studio shell follows the reference navigation, card, theme, and mobile drawer system', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Pages' })).toBeVisible();
+
+  const shell = page.locator('.studio-shell');
+  const navigation = page.getByRole('complementary', { name: 'Primary Studio navigation' });
+  const header = page.locator('.studio-header');
+  const activePage = page.getByRole('button', { name: 'Pages', exact: true });
+  await expect(navigation).toHaveCSS('width', '270px');
+  await expect(navigation).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+  await expect(header).toHaveCSS('height', '70px');
+  await expect(page.locator('.studio-page')).toHaveCSS('background-color', 'rgb(245, 245, 245)');
+  await expect(activePage).toHaveCSS('background-color', 'rgb(22, 90, 80)');
+  await expect(activePage.locator('.studio-navigation__icon')).toHaveCSS(
+    'color',
+    'rgb(194, 253, 117)',
+  );
+  await expect(page.getByRole('search')).toHaveCSS('width', '248px');
+  await expect(page.getByRole('search').locator('svg')).toHaveCSS('fill', 'none');
+  await expect(page.getByRole('search').locator('svg')).toHaveCSS('stroke', 'rgb(104, 110, 107)');
+
+  await page.getByRole('button', { name: 'Switch to dark theme' }).click();
+  await expect(shell).toHaveAttribute('data-theme', 'dark');
+  await expect(navigation).toHaveCSS('background-color', 'rgb(3, 14, 9)');
+  await expect(page.locator('.studio-page')).toHaveCSS('background-color', 'rgb(20, 26, 24)');
+  await expect(header).toHaveCSS('color', 'rgb(255, 255, 255)');
+  await page.getByRole('button', { name: 'Switch to light theme' }).click();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const navigationToggle = page.getByRole('button', { name: 'Toggle navigation' });
+  await expect(navigationToggle).toHaveAttribute('aria-expanded', 'false');
+  await navigationToggle.click();
+  await expect(navigationToggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(navigation).toBeVisible();
+  await expect(page.locator('.studio-navigation-backdrop')).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1,
+      ),
+    )
+    .toBe(true);
+  await page.keyboard.press('Escape');
+  await expect(navigationToggle).toHaveAttribute('aria-expanded', 'false');
+});
+
 test('Studio critical authoring states have no detectable WCAG 2.2 A/AA violations', async ({
   page,
 }, testInfo) => {
@@ -66,15 +114,12 @@ test('Studio critical authoring states have no detectable WCAG 2.2 A/AA violatio
   ).toBeDisabled();
   await expect(aiWorkbench.getByLabel('Bounded semantic query')).toBeVisible();
   await expect(aiWorkbench.getByText(/semantic disabled/i)).toBeVisible();
-  await expect(aiWorkbench).toHaveCSS('background-color', 'rgb(248, 250, 252)');
-  await expect(aiWorkbench.locator('.section-heading p')).toHaveCSS('color', 'rgb(71, 85, 105)');
-  await expect(aiWorkbench.getByLabel('Authoring policy JSON')).toHaveCSS(
-    'color',
-    'rgb(24, 33, 47)',
-  );
+  await expect(aiWorkbench).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+  await expect(aiWorkbench.locator('.section-heading p')).toHaveCSS('color', 'rgb(104, 110, 107)');
+  await expect(aiWorkbench.getByLabel('Authoring policy JSON')).toHaveCSS('color', 'rgb(3, 14, 9)');
   await expect(aiWorkbench.locator('fieldset').first()).toHaveCSS(
     'border-color',
-    'rgb(203, 213, 225)',
+    'rgb(229, 230, 230)',
   );
   await expect(aiWorkbench.getByRole('note')).toHaveCSS('color', 'rgb(154, 52, 18)');
 
@@ -85,15 +130,15 @@ test('Studio critical authoring states have no detectable WCAG 2.2 A/AA violatio
   await expect(
     knowledgeControls.getByRole('button', { name: 'Create reviewable draft plan' }),
   ).toBeDisabled();
-  await expect(knowledgeControls).toHaveCSS('background-color', 'rgb(248, 250, 252)');
+  await expect(knowledgeControls).toHaveCSS('background-color', 'rgb(255, 255, 255)');
   await expect(knowledgeControls.locator('.section-heading p')).toHaveCSS(
     'color',
-    'rgb(71, 85, 105)',
+    'rgb(104, 110, 107)',
   );
-  await expect(knowledgeControls.getByLabel('Policy JSON')).toHaveCSS('color', 'rgb(24, 33, 47)');
+  await expect(knowledgeControls.getByLabel('Policy JSON')).toHaveCSS('color', 'rgb(3, 14, 9)');
   await expect(knowledgeControls.locator('fieldset').first()).toHaveCSS(
     'border-color',
-    'rgb(203, 213, 225)',
+    'rgb(229, 230, 230)',
   );
   await expect(knowledgeControls.getByRole('note')).toHaveCSS('color', 'rgb(124, 45, 18)');
 
@@ -102,30 +147,33 @@ test('Studio critical authoring states have no detectable WCAG 2.2 A/AA violatio
   });
   await expect(federationControls.getByLabel('Offer JSON')).toBeVisible();
   await expect(federationControls.getByLabel('Agreement JSON')).toBeVisible();
-  await expect(federationControls).toHaveCSS('background-color', 'rgb(248, 250, 252)');
+  await expect(federationControls).toHaveCSS('background-color', 'rgb(255, 255, 255)');
   await expect(federationControls.locator('.section-heading p')).toHaveCSS(
     'color',
-    'rgb(71, 85, 105)',
+    'rgb(104, 110, 107)',
   );
-  await expect(federationControls.getByLabel('Offer JSON')).toHaveCSS('color', 'rgb(24, 33, 47)');
+  await expect(federationControls.getByLabel('Offer JSON')).toHaveCSS('color', 'rgb(3, 14, 9)');
   await expect(federationControls.locator('fieldset').first()).toHaveCSS(
     'border-color',
-    'rgb(203, 213, 225)',
+    'rgb(229, 230, 230)',
   );
   await expect(federationControls.getByRole('note')).toHaveCSS('color', 'rgb(124, 45, 18)');
 
   const fleetControls = page.getByRole('region', { name: 'Self-hosted fleet observations' });
   await expect(fleetControls.getByLabel('Configured adapter ID')).toBeVisible();
   await expect(fleetControls.getByLabel('Expected instance ID')).toBeVisible();
-  await expect(fleetControls).toHaveCSS('background-color', 'rgb(248, 250, 252)');
-  await expect(fleetControls.locator('.section-heading p')).toHaveCSS('color', 'rgb(71, 85, 105)');
+  await expect(fleetControls).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+  await expect(fleetControls.locator('.section-heading p')).toHaveCSS(
+    'color',
+    'rgb(104, 110, 107)',
+  );
   await expect(fleetControls.getByLabel('Configured adapter ID')).toHaveCSS(
     'color',
-    'rgb(24, 33, 47)',
+    'rgb(3, 14, 9)',
   );
   await expect(fleetControls.locator('fieldset').first()).toHaveCSS(
     'border-color',
-    'rgb(203, 213, 225)',
+    'rgb(229, 230, 230)',
   );
   await expect(fleetControls.getByRole('note')).toHaveCSS('color', 'rgb(124, 45, 18)');
 
@@ -136,15 +184,29 @@ test('Studio critical authoring states have no detectable WCAG 2.2 A/AA violatio
   await expect(
     regionalControls.getByRole('button', { name: 'Record provider preflight' }),
   ).toBeDisabled();
-  await expect(regionalControls).toHaveCSS('background-color', 'rgb(248, 250, 252)');
+  await expect(regionalControls).toHaveCSS('background-color', 'rgb(255, 255, 255)');
   await expect(regionalControls.locator('.section-heading p')).toHaveCSS(
     'color',
-    'rgb(71, 85, 105)',
+    'rgb(104, 110, 107)',
   );
-  await expect(regionalControls.getByLabel('Policy JSON')).toHaveCSS('color', 'rgb(24, 33, 47)');
+  await expect(regionalControls.getByLabel('Policy JSON')).toHaveCSS('color', 'rgb(3, 14, 9)');
   await expect(regionalControls.getByRole('note')).toHaveCSS('color', 'rgb(124, 45, 18)');
 
   await expectNoDetectableWcagViolations(page, testInfo, 'studio-expanded-panels');
+
+  await page.getByRole('button', { name: 'Switch to dark theme' }).click();
+  await expect(aiWorkbench).toHaveCSS('background-color', 'rgb(3, 14, 9)');
+  await expect(aiWorkbench.locator('.section-heading p')).toHaveCSS('color', 'rgb(166, 172, 169)');
+  await expect(aiWorkbench.getByLabel('Authoring policy JSON')).toHaveCSS(
+    'color',
+    'rgb(255, 255, 255)',
+  );
+  await expect(aiWorkbench.locator('fieldset').first()).toHaveCSS(
+    'border-color',
+    'rgb(28, 38, 34)',
+  );
+  await expectNoDetectableWcagViolations(page, testInfo, 'studio-expanded-panels-dark');
+  await page.getByRole('button', { name: 'Switch to light theme' }).click();
 });
 
 test('critical authoring remains keyboard-operable and adapts at 200% zoom', async ({

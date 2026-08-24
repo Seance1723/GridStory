@@ -8,6 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Added a NiceDash-inspired responsive Studio shell with the inspected 270px categorized rail, 70px search/action top bar, green/lime token system, rounded card/control treatment, locally persisted light/dark themes, and an accessible off-canvas mobile drawer without importing reference branding, content, assets, Angular code, or dependencies (STUDIO-009).
 - Added four generated, committed Draft 2020-12 interoperability schemas/examples for the existing logical archive, canonical schema IR, serializable component manifest, and preview-only node source map; stable public discovery exposes only instance/service/protocol/specification identity and canonical digests with bounded public caching and ETags (M8-004).
 - Added empty-by-default complete-scope fleet inventory with memory/SQLite/PostgreSQL persistence, distinct read/manage/check authorization, configured pull-only observation, strict freshness and exact contract compatibility conditions, private REST/client/neutral Studio controls, recovery/PostgreSQL/browser coverage, and verified `THREAT-0038`/`GS-SEC-042` evidence without any remote write or deployment authority (M8-004).
 - Added private no-store on-demand relation/taxonomy knowledge graphs with per-entry authorization, cycle-safe bounded traversal, exact revision/path evidence, explicit truncation, and deterministic item recommendations whose visible contributions exactly sum to each score (M8-003).
@@ -25,6 +26,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- Reorganized every existing Studio workflow into four navigation groups while retaining the established labels, scoped panels, authoring behavior, save/publish controls, framework-neutral boundaries, and application-owned content (STUDIO-009).
 - Accepted ADR 0025's generated-interoperability and pull-only fleet boundary: canonical contract generation and minimized public discovery are separate from private scoped observations, while arbitrary discovery, credentials, agents, scheduling, provisioning, remote mutation, deployment, upgrade, rollback, traffic, content, and publication control remain excluded.
 - Accepted the M8-003 bounded-knowledge and reviewed-agent boundary in ADR 0024: private on-demand relation/taxonomy graph exploration, deterministic path-explained recommendations, fixed mediated read tools, and expiring human-reviewed single-draft patches without autonomous publication, arbitrary code, network access, or hidden memory.
 - Accepted the M8-002 contract-bound content-federation boundary in ADR 0023: disabled complete-scope producer offers and pinned consumer agreements, signed published-only live reads, reviewed read-only mirror synchronization, explicit withdrawal tombstones, and mandatory source/version/license/credit attribution without remote or local editorial mutation.
@@ -38,6 +40,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Corrected desktop-only mobile-close visibility, selected-entry/workflow/dark-panel contrast, search target/icon semantics, workflow-map keyboard access, cross-engine editor controls, and final accessibility lint findings discovered during the Studio re-theme; the complete repository gate and exact 12/12 Chromium/Firefox/WebKit suite pass (BUG-0375 through BUG-0383, STUDIO-009).
 - Sized the expanded Studio accessibility sweep for WebKit's runtime while preserving the complete multi-panel Axe and color checks (BUG-0374).
 - Serialized root package test suites while preserving package-internal parallelism so heavyweight API/core work cannot starve Studio interaction tests (BUG-0373).
 - Bounded API Vitest concurrency so complete Windows verification runs do not starve worker startup or time-sensitive observability fixtures (BUG-0372).
