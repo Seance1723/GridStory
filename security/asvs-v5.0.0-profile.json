@@ -1268,6 +1268,52 @@
         "tests/e2e/accessibility.spec.ts"
       ],
       "taskIds": ["M8-003"]
+    },
+    {
+      "id": "GS-SEC-042",
+      "title": "Generated minimized interoperability and tenant-safe pull-only fleet observation",
+      "status": "verified",
+      "owner": "Platform, security, interoperability, and self-hosted operations owner",
+      "statement": "Public interoperability documents SHALL be generated from canonical runtime input contracts, use stable versioned identities and canonical digests, fail byte-for-byte drift checks, describe semantic invariants separately, and expose only configured instance/service/protocol/specification metadata with bounded public caching and no scope, content, draft, component inventory, credential, adapter, fleet, or live-status data; preview source maps SHALL target only existing preview-only node attributes and SHALL NOT annotate published rendering; fleet state SHALL be empty by default, complete-scope, optimistic, bounded, private/no-store, recoverable, and protected by distinct read/manage/check authority; checks SHALL use only configured adapter IDs and deployment-controlled credential-free HTTPS origins, accept no caller URL or credential, perform exact bounded GET-only no-redirect same-origin discovery/health/readiness reads, strictly validate freshness, expected instance/service/protocol and every specification digest, retain only sanitized generation-bound Reachable/Ready/Compatible conditions, project expired evidence as Unknown, and SHALL NOT provide discovery scans, inbound enrollment, agents, schedules, secrets, shell, remote writes, provisioning, deployment, upgrade, rollback, traffic, content, workflow, release, or publication authority.",
+      "asvsRefs": [
+        "v5.0.0-1.2.4",
+        "v5.0.0-2.2.2",
+        "v5.0.0-8.1.1",
+        "v5.0.0-11.2.1",
+        "v5.0.0-14.1.1",
+        "v5.0.0-14.2.1"
+      ],
+      "threatRefs": ["THREAT-0001", "THREAT-0004", "THREAT-0012", "THREAT-0013", "THREAT-0038"],
+      "evidence": [
+        "packages/schema/src/interoperability.ts",
+        "packages/schema/src/fleet.ts",
+        "packages/core/src/fleet-repository.ts",
+        "packages/core/src/fleet-service.ts",
+        "packages/core/src/authorization.ts",
+        "apps/api/src/fleet-adapter.ts",
+        "apps/api/src/interoperability-routes.ts",
+        "apps/api/src/server.ts",
+        "packages/client/src/index.ts",
+        "packages/react/src/source-map.ts",
+        "apps/studio/src/App.tsx",
+        "scripts/generate-interoperability-specs.mjs",
+        "docs/interoperability-and-fleet.md",
+        "docs/adr/0025-generated-interoperability-and-observed-fleet.md"
+      ],
+      "verification": [
+        "packages/schema/test/interoperability.test.ts",
+        "packages/react/test/renderer.test.tsx",
+        "packages/core/test/fleet-repository.test.ts",
+        "packages/core/test/fleet-service.test.ts",
+        "packages/core/test/postgres-conformance.test.ts",
+        "apps/api/test/interoperability.test.ts",
+        "apps/api/test/database-recovery.test.ts",
+        "apps/api/test/postgres-server.test.ts",
+        "packages/client/test/interoperability-client.test.ts",
+        "apps/studio/test/App.test.tsx",
+        "tests/e2e/accessibility.spec.ts"
+      ],
+      "taskIds": ["M8-004"]
     }
   ]
 }

@@ -1,0 +1,20 @@
+{
+  "format": "gridstory.preview-source-map",
+  "version": 1,
+  "entry": {
+    "entryId": "entry-1",
+    "contentType": "page",
+    "revisionId": "revision-1"
+  },
+  "mappings": [
+    {
+      "nodeId": "hero-1",
+      "componentId": "example.hero",
+      "componentVersion": 1,
+      "selector": {
+        "attribute": "data-gridstory-node",
+        "value": "hero-1"
+      }
+    }
+  ]
+}

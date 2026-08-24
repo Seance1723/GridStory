@@ -20,6 +20,8 @@ export * from './content-service.js';
 export * from './enterprise-identity-service.js';
 export * from './errors.js';
 export * from './experiment-service.js';
+export * from './fleet-repository.js';
+export * from './fleet-service.js';
 export * from './governance-processors.js';
 export * from './governance-repository.js';
 export * from './governance-service.js';

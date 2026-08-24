@@ -27,6 +27,8 @@ This repository is in active foundation development. The current vertical slice 
 - Provider-neutral regional published reads with explicit strong/bounded-staleness evidence, conservative cache guidance, residency checks, and digest-bound independently approved single-writer failover/reconciliation controls.
 - Contract-bound cross-instance content federation with exact signed published schema/revision identity, live no-copy reads, reviewed read-only mirrors and withdrawal tombstones, and mandatory canonical/license/credit/agent attribution.
 - Private on-demand relation/taxonomy graph exploration, deterministic contribution-explained item recommendations, and disabled-by-default mediated read agents whose expiring single-draft text/slug patches require explicit human review and execution.
+- Generated public Draft 2020-12 specifications for logical archives, canonical schema IR, serializable component manifests, and preview-only node source maps, with stable discovery identities/digests and byte-for-byte drift checks.
+- Empty-by-default complete-scope self-hosted fleet inventory with private on-demand pull-only health/readiness/contract observations, finite expiring conditions, safe configured HTTPS adapters, and no remote mutation authority.
 - Checksummed native SQLite/PostgreSQL backup commands, isolated restore drills, PostgreSQL PITR guidance, bounded API/worker shutdown, and exact current/candidate rollout preflight.
 - Evidence-bounded WCAG 2.2 A/AA automation and ATAG-informed review, keyboard/zoom/adaptation checks, three-engine browser gates, and React 18.3/19 plus Vite compatibility fixtures.
 - Machine-validated alpha/beta/RC/GA readiness reviews with evidence-linked decisions; the current candidate is private-alpha-ready while beta, RC, and GA remain explicit no-go decisions.
@@ -94,7 +96,7 @@ pnpm test:recovery
 # Run durable outbox/job processing beside the API
 pnpm worker
 
-# Regenerate or verify canonical TypeScript projections
+# Regenerate or verify canonical TypeScript projections and public interoperability specifications
 pnpm schema:generate
 pnpm schema:check
 
@@ -136,6 +138,8 @@ See [Contract-bound content federation and syndication](docs/content-federation-
 
 See [Knowledge graph and reviewed agents](docs/knowledge-and-reviewed-agents.md) for derived graph limits, deterministic scoring evidence, fixed mediated tools, runtime composition, human review, idempotent draft execution, recovery, and explicit non-goals.
 
+See [Public interoperability and self-hosted fleet observation](docs/interoperability-and-fleet.md) for generated schema identities/examples, semantic conformance rules, public caching, preview-only mappings, configured observer composition, private fleet actions, freshness semantics, recovery, and explicit no-remote-control limits.
+
 See [Enterprise identity and access](docs/identity-and-access.md), the [security threat model](docs/security/threat-model.md), [security requirements](docs/security/security-requirements.md), and [ASVS 5.0 profile](docs/security/asvs-v5-profile.md) for trust boundaries, abuse cases, normative controls, applicability, evidence, and review workflow. [Release evidence, tested limits, and support](docs/release-and-support.md), [staged release readiness](docs/release-readiness.md), [SECURITY.md](SECURITY.md), and [SUPPORT.md](SUPPORT.md) define capacity claims, package/SBOM/attestation verification, go/no-go criteria, vulnerability handling, and the maintained pre-v1 line. [Accessibility and compatibility](docs/accessibility-and-compatibility.md) records the WCAG/ATAG review, exact browser/framework matrix, header ownership, and untested boundaries. See [visual composition](docs/composition-editor.md) for palettes, layers, slots, nesting constraints, keyboard controls, and application integration. [Design-system authoring](docs/design-system.md) covers tokens, variants, responsive values, symbols, templates, version pins, and resolution order. [Content quality and publish gates](docs/content-quality.md) covers explainable checks, scoring, link adapters, and configurable publication blocking. [Assets and resumable uploads](docs/assets.md) covers scoped metadata, multipart storage adapters, renditions, focal points, usage tracking, and the M4-002 security boundary. [Content queries and GraphQL](docs/content-queries.md) covers filtering, pagination, projection, authorization, and API examples. [Localization](docs/localization.md) covers field declarations, fallback graphs, translation status, completeness, and localized routes. [Editorial workflows](docs/workflows.md) covers custom states, approvals, separation of duties, schedules, notifications, and escalations. [Durable workflow actions](docs/workflow-actions.md) covers action design, reconciliation, leases, retries, dead letters, delivery logs, replay, and webhook security. [Atomic releases](docs/releases.md) covers pinned multi-entry publication, future-state validation and preview, scheduling, and rollback policy. [Search and taxonomies](docs/search-and-taxonomies.md) covers adapter contracts, durable indexing, rebuild/status operations, facets, backlinks, related scoring, and tenant/cache boundaries. [Plugin SDK and isolation](docs/plugins.md) covers signed manifests, grants, external runtimes, lifecycle, limits, and production hardening. [Operations](docs/operations.md) covers the outbox, worker, jobs, cache tags, webhook signatures, retries, dead letters, and replay. [Observability](docs/observability.md) covers OTLP signals, health, dashboards, alerts, retention, redaction, and incident response. [Database recovery and rollouts](docs/recovery-and-rollouts.md) covers native backups, restore drills, PostgreSQL PITR, graceful shutdown, and rolling-upgrade gates. [Audit and administration](docs/audit-and-administration.md) covers hash-chain trust, verification/export, the operations view, and incident response. [Logical portability](docs/portability.md) covers checksummed export/import, JSON Lines, dry-runs, conflicts, and rollback. [Schema lifecycle](docs/schema-lifecycle.md) covers round-trip, migration, approval, promotion, and drift workflows. [Troubleshooting](docs/troubleshooting.md) covers ports, CORS, workspace declarations, databases, local reset, and browser verification. Architectural decisions are recorded under [`docs/adr`](docs/adr).
 
 ## Repository map
@@ -167,6 +171,8 @@ The CMS stores component IDs, versions, validated props, and slots. It does not 
 ## API snapshot
 
 - `GET /health`, `GET /ready`
+- `GET /api/v1/interoperability`, `GET /api/v1/interoperability/specifications/:kind/1`
+- `GET /api/v1/fleet`, `PUT|DELETE /api/v1/fleet/members/:memberId`, `POST /api/v1/fleet/members/:memberId/state|check`
 - `GET /api/v1/schemas`, `GET /api/v1/components`
 - `GET /api/v1/locales`
 - `GET /api/v1/schema-lifecycle`, `GET /api/v1/schema-lifecycle/drift`

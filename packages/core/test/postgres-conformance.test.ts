@@ -15,6 +15,7 @@ import {
   emptyAiGatewayDocument,
   emptyAnalyticsDocument,
   emptyContentFederationDocument,
+  emptyFleetDocument,
   emptyMarketplaceDocument,
   emptyMigrationDocument,
   emptyKnowledgeDocument,
@@ -26,6 +27,7 @@ import {
   PostgresAnalyticsRepository,
   PostgresCollaborationRepository,
   PostgresContentFederationRepository,
+  PostgresFleetRepository,
   PostgresContentRepository,
   PostgresGovernanceRepository,
   PostgresIdentityRepository,
@@ -696,6 +698,48 @@ if (connectionString) {
       }
     });
   });
+  describe('PostgreSQL fleet repository conformance', () => {
+    it('persists optimistic observation state under the complete scope key', async () => {
+      const schema = `gridstory_fleet_test_${process.pid}_${schemaSequence++}`;
+      const pool = new Pool({ connectionString });
+      const scope: ContentScope = {
+        organizationId: 'organization-a',
+        tenantId: 'fleet-tenant-a',
+        workspaceId: 'workspace-a',
+        siteId: 'site-a',
+        environmentId: 'production',
+        locale: 'en',
+      };
+      const first = new PostgresFleetRepository({ pool, schema });
+      try {
+        const initial = emptyFleetDocument(scope, '2026-08-24T00:00:00.000Z');
+        await first.save(initial, null);
+        await first.close();
+
+        const second = new PostgresFleetRepository({ pool, schema });
+        await expect(second.get(scope)).resolves.toEqual(initial);
+        await expect(second.get({ ...scope, tenantId: 'other-tenant' })).resolves.toBeNull();
+        const next = {
+          ...initial,
+          version: 1,
+          updatedBy: 'fleet-operator',
+          updatedAt: '2026-08-24T00:01:00.000Z',
+        };
+        await second.save(next, 0);
+        await expect(second.get(scope)).resolves.toMatchObject({
+          version: 1,
+          updatedBy: 'fleet-operator',
+        });
+        await expect(second.save(next, 0)).rejects.toMatchObject({
+          code: 'fleet_write_conflict',
+        });
+        await second.close();
+      } finally {
+        await pool.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);
+        await pool.end();
+      }
+    });
+  });
 } else {
   describe.skip('PostgreSQL repository conformance', () => {
     it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
@@ -737,6 +781,9 @@ if (connectionString) {
     it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
   });
   describe.skip('PostgreSQL knowledge repository conformance', () => {
+    it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
+  });
+  describe.skip('PostgreSQL fleet repository conformance', () => {
     it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
   });
 }

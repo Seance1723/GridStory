@@ -196,6 +196,23 @@ export const resourceLimits = {
     maximumAgentTimeoutMs: 120_000,
     maximumPlanLifetimeSeconds: 900,
   },
+  interoperability: {
+    maximumSourceMappings: 5_000,
+    maximumSpecifications: 4,
+  },
+  fleet: {
+    maximumMembers: 50,
+    maximumEvents: 500,
+    maximumObservations: 200,
+    maximumLabelCharacters: 160,
+    maximumAdapterIdCharacters: 120,
+    maximumServiceVersionCharacters: 120,
+    maximumObservationBytes: 262_144,
+    minimumObservationTimeoutMs: 100,
+    maximumObservationTimeoutMs: 60_000,
+    maximumObservationLifetimeSeconds: 3_600,
+    maximumFutureSkewMs: 30_000,
+  },
   benchmark: {
     datasetEntries: 250,
     readSamples: 120,

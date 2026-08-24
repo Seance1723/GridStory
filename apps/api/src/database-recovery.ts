@@ -51,6 +51,7 @@ const requiredSqliteTables = [
   'durable_jobs',
   'entries',
   'gridstory_content_federation_documents',
+  'gridstory_fleet_documents',
   'gridstory_knowledge_documents',
   'gridstory_regional_documents',
   'revisions',
@@ -61,6 +62,7 @@ const postgresGridStoryProbe = `SELECT CASE
    AND to_regclass('gridstory.revisions') IS NOT NULL
    AND to_regclass('gridstory.schema_deployments') IS NOT NULL
    AND to_regclass('gridstory.gridstory_content_federation_documents') IS NOT NULL
+   AND to_regclass('gridstory.gridstory_fleet_documents') IS NOT NULL
    AND to_regclass('gridstory.gridstory_knowledge_documents') IS NOT NULL
    AND to_regclass('gridstory.gridstory_regional_documents') IS NOT NULL
   THEN 'ok' ELSE 'missing' END;`;

@@ -12,6 +12,8 @@ export * from './contracts.js';
 export * from './design-system.js';
 export * from './governance.js';
 export * from './identity.js';
+export * from './interoperability.js';
+export * from './fleet.js';
 export * from './lifecycle.js';
 export * from './knowledge.js';
 export * from './localization.js';

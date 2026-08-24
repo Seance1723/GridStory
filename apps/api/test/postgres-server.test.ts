@@ -1,7 +1,9 @@
 import {
   emptyContentFederationDocument,
+  emptyFleetDocument,
   PostgresCollaborationRepository,
   PostgresContentFederationRepository,
+  PostgresFleetRepository,
 } from '@gridstory/core';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -263,6 +265,34 @@ describe.skipIf(!connectionString)('GridStory API with PostgreSQL', () => {
     federationDocument.updatedBy = 'postgres-federation-admin';
     await federationRepository.save(federationDocument, null);
     await federationRepository.close();
+    const fleetRepository = new PostgresFleetRepository({ connectionString });
+    const fleetDocument = emptyFleetDocument(
+      {
+        organizationId: 'local',
+        tenantId: 'postgres-tenant',
+        workspaceId: 'default',
+        siteId: 'default',
+        environmentId: 'development',
+        locale: 'en',
+      },
+      new Date().toISOString(),
+    );
+    fleetDocument.version = 1;
+    fleetDocument.updatedBy = 'postgres-fleet-operator';
+    fleetDocument.members.push({
+      id: 'postgres-remote',
+      generation: 1,
+      label: 'PostgreSQL remote',
+      adapterId: 'postgres-observer',
+      expectedInstanceId: 'postgres-instance',
+      state: 'paused',
+      createdAt: fleetDocument.updatedAt,
+      createdBy: 'postgres-fleet-operator',
+      updatedAt: fleetDocument.updatedAt,
+      updatedBy: 'postgres-fleet-operator',
+    });
+    await fleetRepository.save(fleetDocument, null);
+    await fleetRepository.close();
 
     expect(
       await server.inject({
@@ -421,6 +451,13 @@ describe.skipIf(!connectionString)('GridStory API with PostgreSQL', () => {
       policy: { enabled: false },
       plans: [],
       receipts: [],
+    });
+    const fleet = await server.inject({ method: 'GET', url: '/api/v1/fleet', headers });
+    expect(fleet.statusCode, fleet.body).toBe(200);
+    expect(fleet.json()).toMatchObject({
+      version: 1,
+      updatedBy: 'postgres-fleet-operator',
+      members: [{ id: 'postgres-remote', state: 'paused' }],
     });
     const allocation = await server.inject({
       method: 'POST',

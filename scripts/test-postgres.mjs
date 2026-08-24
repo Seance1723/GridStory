@@ -245,8 +245,26 @@ function runPostgresRecoveryDrill(containerName) {
     if (restoredKnowledge.stdout.trim() !== '1') {
       throw new Error('PostgreSQL restore did not recover the knowledge agent policy.');
     }
+    const restoredFleet = run(
+      'docker',
+      [
+        'exec',
+        containerName,
+        'psql',
+        '--username=gridstory',
+        `--dbname=${targetDatabase}`,
+        '--tuples-only',
+        '--no-align',
+        '--command',
+        "SELECT count(*) FROM gridstory.gridstory_fleet_documents WHERE tenant_id = 'postgres-tenant' AND payload->>'version' = '1' AND payload->'members'->0->>'id' = 'postgres-remote';",
+      ],
+      { capture: true },
+    );
+    if (restoredFleet.stdout.trim() !== '1') {
+      throw new Error('PostgreSQL restore did not recover the self-hosted fleet state.');
+    }
     console.log(
-      'PostgreSQL logical backup/restore drill passed (published content, targeting, experiment lifecycle, analytics aggregate, governed AI policy, reviewed AI authoring policy, regional topology, content federation state, and knowledge agent policy recovered).',
+      'PostgreSQL logical backup/restore drill passed (published content, targeting, experiment lifecycle, analytics aggregate, governed AI policy, reviewed AI authoring policy, regional topology, content federation state, knowledge agent policy, and self-hosted fleet state recovered).',
     );
   } finally {
     run(

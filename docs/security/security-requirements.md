@@ -307,3 +307,14 @@ Repository evidence does not provision a model provider, certify provider TLS/eg
 | Recovery and deployment | Reliability/deployment owner | M5-005 restore, graceful shutdown, rolling upgrade, and secret rotation exercises. |
 | Limits and supply chain | Release engineering owner | Maintain M5-007 limits/benchmarks/SBOM/vulnerability/provenance workflows; hosted and deployment evidence remain unmet `RC-004`/`RC-006`. |
 | GA risk acceptance | Security owner and release owner | Resolve `RC-005`/`GA-001`, retain the current model/profile, close critical risks, and explicitly time-bound any accepted high risk. |
+## GS-SEC-042 — Generated minimized interoperability and pull-only fleet observation
+
+- Generate the four public Draft 2020-12 schemas and examples from canonical runtime input contracts; use stable versioned URNs and canonical SHA-256 digests; make `schema:check` fail on byte drift; and document checksum, reference, uniqueness, ordering, and preview-only semantics JSON Schema cannot enforce.
+- Limit public discovery to configured instance/service/protocol identity, fixed probe paths, and exact kind/version/URN/media/digest/link descriptors. Do not expose complete scope, tenant schemas, component inventory, content, archives, drafts, credentials, adapters, fleet state, or live status. Use bounded public caching and digest ETags.
+- Map source nodes only to existing preview-only renderer attributes and prove published rendering contains no GridStory node annotations.
+- Keep fleet state empty by default, complete-scope, optimistic, bounded, private/no-store, separately authorized for read/manage/check, generation-bound, expiry-aware, and covered by memory/SQLite/PostgreSQL persistence and native recovery.
+- Permit only configured adapter identities whose credential-free HTTPS origins are supplied at trusted server composition. Accept no caller URL or credential. Require exact GET-only paths, disabled redirects, same-origin responses, abort/time/body limits, strict parsing, generic failures, and deployment egress/private-address/DNS/TLS controls.
+- Compare expected instance and optional service version plus protocol and all specification digests. Retain only sanitized Reachable/Ready/Compatible conditions with check/expiry times and project expired evidence as Unknown.
+- Provide pause, resume, remove, and on-demand check only. Do not provide network discovery, inbound enrollment, agents, leases, schedules, alerts, secrets, shell, remote writes, provisioning, deployment, upgrades, rollback, traffic, content, workflow, release, or publication control.
+
+Canonical evidence is `GS-SEC-042` in `security/asvs-v5.0.0-profile.json` and `THREAT-0038` in `security/threat-model.json`.

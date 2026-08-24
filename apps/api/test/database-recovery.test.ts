@@ -4,8 +4,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   emptyContentFederationDocument,
+  emptyFleetDocument,
   type MigrationSourceAdapter,
   SqliteContentFederationRepository,
+  SqliteFleetRepository,
 } from '@gridstory/core';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
@@ -361,6 +363,37 @@ describe('database recovery', () => {
       } finally {
         federationRepository.close();
       }
+      const fleetRepository = new SqliteFleetRepository({ filename: sourcePath });
+      try {
+        const fleetDocument = emptyFleetDocument(
+          {
+            organizationId: 'local',
+            tenantId: 'recovery-tenant',
+            workspaceId: 'default',
+            siteId: 'default',
+            environmentId: 'development',
+            locale: 'en',
+          },
+          '2026-08-21T11:59:00.000Z',
+        );
+        fleetDocument.version = 1;
+        fleetDocument.updatedBy = 'recovery-fleet-operator';
+        fleetDocument.members.push({
+          id: 'recovery-remote',
+          generation: 1,
+          label: 'Recovery remote',
+          adapterId: 'recovery-observer',
+          expectedInstanceId: 'recovery-instance',
+          state: 'paused',
+          createdAt: '2026-08-21T11:59:00.000Z',
+          createdBy: 'recovery-fleet-operator',
+          updatedAt: '2026-08-21T11:59:00.000Z',
+          updatedBy: 'recovery-fleet-operator',
+        });
+        fleetRepository.save(fleetDocument, null);
+      } finally {
+        fleetRepository.close();
+      }
 
       const manifest = await backupSqlite({
         sourcePath,
@@ -616,6 +649,17 @@ describe('database recovery', () => {
         policy: { enabled: false },
         plans: [],
         receipts: [],
+      });
+      const recoveredFleet = await restored.inject({
+        method: 'GET',
+        url: '/api/v1/fleet',
+        headers,
+      });
+      expect(recoveredFleet.statusCode, recoveredFleet.body).toBe(200);
+      expect(recoveredFleet.json()).toMatchObject({
+        version: 1,
+        updatedBy: 'recovery-fleet-operator',
+        members: [{ id: 'recovery-remote', state: 'paused', generation: 1 }],
       });
     } finally {
       await restored?.close();

@@ -1,37 +1,23 @@
 import { createHash } from 'node:crypto';
-import { type ContentScope, resourceLimits } from '@gridstory/schema';
+import {
+  type ContentScope,
+  LOGICAL_ARCHIVE_FORMAT,
+  LOGICAL_ARCHIVE_VERSION,
+  type LogicalArchive,
+  logicalArchiveSchema,
+  type PortableContentRecord,
+  resourceLimits,
+} from '@gridstory/schema';
 import { GridStoryError } from './errors.js';
-import type {
-  ContentRepository,
-  ImportConflictPolicy,
-  PortableContentRecord,
-  PortableImportResult,
-} from './types.js';
+import type { ContentRepository, ImportConflictPolicy, PortableImportResult } from './types.js';
 
-export const LOGICAL_ARCHIVE_FORMAT = 'gridstory.logical-content';
-export const LOGICAL_ARCHIVE_VERSION = 1;
-
-export interface LogicalArchiveManifest {
-  kind: 'manifest';
-  format: typeof LOGICAL_ARCHIVE_FORMAT;
-  version: typeof LOGICAL_ARCHIVE_VERSION;
-  sourceScope: ContentScope;
-  exportedAt: string;
-  entryCount: number;
-  archiveChecksum: string;
-  schemaFingerprint?: string;
-}
-
-export interface LogicalArchiveEntry {
-  kind: 'entry';
-  checksum: string;
-  record: PortableContentRecord;
-}
-
-export interface LogicalArchive {
-  manifest: LogicalArchiveManifest;
-  entries: LogicalArchiveEntry[];
-}
+export {
+  LOGICAL_ARCHIVE_FORMAT,
+  LOGICAL_ARCHIVE_VERSION,
+  type LogicalArchive,
+  type LogicalArchiveEntry,
+  type LogicalArchiveManifest,
+} from '@gridstory/schema';
 
 export class PortabilityError extends GridStoryError {
   constructor(message: string, details?: unknown) {
@@ -248,7 +234,13 @@ export function logicalArchiveFromUnknown(value: unknown): LogicalArchive {
   if (!isRecord(value) || !isRecord(value.manifest) || !Array.isArray(value.entries)) {
     throw new PortabilityError('Archive must contain a manifest and entry array.');
   }
-  const archive = value as unknown as LogicalArchive;
+  const parsed = logicalArchiveSchema.safeParse(value);
+  if (!parsed.success) {
+    throw new PortabilityError('Archive shape does not match the GridStory v1 contract.', {
+      issues: parsed.error.issues,
+    });
+  }
+  const archive = parsed.data;
   validateLogicalArchive(archive);
   return archive;
 }

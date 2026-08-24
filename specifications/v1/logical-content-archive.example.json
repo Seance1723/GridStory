@@ -1,0 +1,19 @@
+{
+  "manifest": {
+    "kind": "manifest",
+    "format": "gridstory.logical-content",
+    "version": 1,
+    "sourceScope": {
+      "organizationId": "example-org",
+      "tenantId": "example-tenant",
+      "workspaceId": "example-workspace",
+      "siteId": "example-site",
+      "environmentId": "production",
+      "locale": "en"
+    },
+    "exportedAt": "2026-01-01T00:00:00.000Z",
+    "entryCount": 0,
+    "archiveChecksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "entries": []
+}

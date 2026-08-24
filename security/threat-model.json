@@ -3,7 +3,7 @@
   "model": {
     "id": "GRIDSTORY-TM-001",
     "title": "GridStory control plane and delivery threat model",
-    "version": "1.8.0",
+    "version": "1.9.0",
     "reviewedAt": "2026-08-24",
     "owners": ["GridStory security owner", "GridStory architecture owner"],
     "methodology": "OWASP four-question threat modeling with STRIDE categorization",
@@ -23,14 +23,16 @@
       "consent-aware targeting attributes, audiences, draft/published configuration, hypothetical preview, edge decisions, and cache guidance",
       "governed experiment designs, lifecycle, stateless weighted allocation, aggregate evidence, guardrails, and targeting-draft promotion",
       "bounded published content/component analytics events, normalized lifecycle evidence, release annotations, aggregate metrics, and injected adapter delivery",
-      "governed AI policy, immutable prompt versions, scoped allowlisted retrieval, provider-neutral text generation, redaction, budgets, usage receipts, and kill switches"
+      "governed AI policy, immutable prompt versions, scoped allowlisted retrieval, provider-neutral text generation, redaction, budgets, usage receipts, and kill switches",
+      "public generated interoperability schemas and discovery plus private complete-scope self-hosted fleet inventory, configured pull-only observers, compatibility conditions, events, and recovery"
     ],
     "outOfScope": [
       "security of application-owned React components after validated data leaves GridStory",
       "identity-provider internals",
       "cloud, CDN, database, object-store, and network controls not configured by GridStory",
       "package binary hosting/download, scanner-engine internals, publisher business-legitimacy verification, and operating-system/container isolation supplied outside GridStory",
-      "customer profile storage, consent collection or legal interpretation, raw analytics warehousing/export, attribution/funnels/cohorts, provider credentials or provider-specific SDKs in core, statistical-significance engines, automatic experiment winner selection or publication, autonomous agents, tools, content mutation, semantic search, provider fallback, or raw AI invocation history"
+      "customer profile storage, consent collection or legal interpretation, raw analytics warehousing/export, attribution/funnels/cohorts, provider credentials or provider-specific SDKs in core, statistical-significance engines, automatic experiment winner selection or publication, autonomous agents, tools, content mutation, semantic search, provider fallback, or raw AI invocation history",
+      "fleet provisioning, discovery scans, inbound enrollment, agents, leases, continuous heartbeats, placement, traffic control, remote deployment, upgrade, rollback, mutation, shell access, or hosted availability claims"
     ],
     "riskModel": {
       "formula": "likelihood * impact",
@@ -310,6 +312,20 @@
         "accountability",
         "recoverability"
       ]
+    },
+    {
+      "id": "ASSET-026",
+      "name": "Generated public interoperability contracts, stable instance identity, private fleet members, compatibility observations, and events",
+      "securityProperties": [
+        "integrity",
+        "availability",
+        "data minimization",
+        "tenant isolation",
+        "freshness",
+        "least privilege",
+        "accountability",
+        "recoverability"
+      ]
     }
   ],
   "trustBoundaries": [
@@ -527,6 +543,20 @@
         "strict single-current-draft plan output, complete candidate validation, visible rationale, expiring policy/prompt/model/target/result digest, and no hidden reasoning or raw tool/provider retention",
         "human-user-only one-time review with no mutation, followed by ordinary content.draft.update authorization and exact execution-time policy, prompt, target, schema, reference, checksum, and expiry revalidation",
         "persisted pending execution, stable caller idempotency, checksum reconciliation, normal draft revision history, bounded receipts, and no workflow/release/publication/bulk/rich/relation/taxonomy/component/asset operation"
+      ]
+    },
+    {
+      "id": "BOUNDARY-021",
+      "name": "Public interoperability discovery and configured pull-only self-hosted fleet observation",
+      "controls": [
+        "generated reviewed Draft 2020-12 schemas with stable URN identities, committed examples, byte drift checks, canonical SHA-256 digests, and immutable versioned caching",
+        "short-cache public discovery limited to configured instance/service identity, fixed protocol/probe paths, and exact schema kind/version/media/digest/link descriptors without tenant, content, draft, credential, adapter, or fleet state",
+        "preview source maps bind only existing preview-only data-gridstory-node selectors and are never injected into published rendering",
+        "private no-store complete-scope optimistic fleet documents with distinct read, manage, and check actions, empty default, bounded members/observations/events, generation binding, expiry, and native recovery",
+        "configured adapter IDs only; credential-free HTTPS origins remain in trusted server composition with no browser or caller URL/credential input",
+        "GET-only exact discovery/health/readiness paths, disabled redirects, same-origin response validation, strict time/body bounds, abort propagation, strict schemas, generic failures, and no raw diagnostics",
+        "exact expected instance/service/protocol/specification digest comparison with finite Reachable, Ready, and Compatible conditions that project unknown after expiry",
+        "no remote write, provisioning, deployment, upgrade, rollback, traffic, publication, content mutation, agent, scheduler, or hosted monitoring authority"
       ]
     }
   ],
@@ -783,6 +813,20 @@
       "to": "ACTOR-007",
       "data": "redacted bounded goal and fixed read-only mediated tool callback returning authorized bounded projections, followed by one strict untrusted draft plan",
       "assets": ["ASSET-001", "ASSET-003", "ASSET-012", "ASSET-021", "ASSET-025"]
+    },
+    {
+      "id": "FLOW-036",
+      "from": "ACTOR-001",
+      "to": "BOUNDARY-021",
+      "data": "public instance/service/protocol identity and four immutable kind/version/URN/media/digest/schema-link descriptors or generated schema documents",
+      "assets": ["ASSET-012", "ASSET-026"]
+    },
+    {
+      "id": "FLOW-037",
+      "from": "ACTOR-003",
+      "to": "BOUNDARY-021",
+      "data": "authorized complete-scope member identity and on-demand check through one preconfigured adapter, returning sanitized generation-bound freshness and compatibility conditions",
+      "assets": ["ASSET-003", "ASSET-004", "ASSET-009", "ASSET-012", "ASSET-026"]
     }
   ],
   "assumptions": [
@@ -799,7 +843,8 @@
     "AI provider adapters are composed only in the trusted server runtime, preserve structured instruction/data separation and output limits, honor abort signals where supported, and keep credentials, provider diagnostics, retention, regional processing, and egress policy outside browser, schema, core, persistence, and logs.",
     "Regional read and failover adapters are composed only in the trusted server runtime, truthfully attest deployment-controlled topology and residency, enforce provider fencing and idempotency, and keep credentials, raw replication positions, DNS/control-plane details, and protected diagnostics outside browser, schema, core persistence, delivery bodies, and public logs.",
     "Federation signers and source adapters are composed only in the trusted server runtime; operators independently obtain and review source scopes, instances, public keys, schema allowlists, attribution terms, credentials, legal authority, and egress policy, while source availability, license truth, key rotation, revocation, and required attribution placement remain external obligations.",
-    "Knowledge agent runtimes are separately isolated and composed only in the trusted server runtime, implement the fixed callback without retaining or forwarding data, honor abort and idempotency contracts, and keep model credentials, egress, diagnostics, memory, billing, retention, and regional processing outside GridStory state and browsers."
+    "Knowledge agent runtimes are separately isolated and composed only in the trusted server runtime, implement the fixed callback without retaining or forwarding data, honor abort and idempotency contracts, and keep model credentials, egress, diagnostics, memory, billing, retention, and regional processing outside GridStory state and browsers.",
+    "Fleet observer origins, network allowlists, DNS/private-address protections, credentials when an external deployment adds them, TLS trust, egress, availability, and target ownership are reviewed deployment configuration; GridStory accepts no caller-selected target URL and provides no remote mutation authority."
   ],
   "threats": [
     {
@@ -2037,6 +2082,67 @@
         "tests/e2e/accessibility.spec.ts",
         "docs/knowledge-and-reviewed-agents.md",
         "docs/adr/0024-bounded-knowledge-and-reviewed-agent-operations.md"
+      ]
+    },
+    {
+      "id": "THREAT-0038",
+      "title": "Interoperability drift or disclosure, fleet scope bleed, SSRF, spoofed/stale conditions, diagnostic leakage, or remote-control expansion",
+      "stride": [
+        "Spoofing",
+        "Tampering",
+        "Repudiation",
+        "Information Disclosure",
+        "Denial of Service",
+        "Elevation of Privilege"
+      ],
+      "scenario": "Generated schemas drift from runtime contracts; public discovery exposes tenant, draft, content, component inventory, credentials, adapters, or fleet state; a caller supplies an origin/credential or induces redirects, cross-origin/private-network access, oversized/malformed/future/stale evidence, instance/service/spec substitution, or raw diagnostic retention; authorization or storage crosses scope; expired status still appears current; or fleet management gains remote write, provisioning, upgrade, traffic, content, or publication authority.",
+      "actors": ["ACTOR-001", "ACTOR-003", "ACTOR-004", "ACTOR-007", "ACTOR-008"],
+      "assets": [
+        "ASSET-001",
+        "ASSET-003",
+        "ASSET-004",
+        "ASSET-005",
+        "ASSET-009",
+        "ASSET-011",
+        "ASSET-012",
+        "ASSET-026"
+      ],
+      "boundaries": [
+        "BOUNDARY-001",
+        "BOUNDARY-002",
+        "BOUNDARY-003",
+        "BOUNDARY-006",
+        "BOUNDARY-021"
+      ],
+      "likelihood": 4,
+      "impact": 5,
+      "risk": 20,
+      "response": "mitigate",
+      "owner": "Platform, security, interoperability, and self-hosted operations owner",
+      "mitigations": [
+        "Generate all four committed Draft 2020-12 documents from canonical Zod contracts, use stable URNs and canonical SHA-256 digests, verify byte-for-byte drift in schema:check, and cover semantic checksum/reference/uniqueness/preview-only invariants with prose and executable fixtures.",
+        "Expose only configured instance ID, service version, fixed protocol/probe paths, and exact specification descriptors through short-cache discovery; serve immutable versioned schemas with digest ETags and no scope, content, drafts, component inventory, credentials, adapter configuration, fleet membership, or live status.",
+        "Keep preview source-map selectors aligned to existing preview-only renderer attributes and prove published rendering has no GridStory node annotations.",
+        "Keep fleet state empty by default, private/no-store, complete-scope, optimistic, bounded, recoverable, and protected by separate read/manage/check actions; bind every observation/event to member generation and project expired evidence as Unknown.",
+        "Allow only configured adapter IDs whose credential-free HTTPS origins remain in trusted composition; accept no caller URL or credential; use GET-only exact paths, disabled redirects, same-origin checks, abort/time/byte bounds, and deployment egress/private-network policy.",
+        "Strictly parse discovery/health/readiness, validate time and expiry, compare expected instance/service plus every local protocol/specification version/digest, retain finite sanitized conditions only, and replace malformed/transport/provider failures with generic evidence without raw diagnostics.",
+        "Expose pause/remove/on-demand-check only and ship no scheduler, inbound enrollment, agent, lease, secret, shell, remote write, provision, deploy, upgrade, rollback, traffic, content, workflow, release, or publication operation."
+      ],
+      "verification": [
+        "scripts/generate-interoperability-specs.mjs",
+        "packages/schema/test/interoperability.test.ts",
+        "packages/react/test/renderer.test.tsx",
+        "packages/core/test/fleet-repository.test.ts",
+        "packages/core/test/fleet-service.test.ts",
+        "packages/core/test/postgres-conformance.test.ts",
+        "apps/api/test/interoperability.test.ts",
+        "apps/api/test/database-recovery.test.ts",
+        "apps/api/test/postgres-server.test.ts",
+        "packages/client/test/interoperability-client.test.ts",
+        "apps/studio/test/App.test.tsx",
+        "tests/e2e/accessibility.spec.ts",
+        "docs/interoperability-and-fleet.md",
+        "docs/adr/0025-generated-interoperability-and-observed-fleet.md"
       ]
     }
   ],

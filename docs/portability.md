@@ -6,6 +6,8 @@ GridStory logical archives move content between installations and database adapt
 
 The current format is `gridstory.logical-content` version `1`. JSON responses contain one manifest and an ordered entry collection. `format=ndjson` returns the same archive as newline-delimited JSON so callers can process one logical record at a time.
 
+The generated public shape contract is `specifications/v1/logical-content-archive.schema.json`, discoverable through `GET /api/v1/interoperability`. It specifies the parsed logical document only; checksum, reference, uniqueness, cross-scope, dry-run, and atomic-import rules in this guide remain normative. Public specification access does not expose an archive export endpoint or any tenant content.
+
 The manifest records the source scope, export time, entry count, optional deployed-schema fingerprint, and an aggregate SHA-256 checksum. Every entry has its own SHA-256 checksum over canonical JSON. Import verifies the format, counts, checksums, stable IDs, revision references, publication pointers, audit references/actions, and duplicate IDs before storage is changed.
 
 The API import body is limited to 16 MiB. A logical archive is limited to 1,000 entries; each entry is limited to 100 revisions and 1,000 audit events. Export refuses to produce an archive beyond the supported entry count, and import validates all three shape limits before repository mutation. Split a larger migration into independently reviewed archives and re-run dry-run/conflict analysis for each scope.

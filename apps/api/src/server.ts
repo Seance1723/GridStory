@@ -46,6 +46,9 @@ import {
   type DueWorkflowExecution,
   EnterpriseIdentityService,
   ExperimentService,
+  type FleetObservationAdapter,
+  type FleetRepository,
+  FleetService,
   type ExternalLinkChecker,
   type GovernanceRepository,
   GovernanceService,
@@ -82,6 +85,7 @@ import {
   PostgresCollaborationRepository,
   PostgresContentFederationRepository,
   PostgresContentRepository,
+  PostgresFleetRepository,
   PostgresGovernanceRepository,
   PostgresIdentityRepository,
   PostgresMarketplaceRepository,
@@ -110,6 +114,7 @@ import {
   SqliteCollaborationRepository,
   SqliteContentFederationRepository,
   SqliteContentRepository,
+  SqliteFleetRepository,
   SqliteGovernanceRepository,
   SqliteIdentityRepository,
   SqliteMarketplaceRepository,
@@ -138,6 +143,8 @@ import {
   collaborationOperationInputSchema,
   collaborationTargetSchema,
   completeAssetUploadSchema,
+  createInteroperabilityDiscovery,
+  createInteroperabilitySpecifications,
   createAssetDeliverySchema,
   generatedTypesFingerprint,
   type LocaleConfiguration,
@@ -173,6 +180,7 @@ import { registerContentFederationRoutes } from './content-federation-routes.js'
 import { parseContentQuery } from './content-query.js';
 import { defaultPageQualityPolicies, defaultWorkflowDefinitions } from './defaults.js';
 import { registerExperimentRoutes } from './experiment-routes.js';
+import { registerInteroperabilityRoutes } from './interoperability-routes.js';
 import { registerGovernanceRoutes } from './governance-routes.js';
 import { registerGridStoryGraphql } from './graphql.js';
 import {
@@ -274,6 +282,12 @@ export interface BuildServerOptions {
   knowledge?: {
     repository?: KnowledgeRepository;
     runtimes?: KnowledgeAgentRuntimeAdapter[];
+  };
+  fleet?: {
+    repository?: FleetRepository;
+    observers?: FleetObservationAdapter[];
+    instanceId?: string;
+    serviceVersion?: string;
   };
 }
 
@@ -548,6 +562,7 @@ export async function buildServer({
   regional: regionalOptions,
   contentFederation: contentFederationOptions,
   knowledge: knowledgeOptions,
+  fleet: fleetOptions,
 }: BuildServerOptions): Promise<FastifyInstance> {
   if (!databaseUrl && databasePath !== ':memory:') {
     mkdirSync(dirname(resolve(databasePath)), { recursive: true });
@@ -636,6 +651,11 @@ export async function buildServer({
     (databaseUrl
       ? new PostgresKnowledgeRepository({ connectionString: databaseUrl })
       : new SqliteKnowledgeRepository({ filename: databasePath }));
+  const resolvedFleetRepository: FleetRepository =
+    fleetOptions?.repository ??
+    (databaseUrl
+      ? new PostgresFleetRepository({ connectionString: databaseUrl })
+      : new SqliteFleetRepository({ filename: databasePath }));
   const governance = new GovernanceService({
     repository: resolvedGovernanceRepository,
     ...(governanceOptions?.keyAdapter ? { keyAdapter: governanceOptions.keyAdapter } : {}),
@@ -707,6 +727,16 @@ export async function buildServer({
     schemas: contentSchemas,
     aiGateway: ai,
     runtimes: knowledgeOptions?.runtimes ?? [],
+  });
+  const interoperabilitySpecifications = createInteroperabilitySpecifications();
+  const interoperabilityDiscovery = createInteroperabilityDiscovery({
+    instanceId: fleetOptions?.instanceId ?? 'gridstory-local',
+    serviceVersion: fleetOptions?.serviceVersion ?? '0.0.0',
+  });
+  const fleet = new FleetService({
+    repository: resolvedFleetRepository,
+    adapters: fleetOptions?.observers ?? [],
+    localDiscovery: interoperabilityDiscovery,
   });
   const migration = new MigrationService({
     repository: resolvedMigrationRepository,
@@ -927,6 +957,12 @@ export async function buildServer({
   await registerRegionalRoutes(server, { service: regional, policy });
   await registerContentFederationRoutes(server, { service: contentFederation, policy });
   await registerKnowledgeRoutes(server, { service: knowledge, policy });
+  await registerInteroperabilityRoutes(server, {
+    discovery: interoperabilityDiscovery,
+    specifications: interoperabilitySpecifications,
+    fleet,
+    policy,
+  });
 
   server.addHook('onClose', async () => {
     await repository.close();
@@ -946,9 +982,12 @@ export async function buildServer({
     await resolvedRegionalRepository.close();
     await resolvedContentFederationRepository.close();
     await resolvedKnowledgeRepository.close();
+    await resolvedFleetRepository.close();
   });
   server.addHook('onSend', async (request, reply, payload) => {
-    if (request.url.startsWith('/api/v1/delivery/')) {
+    if (request.url.startsWith('/api/v1/interoperability')) {
+      // Public interoperability routes set their own short or immutable cache policy.
+    } else if (request.url.startsWith('/api/v1/delivery/')) {
       if (!reply.hasHeader('cache-control')) {
         reply.header('cache-control', 'public, max-age=0, s-maxage=60, stale-while-revalidate=300');
       }

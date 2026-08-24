@@ -26,6 +26,7 @@ import {
   type ExperimentOverview,
   type FederationAgreementInspectionInput,
   type FederationOfferInput,
+  type FleetDocument,
   type GovernancePlan,
   type GovernanceSnapshot,
   GridStoryApiError,
@@ -794,6 +795,13 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
     defaultFederationAgreement,
   );
   const [federationBusy, setFederationBusy] = useState(false);
+  const [fleet, setFleet] = useState<FleetDocument | null>(null);
+  const [fleetMemberId, setFleetMemberId] = useState('remote-primary');
+  const [fleetMemberLabel, setFleetMemberLabel] = useState('Remote primary');
+  const [fleetAdapterId, setFleetAdapterId] = useState('remote-primary');
+  const [fleetExpectedInstanceId, setFleetExpectedInstanceId] = useState('remote-instance');
+  const [fleetExpectedServiceVersion, setFleetExpectedServiceVersion] = useState('');
+  const [fleetBusy, setFleetBusy] = useState(false);
   const [knowledge, setKnowledge] = useState<KnowledgeDocument | null>(null);
   const [knowledgeGraph, setKnowledgeGraph] = useState<KnowledgeGraphResponse | null>(null);
   const [knowledgeRecommendations, setKnowledgeRecommendations] =
@@ -2776,6 +2784,90 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
       setKnowledgeBusy(false);
     }
   };
+  const refreshFleet = async () => {
+    setFleet(await client.getFleet());
+  };
+  const toggleFleet = async () => {
+    if (fleet) {
+      setFleet(null);
+      return;
+    }
+    setFleetBusy(true);
+    try {
+      await refreshFleet();
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    } finally {
+      setFleetBusy(false);
+    }
+  };
+  const registerFleetMember = async () => {
+    if (!fleet) return;
+    setFleetBusy(true);
+    try {
+      setFleet(
+        await client.upsertFleetMember(fleetMemberId.trim(), {
+          expectedVersion: fleet.version,
+          label: fleetMemberLabel.trim(),
+          adapterId: fleetAdapterId.trim(),
+          expectedInstanceId: fleetExpectedInstanceId.trim(),
+          ...(fleetExpectedServiceVersion.trim()
+            ? { expectedServiceVersion: fleetExpectedServiceVersion.trim() }
+            : {}),
+        }),
+      );
+      setNotice({ tone: 'success', message: 'Fleet member registered for pull-only observation.' });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    } finally {
+      setFleetBusy(false);
+    }
+  };
+  const setFleetState = async (memberId: string, state: 'active' | 'paused') => {
+    if (!fleet) return;
+    setFleetBusy(true);
+    try {
+      setFleet(
+        await client.setFleetMemberState(memberId, {
+          expectedVersion: fleet.version,
+          state,
+        }),
+      );
+      setNotice({ tone: 'success', message: `Fleet member ${state}.` });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    } finally {
+      setFleetBusy(false);
+    }
+  };
+  const checkFleetMember = async (memberId: string) => {
+    if (!fleet) return;
+    setFleetBusy(true);
+    try {
+      setFleet(await client.checkFleetMember(memberId, { expectedVersion: fleet.version }));
+      setNotice({ tone: 'info', message: 'Bounded fleet observation recorded.' });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+      await refreshFleet().catch(() => undefined);
+    } finally {
+      setFleetBusy(false);
+    }
+  };
+  const removeFleetMember = async (memberId: string) => {
+    if (!fleet) return;
+    setFleetBusy(true);
+    try {
+      setFleet(await client.removeFleetMember(memberId, { expectedVersion: fleet.version }));
+      setNotice({
+        tone: 'success',
+        message: 'Fleet member removed; retained evidence is unchanged.',
+      });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    } finally {
+      setFleetBusy(false);
+    }
+  };
   const refreshIdentity = async () => {
     setIdentitySnapshot(await client.getIdentity());
   };
@@ -3824,6 +3916,15 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
           <button
             type="button"
             className="button button--secondary"
+            onClick={() => void toggleFleet()}
+            aria-expanded={fleet !== null}
+            disabled={fleetBusy}
+          >
+            Fleet
+          </button>{' '}
+          <button
+            type="button"
+            className="button button--secondary"
             onClick={() => void toggleRegional()}
             aria-expanded={regional !== null}
             disabled={regionalBusy}
@@ -4842,6 +4943,158 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
             {knowledge.plans.length === 0 ? (
               <p className="empty-copy">No knowledge-agent plan has been retained.</p>
             ) : null}
+          </div>
+        </section>
+      ) : null}
+      {fleet ? (
+        <section className="fleet-panel" aria-label="Self-hosted fleet observations">
+          <div className="section-heading">
+            <div>
+              <span className="kicker">Private pull-only operations</span>
+              <h2>Self-hosted fleet compatibility</h2>
+              <p>
+                State r{fleet.version} · {fleet.members.length} configured members ·{' '}
+                {fleet.observations.length} retained observations
+              </p>
+            </div>
+            <button
+              type="button"
+              className="button button--secondary"
+              onClick={() => void refreshFleet()}
+              disabled={fleetBusy}
+            >
+              Refresh fleet state
+            </button>
+          </div>
+          <p className="fleet-panel__warning" role="note">
+            GridStory observes only preconfigured adapters. Browser input never supplies a target
+            URL or credential, checks perform GET requests only, and this panel cannot provision,
+            deploy, upgrade, roll back, or mutate another instance.
+          </p>
+          <div className="fleet-panel__grid">
+            <fieldset>
+              <legend>Register configured member</legend>
+              <label>
+                <span>Member ID</span>
+                <input
+                  value={fleetMemberId}
+                  onChange={(event) => setFleetMemberId(event.target.value)}
+                />
+              </label>
+              <label>
+                <span>Display label</span>
+                <input
+                  value={fleetMemberLabel}
+                  onChange={(event) => setFleetMemberLabel(event.target.value)}
+                />
+              </label>
+              <label>
+                <span>Configured adapter ID</span>
+                <input
+                  value={fleetAdapterId}
+                  onChange={(event) => setFleetAdapterId(event.target.value)}
+                />
+              </label>
+              <label>
+                <span>Expected instance ID</span>
+                <input
+                  value={fleetExpectedInstanceId}
+                  onChange={(event) => setFleetExpectedInstanceId(event.target.value)}
+                />
+              </label>
+              <label>
+                <span>Expected service version (optional)</span>
+                <input
+                  value={fleetExpectedServiceVersion}
+                  onChange={(event) => setFleetExpectedServiceVersion(event.target.value)}
+                />
+              </label>
+              <button
+                type="button"
+                className="button button--secondary"
+                onClick={() => void registerFleetMember()}
+                disabled={
+                  fleetBusy ||
+                  !fleetMemberId.trim() ||
+                  !fleetMemberLabel.trim() ||
+                  !fleetAdapterId.trim() ||
+                  !fleetExpectedInstanceId.trim()
+                }
+              >
+                Register fleet member
+              </button>
+            </fieldset>
+            <div className="fleet-panel__records" aria-live="polite">
+              <h3>Configured members and latest evidence</h3>
+              {fleet.members.map((member) => {
+                const observation = fleet.observations
+                  .slice()
+                  .reverse()
+                  .find(
+                    (candidate) =>
+                      candidate.memberId === member.id &&
+                      candidate.memberGeneration === member.generation,
+                  );
+                return (
+                  <article key={member.id}>
+                    <div>
+                      <strong>
+                        {member.label} · {member.state} · generation {member.generation}
+                      </strong>
+                      <span>
+                        {member.id} · adapter {member.adapterId} · expects{' '}
+                        {member.expectedInstanceId}
+                        {member.expectedServiceVersion ? ` @ ${member.expectedServiceVersion}` : ''}
+                      </span>
+                      <small>
+                        {observation
+                          ? observation.conditions
+                              .map(
+                                (candidate) =>
+                                  `${candidate.type} ${candidate.status} (${candidate.reason})`,
+                              )
+                              .join(' · ')
+                          : 'No current-generation observation has been recorded.'}
+                      </small>
+                    </div>
+                    <div className="fleet-panel__actions">
+                      <button
+                        type="button"
+                        className="button button--secondary"
+                        onClick={() => void checkFleetMember(member.id)}
+                        disabled={fleetBusy || member.state !== 'active'}
+                      >
+                        Check compatibility
+                      </button>
+                      <button
+                        type="button"
+                        className="button button--secondary"
+                        onClick={() =>
+                          void setFleetState(
+                            member.id,
+                            member.state === 'active' ? 'paused' : 'active',
+                          )
+                        }
+                        disabled={fleetBusy}
+                      >
+                        {member.state === 'active' ? 'Pause member' : 'Resume member'}
+                      </button>
+                      <button
+                        type="button"
+                        className="button button--danger"
+                        onClick={() => void removeFleetMember(member.id)}
+                        disabled={fleetBusy}
+                      >
+                        Remove member
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+              {fleet.members.length === 0 ? (
+                <p className="empty-copy">No self-hosted instance is configured in this scope.</p>
+              ) : null}
+            </div>
           </div>
         </section>
       ) : null}

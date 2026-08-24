@@ -8,6 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Added four generated, committed Draft 2020-12 interoperability schemas/examples for the existing logical archive, canonical schema IR, serializable component manifest, and preview-only node source map; stable public discovery exposes only instance/service/protocol/specification identity and canonical digests with bounded public caching and ETags (M8-004).
+- Added empty-by-default complete-scope fleet inventory with memory/SQLite/PostgreSQL persistence, distinct read/manage/check authorization, configured pull-only observation, strict freshness and exact contract compatibility conditions, private REST/client/neutral Studio controls, recovery/PostgreSQL/browser coverage, and verified `THREAT-0038`/`GS-SEC-042` evidence without any remote write or deployment authority (M8-004).
 - Added private no-store on-demand relation/taxonomy knowledge graphs with per-entry authorization, cycle-safe bounded traversal, exact revision/path evidence, explicit truncation, and deterministic item recommendations whose visible contributions exactly sum to each score (M8-003).
 - Added disabled-by-default least-authority knowledge agents with governed prompt/runtime policy, fixed mediated draft-read tools, redaction and call/time/byte limits, strict expiring single-draft text/slug plans, metadata-only tool evidence, human-only review, ordinary draft-update reauthorization/revalidation, persisted idempotent reconciliation/receipts, complete-scope memory/SQLite/PostgreSQL recovery, typed REST/client and neutral Studio controls, and verified `THREAT-0037`/`GS-SEC-041` evidence (M8-003).
 - Added strict signed content-federation contracts, bounded immutable producer offers, pinned consumer agreements, published-only live external records, reviewed read-only mirror synchronization, explicit withdrawal tombstones, mandatory attribution, and complete-scope optimistic memory/SQLite/PostgreSQL persistence (M8-002).
@@ -23,6 +25,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- Accepted ADR 0025's generated-interoperability and pull-only fleet boundary: canonical contract generation and minimized public discovery are separate from private scoped observations, while arbitrary discovery, credentials, agents, scheduling, provisioning, remote mutation, deployment, upgrade, rollback, traffic, content, and publication control remain excluded.
 - Accepted the M8-003 bounded-knowledge and reviewed-agent boundary in ADR 0024: private on-demand relation/taxonomy graph exploration, deterministic path-explained recommendations, fixed mediated read tools, and expiring human-reviewed single-draft patches without autonomous publication, arbitrary code, network access, or hidden memory.
 - Accepted the M8-002 contract-bound content-federation boundary in ADR 0023: disabled complete-scope producer offers and pinned consumer agreements, signed published-only live reads, reviewed read-only mirror synchronization, explicit withdrawal tombstones, and mandatory source/version/license/credit attribution without remote or local editorial mutation.
 - Accepted the M8-001 single-writer regional-delivery boundary in ADR 0022: only published reads may use evidence-bearing regional adapters, while drafts, preview, control reads, and writes remain strong-primary and failover remains a reviewed external-adapter operation.
@@ -35,6 +38,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Sized the expanded Studio accessibility sweep for WebKit's runtime while preserving the complete multi-panel Axe and color checks (BUG-0374).
+- Serialized root package test suites while preserving package-internal parallelism so heavyweight API/core work cannot starve Studio interaction tests (BUG-0373).
+- Bounded API Vitest concurrency so complete Windows verification runs do not starve worker startup or time-sensitive observability fixtures (BUG-0372).
+- Kept generator-owned interoperability artifacts out of a competing formatter pass while retaining exact generated-spec drift checks (BUG-0371).
+- Preserved the established semantic archive-limit diagnostics while enforcing the new canonical archive shape at untrusted ingress (BUG-0370).
+- Removed stale archive-contract type imports after canonicalization so the complete lint and architectural-policy chain remains warning-free (BUG-0369).
+- Distinguished a persisted empty fleet document from repository absence so the first post-restore mutation updates version zero instead of conflicting (BUG-0368).
+- Narrowed the discovery minimization regression to sensitive field names so legitimate public content-format identifiers remain covered (BUG-0367).
+- Retained the fleet checked-event literal through document transforms so the bounded event contract compiles without widening (BUG-0366).
 - Revalidated expiry and the current knowledge/AI policy before a crash-recovery retry may perform any still-needed agent draft mutation, with disabled-policy and expired-plan regressions proving fail-closed behavior (BUG-0365).
 - Removed the unused knowledge-service policy import so the complete lint and architectural-policy chain remains warning-free (BUG-0364).
 - Built the cycle-safety regression through valid revision-checked draft updates so existing reference-integrity validation remains exercised before graph traversal (BUG-0363).

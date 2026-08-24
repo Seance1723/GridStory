@@ -184,3 +184,6 @@ This control does not provision or certify a model/agent runtime, process/contai
 6. Run `pnpm security:check`, proportionate tests, and a human evidence review.
 
 The ASVS source release is `https://github.com/OWASP/ASVS/tree/v5.0.0/5.0`. Reviewers should compare requirement wording there; this repository records GridStory obligations and traceability rather than reproducing the standard.
+## M8-004 interoperability and self-hosted fleet extension
+
+`GS-SEC-042` applies ASVS validation/business-logic, authorization, data-protection, communication, configuration, and safe-consumption controls to a deliberately split surface: generated minimized public format metadata versus private complete-scope fleet observation. Verification includes generator drift, semantic contract fixtures, published-render annotation absence, authorization/scope/hostile-adapter/freshness tests, memory/SQLite/PostgreSQL parity, native recovery, typed client behavior, and neutral accessible Studio/browser evidence. The profile does not claim OpenAPI, OCI, Custom Elements Manifest, Sanity source-map, Kubernetes, hosted monitoring, remote deployment, or external network-policy conformance.

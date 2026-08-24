@@ -82,6 +82,9 @@ export const GridStoryActions = {
   agentPlan: 'agent.plan',
   agentReview: 'agent.review',
   agentExecute: 'agent.execute',
+  fleetRead: 'fleet.read',
+  fleetManage: 'fleet.manage',
+  fleetCheck: 'fleet.check',
 } as const;
 
 export type GridStoryAction = (typeof GridStoryActions)[keyof typeof GridStoryActions];
@@ -104,6 +107,7 @@ export interface AuthorizationResource {
     | 'federation'
     | 'knowledge'
     | 'agent'
+    | 'fleet'
     | 'governance'
     | 'migration'
     | 'delivery'
@@ -155,6 +159,7 @@ export const defaultRoles: RoleDefinition[] = [
       GridStoryActions.federationRead,
       GridStoryActions.knowledgeRead,
       GridStoryActions.agentRead,
+      GridStoryActions.fleetRead,
     ],
   },
   {
@@ -188,6 +193,7 @@ export const defaultRoles: RoleDefinition[] = [
       GridStoryActions.knowledgeRead,
       GridStoryActions.agentRead,
       GridStoryActions.agentPlan,
+      GridStoryActions.fleetRead,
     ],
   },
   {
@@ -239,6 +245,9 @@ export const defaultRoles: RoleDefinition[] = [
       GridStoryActions.agentPlan,
       GridStoryActions.agentReview,
       GridStoryActions.agentExecute,
+      GridStoryActions.fleetRead,
+      GridStoryActions.fleetManage,
+      GridStoryActions.fleetCheck,
     ],
   },
   { id: 'delivery', actions: [GridStoryActions.deliveryRead] },

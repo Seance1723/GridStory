@@ -29,6 +29,7 @@ async function expectNoDetectableWcagViolations(
 test('Studio critical authoring states have no detectable WCAG 2.2 A/AA violations', async ({
   page,
 }, testInfo) => {
+  test.setTimeout(60_000);
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Pages' })).toBeVisible();
   await expectNoDetectableWcagViolations(page, testInfo, 'studio-default');
@@ -42,6 +43,7 @@ test('Studio critical authoring states have no detectable WCAG 2.2 A/AA violatio
     ['AI gateway', 'Governed AI gateway workbench'],
     ['Knowledge', 'Knowledge graph and reviewed agents'],
     ['Federation', 'Content federation and syndication'],
+    ['Fleet', 'Self-hosted fleet observations'],
     ['Regions', 'Regional delivery and failover controls'],
     ['Workflows', 'Workflow action designer'],
     ['Releases', 'Release manager'],
@@ -111,6 +113,21 @@ test('Studio critical authoring states have no detectable WCAG 2.2 A/AA violatio
     'rgb(203, 213, 225)',
   );
   await expect(federationControls.getByRole('note')).toHaveCSS('color', 'rgb(124, 45, 18)');
+
+  const fleetControls = page.getByRole('region', { name: 'Self-hosted fleet observations' });
+  await expect(fleetControls.getByLabel('Configured adapter ID')).toBeVisible();
+  await expect(fleetControls.getByLabel('Expected instance ID')).toBeVisible();
+  await expect(fleetControls).toHaveCSS('background-color', 'rgb(248, 250, 252)');
+  await expect(fleetControls.locator('.section-heading p')).toHaveCSS('color', 'rgb(71, 85, 105)');
+  await expect(fleetControls.getByLabel('Configured adapter ID')).toHaveCSS(
+    'color',
+    'rgb(24, 33, 47)',
+  );
+  await expect(fleetControls.locator('fieldset').first()).toHaveCSS(
+    'border-color',
+    'rgb(203, 213, 225)',
+  );
+  await expect(fleetControls.getByRole('note')).toHaveCSS('color', 'rgb(124, 45, 18)');
 
   const regionalControls = page.getByRole('region', {
     name: 'Regional delivery and failover controls',

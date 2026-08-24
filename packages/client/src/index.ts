@@ -63,6 +63,10 @@ import type {
   FederationSyncPlan,
   FederationSyncPlanExecutionInput,
   FederationSyncReceipt,
+  FleetDocument,
+  FleetExpectedVersionInput,
+  FleetMemberInput,
+  FleetMemberStateInput,
   GovernanceBackupEvidence,
   GovernanceExportEnvelope,
   GovernanceExportPackage,
@@ -73,6 +77,8 @@ import type {
   IdentityProvider,
   IdentitySession,
   IdentitySnapshot,
+  InteroperabilityDiscovery,
+  InteroperabilitySpecificationKind,
   KnowledgeAgentExecuteInput,
   KnowledgeAgentPlanRequest,
   KnowledgeAgentPolicyInput,
@@ -596,6 +602,33 @@ export class GridStoryClient {
       );
     }
     if (response.status === 204) return undefined as T;
+    return (await response.json()) as T;
+  }
+
+  async #publicRequest<T>(path: string, signal?: AbortSignal): Promise<T> {
+    const response = await this.#fetch(`${this.#baseUrl}${path}`, {
+      method: 'GET',
+      credentials: 'omit',
+      headers: { accept: 'application/json, application/schema+json' },
+      ...(signal ? { signal } : {}),
+    });
+    if (!response.ok) {
+      let envelope: GridStoryErrorEnvelope = {};
+      try {
+        envelope = (await response.json()) as GridStoryErrorEnvelope;
+      } catch {
+        // Keep a stable error even if a proxy returned a non-JSON response.
+      }
+      throw new GridStoryApiError(
+        envelope.error?.message ?? `GridStory request failed with status ${response.status}.`,
+        {
+          status: response.status,
+          ...(envelope.error?.code ? { code: envelope.error.code } : {}),
+          ...(envelope.error?.details !== undefined ? { details: envelope.error.details } : {}),
+          ...(envelope.error?.requestId ? { requestId: envelope.error.requestId } : {}),
+        },
+      );
+    }
     return (await response.json()) as T;
   }
 
@@ -2114,6 +2147,72 @@ export class GridStoryClient {
     });
   }
 
+  getInteroperabilityDiscovery(signal?: AbortSignal): Promise<InteroperabilityDiscovery> {
+    return this.#publicRequest('/api/v1/interoperability', signal);
+  }
+
+  getInteroperabilitySpecification(
+    kind: InteroperabilitySpecificationKind,
+    signal?: AbortSignal,
+  ): Promise<Record<string, unknown>> {
+    return this.#publicRequest(
+      `/api/v1/interoperability/specifications/${encodeURIComponent(kind)}/1`,
+      signal,
+    );
+  }
+
+  getFleet(signal?: AbortSignal): Promise<FleetDocument> {
+    return this.#request('/api/v1/fleet', { ...(signal ? { signal } : {}) });
+  }
+
+  upsertFleetMember(
+    memberId: string,
+    input: FleetMemberInput,
+    signal?: AbortSignal,
+  ): Promise<FleetDocument> {
+    return this.#request(`/api/v1/fleet/members/${encodeURIComponent(memberId)}`, {
+      method: 'PUT',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  setFleetMemberState(
+    memberId: string,
+    input: FleetMemberStateInput,
+    signal?: AbortSignal,
+  ): Promise<FleetDocument> {
+    return this.#request(`/api/v1/fleet/members/${encodeURIComponent(memberId)}/state`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  checkFleetMember(
+    memberId: string,
+    input: FleetExpectedVersionInput,
+    signal?: AbortSignal,
+  ): Promise<FleetDocument> {
+    return this.#request(`/api/v1/fleet/members/${encodeURIComponent(memberId)}/check`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  removeFleetMember(
+    memberId: string,
+    input: FleetExpectedVersionInput,
+    signal?: AbortSignal,
+  ): Promise<FleetDocument> {
+    return this.#request(`/api/v1/fleet/members/${encodeURIComponent(memberId)}`, {
+      method: 'DELETE',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
   getContentFederation(signal?: AbortSignal): Promise<ContentFederationDocument> {
     return this.#request('/api/v1/federation', { ...(signal ? { signal } : {}) });
   }
@@ -2591,6 +2690,10 @@ export type {
   ExperimentPromotionRequest,
   ExperimentTransitionRequest,
   FederatedContentRecord,
+  FleetDocument,
+  FleetExpectedVersionInput,
+  FleetMemberInput,
+  FleetMemberStateInput,
   FederationAgreement,
   FederationAgreementInspectionInput,
   FederationAgreementStateInput,
@@ -2610,6 +2713,8 @@ export type {
   IdentityProvider,
   IdentitySession,
   IdentitySnapshot,
+  InteroperabilityDiscovery,
+  InteroperabilitySpecificationKind,
   KnowledgeAgentExecuteInput,
   KnowledgeAgentPlanRequest,
   KnowledgeAgentPolicyInput,

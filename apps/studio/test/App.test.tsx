@@ -11,6 +11,7 @@ import {
   type ExperimentDesign,
   type ExperimentMetricSnapshotInput,
   type ExperimentOverview,
+  type FleetDocument,
   type KnowledgeDocument,
   type MarketplaceOverviewRecord,
   type MigrationCutoverReport,
@@ -2203,6 +2204,63 @@ describe('GridStory Studio', () => {
       'published-pages',
       expect.objectContaining({ expectedVersion: 0, state: 'disabled' }),
     );
+  });
+
+  it('shows an empty private fleet and registers only a preconfigured adapter identity', async () => {
+    const user = userEvent.setup();
+    const client = createTestClient();
+    const document: FleetDocument = {
+      organizationId: 'local',
+      tenantId: 'default',
+      workspaceId: 'default',
+      siteId: 'default',
+      environmentId: 'development',
+      locale: 'en',
+      schemaVersion: 1,
+      version: 0,
+      members: [],
+      observations: [],
+      events: [],
+      updatedAt: now,
+      updatedBy: 'system',
+    };
+    vi.spyOn(client, 'getFleet').mockResolvedValue(document);
+    const register = vi.spyOn(client, 'upsertFleetMember').mockResolvedValue({
+      ...document,
+      version: 1,
+      members: [
+        {
+          id: 'remote-primary',
+          generation: 1,
+          label: 'Remote primary',
+          adapterId: 'remote-primary',
+          expectedInstanceId: 'remote-instance',
+          state: 'active',
+          createdAt: now,
+          createdBy: 'local-admin',
+          updatedAt: now,
+          updatedBy: 'local-admin',
+        },
+      ],
+      updatedBy: 'local-admin',
+    });
+
+    render(<App client={client} />);
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Fleet' }));
+    const panel = await screen.findByRole('region', { name: 'Self-hosted fleet observations' });
+    expect(panel.textContent).toContain('No self-hosted instance is configured in this scope.');
+    expect(panel.textContent).toContain('Browser input never supplies a target URL or credential');
+    expect(within(panel).queryByRole('textbox', { name: /URL/u })).toBeNull();
+    await user.click(within(panel).getByRole('button', { name: 'Register fleet member' }));
+    await screen.findByText('Fleet member registered for pull-only observation.');
+    expect(register).toHaveBeenCalledWith('remote-primary', {
+      expectedVersion: 0,
+      label: 'Remote primary',
+      adapterId: 'remote-primary',
+      expectedInstanceId: 'remote-instance',
+    });
+    expect(panel.textContent).toContain('generation 1');
   });
 
   it('explores bounded knowledge and requires explicit plan review before draft execution', async () => {

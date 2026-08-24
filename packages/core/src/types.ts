@@ -6,7 +6,14 @@ import type {
   ContentRevision,
   ContentSchemaDefinition,
   ContentScope,
+  PortableContentRecord,
   SchemaIrDocument,
+} from '@gridstory/schema';
+
+export type {
+  PortableAuditEvent,
+  PortableContentRecord,
+  PortableRevision,
 } from '@gridstory/schema';
 
 export interface Actor {
@@ -127,36 +134,6 @@ export interface WebhookSubscription extends ContentScope {
   active: boolean;
   createdAt: string;
   updatedAt: string;
-}
-
-export interface PortableRevision {
-  id: string;
-  sequence: number;
-  baseRevisionId?: string;
-  actorId: string;
-  data: Record<string, unknown>;
-  createdAt: string;
-}
-
-export interface PortableAuditEvent {
-  id: string;
-  sequence: number;
-  actorId: string;
-  action: AuditEvent['action'];
-  revisionId: string;
-  occurredAt: string;
-}
-
-export interface PortableContentRecord {
-  entryId: string;
-  contentType: string;
-  currentDraftRevisionId: string;
-  publishedRevisionId?: string;
-  translationGroupId: string;
-  createdAt: string;
-  updatedAt: string;
-  revisions: PortableRevision[];
-  auditEvents: PortableAuditEvent[];
 }
 
 export type ImportConflictPolicy = 'reject' | 'skip' | 'replace';
