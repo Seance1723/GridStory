@@ -850,6 +850,61 @@ function createTestClient(
         recentAudit: [],
       });
     }
+    if (url.pathname === '/api/v1/analytics/report') {
+      return json({
+        organizationId: 'local',
+        tenantId: 'default',
+        workspaceId: 'default',
+        siteId: 'default',
+        environmentId: 'development',
+        locale: 'en',
+        version: 3,
+        eventCounts: {
+          'content.created': 2,
+          'content.draft.updated': 1,
+          'content.published': 2,
+          'content.viewed': 14,
+          'component.viewed': 9,
+          'component.interacted': 4,
+        },
+        contents: [],
+        components: [],
+        releaseAnnotations: [
+          {
+            organizationId: 'local',
+            tenantId: 'default',
+            workspaceId: 'default',
+            siteId: 'default',
+            environmentId: 'development',
+            locale: 'en',
+            id: '018daf23-89b3-7cf8-a4f1-94064c96df90',
+            name: 'release.published',
+            releaseId: 'release-1',
+            releaseName: 'Homepage launch',
+            entryCount: 2,
+            occurredAt: now,
+          },
+        ],
+        truncated: {
+          contents: false,
+          components: false,
+          releaseAnnotations: false,
+          receipts: false,
+        },
+        updatedAt: now,
+        generatedAt: now,
+        adapterDeliveries: [
+          {
+            adapterId: 'warehouse',
+            pending: 0,
+            processing: 0,
+            succeeded: 3,
+            dead: 1,
+          },
+        ],
+        deliveriesTruncated: false,
+      });
+    }
     if (url.pathname === '/api/v1/governance' && init?.method !== 'POST') {
       return json(governanceSnapshot());
     }
@@ -1703,6 +1758,12 @@ describe('GridStory Studio', () => {
     expect(panel.textContent).toContain('Audit chain verified');
     expect(panel.textContent).toContain('Pending events');
     expect(panel.textContent).toContain('Dead jobs');
+    expect(panel.textContent).toContain('Content views');
+    expect(panel.textContent).toContain('14');
+    expect(panel.textContent).toContain('Component views');
+    expect(panel.textContent).toContain('Interactions');
+    expect(panel.textContent).toContain('Release markers');
+    expect(panel.textContent).toContain('Dead deliveries');
   });
 
   it('shows enterprise identity policy, providers, security events, and one-time credentials', async () => {

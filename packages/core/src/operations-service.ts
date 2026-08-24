@@ -53,6 +53,15 @@ export interface OperationsServiceOptions {
     type: 'search.index' | 'search.rebuild';
     payload: Record<string, unknown>;
   }) => Promise<Record<string, unknown>>;
+  analyticsLifecycleEnqueuer?: (input: {
+    scope: ContentScope;
+    event: OutboxEvent;
+  }) => Promise<unknown>;
+  analyticsJobRunner?: (input: {
+    scope: ContentScope;
+    type: 'analytics.process' | 'analytics.deliver';
+    payload: Record<string, unknown>;
+  }) => Promise<Record<string, unknown>>;
   allowedWebhookHosts?: string[];
   telemetry?: TenantTelemetrySink;
   now?: () => Date;
@@ -166,6 +175,8 @@ export class OperationsService {
   readonly #cacheInvalidator: CacheInvalidator;
   readonly #workflowActionNotifier: NonNullable<OperationsServiceOptions['workflowActionNotifier']>;
   readonly #searchJobRunner: NonNullable<OperationsServiceOptions['searchJobRunner']>;
+  readonly #analyticsLifecycleEnqueuer: OperationsServiceOptions['analyticsLifecycleEnqueuer'];
+  readonly #analyticsJobRunner: NonNullable<OperationsServiceOptions['analyticsJobRunner']>;
   readonly #allowedWebhookHosts?: ReadonlySet<string>;
   readonly #telemetry: TenantTelemetrySink | undefined;
   readonly #now: () => Date;
@@ -179,6 +190,10 @@ export class OperationsService {
     workflowActionNotifier = async () => undefined,
     searchJobRunner = async () => {
       throw new Error('Search job runner is not configured.');
+    },
+    analyticsLifecycleEnqueuer,
+    analyticsJobRunner = async () => {
+      throw new Error('Analytics job runner is not configured.');
     },
     allowedWebhookHosts,
     telemetry,
@@ -198,6 +213,8 @@ export class OperationsService {
     this.#cacheInvalidator = cacheInvalidator;
     this.#workflowActionNotifier = workflowActionNotifier;
     this.#searchJobRunner = searchJobRunner;
+    this.#analyticsLifecycleEnqueuer = analyticsLifecycleEnqueuer;
+    this.#analyticsJobRunner = analyticsJobRunner;
     this.#telemetry = telemetry;
     if (allowedWebhookHosts) {
       this.#allowedWebhookHosts = new Set(
@@ -385,6 +402,10 @@ export class OperationsService {
     });
     assertSameContentScope(scope, searchJob, 'search job enqueue');
     enqueued += 1;
+    if (this.#analyticsLifecycleEnqueuer) {
+      await this.#analyticsLifecycleEnqueuer({ scope, event });
+      enqueued += 1;
+    }
     const subscriptions = await this.#repository.listWebhookSubscriptions({ scope });
     subscriptions.forEach((subscription) => {
       assertSameContentScope(scope, subscription, 'outbox webhook subscription');
@@ -417,6 +438,21 @@ export class OperationsService {
 
   async #runJob(scope: ContentScope, workerId: string, job: DurableJob): Promise<void> {
     assertSameContentScope(scope, job, 'claimed durable job');
+    if (job.type === 'analytics.process' || job.type === 'analytics.deliver') {
+      const result = await this.#analyticsJobRunner({
+        scope,
+        type: job.type,
+        payload: job.payload,
+      });
+      await this.#repository.completeJob({
+        scope,
+        id: job.id,
+        workerId,
+        completedAt: iso(this.#now()),
+        result,
+      });
+      return;
+    }
     if (job.type === 'search.index' || job.type === 'search.rebuild') {
       const result = await this.#searchJobRunner({ scope, type: job.type, payload: job.payload });
       await this.#repository.completeJob({

@@ -117,6 +117,12 @@ This control does not certify a deployment's provider credentials/revocation, se
 
 This control does not host package bytes, implement or certify scanners, prove publisher business legitimacy, guarantee support, automatically approve/install/enable/upgrade, provision a Studio or server sandbox, or authenticate and operate a production scanner/evidence store. Those remain deployment/plugin-owner evidence under `BETA-003`, `RC-005`, `RC-006`, and `GA-003`; a badge, provenance result, or clean scan is never a safety guarantee.
 
+## M7-003 evidence update
+
+`GS-SEC-036` and `THREAT-0032` link strict bounded analytics schemas; exact-current-published and configured-purpose/GPC ingestion; complete-scope optimistic memory, SQLite, and qualified PostgreSQL aggregates; transactional lifecycle normalization; persisted-release annotations; independently retried injected adapter jobs; generic retained hostile-adapter failures; private operations-authorized REST/client/Studio reports; PostgreSQL persistence; and live SQLite recovery.
+
+This control does not collect consent, enforce deployment admission rates, operate provider credentials/endpoints/egress, certify provider idempotency/availability, retain a raw warehouse, perform attribution/funnels/cohorts/bot filtering/statistics, prove retention/deletion/access policy, synthesize experiment evidence, or establish release causality. Those remain deployment/privacy/analytics-owner evidence under `BETA-003`, `RC-005`, `RC-006`, and `GA-003`.
+
 ## Highest-priority gaps
 
 | Gap | ASVS areas | Owner task |
@@ -125,6 +131,7 @@ This control does not host package bytes, implement or certify scanners, prove p
 | Live IdP, secret-manager, secure-cookie/TLS, and trusted-proxy conformance | V4, V6, V7, V10, V13 | Repository boundary delivered by M6-002; deployment acceptance under `BETA-003` |
 | Plugin runtime OS/container hardening, package hosting/scanner-engine conformance, and publisher business-legitimacy review | V8, V11, V13, V15 | Repository marketplace boundary delivered by M6-005; deployment evidence |
 | Production CMS credential lifecycle, outbound egress, provider throttling/audit, coordinated backup, and application/traffic cutover proof | V8, V11, V12, V13, V14, V15 | Repository boundary delivered by M6-004; deployment acceptance under `BETA-003`, `RC-005`, `RC-006` |
+| Analytics consent/legal review, edge admission rates, provider credential/egress/retention/deletion controls, and data-quality/statistical governance | V8, V11, V13, V14, V15, V16 | Repository minimized adapter boundary delivered by M7-003; deployment/privacy acceptance under `BETA-003`, `RC-005`, `RC-006`, `GA-003` |
 | Telemetry backend access/deletion, Collector deployment conformance, and production identity/credential event sources | V11, V13, V14, V16 | `BETA-003`, `GA-003`; event sources M6-002 |
 | Backup storage/physical PITR, secret rotation, and orchestrator rollout proof | V13, V14, V15, V16 | `RC-006`, `GA-003`; identity lifecycle M6-002 |
 | Deployed HTML CSP/header conformance, arbitrary application rendering, and branded-browser/assistive-technology acceptance | V1, V3, V14 | `BETA-003`, `BETA-005`, `RC-005` |

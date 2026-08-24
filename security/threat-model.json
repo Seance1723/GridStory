@@ -3,8 +3,8 @@
   "model": {
     "id": "GRIDSTORY-TM-001",
     "title": "GridStory control plane and delivery threat model",
-    "version": "1.6.0",
-    "reviewedAt": "2026-08-23",
+    "version": "1.7.0",
+    "reviewedAt": "2026-08-24",
     "owners": ["GridStory security owner", "GridStory architecture owner"],
     "methodology": "OWASP four-question threat modeling with STRIDE categorization",
     "scope": [
@@ -21,14 +21,15 @@
       "data governance, legal holds, rights requests, guarded erasure, encrypted exports, customer-managed key references, and placement attestations",
       "read-only CMS source adapters, private migration recipes, dry-run plans, checkpoints, links, receipts, and cutover evidence",
       "consent-aware targeting attributes, audiences, draft/published configuration, hypothetical preview, edge decisions, and cache guidance",
-      "governed experiment designs, lifecycle, stateless weighted allocation, aggregate evidence, guardrails, and targeting-draft promotion"
+      "governed experiment designs, lifecycle, stateless weighted allocation, aggregate evidence, guardrails, and targeting-draft promotion",
+      "bounded published content/component analytics events, normalized lifecycle evidence, release annotations, aggregate metrics, and injected adapter delivery"
     ],
     "outOfScope": [
       "security of application-owned React components after validated data leaves GridStory",
       "identity-provider internals",
       "cloud, CDN, database, object-store, and network controls not configured by GridStory",
       "package binary hosting/download, scanner-engine internals, publisher business-legitimacy verification, and operating-system/container isolation supplied outside GridStory",
-      "customer profile storage, consent collection or legal interpretation, raw behavioral ingestion, CDP/warehouse credentials or adapters, statistical-significance engines, and automatic experiment winner selection or publication"
+      "customer profile storage, consent collection or legal interpretation, raw analytics warehousing/export, attribution/funnels/cohorts, provider credentials or provider-specific SDKs in core, statistical-significance engines, and automatic experiment winner selection or publication"
     ],
     "riskModel": {
       "formula": "likelihood * impact",
@@ -41,7 +42,11 @@
       "id": "ACTOR-001",
       "name": "Anonymous delivery consumer",
       "trust": "untrusted",
-      "capabilities": ["read published delivery", "request published experiment allocation"]
+      "capabilities": [
+        "read published delivery",
+        "request published experiment allocation",
+        "submit bounded consent-aware published analytics events"
+      ]
     },
     {
       "id": "ACTOR-002",
@@ -77,7 +82,9 @@
       "id": "ACTOR-007",
       "name": "External adapter or webhook receiver",
       "trust": "external",
-      "capabilities": ["receive events or provide storage, search, cache, identity, and scanning"]
+      "capabilities": [
+        "receive events or provide storage, search, cache, identity, scanning, and analytics delivery"
+      ]
     },
     {
       "id": "ACTOR-008",
@@ -214,6 +221,18 @@
         "purpose limitation",
         "allocation correctness",
         "accountability"
+      ]
+    },
+    {
+      "id": "ASSET-020",
+      "name": "Normalized analytics evidence, bounded aggregates, release annotations, private receipts, and adapter delivery history",
+      "securityProperties": [
+        "integrity",
+        "tenant isolation",
+        "purpose limitation",
+        "data minimization",
+        "idempotency",
+        "availability"
       ]
     }
   ],
@@ -352,6 +371,18 @@
         "immutable running experiments with pinned published targeting and active-placement exclusion",
         "purpose-gated stateless token hashing with no token/bucket persistence or echo",
         "complete immutable aggregate evidence, enforced guardrails, and draft-only promotion"
+      ]
+    },
+    {
+      "id": "BOUNDARY-015",
+      "name": "Anonymous analytics ingestion to durable aggregation and external adapters",
+      "controls": [
+        "closed anonymous event union with no identity or free-form properties",
+        "configured purpose consent plus received GPC suppression",
+        "exact current published content revision validation and request-context scope",
+        "bounded event age, cardinality, aggregates, receipts, annotations, and report projection",
+        "idempotent processing plus independent leased adapter jobs with retry, dead letter, and replay",
+        "generic retained adapter errors and non-authoritative release annotation failure"
       ]
     }
   ],
@@ -503,6 +534,20 @@
       "to": "BOUNDARY-014",
       "data": "bounded published context, consent and GPC signals, random per-experiment assignment token, ordinary baseline, and no-store allocation",
       "assets": ["ASSET-002", "ASSET-003", "ASSET-010", "ASSET-018", "ASSET-019"]
+    },
+    {
+      "id": "FLOW-021",
+      "from": "ACTOR-001",
+      "to": "BOUNDARY-015",
+      "data": "bounded anonymous event UUID/time, exact current published content/component reference, stable interaction name, configured purpose decision, and GPC signal",
+      "assets": ["ASSET-002", "ASSET-003", "ASSET-008", "ASSET-012", "ASSET-020"]
+    },
+    {
+      "id": "FLOW-022",
+      "from": "ACTOR-006",
+      "to": "BOUNDARY-015",
+      "data": "normalized lifecycle event or release annotation, bounded aggregate update, private idempotency receipt, and independently retried adapter evidence",
+      "assets": ["ASSET-002", "ASSET-003", "ASSET-008", "ASSET-012", "ASSET-020"]
     }
   ],
   "assumptions": [
@@ -514,7 +559,8 @@
     "Production plugin runtimes are separately operated processes or containers with least-privilege OS, filesystem, network, CPU, and memory policies; the GridStory adapter protocol does not itself provide OS isolation.",
     "Marketplace artifact inspectors are separately authenticated and operated trusted adapters whose policy, evidence storage, availability, and scanner-engine correctness require deployment conformance; a passing result or verified provenance is not a safety guarantee.",
     "CMS migration credentials are read-only, least privilege, and injected by the trusted server runtime; the source stays authoritative and recoverable until an externally operated cutover is accepted.",
-    "Applications create and, when permitted, retain an unpredictable token separately for each experiment after consent; external analytics owns raw events, attribution, aggregate computation, statistical validity, and retained evidence integrity."
+    "Applications create and, when permitted, retain an unpredictable token separately for each experiment after consent; external experiment analytics still owns attribution, statistical validity, and retained evidence integrity.",
+    "Applications send only anonymous allowlisted analytics events after a valid configured-purpose decision; deployments own public rate controls and provider adapter credentials, retention, deletion, egress, and independently protected diagnostics."
   ],
   "threats": [
     {
@@ -1422,6 +1468,56 @@
         "tests/e2e/accessibility.spec.ts",
         "docs/experiments.md",
         "docs/adr/0018-governed-content-experiments.md"
+      ]
+    },
+    {
+      "id": "THREAT-0032",
+      "title": "Fabricated, identifying, replayed, or unavailable content analytics",
+      "stride": [
+        "Spoofing",
+        "Tampering",
+        "Repudiation",
+        "Information Disclosure",
+        "Denial of Service",
+        "Elevation of Privilege"
+      ],
+      "scenario": "An attacker or misconfigured application sends identifying/free-form, draft, stale, cross-scope, duplicated, old/future, or consent-disallowed analytics evidence; exhausts aggregate/job cardinality; forges lifecycle/release correlation; or uses a slow, removed, unavailable, or hostile provider adapter to leak secrets, block publication, lose retry evidence, or corrupt operational metrics.",
+      "actors": ["ACTOR-001", "ACTOR-006", "ACTOR-007", "ACTOR-008"],
+      "assets": ["ASSET-002", "ASSET-003", "ASSET-008", "ASSET-009", "ASSET-012", "ASSET-020"],
+      "boundaries": [
+        "BOUNDARY-001",
+        "BOUNDARY-003",
+        "BOUNDARY-006",
+        "BOUNDARY-008",
+        "BOUNDARY-015"
+      ],
+      "likelihood": 4,
+      "impact": 5,
+      "risk": 20,
+      "response": "mitigate",
+      "owner": "Analytics, privacy, operations, and delivery owner",
+      "mitigations": [
+        "Accept only a strict closed content-view/component-view/component-interaction union with bounded UUID/time/token fields; reject arbitrary properties and all visitor, account, session, assignment, URL, referrer, IP, user-agent, device, draft, and preview values.",
+        "Derive complete scope only from validated delivery context, require the configured purpose grant, honor received GPC, bound age/future skew, and prove the exact content ID/type/revision is the current published pointer before durable acceptance.",
+        "Normalize server lifecycle only from the complete-scope transactional outbox, enqueue release annotations only after authoritative persisted publication/rollback, and never reverse content or release truth when analytics enqueue/delivery fails.",
+        "Use idempotent process receipts, optimistic complete-scope memory/SQLite/PostgreSQL aggregates, explicit cardinality/truncation limits, independent leased delivery jobs, retries/dead letters/replay, and a private operations-authorized report that omits receipt IDs and raw evidence.",
+        "Inject adapters only at trusted server composition, keep credentials/providers out of schema/core, validate adapter IDs, replace thrown diagnostics with a stable generic retained error, and require deployment TLS/egress/timeout/rate/retention/deletion/access/alert controls.",
+        "Treat bounded counters and release annotations as operational correlation only; require separately governed attribution, bot/late-event policy, statistical methodology, evidence authenticity, retention, and causality review before higher-stakes use."
+      ],
+      "verification": [
+        "packages/schema/test/analytics.test.ts",
+        "packages/core/test/analytics-repository.test.ts",
+        "packages/core/test/analytics-service.test.ts",
+        "packages/core/test/postgres-conformance.test.ts",
+        "packages/core/test/release-service.test.ts",
+        "apps/api/test/analytics.test.ts",
+        "apps/api/test/database-recovery.test.ts",
+        "apps/api/test/postgres-server.test.ts",
+        "packages/client/test/client.test.ts",
+        "apps/studio/test/App.test.tsx",
+        "tests/e2e/accessibility.spec.ts",
+        "docs/analytics.md",
+        "docs/adr/0019-bounded-content-analytics.md"
       ]
     }
   ],

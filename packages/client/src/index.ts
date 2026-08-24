@@ -1,5 +1,7 @@
 import type {
   AssetDeliveryGrant,
+  AnalyticsIngestionResult,
+  AnalyticsReport,
   AssetRecord,
   AssetRendition,
   AssetRenditionPreset,
@@ -76,6 +78,7 @@ import type {
   PluginInstallation,
   PluginInvocationResult,
   PluginUninstallPreview,
+  PublicAnalyticsEventInput,
   PresenceParticipant,
   PreviewMessage,
   PreviewMode,
@@ -1872,6 +1875,23 @@ export class GridStoryClient {
     });
   }
 
+  trackAnalyticsEvent(
+    event: PublicAnalyticsEventInput,
+    signal?: AbortSignal,
+  ): Promise<AnalyticsIngestionResult> {
+    return this.#request('/api/v1/analytics/events', {
+      method: 'POST',
+      body: JSON.stringify(event),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  getAnalyticsReport(signal?: AbortSignal): Promise<AnalyticsReport> {
+    return this.#request('/api/v1/analytics/report', {
+      ...(signal ? { signal } : {}),
+    });
+  }
+
   getContent(
     id: string,
     options: { perspective?: ContentPerspective; signal?: AbortSignal } = {},
@@ -2154,6 +2174,8 @@ export function createGridStoryClient(options: GridStoryClientOptions): GridStor
 }
 
 export type {
+  AnalyticsIngestionResult,
+  AnalyticsReport,
   AssetDeliveryGrant,
   AssetRecord,
   AssetRendition,
@@ -2223,6 +2245,7 @@ export type {
   PreviewMessage,
   PreviewMode,
   PreviewSessionGrant,
+  PublicAnalyticsEventInput,
   RelatedContentRecord,
   Release,
   ReleaseInput,

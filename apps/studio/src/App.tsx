@@ -1,6 +1,7 @@
 import {
   type AssetRecord,
   type AssetUsageReport,
+  type AnalyticsReport,
   type BacklinkRecord,
   type CollaborationSnapshot,
   type ComponentManifest,
@@ -583,6 +584,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   const [operationsDashboard, setOperationsDashboard] = useState<OperationsDashboardRecord | null>(
     null,
   );
+  const [analyticsReport, setAnalyticsReport] = useState<AnalyticsReport | null>(null);
   const [identitySnapshot, setIdentitySnapshot] = useState<IdentitySnapshot | null>(null);
   const [identityProviderId, setIdentityProviderId] = useState('');
   const [identityProviderIssuer, setIdentityProviderIssuer] = useState('');
@@ -1856,10 +1858,16 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   const toggleOperations = async () => {
     if (operationsDashboard) {
       setOperationsDashboard(null);
+      setAnalyticsReport(null);
       return;
     }
     try {
-      setOperationsDashboard(await client.getOperationsDashboard());
+      const [operations, analytics] = await Promise.all([
+        client.getOperationsDashboard(),
+        client.getAnalyticsReport(),
+      ]);
+      setOperationsDashboard(operations);
+      setAnalyticsReport(analytics);
     } catch (error) {
       setNotice({ tone: 'error', message: messageFrom(error) });
     }
@@ -3663,14 +3671,15 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
           </aside>
         </section>
       ) : null}{' '}
-      {operationsDashboard ? (
+      {operationsDashboard && analyticsReport ? (
         <section className="operations-panel" aria-label="Administrator operations">
           <div>
             <span className="kicker">Administrator</span>
             <h2>System integrity</h2>
             <p>
               Audit chain {operationsDashboard.audit.valid ? 'verified' : 'requires attention'} ·{' '}
-              {operationsDashboard.audit.eventCount} events
+              {operationsDashboard.audit.eventCount} audit events ·{' '}
+              {analyticsReport.adapterDeliveries.length} analytics adapters
             </p>
           </div>
           <dl>
@@ -3689,6 +3698,31 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
             <div className="operation-metric">
               <dt>Active webhooks</dt>
               <dd>{operationsDashboard.webhooks.active}</dd>
+            </div>
+            <div className="operation-metric">
+              <dt>Content views</dt>
+              <dd>{analyticsReport.eventCounts['content.viewed']}</dd>
+            </div>
+            <div className="operation-metric">
+              <dt>Component views</dt>
+              <dd>{analyticsReport.eventCounts['component.viewed']}</dd>
+            </div>
+            <div className="operation-metric">
+              <dt>Interactions</dt>
+              <dd>{analyticsReport.eventCounts['component.interacted']}</dd>
+            </div>
+            <div className="operation-metric">
+              <dt>Release markers</dt>
+              <dd>{analyticsReport.releaseAnnotations.length}</dd>
+            </div>
+            <div className="operation-metric">
+              <dt>Dead deliveries</dt>
+              <dd>
+                {analyticsReport.adapterDeliveries.reduce(
+                  (total, adapter) => total + adapter.dead,
+                  0,
+                )}
+              </dd>
             </div>
           </dl>
         </section>

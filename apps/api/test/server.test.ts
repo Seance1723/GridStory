@@ -800,8 +800,8 @@ describe('GridStory API', () => {
     expect(drained.statusCode).toBe(200);
     expect(drained.json()).toMatchObject({
       completedOutbox: 2,
-      enqueuedJobs: 5,
-      completedJobs: 5,
+      enqueuedJobs: 7,
+      completedJobs: 7,
     });
     expect(invalidations).toHaveLength(2);
     expect(deliveries).toHaveLength(1);

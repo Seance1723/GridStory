@@ -16,6 +16,7 @@ flowchart LR
   db[("SQLite / PostgreSQL")]
   worker["Operations worker"]
   adapters["Search / cache / webhook / notification adapters"]
+  analytics["Injected analytics adapters"]
   object[("Private object storage + scanner")]
   preview["Origin-bound preview application"]
   delivery["Published delivery + CDN"]
@@ -39,6 +40,8 @@ flowchart LR
   preview -->|"origin/token-bound draft requests"| api
   core -->|"published revisions only"| delivery
   delivery --> app
+  app -->|"bounded anonymous published event + purpose decision"| api
+  worker -->|"normalized evidence + independent retry"| analytics
   publisher -->|"signed manifest + DNS/key identity"| api
   api -->|"opaque reference + exact digest/size"| scanner
   scanner -->|"bounded SBOM/provenance/security evidence"| api
@@ -63,12 +66,13 @@ The numbered boundaries in the canonical model are:
 12. Governance approval and worker to governed resources, KMS, and placement adapters.
 13. Migration service to read-only external CMS sources and guarded target writes.
 14. Authoring and anonymous applications to targeting and experiment decisions.
+15. Anonymous analytics ingestion to durable aggregation and external adapters.
 
 A change that crosses or weakens one of these boundaries requires a threat-model review in the same change.
 
 ## Security assets
 
-The protected assets are draft history; published content and routes; complete tenant/locale scope; identities, roles, grants, and sessions; signing secrets and service credentials; private asset bytes and verdicts; workflow approvals and release intent; outbox/job state; audit history; search indexes and cache tags; logical archives; service capacity; plugin manifests, marketplace publisher/release evidence, tenant grants, and lifecycle evidence; whole-database backups/recovery manifests; targeting configuration; and experiment designs, aggregate evidence, guardrail decisions, and promotion history.
+The protected assets are draft history; published content and routes; complete tenant/locale scope; identities, roles, grants, and sessions; signing secrets and service credentials; private asset bytes and verdicts; workflow approvals and release intent; outbox/job state; audit history; search indexes and cache tags; logical archives; service capacity; plugin manifests, marketplace publisher/release evidence, tenant grants, and lifecycle evidence; whole-database backups/recovery manifests; targeting configuration; experiment designs, aggregate evidence, guardrail decisions, and promotion history; and normalized analytics evidence, bounded aggregates, release annotations, private receipts, and adapter delivery history.
 
 Draft content, identity attributes, credentials/tokens, private assets, and operational/audit data are sensitive. Published content is intentionally public, but its integrity, freshness, route correctness, and tenant separation remain security properties.
 
@@ -95,6 +99,7 @@ Every modeled threat has a response, owner, concrete mitigations, and verificati
 | THREAT-0029 | Forged, stale, incomplete, or overtrusted marketplace release review | S/T/R/D/E | 20 Critical | A configured non-executing inspector must bind current inventory/SBOM/provenance/malware/vulnerability/license evidence to the exact signed artifact; unsafe/missing/error evidence blocks, another human approves, releases remain immutable/yankable, and UI/docs separate evidence from safety. Scanner transport, engine/policy, and evidence-store conformance remain deployment evidence. |
 | THREAT-0030 | Personal-data overcollection, consent bypass, draft leakage, or targeting cache confusion | S/T/R/I/D/E | 20 Critical | Typed finite allowlists, purpose-specific consent/GPC gates, no profile/input persistence, private draft preview, exact published revision, deterministic fallback, and complete scope/revision/input cache keys fail closed. Customer consent/legal decisions, input provenance, CDN behavior, and purge operations remain deployment evidence. |
 | THREAT-0031 | Experiment assignment, evidence, guardrail, or promotion abuse | S/T/R/I/D/E | 20 Critical | Complete-scope permissions, immutable pinned designs, application-owned random tokens with no persistence/echo, consent/GPC gates, no-store allocation, complete aggregate evidence, enforced guardrails/auto-pause, and explicit draft-only promotion fail closed. Analytics/evidence integrity, statistics, consent/legal review, rate limits, and application token/cache behavior remain deployment evidence. |
+| THREAT-0032 | Fabricated, identifying, replayed, or unavailable content analytics | S/T/R/I/D/E | 20 Critical | Closed identity-free published-only events, configured-purpose/GPC gates, request-context scope, age/cardinality bounds, idempotent aggregates, independent adapter jobs, generic retained failures, and non-authoritative release annotations fail closed. Deployment consent/legal review, public rate limits, provider credentials/egress/retention/deletion, data quality, attribution, statistics, and causality remain external evidence. |
 | THREAT-0024 | Database backup disclosure, tampering, or unsafe restore | T/I/D | 20 Critical | M5-005 adds native consistent backup formats, minimal SHA-256 manifests, integrity/table checks, credential-safe PostgreSQL invocation, absent/empty isolated restore targets, live SQLite and disposable PostgreSQL restore drills, and protected storage/PITR guidance. Provider storage, keys, retention, access logging, and physical PITR proof remain deployment evidence. |
 | THREAT-0026 | CMS source credential disclosure, SSRF, hostile continuation, or source exhaustion | S/T/I/D/E | 20 Critical | Server-only read credentials, credential-free fixed HTTPS origins, disabled redirects, same-origin continuation, response/record bounds, strict normalization, private state, and mocked hostile adapter regressions mitigate the repository boundary. Egress policy, secret-manager lifecycle, provider logs/revocation, and production throttling remain deployment evidence. |
 | THREAT-0027 | Migration drift, retry duplication, destructive reconciliation, or false cutover readiness | T/R/I/D/E | 20 Critical | Exact-effect dry-runs, digest/expiry/version/revision binding, pending links, checksum recovery, post-success checkpoints, normal content gates, non-destructive deletion blockers, full reconciliation, and an explicit content-only readiness claim fail closed. External traffic/application/SEO/analytics acceptance remains operator work. |
@@ -133,7 +138,8 @@ The canonical register also covers preview and asset grant replay, forged webhoo
 - CMS source credentials are server-only, read-only, least privilege, and operator-managed. GridStory does not write to or decommission a source CMS, move binary media, or administer its credentials.
 - A migration cutover report covers only the normalized content observed during that validation. It does not certify routes outside mapped schemas, binary assets, application behavior, SEO, analytics, identity, infrastructure, legal readiness, traffic switching, or source retirement.
 - Targeting configuration is not a consent manager, customer profile store, legal interpretation, behavioral collector, or CDN. Applications own consent evidence, lawful use, source normalization, rendered-response isolation, and exact use/purge of shared cache keys.
-- Experiment allocation is not a subject/profile store, analytics warehouse, statistical engine, or automatic rollout system. Applications own random token generation/retention, consent and rendered-response isolation; analytics owners retain raw events and prove attribution, aggregate correctness, evidence integrity, and statistical validity.
+- Experiment allocation is not a subject/profile store, analytics warehouse, statistical engine, or automatic rollout system. Applications own random token generation/retention, consent and rendered-response isolation; analytics owners prove experiment attribution, evidence integrity, and statistical validity independently of the bounded general content counters.
+- Content analytics is not an identity/session store, raw-event warehouse, consent manager, attribution/funnel/cohort system, statistical engine, billing record, or proof of release causality. Deployments own public rate controls and provider credentials, egress, diagnostics, retention, deletion, access, data-quality, bot/late-event, and legal policy.
 - No threat is accepted merely because it is listed. Any residual high or critical risk needs a task or explicit, named, expiring acceptance.
 
 ## M6-003 evidence update
@@ -173,6 +179,14 @@ Residual deployment risk remains critical until the customer validates notices, 
 Authenticated snapshots must contain every variant/metric, bounded exposures/samples/values, immutable evidence identity, and an external SHA-256 evidence digest. Allocation deviation, minimum samples, and absolute guardrails are enforced, with a failed running snapshot causing an automatic pause. Promotion requires completion, duration, a retained passing snapshot, unchanged published/draft control targeting, explicit non-control selection, and primary aggregate improvement; one optimistic write changes only the targeting draft and retains evidence. No raw-event route, automatic winner, statistical-significance claim, or automatic publication exists.
 
 Residual deployment risk remains critical until the customer validates consent/legal use and revocation, unpredictable per-experiment token creation/retention, application cache/render isolation, public allocation rate controls, analytics attribution/metric definitions/late-data/bot policy, statistical methodology, and evidence-store authenticity/retention. Repository evidence verifies deterministic allocation and policy gates against synthetic aggregates; it does not certify experiment validity or business causality.
+
+## M7-003 evidence update
+
+`THREAT-0032` adds the anonymous-application-to-analytics-aggregation/adapter boundary. The strict public union accepts only content view, component view, and component interaction with a UUID, bounded time, exact current published content reference, and stable component/interaction tokens. Complete scope comes from the validated delivery context; the configured purpose must be granted and a received GPC signal suppresses acceptance. Identity, session, assignment, URL/referrer/network/device, draft/preview, and arbitrary property values have no schema path.
+
+The transactional outbox normalizes content lifecycle events, while persisted successful release publication/rollback creates typed non-authoritative annotations. One idempotent process job updates an optimistic complete-scope bounded aggregate and creates one independent leased delivery job per injected adapter. Memory, SQLite, and PostgreSQL use the same document; reports require operations authorization, omit private receipt IDs/raw evidence, and expose truncation plus bounded adapter state. Hostile adapter exceptions become a generic retained failure, retry/dead-letter/replay remains available, and neither adapter nor analytics enqueue failure can reverse authoritative content/release state.
+
+Residual deployment risk remains critical until the customer validates consent/legal use and revocation, public endpoint rate/admission controls, provider credentials and TLS/egress/timeout policy, provider idempotency/availability, separately protected diagnostics, retention/deletion/access controls, data quality and bot/late-event rules, attribution/statistics, and causal interpretation. Repository counters and annotations are synthetic operational evidence, not billing, experimentation, legal-record, or release-causality certification.
 
 ## Review workflow
 

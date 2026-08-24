@@ -1,4 +1,5 @@
 export * from './assets.js';
+export * from './analytics.js';
 export * from './authoring.js';
 export * from './canonical.js';
 export * from './collaboration.js';

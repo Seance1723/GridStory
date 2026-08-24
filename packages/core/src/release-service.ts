@@ -16,6 +16,14 @@ import type { ContentService } from './content-service.js';
 export interface ReleaseServiceOptions {
   repository: ReleaseRepository;
   contentService: ContentService;
+  analyticsAnnotator?: (input: {
+    scope: ContentScope;
+    name: 'release.published' | 'release.rolled_back';
+    releaseId: string;
+    releaseName: string;
+    entryCount: number;
+    occurredAt: string;
+  }) => Promise<unknown>;
   now?: () => Date;
   createId?: () => string;
 }
@@ -31,17 +39,20 @@ function messageOf(error: unknown): string {
 export class ReleaseService {
   readonly #repository: ReleaseRepository;
   readonly #content: ContentService;
+  readonly #analyticsAnnotator: NonNullable<ReleaseServiceOptions['analyticsAnnotator']>;
   readonly #now: () => Date;
   readonly #createId: () => string;
 
   constructor({
     repository,
     contentService,
+    analyticsAnnotator = async () => undefined,
     now = () => new Date(),
     createId = randomUUID,
   }: ReleaseServiceOptions) {
     this.#repository = repository;
     this.#content = contentService;
+    this.#analyticsAnnotator = analyticsAnnotator;
     this.#now = now;
     this.#createId = createId;
   }
@@ -265,7 +276,7 @@ export class ReleaseService {
         ...(input.channel ? { channel: input.channel } : {}),
       });
       const executedAt = iso(this.#now());
-      return await this.#repository.save({
+      const published = await this.#repository.save({
         ...executing,
         state: 'published',
         executedAt,
@@ -281,6 +292,8 @@ export class ReleaseService {
           : {}),
         updatedAt: executedAt,
       });
+      await this.#annotate(published, 'release.published', executedAt);
+      return published;
     } catch (error) {
       const failedAt = iso(this.#now());
       await this.#repository.save({
@@ -350,7 +363,7 @@ export class ReleaseService {
       actor: input.actor,
     });
     const rolledBackAt = iso(this.#now());
-    return await this.#repository.save({
+    const rolledBack = await this.#repository.save({
       ...release,
       state: 'rolled-back',
       rolledBackAt,
@@ -358,6 +371,27 @@ export class ReleaseService {
       rollbackReason: reason,
       updatedAt: rolledBackAt,
     });
+    await this.#annotate(rolledBack, 'release.rolled_back', rolledBackAt);
+    return rolledBack;
+  }
+
+  async #annotate(
+    release: Release,
+    name: 'release.published' | 'release.rolled_back',
+    occurredAt: string,
+  ): Promise<void> {
+    try {
+      await this.#analyticsAnnotator({
+        scope: release,
+        name,
+        releaseId: release.id,
+        releaseName: release.name,
+        entryCount: release.entries.length,
+        occurredAt,
+      });
+    } catch {
+      // Release state is authoritative; analytics enqueue health is operational evidence only.
+    }
   }
 
   async processDue(scope: ContentScope): Promise<{ executed: number; failed: number }> {

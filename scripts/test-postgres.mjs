@@ -137,8 +137,26 @@ function runPostgresRecoveryDrill(containerName) {
         'PostgreSQL restore did not recover the published targeting and running experiment fixture.',
       );
     }
+    const restoredAnalytics = run(
+      'docker',
+      [
+        'exec',
+        containerName,
+        'psql',
+        '--username=gridstory',
+        `--dbname=${targetDatabase}`,
+        '--tuples-only',
+        '--no-align',
+        '--command',
+        "SELECT count(*) FROM gridstory.gridstory_analytics_documents WHERE tenant_id = 'postgres-tenant' AND payload->'eventCounts'->>'content.created' = '1';",
+      ],
+      { capture: true },
+    );
+    if (restoredAnalytics.stdout.trim() !== '1') {
+      throw new Error('PostgreSQL restore did not recover the bounded analytics aggregate.');
+    }
     console.log(
-      'PostgreSQL logical backup/restore drill passed (published content, targeting, and experiment lifecycle recovered).',
+      'PostgreSQL logical backup/restore drill passed (published content, targeting, experiment lifecycle, and analytics aggregate recovered).',
     );
   } finally {
     run(

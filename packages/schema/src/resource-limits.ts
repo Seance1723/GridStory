@@ -105,6 +105,16 @@ export const resourceLimits = {
     maximumExperimentSnapshots: 100,
     maximumExperimentGuardrailReasons: 25,
   },
+  analytics: {
+    maximumAdapters: 20,
+    maximumContentMetrics: 1_000,
+    maximumComponentMetrics: 1_000,
+    maximumInteractionNamesPerComponent: 25,
+    maximumReleaseAnnotations: 100,
+    maximumIdempotencyReceipts: 5_000,
+    maximumEventAgeSeconds: 86_400,
+    maximumFutureSkewSeconds: 300,
+  },
   benchmark: {
     datasetEntries: 250,
     readSamples: 120,

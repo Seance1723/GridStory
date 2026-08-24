@@ -2,6 +2,7 @@ import {
   PLUGIN_MANIFEST_FORMAT,
   PLUGIN_MANIFEST_VERSION,
   PLUGIN_PROTOCOL_VERSION,
+  type PublicAnalyticsEventInput,
   type SignedPluginManifest,
 } from '@gridstory/schema';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -12,6 +13,37 @@ afterEach(() => {
 });
 
 describe('GridStoryClient browser compatibility', () => {
+  it('sends normalized analytics events and reads private aggregate reports', async () => {
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    const client = createGridStoryClient({
+      baseUrl: 'https://cms.example.test',
+      tenantId: 'analytics-tenant',
+      fetch: async (input, init) => {
+        requests.push({ url: String(input), ...(init ? { init } : {}) });
+        return new Response(JSON.stringify({}), {
+          headers: { 'content-type': 'application/json' },
+        });
+      },
+    });
+    const event: PublicAnalyticsEventInput = {
+      id: '018daf23-89b3-7cf8-a4f1-94064c96df90',
+      name: 'component.viewed',
+      occurredAt: '2026-08-24T08:00:00.000Z',
+      content: { id: 'home', contentType: 'page', revisionId: 'revision-1' },
+      component: { id: 'hero', version: 2, nodeId: 'hero-primary' },
+      consent: { purposeId: 'analytics', granted: true, globalPrivacyControl: false },
+    };
+
+    await client.trackAnalyticsEvent(event);
+    await client.getAnalyticsReport();
+
+    expect(requests.map(({ url, init }) => [url, init?.method])).toEqual([
+      ['https://cms.example.test/api/v1/analytics/events', 'POST'],
+      ['https://cms.example.test/api/v1/analytics/report', undefined],
+    ]);
+    expect(JSON.parse(String(requests[0]?.init?.body))).toEqual(event);
+  });
+
   it('sends typed migration planning, execution, state, and cutover contracts', async () => {
     const requests: Array<{ url: string; init?: RequestInit }> = [];
     const client = createGridStoryClient({

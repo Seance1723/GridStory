@@ -125,6 +125,13 @@ describe.skipIf(!connectionString)('GridStory API with PostgreSQL', () => {
       payload: { expectedVersion: 3, action: 'start', reason: 'PostgreSQL restart fixture.' },
     });
     expect(experimentStarted.statusCode, experimentStarted.body).toBe(200);
+    const analyticsProcessed = await server.inject({
+      method: 'POST',
+      url: '/api/v1/operations/drain',
+      headers,
+      payload: { limit: 100 },
+    });
+    expect(analyticsProcessed.statusCode, analyticsProcessed.body).toBe(200);
 
     expect(
       await server.inject({
@@ -221,6 +228,16 @@ describe.skipIf(!connectionString)('GridStory API with PostgreSQL', () => {
     expect(experiments.json()).toMatchObject({
       version: 4,
       experiments: [{ id: 'postgres-banner-test', state: 'running', targetingRevision: 2 }],
+    });
+    const analytics = await server.inject({
+      method: 'GET',
+      url: '/api/v1/analytics/report',
+      headers,
+    });
+    expect(analytics.statusCode, analytics.body).toBe(200);
+    expect(analytics.json()).toMatchObject({
+      eventCounts: { 'content.created': 1 },
+      contents: [{ contentId: created.id, created: 1 }],
     });
     const allocation = await server.inject({
       method: 'POST',

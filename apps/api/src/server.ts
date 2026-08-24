@@ -6,6 +6,9 @@ import cors from '@fastify/cors';
 import formbody from '@fastify/formbody';
 import {
   type AssetContentInspector,
+  type AnalyticsAdapter,
+  type AnalyticsRepository,
+  AnalyticsService,
   AssetDeliveryService,
   AssetGovernanceProcessor,
   type AssetMalwareScanner,
@@ -61,6 +64,7 @@ import {
   PluginService,
   PortabilityService,
   PostgresCollaborationRepository,
+  PostgresAnalyticsRepository,
   PostgresContentRepository,
   PostgresGovernanceRepository,
   PostgresIdentityRepository,
@@ -78,6 +82,7 @@ import {
   type SearchAdapter,
   SearchService,
   SqliteAssetRepository,
+  SqliteAnalyticsRepository,
   SqliteCollaborationRepository,
   SqliteContentRepository,
   SqliteGovernanceRepository,
@@ -135,6 +140,7 @@ import {
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import { parseContentQuery } from './content-query.js';
 import { defaultPageQualityPolicies, defaultWorkflowDefinitions } from './defaults.js';
+import { registerAnalyticsRoutes } from './analytics-routes.js';
 import { registerExperimentRoutes } from './experiment-routes.js';
 import { registerGovernanceRoutes } from './governance-routes.js';
 import { registerGridStoryGraphql } from './graphql.js';
@@ -208,6 +214,11 @@ export interface BuildServerOptions {
   };
   personalization?: {
     repository?: PersonalizationRepository;
+  };
+  analytics?: {
+    repository?: AnalyticsRepository;
+    adapters?: AnalyticsAdapter[];
+    purposeId?: string;
   };
 }
 
@@ -457,6 +468,7 @@ export async function buildServer({
   migration: migrationOptions,
   marketplace: marketplaceOptions,
   personalization: personalizationOptions,
+  analytics: analyticsOptions,
 }: BuildServerOptions): Promise<FastifyInstance> {
   if (!databaseUrl && databasePath !== ':memory:') {
     mkdirSync(dirname(resolve(databasePath)), { recursive: true });
@@ -515,6 +527,11 @@ export async function buildServer({
     (databaseUrl
       ? new PostgresPersonalizationRepository({ connectionString: databaseUrl })
       : new SqlitePersonalizationRepository({ filename: databasePath }));
+  const resolvedAnalyticsRepository: AnalyticsRepository =
+    analyticsOptions?.repository ??
+    (databaseUrl
+      ? new PostgresAnalyticsRepository({ connectionString: databaseUrl })
+      : new SqliteAnalyticsRepository({ filename: databasePath }));
   const governance = new GovernanceService({
     repository: resolvedGovernanceRepository,
     ...(governanceOptions?.keyAdapter ? { keyAdapter: governanceOptions.keyAdapter } : {}),
@@ -554,6 +571,12 @@ export async function buildServer({
     workflowGate: workflows,
     governanceGate: governance,
   });
+  const analytics = new AnalyticsService({
+    repository: resolvedAnalyticsRepository,
+    jobRepository: repository,
+    adapters: analyticsOptions?.adapters ?? [],
+    ...(analyticsOptions?.purposeId ? { purposeId: analyticsOptions.purposeId } : {}),
+  });
   const migration = new MigrationService({
     repository: resolvedMigrationRepository,
     contentRepository: repository,
@@ -563,6 +586,7 @@ export async function buildServer({
   const releases = new ReleaseService({
     repository: resolvedReleaseRepository,
     contentService: service,
+    analyticsAnnotator: (input) => analytics.annotateRelease(input),
   });
   const marketplace = new MarketplaceService({
     repository: resolvedMarketplaceRepository,
@@ -662,6 +686,11 @@ export async function buildServer({
     ...(webhookTransport ? { webhookTransport } : {}),
     ...(cacheInvalidator ? { cacheInvalidator } : {}),
     searchJobRunner: (job) => search.processJob(job),
+    analyticsLifecycleEnqueuer: ({ scope, event }) => analytics.enqueueLifecycle(scope, event),
+    analyticsJobRunner: ({ scope, type, payload }) =>
+      type === 'analytics.process'
+        ? analytics.process(scope, payload)
+        : analytics.deliver(scope, payload),
     ...(allowedWebhookHosts ? { allowedWebhookHosts } : {}),
     ...(resolvedTenantTelemetry ? { telemetry: resolvedTenantTelemetry } : {}),
   });
@@ -740,6 +769,7 @@ export async function buildServer({
   await registerMarketplaceRoutes(server, { service: marketplace, plugins, policy });
   await registerPersonalizationRoutes(server, { service: personalization, policy });
   await registerExperimentRoutes(server, { service: experiments, policy });
+  await registerAnalyticsRoutes(server, { service: analytics, policy });
 
   server.addHook('onClose', async () => {
     await repository.close();
@@ -753,6 +783,7 @@ export async function buildServer({
     await resolvedMigrationRepository.close();
     await resolvedMarketplaceRepository.close();
     await resolvedPersonalizationRepository.close();
+    await resolvedAnalyticsRepository.close();
   });
   server.addHook('onSend', async (request, reply, payload) => {
     if (request.url.startsWith('/api/v1/delivery/')) {

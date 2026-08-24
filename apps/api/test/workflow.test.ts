@@ -144,7 +144,7 @@ describe('workflow API', () => {
     expect(drainedActions.statusCode).toBe(200);
     expect(drainedActions.json()).toMatchObject({
       reconciliation: { discovered: 1, reconciled: 1 },
-      delivery: { completedJobs: 3 },
+      delivery: { completedJobs: 4 },
     });
     const completedActions = await server.inject({
       method: 'GET',

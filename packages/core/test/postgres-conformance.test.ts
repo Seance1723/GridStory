@@ -10,12 +10,14 @@ import { Pool } from 'pg';
 import { describe, expect, it } from 'vitest';
 import {
   CollaborationService,
+  emptyAnalyticsDocument,
   emptyMarketplaceDocument,
   emptyPersonalizationDocument,
   EnterpriseIdentityService,
   emptyMigrationDocument,
   GovernanceService,
   PostgresCollaborationRepository,
+  PostgresAnalyticsRepository,
   PostgresContentRepository,
   PostgresGovernanceRepository,
   PostgresIdentityRepository,
@@ -390,6 +392,48 @@ if (connectionString) {
       }
     });
   });
+  describe('PostgreSQL analytics repository conformance', () => {
+    it('persists bounded aggregates under the complete scope key', async () => {
+      const schema = `gridstory_analytics_test_${process.pid}_${schemaSequence++}`;
+      const pool = new Pool({ connectionString });
+      const scope: ContentScope = {
+        organizationId: 'organization-a',
+        tenantId: 'analytics-tenant-a',
+        workspaceId: 'workspace-a',
+        siteId: 'site-a',
+        environmentId: 'production',
+        locale: 'en',
+      };
+      const first = new PostgresAnalyticsRepository({ pool, schema });
+      try {
+        const initial = emptyAnalyticsDocument(scope, '2026-08-24T00:00:00.000Z');
+        await first.save(initial, null);
+        await first.close();
+
+        const second = new PostgresAnalyticsRepository({ pool, schema });
+        await expect(second.get(scope)).resolves.toEqual(initial);
+        await expect(second.get({ ...scope, tenantId: 'other-tenant' })).resolves.toBeNull();
+        const next = {
+          ...initial,
+          version: 2,
+          eventCounts: { ...initial.eventCounts, 'content.viewed': 1 },
+          updatedAt: '2026-08-24T00:01:00.000Z',
+        };
+        await second.save(next, 1);
+        await expect(second.get(scope)).resolves.toMatchObject({
+          version: 2,
+          eventCounts: { 'content.viewed': 1 },
+        });
+        await expect(second.save(next, 1)).rejects.toMatchObject({
+          code: 'analytics_write_conflict',
+        });
+        await second.close();
+      } finally {
+        await pool.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);
+        await pool.end();
+      }
+    });
+  });
 } else {
   describe.skip('PostgreSQL repository conformance', () => {
     it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
@@ -413,6 +457,9 @@ if (connectionString) {
     it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
   });
   describe.skip('PostgreSQL personalization repository conformance', () => {
+    it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
+  });
+  describe.skip('PostgreSQL analytics repository conformance', () => {
     it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
   });
 }

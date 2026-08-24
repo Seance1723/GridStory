@@ -151,6 +151,16 @@ The configuration, integration contract, privacy boundary, cache rules, recovery
 
 The integration, metric-evidence, lifecycle, recovery, rollback, and statistical-claim boundaries are documented in [Governed content experiments](../experiments.md). `THREAT-0031` owns assignment-token misuse, lifecycle/design tampering, invalid aggregate evidence, allocation/guardrail bypass, and unsafe winner promotion.
 
+## Bounded content analytics
+
+- `GS-SEC-036`: public analytics SHALL accept only the closed content-view, component-view, and component-interaction union. Complete organization, tenant, workspace, site, environment, and locale scope SHALL come only from validated delivery context; an explicit configured-purpose grant is mandatory and a received GPC signal SHALL suppress acceptance.
+- Public events SHALL use bounded UUID/time/token fields, SHALL reference the exact current published content ID/type/revision, and SHALL NOT accept visitor/account/session/assignment IDs, URL/referrer/IP/user-agent/device values, draft/preview data, arbitrary event names, or property bags. Age, future skew, aggregate cardinality, receipts, annotations, and report size SHALL be bounded with explicit truncation.
+- Server lifecycle evidence SHALL originate only from the complete-scope transactional outbox. Release publication/rollback annotations SHALL be enqueued only after authoritative persistence, SHALL be described as correlation rather than causality, and analytics failure SHALL NOT reverse content or release state.
+- Processing SHALL be idempotent and complete-scope. Each injected adapter SHALL receive an independent leased/retried/dead-lettered/replayable job; provider credentials SHALL remain outside schema/core, and thrown adapter detail SHALL be replaced by a stable generic error before durable retention.
+- Analytics reports SHALL require `operations.read`, remain private/no-store, omit raw evidence and private event receipt IDs, and expose bounded aggregate plus adapter-job health. Deployments SHALL own consent/legal interpretation, public rate controls, provider TLS/egress/timeout/credential/idempotency policy, protected diagnostics, retention/deletion/access controls, data quality, attribution, statistics, and causal use.
+
+The event contract, adapter composition, aggregate limits, recovery, rollback, and interpretation boundaries are documented in [Bounded content analytics](../analytics.md). `THREAT-0032` owns fabricated/identifying/replayed evidence, consent/scope/published-revision bypass, cardinality exhaustion, adapter leakage/unavailability, and false release-causality claims.
+
 ## Logging, error handling, and operations
 
 - `GS-SEC-028`: a maintained log inventory SHALL define event, metadata, format, sink, access, retention, correlation, and alerting. At minimum cover authentication, failed authorization, privileged mutation, publication, workflow/release, import/export, credential lifecycle, adapter failure, and control bypass.
@@ -217,7 +227,13 @@ Repository evidence does not collect consent, interpret law, store customer prof
 
 `GS-SEC-035` and `THREAT-0031` cover complete-scope experiment state, immutable running design, exact weighted allocation, consent/GPC gating, non-persistent per-experiment random tokens, no-store application responses, pinned targeting, overlap prevention, bounded immutable aggregate evidence, allocation/sample/absolute guardrails, automatic failure pause, and explicit evidence-backed promotion into the targeting draft only. SQLite/PostgreSQL retain the experiment inside the optimistic targeting document; live SQLite recovery restores a running experiment and PostgreSQL verification covers restart allocation plus logical restore.
 
-Repository evidence does not collect consent, generate or retain the application token, ingest raw events, validate analytics attribution or evidence-store integrity, calculate statistical significance, select a winner, automatically publish, configure CDN/application isolation, enforce external rate limits, or certify lawful/statistically valid experimentation. Those remain customer/application/analytics/deployment responsibilities; M7-003 owns future normalized event and analytics adapter work.
+Repository evidence does not collect consent, generate or retain the application token, ingest raw experiment exposure/conversion or subject events, validate experiment attribution/evidence-store integrity, calculate statistical significance, select a winner, automatically publish, configure CDN/application isolation, enforce external rate limits, or certify lawful/statistically valid experimentation. Those remain customer/application/analytics/deployment responsibilities. M7-003's bounded general content/component events do not synthesize experiment snapshots or change this boundary.
+
+## M7-003 analytics baseline
+
+`GS-SEC-036` and `THREAT-0032` cover a strict identity-free public event union, configured-purpose/GPC gating, exact current published references, request-context complete scope, age/cardinality bounds, normalized transactional lifecycle evidence, non-authoritative release annotations, idempotent optimistic aggregates, independent durable adapter delivery, generic retained adapter failures, private receipt omission, and explicit report truncation. Memory, SQLite, and PostgreSQL persist the same analytics document; live SQLite recovery restores the earlier aggregate, and PostgreSQL verification covers persistence plus logical restore.
+
+Repository evidence does not collect consent, enforce public edge rates, operate provider credentials/endpoints/egress, prove provider idempotency or availability, retain raw event history, implement attribution/funnels/cohorts/bot rules/statistics, certify retention/deletion/access policy, supply experiment snapshots, or prove release causality. Those remain customer/application/analytics/privacy/deployment responsibilities; bounded operational counters are not billing, legal, experiment, or causal evidence.
 
 ## Verification ownership
 

@@ -216,6 +216,13 @@ describe('database recovery', () => {
         payload: { expectedVersion: 3, action: 'start', reason: 'Recovery drill fixture.' },
       });
       expect(experimentStarted.statusCode, experimentStarted.body).toBe(200);
+      const analyticsProcessed = await server.inject({
+        method: 'POST',
+        url: '/api/v1/operations/drain',
+        headers,
+        payload: { limit: 100 },
+      });
+      expect(analyticsProcessed.statusCode, analyticsProcessed.body).toBe(200);
 
       const manifest = await backupSqlite({
         sourcePath,
@@ -283,6 +290,12 @@ describe('database recovery', () => {
             publicKey: publicKey.export({ format: 'pem', type: 'spki' }).toString(),
           },
         },
+      });
+      await server.inject({
+        method: 'POST',
+        url: '/api/v1/operations/drain',
+        headers,
+        payload: { limit: 100 },
       });
 
       await expect(restoreSqlite({ backupPath, targetPath: restoredPath })).resolves.toEqual(
@@ -366,6 +379,17 @@ describe('database recovery', () => {
         targetingPublishedRevision: 2,
         experiments: [{ id: 'recovery-banner-test', state: 'running' }],
       });
+      const recoveredAnalytics = await restored.inject({
+        method: 'GET',
+        url: '/api/v1/analytics/report',
+        headers,
+      });
+      expect(recoveredAnalytics.statusCode).toBe(200);
+      expect(recoveredAnalytics.json()).toMatchObject({
+        eventCounts: { 'content.created': 1, 'content.draft.updated': 0 },
+        contents: [{ contentId: created.id, created: 1, draftUpdates: 0 }],
+      });
+      expect(recoveredAnalytics.json()).not.toHaveProperty('receipts');
     } finally {
       await restored?.close();
       await server.close();

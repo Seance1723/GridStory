@@ -43,6 +43,8 @@ Scoped manual rebuilds enqueue `search.rebuild` jobs into the same leased queue.
 
 Completed workflow transitions enqueue `workflow.action` jobs into the same leased queue. The worker reconciles exact action snapshots from workflow history before claiming jobs, so a crash between transition persistence and enqueue is restart-safe. Operators can use the dedicated, private/no-store `/api/v1/workflow-actions` list, `/drain`, and `/:id/replay` endpoints or the Studio delivery log without mixing action permissions into general operations permissions.
 
+Normalized analytics uses the same queue without putting provider calls inside content writes. Each accepted public or server lifecycle event creates one idempotent `analytics.process` job; processing updates a bounded scoped aggregate and creates one `analytics.deliver` job per injected adapter. Adapter failure retries independently and cannot reverse content, release, or aggregate truth. The ordinary operations job list/replay controls remain the delivery log, while `/api/v1/analytics/report` and Studio summarize bounded adapter state. The closed event contract, consent/GPC behavior, adapter composition, retention limits, and interpretation boundary are documented in [Bounded content analytics](analytics.md).
+
 ## Cache tags
 
 Every event and public REST delivery uses a collision-safe cache prefix containing organization, tenant, workspace, site, environment, and locale, followed by content type, entry, and exact revision tags. REST uses the `Cache-Tag` response header and also retains the full scope `Vary` header. Query connections return the union of their page nodes' tags. Workflow-authored cache tags are deduplicated and namespaced beneath the same prefix; raw global tags are never passed through.

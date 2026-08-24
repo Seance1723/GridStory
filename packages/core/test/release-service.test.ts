@@ -70,7 +70,9 @@ describe('ReleaseService', () => {
     for (const repository of repositories.splice(0)) repository.close();
   });
 
-  async function harness() {
+  async function harness(
+    analyticsAnnotator?: ConstructorParameters<typeof ReleaseService>[0]['analyticsAnnotator'],
+  ) {
     let clock = new Date('2026-07-26T00:00:00.000Z');
     let id = 0;
     const workflow = new WorkflowService({
@@ -92,6 +94,7 @@ describe('ReleaseService', () => {
       contentService: content,
       now: () => clock,
       createId: () => `release-${++id}`,
+      ...(analyticsAnnotator ? { analyticsAnnotator } : {}),
     });
     return {
       content,
@@ -163,7 +166,11 @@ describe('ReleaseService', () => {
   }
 
   it('previews and atomically publishes two pinned revisions, then restores both', async () => {
-    const value = await harness();
+    const annotations: string[] = [];
+    const value = await harness(async (annotation) => {
+      annotations.push(annotation.name);
+      if (annotation.name === 'release.rolled_back') throw new Error('analytics queue unavailable');
+    });
     const firstPublished = await initiallyPublished(value, 'first');
     const secondPublished = await initiallyPublished(value, 'second');
     const first = await revise(value, firstPublished, 'First launch', 'first');
@@ -191,6 +198,7 @@ describe('ReleaseService', () => {
 
     release = await value.releases.execute({ scope, id: release.id, actor: reviewer });
     expect(release.state).toBe('published');
+    expect(annotations).toEqual(['release.published']);
     expect(
       (await value.content.get({ scope, id: first.id, perspective: 'published' })).data.title,
     ).toBe('First launch');
@@ -208,6 +216,7 @@ describe('ReleaseService', () => {
       state: 'rolled-back',
       rollbackReason: 'Launch rollback drill',
     });
+    expect(annotations).toEqual(['release.published', 'release.rolled_back']);
     expect(
       (await value.content.get({ scope, id: first.id, perspective: 'published' })).data.title,
     ).toBe('first initial');

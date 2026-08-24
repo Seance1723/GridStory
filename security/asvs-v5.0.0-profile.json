@@ -990,6 +990,48 @@
         "tests/e2e/accessibility.spec.ts"
       ],
       "taskIds": ["M7-002"]
+    },
+    {
+      "id": "GS-SEC-036",
+      "title": "Minimized consent-aware content analytics and isolated adapter delivery",
+      "status": "verified",
+      "owner": "Analytics, privacy, operations, and delivery owner",
+      "statement": "Public analytics SHALL accept only a bounded closed anonymous event union after the configured purpose grant and received GPC check, derive complete scope from trusted request context, and validate the exact current published content revision while rejecting identity, arbitrary properties, and draft/preview data; normalized lifecycle, bounded aggregates, private receipts, and release annotations SHALL be completely tenant scoped and idempotent; adapter delivery SHALL use independent durable retries with provider credentials outside schema/core and generic retained failures, and SHALL NOT alter authoritative content/release state; authenticated reports SHALL omit raw evidence and receipt IDs and expose explicit truncation while deployment rate, egress, retention, deletion, provider, and statistical controls remain external evidence.",
+      "asvsRefs": [
+        "v5.0.0-2.2.2",
+        "v5.0.0-8.1.1",
+        "v5.0.0-11.2.1",
+        "v5.0.0-14.1.1",
+        "v5.0.0-14.2.1",
+        "v5.0.0-16.5.3"
+      ],
+      "threatRefs": ["THREAT-0001", "THREAT-0004", "THREAT-0013", "THREAT-0019", "THREAT-0032"],
+      "evidence": [
+        "packages/schema/src/analytics.ts",
+        "packages/core/src/analytics-repository.ts",
+        "packages/core/src/analytics-service.ts",
+        "packages/core/src/operations-service.ts",
+        "packages/core/src/release-service.ts",
+        "apps/api/src/analytics-routes.ts",
+        "packages/client/src/index.ts",
+        "apps/studio/src/App.tsx",
+        "docs/analytics.md",
+        "docs/adr/0019-bounded-content-analytics.md"
+      ],
+      "verification": [
+        "packages/schema/test/analytics.test.ts",
+        "packages/core/test/analytics-repository.test.ts",
+        "packages/core/test/analytics-service.test.ts",
+        "packages/core/test/postgres-conformance.test.ts",
+        "packages/core/test/release-service.test.ts",
+        "apps/api/test/analytics.test.ts",
+        "apps/api/test/database-recovery.test.ts",
+        "apps/api/test/postgres-server.test.ts",
+        "packages/client/test/client.test.ts",
+        "apps/studio/test/App.test.tsx",
+        "tests/e2e/accessibility.spec.ts"
+      ],
+      "taskIds": ["M7-003"]
     }
   ]
 }

@@ -36,6 +36,8 @@ The final revision-pointer swap is implemented by `ContentRepository.publishMany
 
 After commit, existing outbox processing invalidates the ordinary entry, revision, content-type, locale, site, environment, and tenant cache tags for every member. Published delivery APIs do not understand release records and cannot see partial release state.
 
+After persisted publication or rollback, the release service also attempts to enqueue a typed analytics annotation containing the complete scope, release ID/name, member count, and occurrence time. This is non-authoritative operational evidence: an enqueue or downstream adapter failure never changes the already committed release result. Operators can correlate the annotation with later bounded content/component counters, but it does not establish causality. See [Bounded content analytics](analytics.md).
+
 Workflow completion is notified after the atomic content commit, matching the existing single-entry publication boundary. Deploy compatible API and worker versions together so workflow and release services interpret the same contracts.
 
 ## Schedules and worker execution

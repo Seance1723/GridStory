@@ -1,4 +1,6 @@
 export * from './asset-delivery-service.js';
+export * from './analytics-repository.js';
+export * from './analytics-service.js';
 export * from './asset-security.js';
 export * from './asset-service.js';
 export * from './audit-service.js';

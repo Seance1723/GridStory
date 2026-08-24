@@ -6,14 +6,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- Added strict normalized analytics schemas, bounded complete-scope memory/SQLite/PostgreSQL aggregates, transactional content-lifecycle normalization, idempotent processing, independent durable adapter fan-out, and non-authoritative published/rolled-back release annotations (M7-003).
+- Added consent/GPC-gated exact-published public event ingestion, private operational reports, typed universal-client methods, Studio content/component/release/adapter metrics, recovery/PostgreSQL/browser coverage, analytics guidance/ADR, and verified `THREAT-0032`/`GS-SEC-036` controls (M7-003).
+
 ### Changed
 
+- Recorded the accepted M7-003 analytics boundary: anonymous consent-gated published content/component events, durable provider-neutral adapter fan-out, bounded complete-scope aggregates, and non-authoritative release annotations without identity, raw-event warehousing, or provider credentials in core.
 - Recorded the accepted M7-002 governed-experiment decision: immutable running designs, consent-gated stateless deterministic allocation, externally computed bounded aggregate evidence, enforced allocation/metric guardrails, and explicit draft-only winner promotion without raw event ingestion or statistical-significance claims.
 - Recorded the accepted M7-001 consent-aware targeting decision: bounded typed attributes, purpose-specific consent/GPC handling, deterministic first-match rules, authenticated hypothetical preview, published-only edge evaluation, and conservative cache guidance without persistent profiles or experiment allocation.
 - Recorded the accepted M6-005 evidence-bound marketplace decision: operator-scoped publisher verification, signed compatibility/support metadata, injected non-executing artifact review, separate human approval, and approved-only handoff to the existing disabled plugin installation lifecycle.
 
 ### Fixed
 
+- Updated legacy API outbox/workflow job-count fixtures to include the intended normalized content-lifecycle analytics processing jobs (BUG-0325).
+- Made the analytics report's durable-job scope audit explicitly side-effect-only so the full repository lint gate remains warning-free (BUG-0324).
+- Redacted hostile analytics-adapter exception text into a stable generic delivery failure before durable job/report retention, while preserving independent retry and aggregate truth (BUG-0323).
+- Aligned the analytics adapter fixture with seeded server lifecycle evidence and verified created, published, and browser component deliveries independently (BUG-0322).
+- Required every public analytics event to match the current exact published content ID, type, and revision before durable processing, rejecting fabricated, draft, or stale references (BUG-0321).
+- Made the analytics API denial fixture explicitly anonymous so it tests the private-report authorization boundary rather than the development identity default (BUG-0320).
+- Kept private analytics idempotency receipts out of the strict authenticated report projection so bounded metrics remain readable without exposing event receipt IDs (BUG-0319).
 - Returned grammatically correct explicit Studio notices for every experiment lifecycle transition instead of generating `pauseed`/`resumeed` labels (BUG-0318).
 - Bounded the existing multi-step guarded-migration Studio regression exposed by the M7-002 full parallel gate without increasing the suite-wide timeout (BUG-0317).
 - Bounded the multi-step M7-002 Studio lifecycle regression timeout so it remains reliable under the full parallel workspace gate (BUG-0316).

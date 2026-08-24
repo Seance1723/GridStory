@@ -102,7 +102,9 @@ export interface DurableJob extends ContentScope {
     | 'webhook.deliver'
     | 'workflow.action'
     | 'search.index'
-    | 'search.rebuild';
+    | 'search.rebuild'
+    | 'analytics.process'
+    | 'analytics.deliver';
   idempotencyKey: string;
   payload: Record<string, unknown>;
   state: DurableState;
