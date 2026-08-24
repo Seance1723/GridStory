@@ -150,6 +150,17 @@ export const resourceLimits = {
     maximumSemanticAdapterHits: 100,
     maximumSemanticSourceCharacters: 50_000,
   },
+  regional: {
+    maximumReadRegions: 20,
+    maximumEntriesPerRead: 1_000,
+    maximumOperations: 100,
+    maximumLagMs: 86_400_000,
+    maximumDataLossMs: 604_800_000,
+    maximumFutureSkewMs: 30_000,
+    planLifetimeSeconds: 900,
+    maximumReauthenticationAgeSeconds: 900,
+    maximumBackupEvidenceAgeSeconds: 86_400,
+  },
   benchmark: {
     datasetEntries: 250,
     readSamples: 120,

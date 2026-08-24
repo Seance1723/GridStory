@@ -12,7 +12,7 @@ import {
 } from '@gridstory/schema';
 import { ConflictError, GridStoryError, NotFoundError } from './errors.js';
 import type { ContentService } from './content-service.js';
-import type { Actor, ContentRepository } from './types.js';
+import type { Actor, ContentRepository, PublishedContentReader } from './types.js';
 
 function localeKey(siteId: string, code: string): string {
   return `${siteId}\u0000${code}`;
@@ -264,14 +264,22 @@ export class LocalizationService {
     scope: ContentScope;
     translationGroupId: string;
     perspective?: ContentPerspective;
+    publishedReader?: PublishedContentReader;
   }): Promise<LocalizedContentResolution> {
     const perspective = input.perspective ?? 'published';
     const fallbackChain = this.#locales.fallbackChain(input.scope.siteId, input.scope.locale);
-    const variants = await this.#repository.listTranslationVariants({
-      scope: input.scope,
-      translationGroupId: input.translationGroupId,
-      perspective,
-    });
+    const variants =
+      perspective === 'published' && input.publishedReader
+        ? await input.publishedReader.listTranslationVariants({
+            scope: input.scope,
+            translationGroupId: input.translationGroupId,
+            perspective: 'published',
+          })
+        : await this.#repository.listTranslationVariants({
+            scope: input.scope,
+            translationGroupId: input.translationGroupId,
+            perspective,
+          });
     const entry = fallbackChain
       .map((locale) => variants.find((variant) => variant.locale === locale))
       .find((variant) => variant !== undefined);
@@ -347,22 +355,32 @@ export class LocalizationService {
     };
   }
 
-  async resolveRoute(scope: ContentScope, rawPath: string): Promise<LocalizedContentResolution> {
+  async resolveRoute(
+    scope: ContentScope,
+    rawPath: string,
+    publishedReader?: PublishedContentReader,
+  ): Promise<LocalizedContentResolution> {
     const requestedLocale = this.#locales.get(scope.siteId, scope.locale);
     const path = normalizeRoutePath(rawPath);
     const fallbackChain = this.#locales.fallbackChain(scope.siteId, scope.locale);
     for (const locale of fallbackChain) {
       const localeScope = { ...scope, locale };
-      const entries = await this.#content.list({ scope: localeScope, perspective: 'published' });
+      const entries = publishedReader
+        ? await publishedReader.list({ scope: localeScope, perspective: 'published' })
+        : await this.#content.list({ scope: localeScope, perspective: 'published' });
       for (const entry of entries) {
         const schema = this.#schema(entry.contentType);
         if (this.#route(schema, entry.data, requestedLocale) !== path) continue;
-        const translationGroupId = await this.#repository.getTranslationGroup({
-          scope: localeScope,
-          id: entry.id,
-        });
+        const translationGroupId = publishedReader
+          ? await publishedReader.getTranslationGroup({ scope: localeScope, id: entry.id })
+          : await this.#repository.getTranslationGroup({ scope: localeScope, id: entry.id });
         if (!translationGroupId) continue;
-        return this.resolve({ scope, translationGroupId, perspective: 'published' });
+        return this.resolve({
+          scope,
+          translationGroupId,
+          perspective: 'published',
+          ...(publishedReader ? { publishedReader } : {}),
+        });
       }
     }
     throw new NotFoundError('Published localized route was not found.');

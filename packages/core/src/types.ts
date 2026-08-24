@@ -317,6 +317,26 @@ export interface ContentRepository {
   close(): Awaitable<void>;
 }
 
+export interface PublishedContentReader {
+  list(input: {
+    scope: ContentScope;
+    contentType?: string;
+    perspective: 'published';
+  }): Awaitable<ContentEntry[]>;
+  getBySlug(input: {
+    scope: ContentScope;
+    contentType: string;
+    slug: string;
+    perspective: 'published';
+  }): Awaitable<ContentEntry | null>;
+  getTranslationGroup(input: { scope: ContentScope; id: string }): Awaitable<string | null>;
+  listTranslationVariants(input: {
+    scope: ContentScope;
+    translationGroupId: string;
+    perspective: 'published';
+  }): Awaitable<ContentEntry[]>;
+}
+
 export interface ContentServiceOptions {
   repository: ContentRepository;
   schemas: ContentSchemaDefinition[];

@@ -69,6 +69,9 @@ export const GridStoryActions = {
   aiManage: 'ai.manage',
   aiExecute: 'ai.execute',
   aiReview: 'ai.review',
+  regionalRead: 'regional.read',
+  regionalManage: 'regional.manage',
+  regionalFailover: 'regional.failover',
 } as const;
 
 export type GridStoryAction = (typeof GridStoryActions)[keyof typeof GridStoryActions];
@@ -87,6 +90,7 @@ export interface AuthorizationResource {
     | 'personalization'
     | 'experiment'
     | 'ai'
+    | 'regional'
     | 'governance'
     | 'migration'
     | 'delivery'
@@ -134,6 +138,7 @@ export const defaultRoles: RoleDefinition[] = [
       GridStoryActions.personalizationRead,
       GridStoryActions.experimentRead,
       GridStoryActions.aiRead,
+      GridStoryActions.regionalRead,
     ],
   },
   {
@@ -162,6 +167,7 @@ export const defaultRoles: RoleDefinition[] = [
       GridStoryActions.experimentRead,
       GridStoryActions.aiRead,
       GridStoryActions.aiExecute,
+      GridStoryActions.regionalRead,
     ],
   },
   {
@@ -202,6 +208,8 @@ export const defaultRoles: RoleDefinition[] = [
       GridStoryActions.aiManage,
       GridStoryActions.aiExecute,
       GridStoryActions.aiReview,
+      GridStoryActions.regionalRead,
+      GridStoryActions.regionalManage,
     ],
   },
   { id: 'delivery', actions: [GridStoryActions.deliveryRead] },

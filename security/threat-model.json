@@ -263,6 +263,21 @@
         "revision binding",
         "recoverability"
       ]
+    },
+    {
+      "id": "ASSET-023",
+      "name": "Regional topology policy, replica evidence, consistency indicators, backup attestations, and failover plans/results",
+      "securityProperties": [
+        "integrity",
+        "availability",
+        "tenant isolation",
+        "residency",
+        "cache correctness",
+        "single-writer safety",
+        "idempotency",
+        "accountability",
+        "recoverability"
+      ]
     }
   ],
   "trustBoundaries": [
@@ -438,6 +453,20 @@
         "positive top-level text/slug semantic field allowlists and deterministic redaction",
         "identifier-only durable jobs and derived rebuildable adapter indexes",
         "same-scope, perspective, model, current-revision, field, finite-score, unique-hit, and content-authorization validation"
+      ]
+    },
+    {
+      "id": "BOUNDARY-018",
+      "name": "Published delivery and reviewed regional failover through injected topology adapters",
+      "controls": [
+        "trusted deployment region and complete request scope rather than caller-selected routing",
+        "published-only least-authority reader with scope, perspective, revision, slug, type, count, and duplicate validation",
+        "exact adapter, served-region, replica-role, topology, time, lag, watermark, residency, and cache-partition evidence",
+        "strong primary default, explicit bounded-staleness policy, explicit failover behavior, and private cache fallback without complete attestation",
+        "private complete-scope optimistic topology state with separate read, manage, and failover permissions",
+        "current residency and backup evidence plus planned zero-loss or explicit emergency data-loss bounds",
+        "digest-bound preview, different recent-human approval, persisted executing/ambiguous state, stable idempotency key, and reconciliation",
+        "single-writer result validation, topology increment, primary-only reset, bounded diagnostics, and no provider position disclosure"
       ]
     }
   ],
@@ -638,6 +667,27 @@
       "to": "ACTOR-007",
       "data": "redacted bounded semantic documents or private query and scoped candidate IDs, scores, revisions, field paths, model, and index version",
       "assets": ["ASSET-001", "ASSET-003", "ASSET-012", "ASSET-022"]
+    },
+    {
+      "id": "FLOW-028",
+      "from": "ACTOR-001",
+      "to": "BOUNDARY-018",
+      "data": "published delivery request resolved from trusted deployment region with validated scope, revision, consistency, topology, cache, and opaque watermark evidence",
+      "assets": ["ASSET-002", "ASSET-003", "ASSET-010", "ASSET-012", "ASSET-023"]
+    },
+    {
+      "id": "FLOW-029",
+      "from": "ACTOR-003",
+      "to": "BOUNDARY-018",
+      "data": "private scoped topology policy, readiness evidence, verified backup, exact digest, independent approval, stable request ID, and reconciliation decision",
+      "assets": ["ASSET-003", "ASSET-004", "ASSET-009", "ASSET-012", "ASSET-014", "ASSET-023"]
+    },
+    {
+      "id": "FLOW-030",
+      "from": "BOUNDARY-018",
+      "to": "ACTOR-007",
+      "data": "credential-free scoped regional read or failover operation and bounded validated evidence without preview credentials, draft content, provider diagnostics, or raw replication positions",
+      "assets": ["ASSET-002", "ASSET-003", "ASSET-012", "ASSET-023"]
     }
   ],
   "assumptions": [
@@ -651,7 +701,8 @@
     "CMS migration credentials are read-only, least privilege, and injected by the trusted server runtime; the source stays authoritative and recoverable until an externally operated cutover is accepted.",
     "Applications create and, when permitted, retain an unpredictable token separately for each experiment after consent; external experiment analytics still owns attribution, statistical validity, and retained evidence integrity.",
     "Applications send only anonymous allowlisted analytics events after a valid configured-purpose decision; deployments own public rate controls and provider adapter credentials, retention, deletion, egress, and independently protected diagnostics.",
-    "AI provider adapters are composed only in the trusted server runtime, preserve structured instruction/data separation and output limits, honor abort signals where supported, and keep credentials, provider diagnostics, retention, regional processing, and egress policy outside browser, schema, core, persistence, and logs."
+    "AI provider adapters are composed only in the trusted server runtime, preserve structured instruction/data separation and output limits, honor abort signals where supported, and keep credentials, provider diagnostics, retention, regional processing, and egress policy outside browser, schema, core, persistence, and logs.",
+    "Regional read and failover adapters are composed only in the trusted server runtime, truthfully attest deployment-controlled topology and residency, enforce provider fencing and idempotency, and keep credentials, raw replication positions, DNS/control-plane details, and protected diagnostics outside browser, schema, core persistence, delivery bodies, and public logs."
   ],
   "threats": [
     {
@@ -1711,6 +1762,66 @@
         "tests/e2e/accessibility.spec.ts",
         "docs/ai-authoring-and-semantic-search.md",
         "docs/adr/0021-reviewed-ai-authoring-and-semantic-search.md"
+      ]
+    },
+    {
+      "id": "THREAT-0035",
+      "title": "Regional scope bleed, stale replica publication, cache confusion, split brain, or unsafe failover",
+      "stride": [
+        "Spoofing",
+        "Tampering",
+        "Repudiation",
+        "Information Disclosure",
+        "Denial of Service",
+        "Elevation of Privilege"
+      ],
+      "scenario": "A caller selects an unauthorized region; a read adapter returns draft, stale, duplicate, wrong-type, wrong-slug, wrong-scope, wrong-topology, future, or fabricated residency/cache evidence; a CDN shares a response without complete partitioning; an operator bypasses residency, backup, RPO, independent approval, expiry, or current-version checks; a provider repeats or ambiguously completes promotion; both regions remain writable; or raw replication positions, credentials, topology, or provider diagnostics escape into public bodies, headers, caches, logs, or persisted state.",
+      "actors": ["ACTOR-001", "ACTOR-003", "ACTOR-004", "ACTOR-007", "ACTOR-008"],
+      "assets": [
+        "ASSET-002",
+        "ASSET-003",
+        "ASSET-004",
+        "ASSET-009",
+        "ASSET-010",
+        "ASSET-012",
+        "ASSET-014",
+        "ASSET-023"
+      ],
+      "boundaries": [
+        "BOUNDARY-001",
+        "BOUNDARY-002",
+        "BOUNDARY-003",
+        "BOUNDARY-004",
+        "BOUNDARY-006",
+        "BOUNDARY-011",
+        "BOUNDARY-018"
+      ],
+      "likelihood": 4,
+      "impact": 5,
+      "risk": 20,
+      "response": "mitigate",
+      "owner": "Platform, operations, security, and delivery owner",
+      "mitigations": [
+        "Derive complete tenant scope and local deployment region at the trusted server boundary; never accept caller-selected routing; expose only a published-content reader; validate every returned item for complete/base scope, published perspective and revision, requested type/slug, uniqueness, and bounded counts.",
+        "Validate exact configured adapter, served region, replica role, topology version, observation time, bounded lag, opaque watermark, residency reference, and complete cache partition evidence; default to the strong primary, require explicit bounded-staleness and failure policy, and fall back to private caching whenever shared-cache attestation is incomplete.",
+        "Persist one private complete-scope optimistic topology document with distinct read/manage/failover permissions, bounded regions/history, disabled default, explicit single active control, current residency checks, and no active-operation policy replacement.",
+        "Require fresh verified backup evidence and adapter readiness; planned switchovers must be caught up with zero declared loss, while emergency failover requires a nonzero RPO that covers observed loss and an explicit data-loss acceptance.",
+        "Bind an expiring preflight digest to exact scope, topology, backup, readiness, RPO/RTO, reason, and target; require a different recent human approver; persist executing before provider effects; use the request UUID as an idempotency key; and retain uncertain outcomes as ambiguous for explicit reconciliation.",
+        "Accept success only when the approved adapter/result matches exact scope/request/topology and proves the source non-writable and target writable; then increment topology and reset delivery to primary-only. Strictly validate adapter evidence, replace failures with generic stable errors, hash watermarks, and retain no raw provider diagnostics or positions."
+      ],
+      "verification": [
+        "packages/schema/test/regional.test.ts",
+        "packages/core/test/regional-repository.test.ts",
+        "packages/core/test/regional-service.test.ts",
+        "packages/core/test/postgres-conformance.test.ts",
+        "apps/api/test/regional.test.ts",
+        "apps/api/test/database-recovery.test.ts",
+        "apps/api/test/postgres-server.test.ts",
+        "packages/client/test/regional-client.test.ts",
+        "apps/studio/test/App.test.tsx",
+        "tests/e2e/accessibility.spec.ts",
+        "docs/regional-delivery-and-failover.md",
+        "docs/adr/0022-regional-delivery-and-failover.md"
       ]
     }
   ],

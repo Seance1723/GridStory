@@ -8,6 +8,7 @@ import {
 } from '@gridstory/schema';
 import { ConflictError, NotFoundError } from './errors.js';
 import type { ContentService } from './content-service.js';
+import type { PublishedContentReader } from './types.js';
 
 export type ContentRouteResolution =
   | { kind: 'content'; path: string; entry: ContentEntry }
@@ -27,7 +28,11 @@ export class ContentRoutingService {
     this.#redirects = new RedirectResolver(redirects);
   }
 
-  async resolve(scope: ContentScope, inputPath: string): Promise<ContentRouteResolution> {
+  async resolve(
+    scope: ContentScope,
+    inputPath: string,
+    publishedReader?: PublishedContentReader,
+  ): Promise<ContentRouteResolution> {
     const path = normalizeRoutePath(inputPath);
     const redirect = this.#redirects.resolve(path);
     if (redirect) {
@@ -37,11 +42,13 @@ export class ContentRoutingService {
     const matches: ContentEntry[] = [];
     for (const schema of this.#contentService.getSchemas()) {
       if (!schema.route) continue;
-      const entries = await this.#contentService.list({
-        scope,
-        contentType: schema.id,
-        perspective: 'published',
-      });
+      const entries = publishedReader
+        ? await publishedReader.list({ scope, contentType: schema.id, perspective: 'published' })
+        : await this.#contentService.list({
+            scope,
+            contentType: schema.id,
+            perspective: 'published',
+          });
       for (const entry of entries) {
         if (buildContentRoute(schema, entry.data) === path) matches.push(entry);
       }

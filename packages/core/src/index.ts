@@ -36,6 +36,8 @@ export * from './plugin-service.js';
 export * from './portability-service.js';
 export * from './postgres-repository.js';
 export * from './preview-service.js';
+export * from './regional-repository.js';
+export * from './regional-service.js';
 export * from './release-repository.js';
 export * from './release-service.js';
 export * from './routing-service.js';

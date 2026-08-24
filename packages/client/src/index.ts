@@ -99,6 +99,11 @@ import type {
   Release,
   ReleaseInput,
   ReleasePreview,
+  RegionalDocument,
+  RegionalExpectedVersionInput,
+  RegionalFailoverApprovalInput,
+  RegionalFailoverPreflightInput,
+  RegionalPolicyInput,
   RequestContext,
   ResidencyStatus,
   ResolvedComponentManifest,
@@ -2016,6 +2021,68 @@ export class GridStoryClient {
     });
   }
 
+  getRegionalTopology(signal?: AbortSignal): Promise<RegionalDocument> {
+    return this.#request('/api/v1/regional', { ...(signal ? { signal } : {}) });
+  }
+
+  updateRegionalPolicy(
+    input: RegionalPolicyInput,
+    signal?: AbortSignal,
+  ): Promise<RegionalDocument> {
+    return this.#request('/api/v1/regional/policy', {
+      method: 'PUT',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  preflightRegionalFailover(
+    input: RegionalFailoverPreflightInput,
+    signal?: AbortSignal,
+  ): Promise<RegionalDocument> {
+    return this.#request('/api/v1/regional/failover/preflight', {
+      method: 'POST',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  approveRegionalFailover(
+    planId: string,
+    input: RegionalFailoverApprovalInput,
+    signal?: AbortSignal,
+  ): Promise<RegionalDocument> {
+    return this.#request(`/api/v1/regional/failover/${encodeURIComponent(planId)}/approve`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  executeRegionalFailover(
+    planId: string,
+    input: RegionalExpectedVersionInput,
+    signal?: AbortSignal,
+  ): Promise<RegionalDocument> {
+    return this.#request(`/api/v1/regional/failover/${encodeURIComponent(planId)}/execute`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  reconcileRegionalFailover(
+    planId: string,
+    input: RegionalExpectedVersionInput,
+    signal?: AbortSignal,
+  ): Promise<RegionalDocument> {
+    return this.#request(`/api/v1/regional/failover/${encodeURIComponent(planId)}/reconcile`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
   getContent(
     id: string,
     options: { perspective?: ContentPerspective; signal?: AbortSignal } = {},
@@ -2386,6 +2453,11 @@ export type {
   Release,
   ReleaseInput,
   ReleasePreview,
+  RegionalDocument,
+  RegionalExpectedVersionInput,
+  RegionalFailoverApprovalInput,
+  RegionalFailoverPreflightInput,
+  RegionalPolicyInput,
   ResidencyStatus,
   ResolvedComponentManifest,
   SchemaDriftReport,

@@ -191,8 +191,26 @@ function runPostgresRecoveryDrill(containerName) {
     if (restoredAiAuthoring.stdout.trim() !== '1') {
       throw new Error('PostgreSQL restore did not recover the reviewed AI authoring policy.');
     }
+    const restoredRegional = run(
+      'docker',
+      [
+        'exec',
+        containerName,
+        'psql',
+        '--username=gridstory',
+        `--dbname=${targetDatabase}`,
+        '--tuples-only',
+        '--no-align',
+        '--command',
+        "SELECT count(*) FROM gridstory.gridstory_regional_documents WHERE tenant_id = 'postgres-tenant' AND payload->>'state' = 'enabled' AND payload->>'activeControlRegion' = 'local' AND payload->'readPolicy'->>'mode' = 'primary-only';",
+      ],
+      { capture: true },
+    );
+    if (restoredRegional.stdout.trim() !== '1') {
+      throw new Error('PostgreSQL restore did not recover the regional topology policy.');
+    }
     console.log(
-      'PostgreSQL logical backup/restore drill passed (published content, targeting, experiment lifecycle, analytics aggregate, governed AI policy, and reviewed AI authoring policy recovered).',
+      'PostgreSQL logical backup/restore drill passed (published content, targeting, experiment lifecycle, analytics aggregate, governed AI policy, reviewed AI authoring policy, and regional topology recovered).',
     );
   } finally {
     run(

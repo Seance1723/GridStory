@@ -41,6 +41,9 @@ import {
   type RelatedContentRecord,
   type Release,
   type ReleasePreview,
+  type RegionalDocument,
+  type RegionalFailoverPreflightInput,
+  type RegionalPolicyInput,
   type SearchIndexStatus,
   type SearchResponse,
   type TaxonomyDefinition,
@@ -267,6 +270,35 @@ const defaultAiAuthoringPolicy = JSON.stringify(
     ],
     semantic: { enabled: false },
   } satisfies Omit<AiAuthoringPolicyInput, 'expectedVersion'>,
+  null,
+  2,
+);
+
+const defaultRegionalPolicy = JSON.stringify(
+  {
+    state: 'disabled',
+    activeControlRegion: 'local',
+    readPolicy: { mode: 'primary-only', maximumLagMs: 0, failureMode: 'primary' },
+    readRegions: [],
+  } satisfies Omit<RegionalPolicyInput, 'expectedVersion'>,
+  null,
+  2,
+);
+
+const defaultRegionalFailover = JSON.stringify(
+  {
+    requestId: '018daf23-89b3-7cf8-a4f1-94064c96df90',
+    targetRegion: 'standby-region',
+    mode: 'planned',
+    reason: 'Planned operator-controlled regional switchover.',
+    expectedRpoSeconds: 0,
+    expectedRtoSeconds: 300,
+    backup: {
+      reference: 'backup://replace-with-verified-evidence',
+      sha256: '0'.repeat(64),
+      verifiedAt: new Date().toISOString(),
+    },
+  } satisfies Omit<RegionalFailoverPreflightInput, 'expectedVersion'>,
   null,
   2,
 );
@@ -687,6 +719,14 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   const [aiSemanticText, setAiSemanticText] = useState('');
   const [aiSemanticResult, setAiSemanticResult] = useState<AiSemanticSearchResponse | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
+  const [regional, setRegional] = useState<RegionalDocument | null>(null);
+  const [regionalPolicyJson, setRegionalPolicyJson] = useState(defaultRegionalPolicy);
+  const [regionalFailoverJson, setRegionalFailoverJson] = useState(defaultRegionalFailover);
+  const [regionalApprovalReason, setRegionalApprovalReason] = useState(
+    'Readiness, backup, RPO, and RTO evidence independently reviewed.',
+  );
+  const [regionalAcceptDataLoss, setRegionalAcceptDataLoss] = useState(false);
+  const [regionalBusy, setRegionalBusy] = useState(false);
   const [identitySnapshot, setIdentitySnapshot] = useState<IdentitySnapshot | null>(null);
   const [identityProviderId, setIdentityProviderId] = useState('');
   const [identityProviderIssuer, setIdentityProviderIssuer] = useState('');
@@ -1972,6 +2012,137 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
       setAnalyticsReport(analytics);
     } catch (error) {
       setNotice({ tone: 'error', message: messageFrom(error) });
+    }
+  };
+  const applyRegional = (document: RegionalDocument, synchronizePolicy = false) => {
+    setRegional(document);
+    if (synchronizePolicy) {
+      setRegionalPolicyJson(
+        JSON.stringify(
+          {
+            state: document.state,
+            activeControlRegion: document.activeControlRegion,
+            ...(document.activeControlEvidenceReference
+              ? { activeControlEvidenceReference: document.activeControlEvidenceReference }
+              : {}),
+            readPolicy: document.readPolicy,
+            readRegions: document.readRegions,
+            ...(document.failoverAdapter ? { failoverAdapter: document.failoverAdapter } : {}),
+          } satisfies Omit<RegionalPolicyInput, 'expectedVersion'>,
+          null,
+          2,
+        ),
+      );
+    }
+  };
+  const refreshRegional = async (synchronizePolicy = false) => {
+    applyRegional(await client.getRegionalTopology(), synchronizePolicy);
+  };
+  const toggleRegional = async () => {
+    if (regional) {
+      setRegional(null);
+      return;
+    }
+    setRegionalBusy(true);
+    try {
+      await refreshRegional(true);
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    } finally {
+      setRegionalBusy(false);
+    }
+  };
+  const saveRegionalPolicy = async () => {
+    if (!regional) return;
+    setRegionalBusy(true);
+    try {
+      const policy = JSON.parse(regionalPolicyJson) as Omit<RegionalPolicyInput, 'expectedVersion'>;
+      applyRegional(
+        await client.updateRegionalPolicy({ ...policy, expectedVersion: regional.version }),
+        true,
+      );
+      setNotice({ tone: 'success', message: 'Regional topology policy saved.' });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    } finally {
+      setRegionalBusy(false);
+    }
+  };
+  const preflightRegionalFailover = async () => {
+    if (!regional) return;
+    setRegionalBusy(true);
+    try {
+      const input = JSON.parse(regionalFailoverJson) as Omit<
+        RegionalFailoverPreflightInput,
+        'expectedVersion'
+      >;
+      applyRegional(
+        await client.preflightRegionalFailover({ ...input, expectedVersion: regional.version }),
+      );
+      setNotice({
+        tone: 'info',
+        message:
+          'Failover preflight recorded. A different recently authenticated human must approve it.',
+      });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    } finally {
+      setRegionalBusy(false);
+    }
+  };
+  const approveRegionalFailover = async (planId: string, digest: string) => {
+    if (!regional) return;
+    setRegionalBusy(true);
+    try {
+      applyRegional(
+        await client.approveRegionalFailover(planId, {
+          expectedVersion: regional.version,
+          digest,
+          reason: regionalApprovalReason,
+          acceptDataLoss: regionalAcceptDataLoss,
+        }),
+      );
+      setNotice({ tone: 'success', message: 'Failover plan independently approved.' });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    } finally {
+      setRegionalBusy(false);
+    }
+  };
+  const executeRegionalFailover = async (planId: string) => {
+    if (!regional) return;
+    setRegionalBusy(true);
+    try {
+      applyRegional(
+        await client.executeRegionalFailover(planId, { expectedVersion: regional.version }),
+        true,
+      );
+      setNotice({
+        tone: 'success',
+        message:
+          'Failover adapter reported one writable target; regional reads were reset to primary-only.',
+      });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+      await refreshRegional().catch(() => undefined);
+    } finally {
+      setRegionalBusy(false);
+    }
+  };
+  const reconcileRegionalFailover = async (planId: string) => {
+    if (!regional) return;
+    setRegionalBusy(true);
+    try {
+      applyRegional(
+        await client.reconcileRegionalFailover(planId, { expectedVersion: regional.version }),
+        true,
+      );
+      setNotice({ tone: 'success', message: 'Ambiguous failover state reconciled.' });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+      await refreshRegional().catch(() => undefined);
+    } finally {
+      setRegionalBusy(false);
     }
   };
   const applyAiGateway = (document: AiGatewayDocument, synchronizePolicy = false) => {
@@ -3278,6 +3449,15 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
           <button
             type="button"
             className="button button--secondary"
+            onClick={() => void toggleRegional()}
+            aria-expanded={regional !== null}
+            disabled={regionalBusy}
+          >
+            Regions
+          </button>{' '}
+          <button
+            type="button"
+            className="button button--secondary"
             onClick={() => void toggleComponentGovernance()}
             aria-expanded={componentGovernance !== null}
           >
@@ -4109,6 +4289,153 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               </dd>
             </div>
           </dl>
+        </section>
+      ) : null}
+      {regional ? (
+        <section className="regional-panel" aria-label="Regional delivery and failover controls">
+          <div className="section-heading">
+            <div>
+              <span className="kicker">Single-writer regional control</span>
+              <h2>Regional reads, consistency, and failover</h2>
+              <p>
+                {regional.state} · policy r{regional.version} · topology r{regional.topologyVersion}{' '}
+                · active control {regional.activeControlRegion} · reads {regional.readPolicy.mode}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="button button--secondary"
+              onClick={() => void refreshRegional(true)}
+              disabled={regionalBusy}
+            >
+              Refresh regional state
+            </button>
+          </div>
+          <p className="regional-panel__warning" role="note">
+            GridStory validates provider evidence but does not provision replicas, databases, DNS,
+            traffic, or backups. Planned switchovers require caught-up zero-loss evidence; emergency
+            failover requires explicit acceptance of the observed nonzero loss bound.
+          </p>
+          <div className="regional-panel__grid">
+            <fieldset>
+              <legend>Topology and published-read policy</legend>
+              <label>
+                <span>Policy JSON</span>
+                <textarea
+                  value={regionalPolicyJson}
+                  onChange={(event) => setRegionalPolicyJson(event.target.value)}
+                />
+              </label>
+              <button
+                type="button"
+                className="button button--secondary"
+                onClick={() => void saveRegionalPolicy()}
+                disabled={regionalBusy}
+              >
+                Save topology policy
+              </button>
+            </fieldset>
+            <fieldset>
+              <legend>Expiring failover preflight</legend>
+              <label>
+                <span>Preflight JSON</span>
+                <textarea
+                  value={regionalFailoverJson}
+                  onChange={(event) => setRegionalFailoverJson(event.target.value)}
+                />
+              </label>
+              <button
+                type="button"
+                className="button button--secondary"
+                onClick={() => void preflightRegionalFailover()}
+                disabled={regionalBusy || regional.state !== 'enabled'}
+              >
+                Record provider preflight
+              </button>
+            </fieldset>
+            <fieldset>
+              <legend>Independent approval</legend>
+              <label>
+                <span>Review reason</span>
+                <textarea
+                  value={regionalApprovalReason}
+                  onChange={(event) => setRegionalApprovalReason(event.target.value)}
+                />
+              </label>
+              <label className="regional-panel__checkbox">
+                <input
+                  type="checkbox"
+                  checked={regionalAcceptDataLoss}
+                  onChange={(event) => setRegionalAcceptDataLoss(event.target.checked)}
+                />
+                <span>Accept the emergency plan's observed nonzero data-loss bound</span>
+              </label>
+              <p>
+                Approval must come from a different recently reauthenticated human. Execution is
+                idempotent and ambiguous outcomes must be reconciled before another transition.
+              </p>
+            </fieldset>
+          </div>
+          <div className="regional-panel__operations" aria-live="polite">
+            <h3>Bounded operation history</h3>
+            {regional.operations
+              .slice()
+              .reverse()
+              .slice(0, 10)
+              .map((operation) => (
+                <article key={operation.id}>
+                  <div>
+                    <strong>
+                      {operation.mode} · {operation.sourceRegion} → {operation.targetRegion}
+                    </strong>
+                    <span>
+                      {operation.state} · RPO {operation.expectedRpoSeconds}s · RTO{' '}
+                      {operation.expectedRtoSeconds}s · expires {operation.expiresAt}
+                    </span>
+                    <small>
+                      Readiness {operation.readiness.ready ? 'ready' : 'blocked'} · lag{' '}
+                      {operation.readiness.replicationLagMs}ms · estimated loss{' '}
+                      {operation.readiness.estimatedDataLossMs}ms
+                    </small>
+                  </div>
+                  <div className="regional-panel__actions">
+                    {operation.state === 'preview' ? (
+                      <button
+                        type="button"
+                        className="button button--secondary"
+                        onClick={() => void approveRegionalFailover(operation.id, operation.digest)}
+                        disabled={regionalBusy || !regionalApprovalReason.trim()}
+                      >
+                        Approve as second human
+                      </button>
+                    ) : null}
+                    {operation.state === 'approved' ? (
+                      <button
+                        type="button"
+                        className="button button--danger"
+                        onClick={() => void executeRegionalFailover(operation.id)}
+                        disabled={regionalBusy}
+                      >
+                        Execute approved transition
+                      </button>
+                    ) : null}
+                    {operation.state === 'executing' || operation.state === 'ambiguous' ? (
+                      <button
+                        type="button"
+                        className="button button--danger"
+                        onClick={() => void reconcileRegionalFailover(operation.id)}
+                        disabled={regionalBusy}
+                      >
+                        Reconcile provider state
+                      </button>
+                    ) : null}
+                  </div>
+                </article>
+              ))}
+            {regional.operations.length === 0 ? (
+              <p className="empty-copy">No failover preflight has been retained.</p>
+            ) : null}
+          </div>
         </section>
       ) : null}
       {aiGateway ? (

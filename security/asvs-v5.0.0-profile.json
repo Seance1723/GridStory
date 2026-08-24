@@ -1121,6 +1121,55 @@
         "tests/e2e/accessibility.spec.ts"
       ],
       "taskIds": ["M7-005"]
+    },
+    {
+      "id": "GS-SEC-039",
+      "title": "Tenant-safe regional published delivery and reviewed single-writer failover",
+      "status": "verified",
+      "owner": "Platform, operations, security, and delivery owner",
+      "statement": "Regional policy, evidence, plans, approvals, results, and delivery reads SHALL be completely tenant scoped, bounded, optimistic, private by default, disabled by default, and authorized through distinct read/manage/failover actions; trusted deployment composition SHALL select the local region and inject least-authority published-read and failover adapters; every content result and adapter attestation SHALL match exact scope, perspective, revision, adapter, region, topology, time, lag, residency, and cache partition requirements; shared caching SHALL require complete partition evidence; switchovers SHALL require current residency, verified backup, zero-loss planned readiness or explicit bounded emergency loss, an expiring digest, a different recently reauthenticated human approver, persisted execution, stable idempotency, ambiguous reconciliation, and a success result proving only the target writable before topology advances and delivery resets to primary-only; adapter diagnostics, credentials, raw replication positions, preview credentials, and drafts SHALL NOT enter public bodies, headers, caches, logs, or persisted regional state.",
+      "asvsRefs": [
+        "v5.0.0-2.2.2",
+        "v5.0.0-8.1.1",
+        "v5.0.0-11.2.1",
+        "v5.0.0-14.1.1",
+        "v5.0.0-14.2.1",
+        "v5.0.0-16.5.3"
+      ],
+      "threatRefs": [
+        "THREAT-0001",
+        "THREAT-0004",
+        "THREAT-0018",
+        "THREAT-0019",
+        "THREAT-0022",
+        "THREAT-0024",
+        "THREAT-0035"
+      ],
+      "evidence": [
+        "packages/schema/src/regional.ts",
+        "packages/core/src/regional-repository.ts",
+        "packages/core/src/regional-service.ts",
+        "packages/core/src/authorization.ts",
+        "apps/api/src/regional-routes.ts",
+        "apps/api/src/server.ts",
+        "packages/client/src/index.ts",
+        "apps/studio/src/App.tsx",
+        "docs/regional-delivery-and-failover.md",
+        "docs/adr/0022-regional-delivery-and-failover.md"
+      ],
+      "verification": [
+        "packages/schema/test/regional.test.ts",
+        "packages/core/test/regional-repository.test.ts",
+        "packages/core/test/regional-service.test.ts",
+        "packages/core/test/postgres-conformance.test.ts",
+        "apps/api/test/regional.test.ts",
+        "apps/api/test/database-recovery.test.ts",
+        "apps/api/test/postgres-server.test.ts",
+        "packages/client/test/regional-client.test.ts",
+        "apps/studio/test/App.test.tsx",
+        "tests/e2e/accessibility.spec.ts"
+      ],
+      "taskIds": ["M8-001"]
     }
   ]
 }

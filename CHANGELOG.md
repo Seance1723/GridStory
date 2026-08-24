@@ -8,6 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Added provider-neutral regional published delivery with strict topology/read evidence, explicit strong or bounded-staleness policy, trusted-local least-authority readers, response-bound cache partitions, digest-safe consistency headers, exact scope/revision/result validation, residency gating, and explicit primary fallback while remaining disabled and strong-primary by default (M8-001).
+- Added complete-scope optimistic memory/SQLite/PostgreSQL regional persistence; distinct private read/manage/failover authorization; typed REST/client controls; a neutral Studio Regions panel; planned zero-loss and accepted bounded-loss emergency preflight; expiring digest-bound different-human approval; persisted idempotent execution; ambiguous reconciliation; single-writer result proof; recovery/PostgreSQL/browser coverage; the regional operator guide; accepted ADR 0022; and verified `THREAT-0035`/`GS-SEC-039` evidence (M8-001).
 - Added strict fixed-contract AI authoring schemas, bounded actions and deterministic evaluation, complete-scope optimistic memory/SQLite/PostgreSQL proposal and review persistence, exact prompt/model/source/target provenance, and a separate human-only one-time `ai.review` transition that never writes content (M7-005).
 - Added injected tenant-aware semantic adapter contracts, positive redacted text/slug indexing through existing identifier-only search jobs, private fail-closed current-revision search, typed REST/client/Studio controls, visible unsaved approved-value handoff, recovery/PostgreSQL/browser coverage, operator guidance, accepted ADR-0021, and verified `THREAT-0034`/`GS-SEC-038` evidence (M7-005).
 - Added strict governed-AI contracts; complete-scope optimistic memory, SQLite, and PostgreSQL policy persistence; immutable active prompts; explicit scoped field retrieval; deterministic outbound/inbound redaction; conservative atomic budgets; metadata-only receipts; generic provider failures; and settlement-safe kill switches (M7-004).
@@ -17,6 +19,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- Accepted the M8-001 single-writer regional-delivery boundary in ADR 0022: only published reads may use evidence-bearing regional adapters, while drafts, preview, control reads, and writes remain strong-primary and failover remains a reviewed external-adapter operation.
 - Accepted the M7-005 boundary for fixed-contract AI field suggestions, provenance, deterministic evaluation, human-only review, unsaved-editor handoff, and private allowlisted semantic search through derived adapter indexes.
 - Recorded the accepted M7-004 governed AI gateway boundary: injected text-only providers, immutable active prompts, explicit allowlisted scoped retrieval, conservative usage/cost reservations, deterministic redaction, generic external failures, and rechecked kill switches without tools, raw histories, automatic fallback, or content mutation.
 - Recorded the accepted M7-003 analytics boundary: anonymous consent-gated published content/component events, durable provider-neutral adapter fan-out, bounded complete-scope aggregates, and non-authoritative release annotations without identity, raw-event warehousing, or provider credentials in core.
@@ -26,6 +29,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Corrected regional schema initialization, hostile adapter error normalization, draft-result rejection, localized fallback scope, exact response-bound cache attestation, lint/browser fixtures, Windows worker/Docker verification paths, and stale README/security narratives found during M8-001; all defects BUG-0341 through BUG-0352 are resolved.
 - Restored the AI workbench to the established neutral Studio page/content palette and prevented its broad supporting-text rule from overriding safety-warning colors; browser regressions now pin the computed surface, copy, input, boundary, and warning colors (BUG-0340, STUDIO-008).
 - Preserved exact immutable AI action/evaluation provenance without retaining evaluation-failed suggested values, rebuilt the current package boundary for API verification, corrected Studio lint/accessibility and security-document drift, and used supported Windows formatting, child-process, config-inventory, and network verification paths (BUG-0332 through BUG-0339, M7-005).
 - Reran the focused schema suite through the approved Windows child-process path after the restricted sandbox denied Vitest workers, then corrected the recovery inventory to use exact Windows paths (BUG-0330, BUG-0331).

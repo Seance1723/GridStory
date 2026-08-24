@@ -80,9 +80,14 @@ import {
   PostgresMigrationRepository,
   PostgresPersonalizationRepository,
   PostgresPluginRepository,
+  PostgresRegionalRepository,
   PostgresReleaseRepository,
   PostgresWorkflowRepository,
   PreviewSessionService,
+  type RegionalFailoverAdapter,
+  type RegionalReadAdapter,
+  type RegionalRepository,
+  RegionalService,
   parseLogicalArchive,
   type ReleaseRepository,
   ReleaseService,
@@ -101,6 +106,7 @@ import {
   SqliteMigrationRepository,
   SqlitePersonalizationRepository,
   SqlitePluginRepository,
+  SqliteRegionalRepository,
   SqliteReleaseRepository,
   SqliteWorkflowRepository,
   serializeAuditExport,
@@ -130,6 +136,7 @@ import {
   pluginCapabilityNameSchema,
   previewMessageSchema,
   type RedirectDefinition,
+  type RegionalConsistencyIndicator,
   type ReleaseInput,
   releaseInputSchema,
   resourceLimits,
@@ -166,6 +173,7 @@ import { registerMarketplaceRoutes } from './marketplace-routes.js';
 import { registerMigrationRoutes } from './migration-routes.js';
 import type { GridStoryObservability } from './observability.js';
 import { registerPersonalizationRoutes } from './personalization-routes.js';
+import { registerRegionalRoutes } from './regional-routes.js';
 import { authorize, contentScope, requestContext } from './request-context.js';
 
 export interface BuildServerOptions {
@@ -236,6 +244,12 @@ export interface BuildServerOptions {
     authoringRepository?: AiAuthoringRepository;
     providers?: AiProviderAdapter[];
     semanticAdapters?: AiSemanticAdapter[];
+  };
+  regional?: {
+    repository?: RegionalRepository;
+    localRegion?: string;
+    readAdapters?: RegionalReadAdapter[];
+    failoverAdapters?: RegionalFailoverAdapter[];
   };
 }
 
@@ -374,6 +388,25 @@ function setCacheTags(
   );
 }
 
+function setRegionalConsistency(
+  reply: FastifyReply,
+  indicator: RegionalConsistencyIndicator,
+): void {
+  reply.header('x-gridstory-served-region', indicator.servedRegion);
+  reply.header('x-gridstory-region-role', indicator.role);
+  reply.header('x-gridstory-consistency', indicator.consistency);
+  reply.header('x-gridstory-observed-at', indicator.observedAt);
+  reply.header('x-gridstory-replication-lag-ms', String(indicator.lagMs));
+  reply.header('x-gridstory-topology-version', String(indicator.topologyVersion));
+  reply.header('x-gridstory-content-revision', indicator.contentRevision);
+  reply.header('x-gridstory-cache-mode', indicator.cacheMode);
+  reply.header('x-gridstory-fallback-used', String(indicator.fallbackUsed));
+  if (indicator.watermarkDigest) {
+    reply.header('x-gridstory-watermark-digest', indicator.watermarkDigest);
+  }
+  if (indicator.cacheMode === 'private') reply.header('cache-control', 'private, no-store');
+}
+
 function bodyOf(request: FastifyRequest): RequestBody {
   if (typeof request.body !== 'object' || request.body === null || Array.isArray(request.body)) {
     throw new GridStoryError('A JSON request body is required.', 'invalid_request', 400);
@@ -487,6 +520,7 @@ export async function buildServer({
   personalization: personalizationOptions,
   analytics: analyticsOptions,
   ai: aiOptions,
+  regional: regionalOptions,
 }: BuildServerOptions): Promise<FastifyInstance> {
   if (!databaseUrl && databasePath !== ':memory:') {
     mkdirSync(dirname(resolve(databasePath)), { recursive: true });
@@ -560,6 +594,11 @@ export async function buildServer({
     (databaseUrl
       ? new PostgresAiAuthoringRepository({ connectionString: databaseUrl })
       : new SqliteAiAuthoringRepository({ filename: databasePath }));
+  const resolvedRegionalRepository: RegionalRepository =
+    regionalOptions?.repository ??
+    (databaseUrl
+      ? new PostgresRegionalRepository({ connectionString: databaseUrl })
+      : new SqliteRegionalRepository({ filename: databasePath }));
   const governance = new GovernanceService({
     repository: resolvedGovernanceRepository,
     ...(governanceOptions?.keyAdapter ? { keyAdapter: governanceOptions.keyAdapter } : {}),
@@ -567,6 +606,14 @@ export async function buildServer({
       ? { placementAdapter: governanceOptions.placementAdapter }
       : {}),
     ...(resolvedTenantTelemetry ? { telemetry: resolvedTenantTelemetry } : {}),
+  });
+  const regional = new RegionalService({
+    repository: resolvedRegionalRepository,
+    primary: repository,
+    localRegion: regionalOptions?.localRegion ?? 'local',
+    readAdapters: regionalOptions?.readAdapters ?? [],
+    failoverAdapters: regionalOptions?.failoverAdapters ?? [],
+    residency: governance,
   });
   const identity = new EnterpriseIdentityService({ repository: resolvedIdentityRepository });
   const federationAdapters = createFederationAdapters(
@@ -791,6 +838,18 @@ export async function buildServer({
       'x-gridstory-principal-type',
       'x-gridstory-roles',
     ],
+    exposedHeaders: [
+      'x-gridstory-served-region',
+      'x-gridstory-region-role',
+      'x-gridstory-consistency',
+      'x-gridstory-observed-at',
+      'x-gridstory-replication-lag-ms',
+      'x-gridstory-topology-version',
+      'x-gridstory-content-revision',
+      'x-gridstory-cache-mode',
+      'x-gridstory-fallback-used',
+      'x-gridstory-watermark-digest',
+    ],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     credentials: true,
   });
@@ -813,6 +872,7 @@ export async function buildServer({
   await registerExperimentRoutes(server, { service: experiments, policy });
   await registerAnalyticsRoutes(server, { service: analytics, policy });
   await registerAiRoutes(server, { service: ai, authoring, content: service, policy });
+  await registerRegionalRoutes(server, { service: regional, policy });
 
   server.addHook('onClose', async () => {
     await repository.close();
@@ -829,10 +889,13 @@ export async function buildServer({
     await resolvedAnalyticsRepository.close();
     await resolvedAiGatewayRepository.close();
     await resolvedAiAuthoringRepository.close();
+    await resolvedRegionalRepository.close();
   });
   server.addHook('onSend', async (request, reply, payload) => {
     if (request.url.startsWith('/api/v1/delivery/')) {
-      reply.header('cache-control', 'public, max-age=0, s-maxage=60, stale-while-revalidate=300');
+      if (!reply.hasHeader('cache-control')) {
+        reply.header('cache-control', 'public, max-age=0, s-maxage=60, stale-while-revalidate=300');
+      }
       reply.header(
         'vary',
         [
@@ -2249,41 +2312,56 @@ export async function buildServer({
       kind: 'delivery',
       contentType: params.contentType,
     });
-    const entry = await service.getBySlug({
-      scope: contentScope(context),
+    const scope = contentScope(context);
+    const regionalRead = await regional.openRead(scope);
+    const entry = await regionalRead.reader.getBySlug({
+      scope,
       contentType: params.contentType,
       slug: params.slug,
       perspective: 'published',
     });
+    if (!entry) throw new GridStoryError('Published content was not found.', 'not_found', 404);
     setCacheTags(reply, [entry]);
+    if (regionalRead.managed) setRegionalConsistency(reply, regionalRead.indicator([entry]));
     return entry;
   });
 
   server.get('/api/v1/delivery/localized/:translationGroupId', async (request, reply) => {
     const params = request.params as { translationGroupId: string };
     const context = requestContext(request, 'published', true);
+    const scope = contentScope(context);
+    const regionalRead = await regional.openRead(scope);
     const result = await localization.resolve({
-      scope: contentScope(context),
+      scope,
       translationGroupId: params.translationGroupId,
       perspective: 'published',
+      publishedReader: regionalRead.reader,
     });
     authorize(policy, context, GridStoryActions.deliveryRead, {
       kind: 'delivery',
       contentType: result.entry.contentType,
     });
     setCacheTags(reply, [result.entry]);
+    if (regionalRead.managed) {
+      setRegionalConsistency(reply, regionalRead.indicator([result.entry]));
+    }
     return result;
   });
 
   server.get('/api/v1/delivery/localized-routes/*', async (request, reply) => {
     const params = request.params as { '*': string };
     const context = requestContext(request, 'published', true);
-    const result = await localization.resolveRoute(contentScope(context), `/${params['*']}`);
+    const scope = contentScope(context);
+    const regionalRead = await regional.openRead(scope);
+    const result = await localization.resolveRoute(scope, `/${params['*']}`, regionalRead.reader);
     authorize(policy, context, GridStoryActions.deliveryRead, {
       kind: 'delivery',
       contentType: result.entry.contentType,
     });
     setCacheTags(reply, [result.entry]);
+    if (regionalRead.managed) {
+      setRegionalConsistency(reply, regionalRead.indicator([result.entry]));
+    }
     return result;
   });
 
@@ -2294,8 +2372,11 @@ export async function buildServer({
       kind: 'delivery',
       ...(query.contentType ? { contentType: query.contentType } : {}),
     });
-    const result = await contentQueries.query(contentScope(context), query);
+    const scope = contentScope(context);
+    const regionalRead = await regional.openRead(scope);
+    const result = await contentQueries.query(scope, query, regionalRead.reader);
     setCacheTags(reply, result.nodes);
+    if (regionalRead.managed) setRegionalConsistency(reply, regionalRead.indicator(result.nodes));
     return result;
   });
 
@@ -2306,8 +2387,11 @@ export async function buildServer({
       kind: 'delivery',
       ...(query.contentType ? { contentType: query.contentType } : {}),
     });
-    const result = await contentQueries.query(contentScope(context), query);
+    const scope = contentScope(context);
+    const regionalRead = await regional.openRead(scope);
+    const result = await contentQueries.query(scope, query, regionalRead.reader);
     setCacheTags(reply, result.nodes);
+    if (regionalRead.managed) setRegionalConsistency(reply, regionalRead.indicator(result.nodes));
     return result;
   });
 
@@ -2315,11 +2399,16 @@ export async function buildServer({
     const params = request.params as { '*': string };
     const context = requestContext(request, 'published', true);
     authorize(policy, context, GridStoryActions.deliveryRead, { kind: 'delivery' });
-    const result = await routing.resolve(contentScope(context), `/${params['*']}`);
+    const scope = contentScope(context);
+    const regionalRead = await regional.openRead(scope);
+    const result = await routing.resolve(scope, `/${params['*']}`, regionalRead.reader);
     if (result.kind === 'redirect') {
       return reply.status(result.status).header('location', result.location).send();
     }
     setCacheTags(reply, [result.entry]);
+    if (regionalRead.managed) {
+      setRegionalConsistency(reply, regionalRead.indicator([result.entry]));
+    }
     return result.entry;
   });
 

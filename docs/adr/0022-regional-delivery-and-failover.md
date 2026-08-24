@@ -1,0 +1,65 @@
+# ADR 0022: Regional delivery uses explicit consistency evidence and operator-governed single-writer failover
+
+- Status: Accepted
+- Date: 2026-08-24
+- Task: M8-001
+
+## Context
+
+GridStory currently has complete tenant scope, immutable content revisions, private draft and preview paths, public published delivery, durable jobs, qualified SQLite/PostgreSQL persistence, provider-neutral adapters, and a governance residency policy with placement attestations. That residency boundary can reject disallowed write, export, erasure, and key-use placement, but it deliberately does not provision replicas, route regional reads, measure replication freshness, promote a database, change DNS, or provide multi-region failover.
+
+M8-001 asks for regional reads, multi-region control-plane options, failover, consistency indicators, and residency routing. Pretending that an application-level CMS can infer or guarantee a database provider's replication, quorum, backup, or traffic state would be unsafe. The smallest honest boundary is an explicit single-writer topology: trusted server composition injects regional read and failover adapters; GridStory authorizes and validates their evidence, keeps draft/control/write paths strong, exposes bounded consistency indicators, and records operator-governed recovery actions. Provisioning and provider truth remain external.
+
+## Prior-art comparison
+
+| Approach | Representative model | Fit and cost | Decision / deliberately skipped |
+|---|---|---|---|
+| Single primary with asynchronous regional published-read replicas | PostgreSQL streaming replication, Aurora Global Database, Cloudflare D1 read replication | Matches GridStory's immutable published revisions and provider-neutral composition, but replicas may be stale and failover loss depends on observed lag. | Selected, with explicit strong or bounded-staleness policy, adapter evidence, safe fallback rules, and no automatic promotion. |
+| Globally consistent distributed database | Google Spanner, CockroachDB multi-region | Can provide strong global semantics and declarative locality/survival goals, but would make core depend on one storage topology and materially change deployment and write-latency assumptions. | Supported only through adapters; no bundled database, DDL, quorum, or locality controller. |
+| Multi-writer active-active with selectable consistency | Azure Cosmos DB and similar systems | Broad availability and locality options, but introduces conflict resolution, provider-specific tokens, and consistency/RPO behavior far beyond the current repository contract. | Rejected for M8-001. GridStory remains single writer. |
+| CDN-only caching | Existing public delivery cache headers | Helps latency for immutable public responses, but does not prove origin residency, replica freshness, read-your-writes, or safe control-plane failover. | Retained for the existing local/primary mode. Regional mode defaults to private/no-store unless trusted composition proves a complete cache partition. |
+| Automatic health-check failover | Conventional load balancer/DNS automation | Fast, but health alone cannot prove replica readiness or prevent split brain and unintended recovery side effects. | Rejected. GridStory requires an expiring reviewed plan, readiness evidence, idempotent execution, and reconciliation. |
+| Keep only the existing residency attestation | GridStory M5-002 | Zero new surface, but cannot select or report a regional read, enforce staleness, or govern promotion. | Rejected because it does not satisfy M8-001. |
+
+## Decision
+
+GridStory will add one complete-scope, optimistic regional-delivery document, private/no-store and disabled by default. It declares bounded region identifiers, a single active control/write region, eligible published-read regions, an explicit `primary-only` or `bounded-staleness` read policy, maximum accepted lag, failure behavior, topology revision, and bounded operation history. It stores no database endpoint, credential, provider configuration, DNS record, replica position, or unbounded diagnostic payload.
+
+Trusted server composition supplies the local deployment region and injects two capability-limited adapters. A regional content reader exposes published read primitives only and returns the exact complete scope, served region/role, topology revision, content revision, observation time, finite lag, opaque bounded watermark, residency evidence, and cache-partition evidence. It has no write, draft, preview, workflow, job, identity, asset, or arbitrary repository method. A failover adapter exposes bounded preflight, idempotent execute, and reconcile operations; it owns provider-side database and traffic actions and returns sanitized readiness/result evidence rather than secrets or raw provider responses.
+
+All management, draft, preview, workflow, publication, identity, authorization, and repository writes remain on the configured primary and use existing strong semantics. Only published delivery entry, localized delivery, content query, and route-resolution reads may use a regional reader. `primary-only` always uses the ordinary repository path. `bounded-staleness` may use a configured eligible regional reader only when the adapter's complete-scope, region, topology, residency, revision, time, lag, watermark, and result shape pass validation. A caller cannot choose a region through an untrusted public header. No missing, stale, cross-scope, disallowed, non-finite, or contradictory evidence is silently accepted; the document chooses either explicit strong-primary fallback or a bounded unavailable response.
+
+Successful delivery exposes bounded consistency metadata: served region, primary/replica role, `strong` or `bounded-staleness`, observation time, lag, topology revision, content revision, and a digest-safe watermark. It does not expose endpoints, credentials, provider errors, internal topology, tenant identifiers, or draft state. Existing primary delivery remains shared-cacheable. Regional delivery is private/no-store by default; shared caching is enabled only when trusted composition returns an attested cache partition covering complete scope, served region, consistency mode, topology revision, and content revision. Preview and management responses remain private/no-store in every mode.
+
+Residency selection reuses the governance policy rather than creating a second source of truth. The content resource rule must admit both the selected read region and the active control region for the requested complete scope, and adapter placement evidence must match the selected topology revision. Residency mismatch fails closed; it cannot be waived by a delivery caller or by fallback.
+
+Failover is a separate operator workflow, never an automatic consequence of read health. An authorized human creates a short-lived preflight plan bound to the exact regional document version/topology, source and target regions, planned or emergency mode, reason, adapter readiness evidence, backup/runbook evidence, expected RPO/RTO statement, and a request digest. A different authorized human with recent reauthentication approves execution. Planned switchover requires caught-up evidence and zero estimated data loss. Emergency failover requires explicit acceptance of the nonzero observed-loss bound and cannot claim zero RPO. Execution uses one idempotency key; GridStory records pending state before calling the adapter, changes the active control region only after validated success evidence, and can reconcile an interrupted or ambiguous call before permitting another transition. Failback uses the same workflow.
+
+The implementation itself does not execute or configure real infrastructure. Runtime promotion is intentionally hazardous and receives Tier 3-style preview, approval, backup/readiness, idempotency, reconciliation, and rollback safeguards even though the additive provider-neutral application slice is delivered as Tier 2.
+
+## Necessity gate
+
+1. **Traceable:** M8-001 explicitly requires regional reads, multi-region control-plane options, failover, consistency indicators, and residency routing.
+2. **Not already solved:** current residency attestations do not route or measure reads, current delivery has no region/freshness evidence, and the repository has no promotion or failover state machine.
+3. **Minimal form:** one disabled complete-scope topology document, one published-only reader capability, one failover capability, four delivery integrations, bounded indicators, and one reviewed operation workflow are the smallest coherent vertical slice.
+4. **Dependencies justified:** no dependency is added. Existing Zod contracts, tenant scoping, authorization, optimistic documents, durable state patterns, immutable revisions, and adapter injection are sufficient.
+5. **Rule of three:** no provider SDK, replica provisioner, global scheduler, DNS controller, generic distributed transaction framework, multi-writer conflict resolver, or automatic remediation engine is introduced.
+6. **Reversible:** set every scope to `primary-only`, drain regional adapters, reconcile any in-flight external operation to a known primary, export bounded operation evidence if retention requires it, then revert the additive task commit. Existing content, delivery, and residency behavior remain valid.
+
+## Sources that changed the decision
+
+- [Cloudflare D1 read replication](https://developers.cloudflare.com/d1/best-practices/read-replication/) documents asynchronous replicas, potentially stale reads, primary writes, session bookmarks, and served-region/primary indicators. GridStory therefore makes staleness and serving role explicit rather than implying a nearest replica is current.
+- [Google Spanner timestamp bounds](https://docs.cloud.google.com/spanner/docs/timestamp-bounds) distinguishes strong, exact-staleness, and bounded-staleness reads and explains that bounded staleness permits a nearby replica only within the requested bound. GridStory adopts a small strong-or-bounded contract instead of a vague `eventual` mode.
+- [PostgreSQL warm standby](https://www.postgresql.org/docs/current/warm-standby.html) states that streaming replication is asynchronous by default and that potential loss is proportional to replication delay, while synchronous replication trades latency for durability. GridStory treats lag as evidence and never derives a zero-loss claim from health alone.
+- [Amazon Aurora Global Database disaster recovery](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-global-database-disaster-recovery.html) separates planned switchover with synchronized replicas from unplanned failover whose RPO depends on lag. GridStory applies different gates and language to planned and emergency transitions.
+- [Amazon Application Recovery Controller routing controls](https://docs.aws.amazon.com/r53recovery/latest/dg/introduction-components-routing.html) and [readiness checks](https://docs.aws.amazon.com/r53recovery/latest/dg/readiness-what-is.html) separate traffic controls, safety rules, and continuous replica-readiness evidence. GridStory likewise requires explicit readiness plus safety policy and does not equate a routing switch with a ready database.
+- [Azure Cosmos DB consistency levels](https://learn.microsoft.com/en-us/azure/cosmos-db/consistency-levels) exposes strong, bounded-staleness, session, prefix, and eventual trade-offs and ties consistency to availability and RPO. GridStory intentionally implements only the two modes needed for immutable published delivery.
+- [Cloudflare D1 data location](https://developers.cloudflare.com/d1/configuration/data-location/) and [CockroachDB locality-restricted backups](https://www.cockroachlabs.com/docs/stable/take-locality-restricted-backups) show that replica/read locality, job execution, and backup locality are distinct controls. GridStory validates content read/control residency but does not claim to automate telemetry, backups, or provider storage placement.
+
+## Consequences and revisit triggers
+
+- Bounded-staleness improves regional latency only when a deployment supplies truthful freshness and residency evidence. GridStory cannot independently verify provider replication and must document adapter qualification as an operator responsibility.
+- Regional shared caching is conservative by design. Revisit a standard cache-key adapter only after at least two deployed CDN integrations demonstrate the same complete partition contract.
+- The first slice has no session/read-your-writes token. Callers that need immediate post-publish visibility request strong delivery; revisit signed monotonic tokens only with a concrete client need and adapter support across providers.
+- Revisit automatic failover only after repeated drills establish measured readiness, reconciliation, split-brain fencing, RTO/RPO, and independent safety-rule evidence. Health checks alone are not sufficient.
+- Revisit multi-writer, row-locality, identity/asset/plugin/object-store routing, telemetry and backup residency automation, or provider-native global databases as separately approved architectural changes.

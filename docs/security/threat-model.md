@@ -1,6 +1,6 @@
 # GridStory threat model
 
-This document is the reviewable view of the canonical machine-readable model in [`security/threat-model.json`](../../security/threat-model.json). It follows OWASP's four threat-modeling questions: what are we building, what can go wrong, what will we do, and did we do enough. STRIDE is a discovery aid, not the risk score. This model covers GridStory's current control plane, authoring, preview, assets, delivery, background operations, search, portability, recovery, plugin-runtime, operator-scoped marketplace, consent-aware targeting, and governed experiment boundaries.
+This document is the reviewable view of the canonical machine-readable model in [`security/threat-model.json`](../../security/threat-model.json). It follows OWASP's four threat-modeling questions: what are we building, what can go wrong, what will we do, and did we do enough. STRIDE is a discovery aid, not the risk score. This model covers GridStory's current control plane, authoring, preview, assets, regional published delivery, reviewed failover, background operations, search, portability, recovery, plugin-runtime, operator-scoped marketplace, consent-aware targeting, and governed experiment boundaries.
 
 This is a living engineering model. It is not a penetration-test report or a claim that a deployment is secure without its identity provider, TLS edge, secret manager, databases, object stores, egress controls, logging, and application-owned renderers being configured and reviewed.
 
@@ -26,6 +26,7 @@ flowchart LR
   scanner["Trusted marketplace artifact inspector"]
   plugin["External plugin process / container"]
   backup[("Encrypted off-host backup storage")]
+  regional["Injected regional read / failover adapters"]
 
   editor --> studio
   internet --> delivery
@@ -48,6 +49,8 @@ flowchart LR
   core -->|"bounded scoped protocol"| plugin
   db -->|"native snapshot/dump + checksum manifest"| backup
   backup -->|"verified isolated restore"| db
+  delivery -->|"scoped published read + bounded freshness policy"| regional
+  api -->|"digest-bound reviewed idempotent operation"| regional
 ```
 
 The numbered boundaries in the canonical model are:
@@ -67,12 +70,15 @@ The numbered boundaries in the canonical model are:
 13. Migration service to read-only external CMS sources and guarded target writes.
 14. Authoring and anonymous applications to targeting and experiment decisions.
 15. Anonymous analytics ingestion to durable aggregation and external adapters.
+16. Authorized editors and scoped content through the AI gateway to external text providers.
+17. Reviewed AI authoring and private semantic index adapters.
+18. Published delivery and reviewed regional failover through injected topology adapters.
 
 A change that crosses or weakens one of these boundaries requires a threat-model review in the same change.
 
 ## Security assets
 
-The protected assets are draft history; published content and routes; complete tenant/locale scope; identities, roles, grants, and sessions; signing secrets and service credentials; private asset bytes and verdicts; workflow approvals and release intent; outbox/job state; audit history; search indexes and cache tags; logical archives; service capacity; plugin manifests, marketplace publisher/release evidence, tenant grants, and lifecycle evidence; whole-database backups/recovery manifests; targeting configuration; experiment designs, aggregate evidence, guardrail decisions, and promotion history; and normalized analytics evidence, bounded aggregates, release annotations, private receipts, and adapter delivery history.
+The protected assets are draft history; published content and routes; complete tenant/locale scope; identities, roles, grants, and sessions; signing secrets and service credentials; private asset bytes and verdicts; workflow approvals and release intent; outbox/job state; audit history; search indexes and cache tags; logical archives; service capacity; plugin manifests, marketplace publisher/release evidence, tenant grants, and lifecycle evidence; whole-database backups/recovery manifests; targeting configuration; experiment designs, aggregate evidence, guardrail decisions, and promotion history; normalized analytics evidence, bounded aggregates, release annotations, private receipts, and adapter delivery history; AI gateway/authoring/semantic policy and evidence; and regional topology, replica, consistency, backup, approval, and failover evidence.
 
 Draft content, identity attributes, credentials/tokens, private assets, and operational/audit data are sensitive. Published content is intentionally public, but its integrity, freshness, route correctness, and tenant separation remain security properties.
 
@@ -102,6 +108,7 @@ Every modeled threat has a response, owner, concrete mitigations, and verificati
 | THREAT-0032 | Fabricated, identifying, replayed, or unavailable content analytics | S/T/R/I/D/E | 20 Critical | Closed identity-free published-only events, configured-purpose/GPC gates, request-context scope, age/cardinality bounds, idempotent aggregates, independent adapter jobs, generic retained failures, and non-authoritative release annotations fail closed. Deployment consent/legal review, public rate limits, provider credentials/egress/retention/deletion, data quality, attribution, statistics, and causality remain external evidence. |
 | THREAT-0033 | Prompt injection, scoped-source disclosure, unbounded spend, or stale AI disablement | S/T/R/I/D/E | 20 Critical | Separate private permissions, complete-scope optimistic policy, immutable active prompts, explicit source/type/field allowlists with per-source reauthorization, deterministic redaction, structured text-only requests, conservative atomic budgets, generic errors, bounded timeout/output, metadata-only receipts, untrusted results, and settlement-time kill-switch rechecks fail closed. Provider credentials, TLS/egress, regional/retention/training policy, billing truth, and complete DLP remain deployment evidence. |
 | THREAT-0034 | AI proposal poisoning, non-human approval, stale handoff, or semantic index scope bleed | S/T/R/I/D/E | 20 Critical | Fixed bounded output, declared text/slug targets, complete-candidate and deterministic evaluation, exact provenance, separate human-only one-time review, revision-rechecked unsaved handoff, allowlisted redacted indexing, identifier-only jobs, derived vectors, and complete adapter/hit/current-revision/content-authorization validation fail closed. Provider/vector quality, TLS/egress/secrets/retention/rates and factuality/safety/legal review remain deployment/editorial evidence. |
+| THREAT-0035 | Regional scope bleed, stale replica publication, cache confusion, split brain, or unsafe failover | S/T/R/I/D/E | 20 Critical | Trusted deployment-region selection, published-only least-authority reads, complete scope/result/topology/freshness/residency/cache validation, explicit primary fallback, reviewed digest-bound zero-loss or accepted bounded-loss operation, persisted idempotency, ambiguity reconciliation, single-writer proof, generic errors, and hashed watermarks fail closed. Provider replication/fencing/traffic truth, backup durability, actual CDN partitions, regional infrastructure, and measured RPO/RTO remain deployment evidence. |
 | THREAT-0024 | Database backup disclosure, tampering, or unsafe restore | T/I/D | 20 Critical | M5-005 adds native consistent backup formats, minimal SHA-256 manifests, integrity/table checks, credential-safe PostgreSQL invocation, absent/empty isolated restore targets, live SQLite and disposable PostgreSQL restore drills, and protected storage/PITR guidance. Provider storage, keys, retention, access logging, and physical PITR proof remain deployment evidence. |
 | THREAT-0026 | CMS source credential disclosure, SSRF, hostile continuation, or source exhaustion | S/T/I/D/E | 20 Critical | Server-only read credentials, credential-free fixed HTTPS origins, disabled redirects, same-origin continuation, response/record bounds, strict normalization, private state, and mocked hostile adapter regressions mitigate the repository boundary. Egress policy, secret-manager lifecycle, provider logs/revocation, and production throttling remain deployment evidence. |
 | THREAT-0027 | Migration drift, retry duplication, destructive reconciliation, or false cutover readiness | T/R/I/D/E | 20 Critical | Exact-effect dry-runs, digest/expiry/version/revision binding, pending links, checksum recovery, post-success checkpoints, normal content gates, non-destructive deletion blockers, full reconciliation, and an explicit content-only readiness claim fail closed. External traffic/application/SEO/analytics acceptance remains operator work. |
@@ -142,6 +149,7 @@ The canonical register also covers preview and asset grant replay, forged webhoo
 - Targeting configuration is not a consent manager, customer profile store, legal interpretation, behavioral collector, or CDN. Applications own consent evidence, lawful use, source normalization, rendered-response isolation, and exact use/purge of shared cache keys.
 - Experiment allocation is not a subject/profile store, analytics warehouse, statistical engine, or automatic rollout system. Applications own random token generation/retention, consent and rendered-response isolation; analytics owners prove experiment attribution, evidence integrity, and statistical validity independently of the bounded general content counters.
 - Content analytics is not an identity/session store, raw-event warehouse, consent manager, attribution/funnel/cohort system, statistical engine, billing record, or proof of release causality. Deployments own public rate controls and provider credentials, egress, diagnostics, retention, deletion, access, data-quality, bot/late-event, and legal policy.
+- Regional policy is not a database, replica, DNS/load-balancer, CDN, backup, or fencing controller. Deployments own adapter authentication, truthful provider evidence, single-writer enforcement, traffic and cache configuration, physical recovery, measured RPO/RTO, and regional/legal acceptance.
 - No threat is accepted merely because it is listed. Any residual high or critical risk needs a task or explicit, named, expiring acceptance.
 
 ## M6-003 evidence update
@@ -204,7 +212,15 @@ The gateway does not supply a live provider, complete PII/DLP discovery, provide
 
 Existing identifier-only search jobs re-resolve saved content, select configured top-level strings, redact and bound them, and feed an injected tenant-aware semantic adapter. Private bounded queries are redacted and not stored. Adapter identity/model/index and every hit's complete scope, perspective, unique ID, finite score, positive field provenance, current revision, and ordinary content authorization must match; hostile or stale evidence fails the complete request closed. Adapter vectors are derived, excluded from backup truth, and rebuilt after database recovery. No provider/vector dependency or credentials are shipped.
 
-Residual deployment risk remains critical until the customer validates consent/legal use and revocation, public endpoint rate/admission controls, provider credentials and TLS/egress/timeout policy, provider idempotency/availability, separately protected diagnostics, retention/deletion/access controls, data quality and bot/late-event rules, attribution/statistics, and causal interpretation. Repository counters and annotations are synthetic operational evidence, not billing, experimentation, legal-record, or release-causality certification.
+Residual deployment risk remains critical until the customer validates provider/model/vector credentials, TLS/egress/timeout/idempotency/availability, protected diagnostics, retention/deletion/access/training policy, complete DLP, model and index quality, factuality/bias/brand/legal/safety review, and editor accountability. Repository evaluation and provenance make the handoff reviewable; they do not certify generated content or external AI systems.
+
+## M8-001 evidence update
+
+`THREAT-0035` adds the published-delivery and reviewed-regional-failover boundary. Trusted composition supplies the deployment region and capability-limited published-read/failover adapters. The default remains the ordinary strong primary. Enabled bounded-staleness delivery validates exact adapter, complete/base scope, replica role, region, topology, current observation, finite policy-bounded lag, opaque watermark, residency evidence, cache attestation, published revision, requested type/slug, uniqueness, and result count. Caller-selected routing is absent; incomplete cache evidence produces private/no-store delivery and only a watermark digest is exposed.
+
+Complete-scope optimistic memory, SQLite, and PostgreSQL documents retain bounded policy and operation history without endpoints, credentials, raw replication positions, or diagnostics. Private management uses distinct read/manage/failover authority. Preflight rechecks active/target residency and current verified backup evidence; planned mode requires caught-up zero loss, while emergency mode requires an explicit RPO covering observed nonzero loss. An expiring exact digest requires a different recently reauthenticated human. Execution persists before the adapter with a stable idempotency key, malformed or uncertain outcomes remain ambiguous for reconciliation, and success requires proof that only the target is writable before topology advances and reads reset to primary-only.
+
+Residual production risk remains critical until an operator proves the provider's replication, readiness, fencing, promotion, DNS/load-balancer, cache key/purge, backup/PITR, secrets, logging, regional placement, measured RPO/RTO, failback, and application monitoring through a representative exercise. GridStory validates the declared boundary; it does not provision infrastructure, automatically fail over, or certify provider/legal claims.
 
 ## Review workflow
 

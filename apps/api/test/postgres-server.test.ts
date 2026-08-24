@@ -222,6 +222,20 @@ describe.skipIf(!connectionString)('GridStory API with PostgreSQL', () => {
         payload: { expectedVersion: 3, state: 'enabled', reason: 'PostgreSQL restart fixture.' },
       }),
     ).toMatchObject({ statusCode: 200 });
+    const regionalSaved = await server.inject({
+      method: 'PUT',
+      url: '/api/v1/regional/policy',
+      headers,
+      payload: {
+        expectedVersion: 0,
+        state: 'enabled',
+        activeControlRegion: 'local',
+        activeControlEvidenceReference: 'deployment-config',
+        readPolicy: { mode: 'primary-only', maximumLagMs: 0, failureMode: 'primary' },
+        readRegions: [],
+      },
+    });
+    expect(regionalSaved.statusCode, regionalSaved.body).toBe(200);
 
     expect(
       await server.inject({
@@ -348,6 +362,14 @@ describe.skipIf(!connectionString)('GridStory API with PostgreSQL', () => {
       version: 1,
       state: 'enabled',
       actions: [{ id: 'postgres-title', promptId: 'postgres-summary' }],
+    });
+    const regional = await server.inject({ method: 'GET', url: '/api/v1/regional', headers });
+    expect(regional.statusCode, regional.body).toBe(200);
+    expect(regional.json()).toMatchObject({
+      version: 1,
+      state: 'enabled',
+      activeControlRegion: 'local',
+      readPolicy: { mode: 'primary-only' },
     });
     const allocation = await server.inject({
       method: 'POST',

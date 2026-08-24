@@ -315,6 +315,21 @@ describe('database recovery', () => {
           payload: { expectedVersion: 3, state: 'enabled', reason: 'Recovery fixture.' },
         }),
       ).toMatchObject({ statusCode: 200 });
+      expect(
+        await server.inject({
+          method: 'PUT',
+          url: '/api/v1/regional/policy',
+          headers,
+          payload: {
+            expectedVersion: 0,
+            state: 'enabled',
+            activeControlRegion: 'local',
+            activeControlEvidenceReference: 'deployment-config',
+            readPolicy: { mode: 'primary-only', maximumLagMs: 0, failureMode: 'primary' },
+            readRegions: [],
+          },
+        }),
+      ).toMatchObject({ statusCode: 200 });
 
       const manifest = await backupSqlite({
         sourcePath,
@@ -404,6 +419,18 @@ describe('database recovery', () => {
           state: 'disabled',
           actions: [],
           semantic: { enabled: false },
+        },
+      });
+      await server.inject({
+        method: 'PUT',
+        url: '/api/v1/regional/policy',
+        headers,
+        payload: {
+          expectedVersion: 1,
+          state: 'disabled',
+          activeControlRegion: 'local',
+          readPolicy: { mode: 'primary-only', maximumLagMs: 0, failureMode: 'primary' },
+          readRegions: [],
         },
       });
 
@@ -522,6 +549,18 @@ describe('database recovery', () => {
         state: 'enabled',
         actions: [{ id: 'recovery-title', promptId: 'recovery-summary' }],
         semantic: { enabled: false },
+      });
+      const recoveredRegional = await restored.inject({
+        method: 'GET',
+        url: '/api/v1/regional',
+        headers,
+      });
+      expect(recoveredRegional.statusCode, recoveredRegional.body).toBe(200);
+      expect(recoveredRegional.json()).toMatchObject({
+        version: 1,
+        state: 'enabled',
+        activeControlRegion: 'local',
+        readPolicy: { mode: 'primary-only' },
       });
     } finally {
       await restored?.close();

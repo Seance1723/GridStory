@@ -1324,6 +1324,31 @@ export class GovernanceService {
     return this.#assertPolicyPlacement(scope, document.residencyPolicy, resourceType, purpose);
   }
 
+  async assertRegion(
+    scope: ContentScope,
+    resourceType: GovernanceResourceType,
+    region: string,
+    evidenceReference?: string,
+  ): Promise<void> {
+    const document = await this.#document(scope);
+    const rule = policyRule(document.residencyPolicy, resourceType);
+    if (!rule?.allowedRegions.includes(region)) {
+      throw new GridStoryError(
+        `Region ${region} is outside the declared ${resourceType} residency policy.`,
+        'governance_residency_blocked',
+        409,
+        { allowedRegions: rule?.allowedRegions ?? [], actualRegions: [region] },
+      );
+    }
+    if (document.residencyPolicy.requireAttestation && !evidenceReference) {
+      throw new GridStoryError(
+        `Region ${region} requires placement evidence.`,
+        'governance_residency_blocked',
+        409,
+      );
+    }
+  }
+
   async #assertPolicyPlacement(
     scope: ContentScope,
     policy: Pick<ResidencyPolicy, 'requireAttestation' | 'rules'>,

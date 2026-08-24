@@ -41,12 +41,13 @@ Every ASVS chapter is explicitly represented so an omitted area cannot be mistak
 
 ## Evidence summary
 
-The machine profile contains 33 stable `GS-SEC-###` requirements:
+The machine profile contains 34 stable `GS-SEC-###` requirements:
 
 - Verified controls cover trusted-layer validation, parameterized persistence, SVG sanitization, atomic operations, exact origin messaging, tenant-bound deny-by-default authorization, credential/cache containment, signed token validation, approved platform cryptography, capability-isolated plugin execution, and fail-closed generic errors.
 - `GS-SEC-031` verifies the repository-owned guarded-governance boundary: explicit subject links, private complete scope, hold/restriction dominance, independent digest-bound approval, fresh authentication and backup evidence, execution-time revalidation, envelope encryption, narrow processors/KMS/placement adapters, receipts, and events.
 - `GS-SEC-032` verifies the guarded CMS-migration boundary: trusted server composition, read-only fixed-origin bounded adapters, complete-scope private state, exact-effect digest review, source/target/project/recipe drift checks, idempotent recovery, post-success checkpoints, normal content gates, preserved source deletions, and explicitly limited cutover claims.
 - `GS-SEC-033` verifies the evidence-bound marketplace boundary: expiring DNS possession, distinct human publisher approval, signed compatibility/support/capability metadata, immutable releases, trusted exact-artifact inspection, fail-closed policy, distinct release approval, yanking, and disabled/no-grant installation.
+- `GS-SEC-039` verifies the provider-neutral regional boundary: trusted deployment-region selection, least-authority published readers, complete scope/topology/freshness/residency/cache evidence, explicit consistency/fallback, reviewed zero-loss or accepted bounded-loss failover, persisted idempotency, ambiguity reconciliation, and single-writer result validation without raw provider position or diagnostic exposure.
 - Partial controls cover structured rendering, SSRF/egress, browser headers, GraphQL cost/introspection, upload limits/scanning, external adapter configuration, sensitive-data policy, and minimal API fields.
 - Planned controls cover trusted production intermediary/identity configuration, cryptographic inventory/secret lifecycle, and production fail-safe configuration. Anti-automation, vulnerability/component lifecycle, GraphQL/upload bounds, and the resource-demand inventory are partial because distributed/deployment or hosted-release evidence remains.
 - Conditional controls cover deployed trusted-proxy/TLS/service communication and customer-specific IdP/secret-manager conformance; the repository-owned OIDC binding and persistent-session lifecycle are verified.
@@ -135,6 +136,12 @@ This gateway control does not provide a deployed provider, complete PII/DLP disc
 
 This control does not provide a deployed model/vector service, provider TLS/egress/secret/region/retention/training/billing/model-quality conformance, complete PII/DLP discovery, factuality/bias/brand/legal/safety certification, arbitrary schemas/evaluators, rich-content/translation/bulk authoring, tools/agents/conversations/memory, automatic writes/workflow/publication, public semantic delivery, recommendations, hybrid ranking, pgvector, or ANN tuning. Deployment, AI governance, security, privacy, search, and editorial owners retain those obligations.
 
+## M8-001 evidence update
+
+`GS-SEC-039` and `THREAT-0035` link strict regional schemas; complete-scope optimistic memory, SQLite, and qualified PostgreSQL topology persistence; trusted local-region composition; least-authority published readers; complete scope/role/topology/freshness/lag/residency/cache/result validation; strong default and explicit primary fallback; digest-safe consistency headers; distinct private read/manage/failover authorization; residency and verified-backup preflight; planned zero-loss or explicit bounded emergency loss; different recent-human approval; persisted idempotent execution; ambiguous reconciliation; single-writer success proof; primary-only reset; typed REST/client/Studio controls; PostgreSQL logical restore; and live SQLite recovery.
+
+This control does not provision or certify replicas, databases, DNS/load balancers, CDNs, backups, fencing, physical PITR, regional infrastructure, provider credentials, traffic switching, cache partitions/purges, legal residency, or actual RPO/RTO. It does not add multi-writer operation, automatic failover/failback, read-your-writes tokens, or regional draft/control/identity/asset/plugin/search/AI/telemetry/key/object routing. Those remain deployment/operator evidence under `BETA-003`, `RC-005`, `RC-006`, and `GA-003`.
+
 ## Highest-priority gaps
 
 | Gap | ASVS areas | Owner task |
@@ -146,6 +153,7 @@ This control does not provide a deployed model/vector service, provider TLS/egre
 | Analytics consent/legal review, edge admission rates, provider credential/egress/retention/deletion controls, and data-quality/statistical governance | V8, V11, V13, V14, V15, V16 | Repository minimized adapter boundary delivered by M7-003; deployment/privacy acceptance under `BETA-003`, `RC-005`, `RC-006`, `GA-003` |
 | Telemetry backend access/deletion, Collector deployment conformance, and production identity/credential event sources | V11, V13, V14, V16 | `BETA-003`, `GA-003`; event sources M6-002 |
 | Backup storage/physical PITR, secret rotation, and orchestrator rollout proof | V13, V14, V15, V16 | `RC-006`, `GA-003`; identity lifecycle M6-002 |
+| Regional provider replication/fencing/traffic/cache conformance, failover drills, and measured RPO/RTO | V8, V11, V13, V14, V15, V16 | Repository boundary delivered by M8-001; deployment acceptance under `BETA-003`, `RC-005`, `RC-006`, `GA-003` |
 | Deployed HTML CSP/header conformance, arbitrary application rendering, and branded-browser/assistive-technology acceptance | V1, V3, V14 | `BETA-003`, `BETA-005`, `RC-005` |
 | Hosted release attestation/SBOM verification plus deployment rate, concurrency, saturation, quota, and retention evidence | V2, V4, V5, V15 | `RC-004`, `RC-006`; repository governance M6-003 |
 | Independent readiness/risk acceptance | All applicable chapters | `RC-005`, `GA-001` |

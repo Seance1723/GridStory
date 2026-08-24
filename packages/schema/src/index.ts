@@ -20,6 +20,7 @@ export * from './plugins.js';
 export * from './preview.js';
 export * from './quality.js';
 export * from './query.js';
+export * from './regional.js';
 export * from './references.js';
 export * from './release.js';
 export * from './resource-limits.js';

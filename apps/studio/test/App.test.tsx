@@ -19,6 +19,7 @@ import {
   type MigrationSourceDescriptor,
   type PersonalizationSnapshot,
   type Release,
+  type RegionalDocument,
 } from '@gridstory/client';
 import { exampleDesignSystem } from '@gridstory/example-kit/design-system';
 import { componentManifests } from '@gridstory/example-kit/manifests';
@@ -2032,6 +2033,134 @@ describe('GridStory Studio', () => {
     expect(panel.textContent).toContain('Interactions');
     expect(panel.textContent).toContain('Release markers');
     expect(panel.textContent).toContain('Dead deliveries');
+  });
+
+  it('shows bounded regional policy, evidence, independent approval, and execution controls', async () => {
+    const user = userEvent.setup();
+    const client = createTestClient();
+    const scope = {
+      organizationId: 'local',
+      tenantId: 'default',
+      workspaceId: 'default',
+      siteId: 'default',
+      environmentId: 'development',
+      locale: 'en',
+    };
+    const preview: RegionalDocument = {
+      ...scope,
+      schemaVersion: 1,
+      version: 2,
+      state: 'enabled',
+      activeControlRegion: 'us-east-1',
+      activeControlEvidenceReference: 'placement://us-east-1',
+      topologyVersion: 2,
+      readPolicy: {
+        mode: 'bounded-staleness',
+        maximumLagMs: 5_000,
+        failureMode: 'unavailable',
+      },
+      readRegions: [
+        {
+          region: 'eu-west-1',
+          adapter: 'reader-a',
+          enabled: true,
+          residencyEvidenceReference: 'placement://eu-west-1',
+        },
+      ],
+      failoverAdapter: 'failover-a',
+      operations: [
+        {
+          ...scope,
+          id: '018daf23-89b3-7cf8-a4f1-94064c96df91',
+          requestId: '018daf23-89b3-7cf8-a4f1-94064c96df90',
+          state: 'preview',
+          documentVersion: 2,
+          topologyVersion: 2,
+          sourceRegion: 'us-east-1',
+          targetRegion: 'eu-west-1',
+          mode: 'planned',
+          reason: 'Planned maintenance.',
+          expectedRpoSeconds: 0,
+          expectedRtoSeconds: 300,
+          backup: {
+            reference: 'backup://regional/studio',
+            sha256: 'a'.repeat(64),
+            verifiedAt: now,
+          },
+          readiness: {
+            ...scope,
+            adapter: 'failover-a',
+            requestId: '018daf23-89b3-7cf8-a4f1-94064c96df90',
+            sourceRegion: 'us-east-1',
+            targetRegion: 'eu-west-1',
+            topologyVersion: 2,
+            checkedAt: now,
+            ready: true,
+            caughtUp: true,
+            replicationLagMs: 0,
+            estimatedDataLossMs: 0,
+            evidenceDigest: 'b'.repeat(64),
+          },
+          digest: 'c'.repeat(64),
+          createdBy: 'operator-a',
+          createdAt: now,
+          expiresAt: '2026-08-24T09:00:00.000Z',
+        },
+      ],
+      updatedBy: 'operator-a',
+      updatedAt: now,
+    };
+    vi.spyOn(client, 'getRegionalTopology').mockResolvedValue(preview);
+    const approved: RegionalDocument = {
+      ...preview,
+      version: 3,
+      operations: [
+        {
+          ...preview.operations[0],
+          state: 'approved',
+          documentVersion: 3,
+          approval: {
+            digest: 'c'.repeat(64),
+            approvedBy: 'operator-b',
+            approvedAt: now,
+            reauthenticatedAt: now,
+            reason: 'Reviewed.',
+            acceptDataLoss: false,
+          },
+        } as RegionalDocument['operations'][number],
+      ],
+    };
+    vi.spyOn(client, 'approveRegionalFailover').mockResolvedValue(approved);
+    vi.spyOn(client, 'executeRegionalFailover').mockResolvedValue({
+      ...approved,
+      version: 5,
+      topologyVersion: 3,
+      activeControlRegion: 'eu-west-1',
+      readPolicy: { ...approved.readPolicy, mode: 'primary-only', maximumLagMs: 0 },
+      operations: [
+        {
+          ...approved.operations[0],
+          state: 'succeeded',
+          documentVersion: 5,
+          completedAt: now,
+        } as RegionalDocument['operations'][number],
+      ],
+    });
+    render(<App client={client} />);
+
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Regions' }));
+    const panel = await screen.findByRole('region', {
+      name: 'Regional delivery and failover controls',
+    });
+    expect(panel.textContent).toContain('GridStory validates provider evidence');
+    expect(panel.textContent).toContain('Readiness ready');
+    expect(within(panel).getByRole('button', { name: 'Save topology policy' })).toBeTruthy();
+    await user.click(within(panel).getByRole('button', { name: 'Approve as second human' }));
+    await screen.findByText('Failover plan independently approved.');
+    await user.click(within(panel).getByRole('button', { name: 'Execute approved transition' }));
+    await screen.findByText(/regional reads were reset to primary-only/i);
+    expect(panel.textContent).toContain('active control eu-west-1');
   });
 
   it('shows enterprise identity policy, providers, security events, and one-time credentials', async () => {

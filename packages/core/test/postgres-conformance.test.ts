@@ -15,6 +15,7 @@ import {
   emptyAnalyticsDocument,
   emptyMarketplaceDocument,
   emptyPersonalizationDocument,
+  emptyRegionalDocument,
   EnterpriseIdentityService,
   emptyMigrationDocument,
   GovernanceService,
@@ -29,6 +30,7 @@ import {
   PostgresMarketplaceRepository,
   PostgresPersonalizationRepository,
   PostgresPluginRepository,
+  PostgresRegionalRepository,
 } from '../src/index.js';
 import { repositoryConformance } from './repository-conformance.js';
 
@@ -545,6 +547,66 @@ if (connectionString) {
       }
     });
   });
+  describe('PostgreSQL regional repository conformance', () => {
+    it('persists topology and bounded operation state under the complete scope key', async () => {
+      const schema = `gridstory_regional_test_${process.pid}_${schemaSequence++}`;
+      const pool = new Pool({ connectionString });
+      const scope: ContentScope = {
+        organizationId: 'organization-a',
+        tenantId: 'regional-tenant-a',
+        workspaceId: 'workspace-a',
+        siteId: 'site-a',
+        environmentId: 'production',
+        locale: 'en',
+      };
+      const first = new PostgresRegionalRepository({ pool, schema });
+      try {
+        const initial = emptyRegionalDocument(scope, '2026-08-24T00:00:00.000Z', 'us-east-1');
+        await first.save(initial, null);
+        await first.close();
+
+        const second = new PostgresRegionalRepository({ pool, schema });
+        await expect(second.get(scope)).resolves.toEqual(initial);
+        await expect(second.get({ ...scope, tenantId: 'other-tenant' })).resolves.toBeNull();
+        const next = {
+          ...initial,
+          version: 1,
+          state: 'enabled' as const,
+          topologyVersion: 2,
+          activeControlEvidenceReference: 'placement://us-east-1',
+          readPolicy: {
+            mode: 'bounded-staleness' as const,
+            maximumLagMs: 5_000,
+            failureMode: 'primary' as const,
+          },
+          readRegions: [
+            {
+              region: 'eu-west-1',
+              adapter: 'reader-a',
+              enabled: true,
+              residencyEvidenceReference: 'placement://eu-west-1',
+            },
+          ],
+          updatedBy: 'operator-a',
+          updatedAt: '2026-08-24T00:01:00.000Z',
+        };
+        await second.save(next, 0);
+        await expect(second.get(scope)).resolves.toMatchObject({
+          version: 1,
+          state: 'enabled',
+          topologyVersion: 2,
+          readRegions: [{ region: 'eu-west-1', adapter: 'reader-a' }],
+        });
+        await expect(second.save(next, 0)).rejects.toMatchObject({
+          code: 'regional_write_conflict',
+        });
+        await second.close();
+      } finally {
+        await pool.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);
+        await pool.end();
+      }
+    });
+  });
 } else {
   describe.skip('PostgreSQL repository conformance', () => {
     it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
@@ -577,6 +639,9 @@ if (connectionString) {
     it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
   });
   describe.skip('PostgreSQL AI authoring repository conformance', () => {
+    it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
+  });
+  describe.skip('PostgreSQL regional repository conformance', () => {
     it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
   });
 }

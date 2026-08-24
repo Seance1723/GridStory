@@ -8,7 +8,7 @@ import type {
 } from '@gridstory/schema';
 import { contentFilterOperators, resourceLimits } from '@gridstory/schema';
 import { GridStoryError } from './errors.js';
-import type { ContentRepository } from './types.js';
+import type { ContentRepository, PublishedContentReader } from './types.js';
 
 const forbiddenPathSegments = new Set(['__proto__', 'prototype', 'constructor']);
 const systemPaths = new Set([
@@ -339,6 +339,7 @@ export class ContentQueryService {
   async query(
     scope: Parameters<ContentRepository['list']>[0]['scope'],
     input: ContentQuery,
+    publishedReader?: PublishedContentReader,
   ): Promise<ContentConnection> {
     if (input.perspective && input.perspective !== 'draft' && input.perspective !== 'published') {
       invalidQuery('perspective must be draft or published.');
@@ -381,11 +382,18 @@ export class ContentQueryService {
         projection: input.projection ?? null,
       }),
     );
-    const entries = await this.#repository.list({
-      scope,
-      perspective,
-      ...(input.contentType ? { contentType: input.contentType } : {}),
-    });
+    const entries =
+      perspective === 'published' && publishedReader
+        ? await publishedReader.list({
+            scope,
+            perspective: 'published',
+            ...(input.contentType ? { contentType: input.contentType } : {}),
+          })
+        : await this.#repository.list({
+            scope,
+            perspective,
+            ...(input.contentType ? { contentType: input.contentType } : {}),
+          });
     const filtered = input.filter
       ? entries.filter((entry) => matches(entry, input.filter as ContentFilter))
       : entries;
