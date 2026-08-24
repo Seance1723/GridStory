@@ -10,6 +10,7 @@ import { Pool } from 'pg';
 import { describe, expect, it } from 'vitest';
 import {
   CollaborationService,
+  emptyAiAuthoringDocument,
   emptyAiGatewayDocument,
   emptyAnalyticsDocument,
   emptyMarketplaceDocument,
@@ -18,6 +19,7 @@ import {
   emptyMigrationDocument,
   GovernanceService,
   PostgresCollaborationRepository,
+  PostgresAiAuthoringRepository,
   PostgresAiGatewayRepository,
   PostgresAnalyticsRepository,
   PostgresContentRepository,
@@ -488,6 +490,61 @@ if (connectionString) {
       }
     });
   });
+  describe('PostgreSQL AI authoring repository conformance', () => {
+    it('persists reviewed policy and proposals under the complete scope key', async () => {
+      const schema = `gridstory_ai_authoring_test_${process.pid}_${schemaSequence++}`;
+      const pool = new Pool({ connectionString });
+      const scope: ContentScope = {
+        organizationId: 'organization-a',
+        tenantId: 'ai-authoring-tenant-a',
+        workspaceId: 'workspace-a',
+        siteId: 'site-a',
+        environmentId: 'production',
+        locale: 'en',
+      };
+      const first = new PostgresAiAuthoringRepository({ pool, schema });
+      try {
+        const initial = emptyAiAuthoringDocument(scope, '2026-08-24T00:00:00.000Z');
+        await first.save(initial, null);
+        await first.close();
+
+        const second = new PostgresAiAuthoringRepository({ pool, schema });
+        await expect(second.get(scope)).resolves.toEqual(initial);
+        await expect(second.get({ ...scope, tenantId: 'other-tenant' })).resolves.toBeNull();
+        const next = {
+          ...initial,
+          version: 1,
+          state: 'enabled' as const,
+          actions: [
+            {
+              id: 'title',
+              name: 'Title',
+              enabled: true,
+              promptId: 'summary',
+              contentType: 'page',
+              targetFields: ['title'],
+              maximumChanges: 1,
+              evaluationRules: [],
+            },
+          ],
+          updatedAt: '2026-08-24T00:01:00.000Z',
+        };
+        await second.save(next, 0);
+        await expect(second.get(scope)).resolves.toMatchObject({
+          version: 1,
+          state: 'enabled',
+          actions: [{ id: 'title', promptId: 'summary' }],
+        });
+        await expect(second.save(next, 0)).rejects.toMatchObject({
+          code: 'ai_authoring_write_conflict',
+        });
+        await second.close();
+      } finally {
+        await pool.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);
+        await pool.end();
+      }
+    });
+  });
 } else {
   describe.skip('PostgreSQL repository conformance', () => {
     it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
@@ -517,6 +574,9 @@ if (connectionString) {
     it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
   });
   describe.skip('PostgreSQL AI gateway repository conformance', () => {
+    it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
+  });
+  describe.skip('PostgreSQL AI authoring repository conformance', () => {
     it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
   });
 }

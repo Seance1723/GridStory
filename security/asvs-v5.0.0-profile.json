@@ -6,7 +6,7 @@
     "standard": "OWASP Application Security Verification Standard",
     "standardVersion": "5.0.0",
     "targetLevel": "L2-oriented",
-    "reviewedAt": "2026-08-23",
+    "reviewedAt": "2026-08-24",
     "source": "https://github.com/OWASP/ASVS/tree/v5.0.0/5.0",
     "statement": "This is a project-specific selection and applicability record, not an ASVS certification or a claim that every ASVS L2 requirement has been independently verified.",
     "statusDefinitions": {
@@ -1072,6 +1072,55 @@
         "tests/e2e/accessibility.spec.ts"
       ],
       "taskIds": ["M7-004"]
+    },
+    {
+      "id": "GS-SEC-038",
+      "title": "Reviewed AI authoring and tenant-safe private semantic search",
+      "status": "verified",
+      "owner": "AI governance, security, platform, search, and editorial owner",
+      "statement": "AI authoring policy and evaluated proposals SHALL be completely tenant scoped, bounded, optimistic, private/no-store, and disabled by default; generation SHALL require a known enabled action, exact current draft, fixed structured-output contract, declared top-level text/slug changes, complete candidate validation, deterministic evaluation, and exact prompt/model/source/target/usage/redaction provenance without raw provider or source retention; ai.review SHALL be distinct, human-user-only, one-time, revision-rechecked, and SHALL never save, transition, approve workflow, or publish content; semantic indexing SHALL use only positively allowlisted redacted text/slug fields through injected tenant-aware adapters and identifier-only durable jobs, persist no query/vector body, treat indexes as derived, and fail closed unless every result has exact adapter/model/scope/perspective/current-revision/allowed-field/finite-score/unique-ID provenance plus ordinary content authorization.",
+      "asvsRefs": [
+        "v5.0.0-2.2.2",
+        "v5.0.0-8.1.1",
+        "v5.0.0-11.2.1",
+        "v5.0.0-14.1.1",
+        "v5.0.0-14.2.1",
+        "v5.0.0-16.5.3"
+      ],
+      "threatRefs": [
+        "THREAT-0001",
+        "THREAT-0004",
+        "THREAT-0012",
+        "THREAT-0013",
+        "THREAT-0019",
+        "THREAT-0033",
+        "THREAT-0034"
+      ],
+      "evidence": [
+        "packages/schema/src/ai-authoring.ts",
+        "packages/core/src/ai-authoring-repository.ts",
+        "packages/core/src/ai-authoring-service.ts",
+        "packages/core/src/authorization.ts",
+        "apps/api/src/ai-routes.ts",
+        "apps/api/src/worker.ts",
+        "packages/client/src/index.ts",
+        "apps/studio/src/App.tsx",
+        "docs/ai-authoring-and-semantic-search.md",
+        "docs/adr/0021-reviewed-ai-authoring-and-semantic-search.md"
+      ],
+      "verification": [
+        "packages/schema/test/ai-authoring.test.ts",
+        "packages/core/test/ai-authoring-repository.test.ts",
+        "packages/core/test/ai-authoring-service.test.ts",
+        "packages/core/test/postgres-conformance.test.ts",
+        "apps/api/test/ai.test.ts",
+        "apps/api/test/database-recovery.test.ts",
+        "apps/api/test/postgres-server.test.ts",
+        "packages/client/test/client.test.ts",
+        "apps/studio/test/App.test.tsx",
+        "tests/e2e/accessibility.spec.ts"
+      ],
+      "taskIds": ["M7-005"]
     }
   ]
 }

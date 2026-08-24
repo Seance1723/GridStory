@@ -1,9 +1,12 @@
 import {
+  type AiAuthoringDocument,
+  type AiAuthoringPolicyInput,
   type AiGatewayDocument,
   type AiGatewayPolicyInput,
   type AiGenerateInput,
   type AiGenerateResult,
   type AiPromptVersionInput,
+  type AiSemanticSearchResponse,
   type AssetRecord,
   type AssetUsageReport,
   type AnalyticsReport,
@@ -241,6 +244,29 @@ const defaultAiRequest = JSON.stringify(
     input: 'Summarize the selected sources for editorial review.',
     sourceIds: [],
   } satisfies AiGenerateInput,
+  null,
+  2,
+);
+
+const defaultAiAuthoringPolicy = JSON.stringify(
+  {
+    state: 'disabled',
+    actions: [
+      {
+        id: 'improve-title',
+        name: 'Improve title',
+        enabled: true,
+        promptId: 'content-summary',
+        contentType: 'page',
+        targetFields: ['title'],
+        maximumChanges: 1,
+        evaluationRules: [
+          { id: 'title-length', fieldPath: 'title', kind: 'maximum-length', maximum: 120 },
+        ],
+      },
+    ],
+    semantic: { enabled: false },
+  } satisfies Omit<AiAuthoringPolicyInput, 'expectedVersion'>,
   null,
   2,
 );
@@ -650,11 +676,16 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   );
   const [analyticsReport, setAnalyticsReport] = useState<AnalyticsReport | null>(null);
   const [aiGateway, setAiGateway] = useState<AiGatewayDocument | null>(null);
+  const [aiAuthoring, setAiAuthoring] = useState<AiAuthoringDocument | null>(null);
   const [aiPolicyJson, setAiPolicyJson] = useState(defaultAiPolicy);
+  const [aiAuthoringPolicyJson, setAiAuthoringPolicyJson] = useState(defaultAiAuthoringPolicy);
   const [aiPromptJson, setAiPromptJson] = useState(defaultAiPrompt);
   const [aiRequestJson, setAiRequestJson] = useState(defaultAiRequest);
   const [aiSwitchReason, setAiSwitchReason] = useState('Approved operator change.');
   const [aiResult, setAiResult] = useState<AiGenerateResult | null>(null);
+  const [aiReviewReason, setAiReviewReason] = useState('Reviewed in GridStory Studio.');
+  const [aiSemanticText, setAiSemanticText] = useState('');
+  const [aiSemanticResult, setAiSemanticResult] = useState<AiSemanticSearchResponse | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
   const [identitySnapshot, setIdentitySnapshot] = useState<IdentitySnapshot | null>(null);
   const [identityProviderId, setIdentityProviderId] = useState('');
@@ -1954,14 +1985,39 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   const refreshAiGateway = async (synchronizePolicy = false) => {
     applyAiGateway(await client.getAiGateway(), synchronizePolicy);
   };
+  const applyAiAuthoring = (document: AiAuthoringDocument, synchronizePolicy = false) => {
+    setAiAuthoring(document);
+    if (synchronizePolicy && (document.version > 0 || document.actions.length > 0)) {
+      setAiAuthoringPolicyJson(
+        JSON.stringify(
+          { state: document.state, actions: document.actions, semantic: document.semantic },
+          null,
+          2,
+        ),
+      );
+    }
+  };
+  const refreshAiAuthoring = async (synchronizePolicy = false) => {
+    applyAiAuthoring(await client.getAiAuthoring(), synchronizePolicy);
+  };
+  const refreshAiWorkbench = async (synchronizePolicy = false) => {
+    await Promise.all([refreshAiGateway(synchronizePolicy), refreshAiAuthoring(synchronizePolicy)]);
+  };
   const toggleAiGateway = async () => {
     if (aiGateway) {
       setAiGateway(null);
+      setAiAuthoring(null);
       setAiResult(null);
+      setAiSemanticResult(null);
       return;
     }
     try {
-      await refreshAiGateway(true);
+      const [gateway, authoring] = await Promise.all([
+        client.getAiGateway(),
+        client.getAiAuthoring(),
+      ]);
+      applyAiGateway(gateway, true);
+      applyAiAuthoring(authoring, true);
     } catch (error) {
       setNotice({ tone: 'error', message: messageFrom(error) });
     }
@@ -2052,6 +2108,141 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
         message: 'Untrusted AI output returned for review; no content was changed.',
       });
     } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    } finally {
+      setAiBusy(false);
+    }
+  };
+  const saveAiAuthoringPolicy = async () => {
+    if (!aiAuthoring) return;
+    setAiBusy(true);
+    try {
+      const policy = JSON.parse(aiAuthoringPolicyJson) as Omit<
+        AiAuthoringPolicyInput,
+        'expectedVersion'
+      >;
+      applyAiAuthoring(
+        await client.updateAiAuthoringPolicy({
+          ...policy,
+          expectedVersion: aiAuthoring.version,
+        }),
+        true,
+      );
+      setAiSemanticResult(null);
+      setNotice({ tone: 'success', message: 'AI authoring and semantic policy saved.' });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    } finally {
+      setAiBusy(false);
+    }
+  };
+  const createAiAuthoringProposal = async () => {
+    if (!aiAuthoring || !selected || !draft) return;
+    if (dirty) {
+      setNotice({
+        tone: 'error',
+        message: 'Save or discard local edits before requesting an AI proposal.',
+      });
+      return;
+    }
+    const action = aiAuthoring.actions.find(
+      (candidate) => candidate.enabled && candidate.contentType === selected.contentType,
+    );
+    if (!action) {
+      setNotice({ tone: 'error', message: 'No enabled AI action matches this content type.' });
+      return;
+    }
+    setAiBusy(true);
+    try {
+      const request = JSON.parse(aiRequestJson) as AiGenerateInput;
+      applyAiAuthoring(
+        await client.createAiAuthoringProposal({
+          actionId: action.id,
+          targetEntryId: selected.id,
+          expectedDraftRevisionId: selected.draftRevisionId,
+          request: { ...request, promptId: action.promptId, requestId: crypto.randomUUID() },
+        }),
+      );
+      await refreshAiGateway();
+      setNotice({
+        tone: 'info',
+        message:
+          'AI proposal evaluated and retained for explicit human review; content is unchanged.',
+      });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    } finally {
+      setAiBusy(false);
+    }
+  };
+  const reviewAiAuthoringProposal = async (
+    proposalId: string,
+    decision: 'approved' | 'rejected',
+  ) => {
+    if (!aiAuthoring) return;
+    setAiBusy(true);
+    try {
+      applyAiAuthoring(
+        await client.reviewAiAuthoringProposal(proposalId, {
+          expectedVersion: aiAuthoring.version,
+          decision,
+          ...(aiReviewReason.trim() ? { reason: aiReviewReason.trim() } : {}),
+        }),
+      );
+      setNotice({
+        tone: decision === 'approved' ? 'success' : 'info',
+        message:
+          decision === 'approved'
+            ? 'Proposal approved as review evidence. Content remains unchanged until you use and save it.'
+            : 'Proposal rejected. Content remains unchanged.',
+      });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    } finally {
+      setAiBusy(false);
+    }
+  };
+  const applyAiProposalToEditor = (proposalId: string) => {
+    const proposal = aiAuthoring?.proposals.find((candidate) => candidate.id === proposalId);
+    if (
+      proposal?.status !== 'approved' ||
+      !selected ||
+      !draft ||
+      proposal.target.entryId !== selected.id ||
+      proposal.target.revisionId !== selected.draftRevisionId
+    ) {
+      setNotice({
+        tone: 'error',
+        message: 'This approved proposal does not match the current saved draft revision.',
+      });
+      return;
+    }
+    changeDraft((current) => {
+      const next = { ...current };
+      proposal.changes.forEach((change) => {
+        next[change.fieldPath] = change.value;
+      });
+      return next;
+    });
+    setNotice({
+      tone: 'info',
+      message: 'Approved AI values copied into visible unsaved changes. Review and save normally.',
+    });
+  };
+  const searchAiSemantically = async () => {
+    if (!aiSemanticText.trim()) return;
+    setAiBusy(true);
+    try {
+      setAiSemanticResult(
+        await client.semanticAiSearch({
+          text: aiSemanticText.trim(),
+          perspective: 'draft',
+          first: 10,
+        }),
+      );
+      setNotice({ tone: 'info', message: 'Private semantic search completed.' });
+    } catch (error) {
+      setAiSemanticResult(null);
       setNotice({ tone: 'error', message: messageFrom(error) });
     } finally {
       setAiBusy(false);
@@ -3934,7 +4125,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
             <button
               type="button"
               className="button button--secondary"
-              onClick={() => void refreshAiGateway(true)}
+              onClick={() => void refreshAiWorkbench(true)}
               disabled={aiBusy}
             >
               Refresh AI policy
@@ -4043,6 +4234,174 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                 <p className="empty-copy">No AI output has been requested.</p>
               )}
             </fieldset>
+            {aiAuthoring ? (
+              <fieldset>
+                <legend>Reviewed authoring and semantic policy</legend>
+                <p>
+                  Authoring {aiAuthoring.state} · policy r{aiAuthoring.version} ·{' '}
+                  {aiAuthoring.actions.filter((action) => action.enabled).length} enabled actions ·
+                  semantic {aiAuthoring.semantic.enabled ? 'enabled' : 'disabled'}
+                </p>
+                <label>
+                  <span>Authoring policy JSON</span>
+                  <textarea
+                    value={aiAuthoringPolicyJson}
+                    onChange={(event) => setAiAuthoringPolicyJson(event.target.value)}
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="button button--secondary"
+                  onClick={() => void saveAiAuthoringPolicy()}
+                  disabled={aiBusy}
+                >
+                  Save authoring policy
+                </button>
+              </fieldset>
+            ) : null}
+            {aiAuthoring ? (
+              <fieldset>
+                <legend>Field proposals and human review</legend>
+                <p>
+                  Target:{' '}
+                  {selected
+                    ? `${entryTitle(selected, schemas)} · r${selected.draftRevisionId}`
+                    : 'none'}
+                </p>
+                <button
+                  type="button"
+                  className="button button--secondary"
+                  onClick={() => void createAiAuthoringProposal()}
+                  disabled={
+                    aiBusy ||
+                    dirty ||
+                    !selected ||
+                    aiAuthoring.state !== 'enabled' ||
+                    aiGateway.state !== 'enabled'
+                  }
+                >
+                  Generate evaluated proposal
+                </button>
+                <label>
+                  <span>Human review reason</span>
+                  <input
+                    value={aiReviewReason}
+                    onChange={(event) => setAiReviewReason(event.target.value)}
+                  />
+                </label>
+                <section className="ai-proposal-list" aria-label="AI authoring proposals">
+                  {aiAuthoring.proposals
+                    .filter((proposal) => !selected || proposal.target.entryId === selected.id)
+                    .map((proposal) => (
+                      <section className="ai-proposal" key={proposal.id}>
+                        <strong>
+                          {proposal.status} · {proposal.action.id}
+                        </strong>
+                        <small>
+                          {proposal.provenance.providerId}/{proposal.provenance.modelId} · prompt{' '}
+                          {proposal.provenance.promptId} v{proposal.provenance.promptVersion} ·
+                          target {proposal.target.revisionId}
+                        </small>
+                        <ul>
+                          {proposal.changes.map((change) => (
+                            <li key={change.fieldPath}>
+                              <code>{change.fieldPath}</code>: {change.value}
+                            </li>
+                          ))}
+                        </ul>
+                        <small>
+                          Evaluation {proposal.evaluation.outcome} ·{' '}
+                          {proposal.evaluation.results.length} declared checks ·{' '}
+                          {proposal.provenance.sources.length} exact sources
+                        </small>
+                        <div className="ai-panel__actions">
+                          {proposal.status === 'pending-review' ? (
+                            <>
+                              <button
+                                type="button"
+                                className="button button--primary"
+                                onClick={() =>
+                                  void reviewAiAuthoringProposal(proposal.id, 'approved')
+                                }
+                                disabled={aiBusy}
+                              >
+                                Approve proposal
+                              </button>
+                              <button
+                                type="button"
+                                className="button button--secondary"
+                                onClick={() =>
+                                  void reviewAiAuthoringProposal(proposal.id, 'rejected')
+                                }
+                                disabled={aiBusy}
+                              >
+                                Reject proposal
+                              </button>
+                            </>
+                          ) : null}
+                          {proposal.status === 'approved' ? (
+                            <button
+                              type="button"
+                              className="button button--secondary"
+                              onClick={() => applyAiProposalToEditor(proposal.id)}
+                              disabled={
+                                !selected ||
+                                proposal.target.entryId !== selected.id ||
+                                proposal.target.revisionId !== selected.draftRevisionId
+                              }
+                            >
+                              Use as unsaved editor changes
+                            </button>
+                          ) : null}
+                        </div>
+                      </section>
+                    ))}
+                  {aiAuthoring.proposals.length === 0 ? (
+                    <p className="empty-copy">No evaluated proposals have been retained.</p>
+                  ) : null}
+                </section>
+              </fieldset>
+            ) : null}
+            {aiAuthoring ? (
+              <fieldset>
+                <legend>Private semantic search</legend>
+                <label>
+                  <span>Bounded semantic query</span>
+                  <input
+                    value={aiSemanticText}
+                    onChange={(event) => setAiSemanticText(event.target.value)}
+                    placeholder="Find related saved drafts"
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="button button--secondary"
+                  onClick={() => void searchAiSemantically()}
+                  disabled={aiBusy || !aiSemanticText.trim() || !aiAuthoring.semantic.enabled}
+                >
+                  Search private semantic index
+                </button>
+                {aiSemanticResult ? (
+                  <section className="ai-result" aria-label="Semantic search results">
+                    <strong>
+                      {aiSemanticResult.adapterId}/{aiSemanticResult.modelId} · index{' '}
+                      {aiSemanticResult.indexVersion}
+                    </strong>
+                    <ul>
+                      {aiSemanticResult.hits.map((hit) => (
+                        <li key={hit.entryId}>
+                          {hit.contentType}/{hit.entryId} · {hit.score.toFixed(3)} · r
+                          {hit.revisionId} · {hit.fieldPaths.join(', ')}
+                        </li>
+                      ))}
+                      {aiSemanticResult.hits.length === 0 ? <li>No authorized matches.</li> : null}
+                    </ul>
+                  </section>
+                ) : (
+                  <p className="empty-copy">No semantic search has run.</p>
+                )}
+              </fieldset>
+            ) : null}
           </div>
         </section>
       ) : null}

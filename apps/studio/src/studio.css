@@ -882,6 +882,26 @@ button:disabled {
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
+.ai-proposal-list {
+  display: grid;
+  gap: 0.65rem;
+}
+.ai-proposal {
+  background: #fff;
+  border: 1px solid #c4b5fd;
+  border-radius: 0.55rem;
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.7rem;
+}
+.ai-proposal ul,
+.ai-result ul {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+.ai-proposal code {
+  overflow-wrap: anywhere;
+}
 
 @media (max-width: 900px) {
   .ai-panel__workbench {

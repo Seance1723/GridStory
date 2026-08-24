@@ -1,3 +1,4 @@
+import type { AiSemanticAdapter } from '@gridstory/core';
 import type { AiProviderRequest } from '@gridstory/schema';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -237,6 +238,324 @@ describe('AI gateway HTTP workflow', () => {
       headers: { ...publisherHeaders, 'x-gridstory-tenant': 'other-tenant' },
     });
     expect(isolated.json()).toMatchObject({ version: 0, state: 'disabled', models: [] });
+  });
+
+  it('reviews structured field proposals and exposes only validated private semantic hits', async () => {
+    const indexed: Array<{ fields: Array<{ path: string; value: string }> }> = [];
+    let semanticResult: Awaited<ReturnType<AiSemanticAdapter['search']>> | undefined;
+    let semanticQuery = '';
+    const semantic: AiSemanticAdapter = {
+      id: 'semantic-fixture',
+      modelId: 'embedding-small',
+      upsert(input) {
+        if (input.document) indexed.push(input.document);
+        return {
+          ...input.scope,
+          adapterId: this.id,
+          modelId: this.modelId,
+          indexVersion: 'index-1',
+          perspective: input.perspective,
+          indexedDocuments: input.document ? 1 : 0,
+        };
+      },
+      rebuild(input) {
+        indexed.splice(0, indexed.length, ...input.documents);
+        return {
+          ...input.scope,
+          adapterId: this.id,
+          modelId: this.modelId,
+          indexVersion: 'index-1',
+          perspective: input.perspective,
+          indexedDocuments: input.documents.length,
+        };
+      },
+      search(input) {
+        semanticQuery = input.query;
+        if (!semanticResult) throw new Error('Semantic result fixture is not configured.');
+        return semanticResult;
+      },
+    };
+    const captured: AiProviderRequest[] = [];
+    server = await buildServer({
+      databasePath: ':memory:',
+      seed: false,
+      ai: {
+        semanticAdapters: [semantic],
+        providers: [
+          {
+            id: 'fixture-provider',
+            estimate(request) {
+              captured.push(request);
+              return { inputTokens: 12, outputTokens: 8, costMicros: 100 };
+            },
+            generate() {
+              return {
+                output: JSON.stringify({
+                  contract: 'gridstory.authoring-suggestions.v1',
+                  suggestions: [
+                    { fieldPath: 'title', value: 'A reviewed API title', rationale: 'Clearer.' },
+                  ],
+                }),
+                inputTokens: 10,
+                outputTokens: 7,
+                costMicros: 80,
+                finishReason: 'stop',
+              };
+            },
+          },
+        ],
+      },
+    });
+    const adminHeaders = headers('admin-a', 'admin');
+    const created = await server.inject({
+      method: 'POST',
+      url: '/api/v1/content',
+      headers: adminHeaders,
+      payload: {
+        contentType: 'page',
+        data: {
+          title: 'Original editor@example.test',
+          slug: 'original',
+          blocks: [
+            {
+              id: 'ai-authoring-hero',
+              component: 'gridstory.hero',
+              version: 1,
+              props: {
+                eyebrow: 'Governed',
+                heading: 'Original',
+                body: 'api_key=must-not-index',
+                tone: 'indigo',
+              },
+            },
+          ],
+        },
+      },
+    });
+    expect(created.statusCode, created.body).toBe(201);
+    const entry = created.json();
+    await server.inject({
+      method: 'PUT',
+      url: '/api/v1/ai/policy',
+      headers: adminHeaders,
+      payload: {
+        expectedVersion: 0,
+        models: [
+          {
+            providerId: 'fixture-provider',
+            modelId: 'small',
+            enabled: true,
+            maximumInputTokens: 1_000,
+            maximumOutputTokens: 200,
+            inputCostMicrosPerMillion: 10,
+            outputCostMicrosPerMillion: 20,
+          },
+        ],
+        budgets: {
+          dailyRequests: 10,
+          dailyInputTokens: 10_000,
+          dailyOutputTokens: 10_000,
+          dailyCostMicros: 10_000,
+        },
+      },
+    });
+    await server.inject({
+      method: 'POST',
+      url: '/api/v1/ai/prompts',
+      headers: adminHeaders,
+      payload: {
+        expectedVersion: 1,
+        promptId: 'title',
+        version: 1,
+        name: 'Title',
+        purpose: 'Improve one title.',
+        instructions: 'Return the fixed GridStory authoring contract.',
+        allowedModels: [{ providerId: 'fixture-provider', modelId: 'small' }],
+        maximumOutputTokens: 100,
+        maximumCostMicros: 1_000,
+        timeoutMs: 1_000,
+        retrieval: {
+          perspective: 'draft',
+          maximumSources: 1,
+          rules: [{ contentType: 'page', fieldPaths: ['title'] }],
+        },
+      },
+    });
+    await server.inject({
+      method: 'POST',
+      url: '/api/v1/ai/prompts/title/versions/1/activate',
+      headers: adminHeaders,
+      payload: { expectedVersion: 2 },
+    });
+    await server.inject({
+      method: 'POST',
+      url: '/api/v1/ai/kill-switch',
+      headers: adminHeaders,
+      payload: { expectedVersion: 3, state: 'enabled', reason: 'Authoring API test.' },
+    });
+    const authoringPolicy = await server.inject({
+      method: 'PUT',
+      url: '/api/v1/ai/authoring/policy',
+      headers: adminHeaders,
+      payload: {
+        expectedVersion: 0,
+        state: 'enabled',
+        actions: [
+          {
+            id: 'title-action',
+            name: 'Title action',
+            enabled: true,
+            promptId: 'title',
+            contentType: 'page',
+            targetFields: ['title'],
+            maximumChanges: 1,
+            evaluationRules: [
+              { id: 'title-length', fieldPath: 'title', kind: 'maximum-length', maximum: 80 },
+            ],
+          },
+        ],
+        semantic: {
+          enabled: true,
+          adapterId: semantic.id,
+          modelId: semantic.modelId,
+          perspectives: ['draft'],
+          maximumResults: 10,
+          minimumScore: 0,
+          rules: [{ contentType: 'page', fieldPaths: ['title', 'slug'] }],
+        },
+      },
+    });
+    expect(authoringPolicy.statusCode, authoringPolicy.body).toBe(200);
+    const proposed = await server.inject({
+      method: 'POST',
+      url: '/api/v1/ai/authoring/proposals',
+      headers: headers('author-a', 'author'),
+      payload: {
+        actionId: 'title-action',
+        targetEntryId: entry.id,
+        expectedDraftRevisionId: entry.draftRevisionId,
+        request: {
+          requestId: '018daf23-89b3-7cf8-a4f1-94064c96df95',
+          promptId: 'title',
+          providerId: 'fixture-provider',
+          modelId: 'small',
+          input: 'Improve this title.',
+          sourceIds: [entry.id],
+        },
+      },
+    });
+    expect(proposed.statusCode, proposed.body).toBe(201);
+    expect(proposed.json().proposals[0]).toMatchObject({
+      status: 'pending-review',
+      changes: [{ fieldPath: 'title', value: 'A reviewed API title' }],
+      evaluation: { outcome: 'passed' },
+    });
+    expect(captured[0]?.outputContract).toBe('gridstory.authoring-suggestions.v1');
+    const proposal = proposed.json().proposals[0];
+    const authorReviewDenied = await server.inject({
+      method: 'POST',
+      url: `/api/v1/ai/authoring/proposals/${proposal.id}/review`,
+      headers: headers('author-a', 'author'),
+      payload: { expectedVersion: proposed.json().version, decision: 'approved' },
+    });
+    expect(authorReviewDenied.statusCode).toBe(403);
+    const serviceReviewDenied = await server.inject({
+      method: 'POST',
+      url: `/api/v1/ai/authoring/proposals/${proposal.id}/review`,
+      headers: {
+        ...headers('publisher-bot', 'publisher'),
+        'x-gridstory-principal-type': 'service-account',
+      },
+      payload: { expectedVersion: proposed.json().version, decision: 'approved' },
+    });
+    expect(serviceReviewDenied.statusCode).toBe(403);
+    expect(serviceReviewDenied.json()).toMatchObject({
+      error: { code: 'ai_authoring_human_review_required' },
+    });
+    const reviewed = await server.inject({
+      method: 'POST',
+      url: `/api/v1/ai/authoring/proposals/${proposal.id}/review`,
+      headers: headers('publisher-a', 'publisher'),
+      payload: {
+        expectedVersion: proposed.json().version,
+        decision: 'approved',
+        reason: 'Human reviewed.',
+      },
+    });
+    expect(reviewed.statusCode, reviewed.body).toBe(200);
+    expect(reviewed.json().proposals[0]).toMatchObject({ status: 'approved' });
+    const unchanged = await server.inject({
+      method: 'GET',
+      url: `/api/v1/content/${entry.id}?perspective=draft`,
+      headers: adminHeaders,
+    });
+    expect(unchanged.json().data.title).toBe('Original editor@example.test');
+
+    await server.inject({
+      method: 'POST',
+      url: '/api/v1/search/index/rebuild',
+      headers: adminHeaders,
+      payload: { perspective: 'draft' },
+    });
+    await server.inject({
+      method: 'POST',
+      url: '/api/v1/operations/drain',
+      headers: adminHeaders,
+      payload: { limit: 100 },
+    });
+    expect(indexed[0]?.fields).toEqual([
+      { path: 'title', value: 'Original [REDACTED_EMAIL]' },
+      { path: 'slug', value: 'original' },
+    ]);
+    expect(JSON.stringify(indexed)).not.toContain('must-not-index');
+    semanticResult = {
+      organizationId: entry.organizationId,
+      tenantId: entry.tenantId,
+      workspaceId: entry.workspaceId,
+      siteId: entry.siteId,
+      environmentId: entry.environmentId,
+      locale: entry.locale,
+      adapterId: semantic.id,
+      modelId: semantic.modelId,
+      indexVersion: 'index-1',
+      perspective: 'draft',
+      hits: [
+        {
+          organizationId: entry.organizationId,
+          tenantId: entry.tenantId,
+          workspaceId: entry.workspaceId,
+          siteId: entry.siteId,
+          environmentId: entry.environmentId,
+          locale: entry.locale,
+          entryId: entry.id,
+          contentType: entry.contentType,
+          perspective: 'draft',
+          revisionId: entry.draftRevisionId,
+          score: 0.9,
+          fieldPaths: ['title'],
+        },
+      ],
+    };
+    const searched = await server.inject({
+      method: 'POST',
+      url: '/api/v1/ai/semantic/search',
+      headers: headers('viewer-a', 'viewer'),
+      payload: { text: 'editor@example.test', perspective: 'draft', first: 5 },
+    });
+    expect(searched.statusCode, searched.body).toBe(200);
+    expect(semanticQuery).toBe('[REDACTED_EMAIL]');
+    expect(searched.json().hits[0]).toMatchObject({ entryId: entry.id, fieldPaths: ['title'] });
+    const firstHit = semanticResult.hits[0];
+    if (!firstHit) throw new Error('Expected semantic hit fixture.');
+    semanticResult = { ...semanticResult, hits: [{ ...firstHit, tenantId: 'other-tenant' }] };
+    const hostile = await server.inject({
+      method: 'POST',
+      url: '/api/v1/ai/semantic/search',
+      headers: headers('viewer-a', 'viewer'),
+      payload: { text: 'title', perspective: 'draft', first: 5 },
+    });
+    expect(hostile.statusCode).toBe(502);
+    expect(hostile.json()).toMatchObject({ error: { code: 'ai_semantic_result_invalid' } });
   });
 
   it('returns generic provider failures without leaking diagnostics', async () => {

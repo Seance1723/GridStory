@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import {
+  type AiAuthoringDocument,
   type AiGatewayDocument,
   type AssetRecord,
   type AssetUploadSession,
@@ -581,6 +582,21 @@ function createTestClient(
     stateEvents: [],
     updatedAt: now,
   };
+  let aiAuthoring: AiAuthoringDocument = {
+    organizationId: 'local',
+    tenantId: 'default',
+    workspaceId: 'default',
+    siteId: 'default',
+    environmentId: 'development',
+    locale: 'en',
+    schemaVersion: 1,
+    version: 0,
+    state: 'disabled',
+    actions: [],
+    semantic: { enabled: false },
+    proposals: [],
+    updatedAt: now,
+  };
   const workflowInstances = new Map(
     testEntries.map((candidate) => [
       candidate.id,
@@ -1020,6 +1036,141 @@ function createTestClient(
         usage: { requests: 1, inputTokens: 14, outputTokens: 8, costMicros: 80 },
         redactions: { credentials: 0, emails: 0, phones: 0, ips: 0 },
         finishReason: 'stop',
+      });
+    }
+    if (url.pathname === '/api/v1/ai/authoring' && init?.method === undefined) {
+      return json(aiAuthoring);
+    }
+    if (url.pathname === '/api/v1/ai/authoring/policy' && init?.method === 'PUT') {
+      const body = JSON.parse(String(init.body)) as Pick<
+        AiAuthoringDocument,
+        'state' | 'actions' | 'semantic'
+      >;
+      aiAuthoring = {
+        ...aiAuthoring,
+        version: aiAuthoring.version + 1,
+        state: body.state,
+        actions: body.actions,
+        semantic: body.semantic,
+        updatedAt: now,
+      };
+      return json(aiAuthoring);
+    }
+    if (url.pathname === '/api/v1/ai/authoring/proposals' && init?.method === 'POST') {
+      const body = JSON.parse(String(init.body)) as {
+        actionId: string;
+        targetEntryId: string;
+        expectedDraftRevisionId: string;
+        request: { requestId: string; providerId: string; modelId: string };
+      };
+      aiAuthoring = {
+        ...aiAuthoring,
+        version: aiAuthoring.version + 1,
+        proposals: [
+          ...aiAuthoring.proposals,
+          {
+            id: '018daf23-89b3-7cf8-a4f1-94064c96df99',
+            status: 'pending-review',
+            action: {
+              id: body.actionId,
+              name: 'Improve title',
+              enabled: true,
+              promptId: 'content-summary',
+              contentType: 'page',
+              targetFields: ['headline'],
+              maximumChanges: 1,
+              evaluationRules: [],
+              documentVersion: aiAuthoring.version,
+            },
+            target: {
+              entryId: body.targetEntryId,
+              contentType: 'page',
+              revisionId: body.expectedDraftRevisionId,
+            },
+            changes: [
+              {
+                fieldPath: 'headline',
+                value: 'AI reviewed headline',
+                rationale: 'Clearer.',
+              },
+            ],
+            evaluation: {
+              outcome: 'passed',
+              results: [
+                {
+                  ruleId: 'gridstory:content-schema',
+                  fieldPath: 'document',
+                  kind: 'content-schema',
+                  outcome: 'passed',
+                  message: 'The complete candidate passed the content schema.',
+                },
+              ],
+            },
+            provenance: {
+              requestId: body.request.requestId,
+              outputContract: 'gridstory.authoring-suggestions.v1',
+              promptId: 'content-summary',
+              promptVersion: 1,
+              providerId: body.request.providerId,
+              modelId: body.request.modelId,
+              sources: [],
+              usage: { requests: 1, inputTokens: 12, outputTokens: 8, costMicros: 80 },
+              redactions: { credentials: 0, emails: 0, phones: 0, ips: 0 },
+              finishReason: 'stop',
+              actorId: 'studio-local-admin',
+              createdAt: now,
+            },
+            reviews: [],
+          },
+        ],
+        updatedAt: now,
+      };
+      return json(aiAuthoring, 201);
+    }
+    const aiReviewMatch = url.pathname.match(
+      /^\/api\/v1\/ai\/authoring\/proposals\/([^/]+)\/review$/,
+    );
+    if (aiReviewMatch && init?.method === 'POST') {
+      const body = JSON.parse(String(init.body)) as {
+        decision: 'approved' | 'rejected';
+        reason?: string;
+      };
+      aiAuthoring = {
+        ...aiAuthoring,
+        version: aiAuthoring.version + 1,
+        proposals: aiAuthoring.proposals.map((proposal) =>
+          proposal.id === aiReviewMatch[1]
+            ? {
+                ...proposal,
+                status: body.decision,
+                reviews: [
+                  {
+                    decision: body.decision,
+                    actorId: 'studio-local-admin',
+                    occurredAt: now,
+                    ...(body.reason ? { reason: body.reason } : {}),
+                  },
+                ],
+              }
+            : proposal,
+        ),
+        updatedAt: now,
+      };
+      return json(aiAuthoring);
+    }
+    if (url.pathname === '/api/v1/ai/semantic/search' && init?.method === 'POST') {
+      return json({
+        organizationId: 'local',
+        tenantId: 'default',
+        workspaceId: 'default',
+        siteId: 'default',
+        environmentId: 'development',
+        locale: 'en',
+        perspective: 'draft',
+        adapterId: 'semantic-test',
+        modelId: 'embedding-small',
+        indexVersion: 'index-1',
+        hits: [],
       });
     }
     if (url.pathname === '/api/v1/governance' && init?.method !== 'POST') {
@@ -2070,7 +2221,7 @@ describe('GridStory Studio', () => {
     expect(panel.textContent).toContain('Draft promotion: uk');
   }, 15_000);
 
-  it('operates the governed AI policy, prompt, kill switch, and non-mutating test path', async () => {
+  it('operates governed generation, reviewed proposals, unsaved handoff, and semantic search', async () => {
     const user = userEvent.setup();
     render(<App client={createTestClient()} />);
 
@@ -2088,6 +2239,45 @@ describe('GridStory Studio', () => {
     expect(await screen.findByText('Exact AI prompt version activated.')).toBeTruthy();
     await user.click(within(panel).getByRole('button', { name: 'Enable AI gateway' }));
     expect(await screen.findByText(/AI gateway enabled.*In-flight responses/i)).toBeTruthy();
+
+    const authoringPolicy = within(panel).getByLabelText('Authoring policy JSON');
+    const configuredAuthoring = JSON.parse((authoringPolicy as HTMLTextAreaElement).value);
+    fireEvent.change(authoringPolicy, {
+      target: {
+        value: JSON.stringify({
+          ...configuredAuthoring,
+          state: 'enabled',
+          semantic: {
+            enabled: true,
+            adapterId: 'semantic-test',
+            modelId: 'embedding-small',
+            perspectives: ['draft'],
+            maximumResults: 10,
+            minimumScore: 0,
+            rules: [{ contentType: 'page', fieldPaths: ['headline', 'path'] }],
+          },
+        }),
+      },
+    });
+    await user.click(within(panel).getByRole('button', { name: 'Save authoring policy' }));
+    expect(await screen.findByText('AI authoring and semantic policy saved.')).toBeTruthy();
+
+    await user.click(within(panel).getByRole('button', { name: 'Generate evaluated proposal' }));
+    expect(await within(panel).findByText(/pending-review · improve-title/i)).toBeTruthy();
+    expect(await screen.findByText(/content is unchanged/i)).toBeTruthy();
+    await user.click(within(panel).getByRole('button', { name: 'Approve proposal' }));
+    expect(await within(panel).findByText(/approved · improve-title/i)).toBeTruthy();
+    await user.click(within(panel).getByRole('button', { name: 'Use as unsaved editor changes' }));
+    expect((screen.getByLabelText('Headline') as HTMLInputElement).value).toBe(
+      'AI reviewed headline',
+    );
+    expect(screen.getByText('Unsaved changes')).toBeTruthy();
+
+    await user.type(within(panel).getByLabelText('Bounded semantic query'), 'related homepage');
+    await user.click(within(panel).getByRole('button', { name: 'Search private semantic index' }));
+    const semantic = await within(panel).findByRole('region', { name: 'Semantic search results' });
+    expect(semantic.textContent).toContain('semantic-test/embedding-small');
+    expect(semantic.textContent).toContain('No authorized matches.');
 
     await user.click(within(panel).getByRole('button', { name: 'Generate untrusted output' }));
     const result = await within(panel).findByRole('region', { name: 'Untrusted AI result' });

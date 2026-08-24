@@ -90,6 +90,6 @@ SQLite and PostgreSQL persist the same complete-scope document. Native backup/re
 
 ## Explicit limitations
 
-This milestone does not provide provider adapters, autonomous agents, tools/function calling, streaming, embeddings, semantic search, ambient retrieval, conversations or memory, provenance/evaluation workflows, automatic provider fallback, suggestions, content writes, publication, complete PII/DLP detection, provider billing truth, or human-approval workflow. M7-005 owns evaluated suggestions, provenance, semantic retrieval, and human approval; any future tool or mutation authority requires a new threat model and decision record.
+This gateway milestone does not itself provide provider adapters, autonomous agents, tools/function calling, streaming, embeddings, ambient retrieval, conversations or memory, automatic provider fallback, content writes, publication, complete PII/DLP detection, or provider billing truth. M7-005 builds separately reviewed proposals and private semantic search on this non-mutating boundary; see [Reviewed AI authoring and private semantic search](ai-authoring-and-semantic-search.md). Any future tool or mutation authority requires a new threat model and decision record.
 
 The accepted architectural decision is [ADR-0020](adr/0020-governed-ai-gateway.md). `THREAT-0033` and `GS-SEC-037` define the normative security and verification boundary.

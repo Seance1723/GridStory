@@ -1,10 +1,16 @@
 import type {
+  AiAuthoringDocument,
+  AiAuthoringPolicyInput,
+  AiAuthoringProposalInput,
+  AiAuthoringReviewInput,
   AiGatewayDocument,
   AiGatewayPolicyInput,
   AiGatewayStateInput,
   AiGenerateInput,
   AiGenerateResult,
   AiPromptVersionInput,
+  AiSemanticQuery,
+  AiSemanticSearchResponse,
   AssetDeliveryGrant,
   AnalyticsIngestionResult,
   AnalyticsReport,
@@ -1956,6 +1962,60 @@ export class GridStoryClient {
     });
   }
 
+  getAiAuthoring(signal?: AbortSignal): Promise<AiAuthoringDocument> {
+    return this.#request('/api/v1/ai/authoring', {
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  updateAiAuthoringPolicy(
+    input: AiAuthoringPolicyInput,
+    signal?: AbortSignal,
+  ): Promise<AiAuthoringDocument> {
+    return this.#request('/api/v1/ai/authoring/policy', {
+      method: 'PUT',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  createAiAuthoringProposal(
+    input: AiAuthoringProposalInput,
+    signal?: AbortSignal,
+  ): Promise<AiAuthoringDocument> {
+    return this.#request('/api/v1/ai/authoring/proposals', {
+      method: 'POST',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  reviewAiAuthoringProposal(
+    proposalId: string,
+    input: AiAuthoringReviewInput,
+    signal?: AbortSignal,
+  ): Promise<AiAuthoringDocument> {
+    return this.#request(
+      `/api/v1/ai/authoring/proposals/${encodeURIComponent(proposalId)}/review`,
+      {
+        method: 'POST',
+        body: JSON.stringify(input),
+        ...(signal ? { signal } : {}),
+      },
+    );
+  }
+
+  semanticAiSearch(
+    input: AiSemanticQuery,
+    signal?: AbortSignal,
+  ): Promise<AiSemanticSearchResponse> {
+    return this.#request('/api/v1/ai/semantic/search', {
+      method: 'POST',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
   getContent(
     id: string,
     options: { perspective?: ContentPerspective; signal?: AbortSignal } = {},
@@ -2238,12 +2298,18 @@ export function createGridStoryClient(options: GridStoryClientOptions): GridStor
 }
 
 export type {
+  AiAuthoringDocument,
+  AiAuthoringPolicyInput,
+  AiAuthoringProposalInput,
+  AiAuthoringReviewInput,
   AiGatewayDocument,
   AiGatewayPolicyInput,
   AiGatewayStateInput,
   AiGenerateInput,
   AiGenerateResult,
   AiPromptVersionInput,
+  AiSemanticQuery,
+  AiSemanticSearchResponse,
   AnalyticsIngestionResult,
   AnalyticsReport,
   AssetDeliveryGrant,

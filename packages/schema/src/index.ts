@@ -1,5 +1,6 @@
 export * from './assets.js';
 export * from './ai.js';
+export * from './ai-authoring.js';
 export * from './analytics.js';
 export * from './authoring.js';
 export * from './canonical.js';

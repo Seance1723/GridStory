@@ -561,6 +561,7 @@ export class AiGatewayService {
     scope: ContentScope;
     request: AiGenerateInput;
     sourceReader: AiSourceReader;
+    outputContract?: 'gridstory.authoring-suggestions.v1';
   }): Promise<AiGenerateResult> {
     const initial = await this.snapshot(input.scope);
     if (initial.receipts.some((receipt) => receipt.requestId === input.request.requestId)) {
@@ -596,6 +597,7 @@ export class AiGatewayService {
       sources,
       maximumOutputTokens: prompt.maximumOutputTokens,
       timeoutMs: prompt.timeoutMs,
+      ...(input.outputContract ? { outputContract: input.outputContract } : {}),
     });
     let estimate: AiProviderEstimate;
     try {

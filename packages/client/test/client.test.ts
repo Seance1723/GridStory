@@ -78,6 +78,32 @@ describe('GridStoryClient browser compatibility', () => {
       input: 'Summarize this.',
       sourceIds: ['home'],
     });
+    await client.getAiAuthoring();
+    await client.updateAiAuthoringPolicy({
+      expectedVersion: 0,
+      state: 'disabled',
+      actions: [],
+      semantic: { enabled: false },
+    });
+    await client.createAiAuthoringProposal({
+      actionId: 'title',
+      targetEntryId: 'home',
+      expectedDraftRevisionId: 'revision-1',
+      request: {
+        requestId: '018daf23-89b3-7cf8-a4f1-94064c96df91',
+        promptId: 'summary',
+        providerId: 'provider',
+        modelId: 'small',
+        input: 'Improve this.',
+        sourceIds: ['home'],
+      },
+    });
+    await client.reviewAiAuthoringProposal('proposal one', {
+      expectedVersion: 1,
+      decision: 'approved',
+      reason: 'Reviewed.',
+    });
+    await client.semanticAiSearch({ text: 'home', perspective: 'draft', first: 5 });
 
     expect(requests.map(({ url, init }) => [url, init?.method])).toEqual([
       ['https://cms.example.test/api/v1/ai', undefined],
@@ -86,6 +112,11 @@ describe('GridStoryClient browser compatibility', () => {
       ['https://cms.example.test/api/v1/ai/prompts/summary%20prompt/versions/1/activate', 'POST'],
       ['https://cms.example.test/api/v1/ai/kill-switch', 'POST'],
       ['https://cms.example.test/api/v1/ai/generate', 'POST'],
+      ['https://cms.example.test/api/v1/ai/authoring', undefined],
+      ['https://cms.example.test/api/v1/ai/authoring/policy', 'PUT'],
+      ['https://cms.example.test/api/v1/ai/authoring/proposals', 'POST'],
+      ['https://cms.example.test/api/v1/ai/authoring/proposals/proposal%20one/review', 'POST'],
+      ['https://cms.example.test/api/v1/ai/semantic/search', 'POST'],
     ]);
     expect(JSON.parse(String(requests[3]?.init?.body))).toEqual({ expectedVersion: 2 });
   });

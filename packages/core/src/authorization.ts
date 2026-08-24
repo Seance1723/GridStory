@@ -68,6 +68,7 @@ export const GridStoryActions = {
   aiRead: 'ai.read',
   aiManage: 'ai.manage',
   aiExecute: 'ai.execute',
+  aiReview: 'ai.review',
 } as const;
 
 export type GridStoryAction = (typeof GridStoryActions)[keyof typeof GridStoryActions];
@@ -200,6 +201,7 @@ export const defaultRoles: RoleDefinition[] = [
       GridStoryActions.aiRead,
       GridStoryActions.aiManage,
       GridStoryActions.aiExecute,
+      GridStoryActions.aiReview,
     ],
   },
   { id: 'delivery', actions: [GridStoryActions.deliveryRead] },

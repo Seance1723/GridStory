@@ -249,6 +249,20 @@
         "availability",
         "accountability"
       ]
+    },
+    {
+      "id": "ASSET-022",
+      "name": "AI authoring actions, evaluated proposals, review provenance, semantic policy, and derived vector indexes",
+      "securityProperties": [
+        "confidentiality",
+        "integrity",
+        "tenant isolation",
+        "least privilege",
+        "data minimization",
+        "human oversight",
+        "revision binding",
+        "recoverability"
+      ]
     }
   ],
   "trustBoundaries": [
@@ -412,6 +426,18 @@
         "conservative request/input/output/cost reservation with bounded metadata-only receipts",
         "timeout, generic provider failures, duplicate request denial, and no tools or mutation authority",
         "kill-switch checks before retrieval, before provider execution, and during atomic result settlement"
+      ]
+    },
+    {
+      "id": "BOUNDARY-017",
+      "name": "Reviewed AI authoring and private semantic index adapters",
+      "controls": [
+        "fixed bounded provider output contract and complete candidate validation",
+        "exact action, prompt, model, source, target revision, usage, redaction, and evaluation provenance",
+        "separate human-only one-time review with no automatic content write",
+        "positive top-level text/slug semantic field allowlists and deterministic redaction",
+        "identifier-only durable jobs and derived rebuildable adapter indexes",
+        "same-scope, perspective, model, current-revision, field, finite-score, unique-hit, and content-authorization validation"
       ]
     }
   ],
@@ -591,6 +617,27 @@
       "to": "ACTOR-007",
       "data": "credential-free bounded structured text request and validated metered text response without tenant routing fields, tools, or mutation authority",
       "assets": ["ASSET-002", "ASSET-003", "ASSET-012", "ASSET-021"]
+    },
+    {
+      "id": "FLOW-025",
+      "from": "ACTOR-002",
+      "to": "BOUNDARY-017",
+      "data": "exact saved draft/action/request, fixed-contract redacted proposal, deterministic evaluation evidence, explicit human decision, and visible unsaved editor handoff",
+      "assets": ["ASSET-001", "ASSET-003", "ASSET-004", "ASSET-009", "ASSET-021", "ASSET-022"]
+    },
+    {
+      "id": "FLOW-026",
+      "from": "ACTOR-006",
+      "to": "BOUNDARY-017",
+      "data": "identifier-only scoped index job, allowlisted redacted saved field documents, and derived adapter index metadata",
+      "assets": ["ASSET-001", "ASSET-003", "ASSET-008", "ASSET-012", "ASSET-022"]
+    },
+    {
+      "id": "FLOW-027",
+      "from": "BOUNDARY-017",
+      "to": "ACTOR-007",
+      "data": "redacted bounded semantic documents or private query and scoped candidate IDs, scores, revisions, field paths, model, and index version",
+      "assets": ["ASSET-001", "ASSET-003", "ASSET-012", "ASSET-022"]
     }
   ],
   "assumptions": [
@@ -1605,6 +1652,65 @@
         "tests/e2e/accessibility.spec.ts",
         "docs/ai-gateway.md",
         "docs/adr/0020-governed-ai-gateway.md"
+      ]
+    },
+    {
+      "id": "THREAT-0034",
+      "title": "AI proposal poisoning, non-human approval, stale handoff, or semantic index scope bleed",
+      "stride": [
+        "Spoofing",
+        "Tampering",
+        "Repudiation",
+        "Information Disclosure",
+        "Denial of Service",
+        "Elevation of Privilege"
+      ],
+      "scenario": "A provider returns malformed, incomplete, duplicate, oversized, disallowed-field, or schema-invalid suggestion data; an actor fabricates evaluation/provenance, approves through a service account, reviews twice, applies against a changed draft, or treats approval as publication; or a semantic adapter indexes non-allowlisted sensitive fields, accepts a poisoned job/query, returns a cross-scope, wrong-perspective/model/field, duplicate, non-finite, unauthorized, or stale revision hit, leaks diagnostics, or makes derived vectors authoritative backup data.",
+      "actors": ["ACTOR-002", "ACTOR-003", "ACTOR-004", "ACTOR-006", "ACTOR-007", "ACTOR-008"],
+      "assets": [
+        "ASSET-001",
+        "ASSET-003",
+        "ASSET-004",
+        "ASSET-008",
+        "ASSET-009",
+        "ASSET-012",
+        "ASSET-021",
+        "ASSET-022"
+      ],
+      "boundaries": [
+        "BOUNDARY-002",
+        "BOUNDARY-003",
+        "BOUNDARY-006",
+        "BOUNDARY-016",
+        "BOUNDARY-017"
+      ],
+      "likelihood": 4,
+      "impact": 5,
+      "risk": 20,
+      "response": "mitigate",
+      "owner": "AI governance, security, platform, search, and editorial owner",
+      "mitigations": [
+        "Require ai.execute plus ordinary target/source reads for generation, ai.review only for publisher/admin user principals, and content.read again for review and every semantic result; reject service-account/anonymous review and allow only one pending-review transition.",
+        "Bind each enabled action to one known prompt/content type and unique top-level text/slug targets; require the fixed gridstory.authoring-suggestions.v1 contract, complete stop result, bounded unique declared changes, exact current target revision, ordinary complete candidate validation, and every deterministic rule before a proposal can be reviewed.",
+        "Persist bounded redacted suggested values plus exact action/request/prompt/model/target/source revision, usage/redaction, actor/time, evaluation, and one review record; retain no raw provider JSON, rendered prompt, source values, semantic query, embedding/vector, or adapter diagnostics.",
+        "Treat approval as review evidence only; recheck the exact target revision, mark stale rather than approve on drift, expose approved values in Studio only as visible dirty local edits, and require the normal content save, workflow, quality, and publication path afterward.",
+        "Index only positively configured top-level text/slug fields at configured perspectives, redact before the injected tenant-aware adapter, keep durable job payloads identifier-only, and treat adapter vectors/indexes as disposable derived state rebuilt from authoritative content.",
+        "Redact and bound private semantic queries, validate adapter identity/model/index metadata and every hit's complete scope, perspective, unique ID, finite score, content type, positive field provenance, current revision, and content authorization; fail the whole request closed on hostile or stale evidence and replace thrown adapter diagnostics with generic errors.",
+        "Keep authoring and semantic policy complete-scope, optimistic, bounded, private/no-store, and disabled by default; ship no provider/vector SDK or credentials, and require deployment TLS, egress, secrets, retention, deletion, model/index quality, availability, rate, and incident evidence."
+      ],
+      "verification": [
+        "packages/schema/test/ai-authoring.test.ts",
+        "packages/core/test/ai-authoring-repository.test.ts",
+        "packages/core/test/ai-authoring-service.test.ts",
+        "packages/core/test/postgres-conformance.test.ts",
+        "apps/api/test/ai.test.ts",
+        "apps/api/test/database-recovery.test.ts",
+        "apps/api/test/postgres-server.test.ts",
+        "packages/client/test/client.test.ts",
+        "apps/studio/test/App.test.tsx",
+        "tests/e2e/accessibility.spec.ts",
+        "docs/ai-authoring-and-semantic-search.md",
+        "docs/adr/0021-reviewed-ai-authoring-and-semantic-search.md"
       ]
     }
   ],

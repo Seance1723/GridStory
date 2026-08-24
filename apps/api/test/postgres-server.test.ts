@@ -191,6 +191,29 @@ describe.skipIf(!connectionString)('GridStory API with PostgreSQL', () => {
         payload: { expectedVersion: 2 },
       }),
     ).toMatchObject({ statusCode: 200 });
+    const aiAuthoringSaved = await server.inject({
+      method: 'PUT',
+      url: '/api/v1/ai/authoring/policy',
+      headers,
+      payload: {
+        expectedVersion: 0,
+        state: 'enabled',
+        actions: [
+          {
+            id: 'postgres-title',
+            name: 'PostgreSQL title',
+            enabled: true,
+            promptId: 'postgres-summary',
+            contentType: 'page',
+            targetFields: ['title'],
+            maximumChanges: 1,
+            evaluationRules: [],
+          },
+        ],
+        semantic: { enabled: false },
+      },
+    });
+    expect(aiAuthoringSaved.statusCode, aiAuthoringSaved.body).toBe(200);
     expect(
       await server.inject({
         method: 'POST',
@@ -314,6 +337,17 @@ describe.skipIf(!connectionString)('GridStory API with PostgreSQL', () => {
       models: [{ providerId: 'postgres-provider', modelId: 'small', enabled: true }],
       activePrompts: [{ promptId: 'postgres-summary', version: 1 }],
       promptVersions: [{ promptId: 'postgres-summary', version: 1 }],
+    });
+    const aiAuthoring = await server.inject({
+      method: 'GET',
+      url: '/api/v1/ai/authoring',
+      headers,
+    });
+    expect(aiAuthoring.statusCode, aiAuthoring.body).toBe(200);
+    expect(aiAuthoring.json()).toMatchObject({
+      version: 1,
+      state: 'enabled',
+      actions: [{ id: 'postgres-title', promptId: 'postgres-summary' }],
     });
     const allocation = await server.inject({
       method: 'POST',

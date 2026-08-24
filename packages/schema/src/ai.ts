@@ -247,6 +247,7 @@ export const aiProviderRequestSchema = z
       .int()
       .min(resourceLimits.aiGateway.minimumTimeoutMs)
       .max(resourceLimits.aiGateway.maximumTimeoutMs),
+    outputContract: z.literal('gridstory.authoring-suggestions.v1').optional(),
   })
   .strict();
 

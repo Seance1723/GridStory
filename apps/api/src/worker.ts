@@ -1,4 +1,6 @@
 import {
+  AiAuthoringService,
+  AiGatewayService,
   ConfiguredPlacementAdapter,
   ContentGovernanceProcessor,
   ContentQualityService,
@@ -12,6 +14,8 @@ import {
   type IdentityRepository,
   OperationsService,
   PostgresContentRepository,
+  PostgresAiAuthoringRepository,
+  PostgresAiGatewayRepository,
   PostgresGovernanceRepository,
   PostgresIdentityRepository,
   PostgresReleaseRepository,
@@ -19,6 +23,8 @@ import {
   type ReleaseRepository,
   ReleaseService,
   SearchService,
+  SqliteAiAuthoringRepository,
+  SqliteAiGatewayRepository,
   SqliteContentRepository,
   SqliteGovernanceRepository,
   SqliteIdentityRepository,
@@ -51,6 +57,12 @@ const governanceRepository: GovernanceRepository = config.databaseUrl
 const identityRepository: IdentityRepository = config.databaseUrl
   ? new PostgresIdentityRepository({ connectionString: config.databaseUrl })
   : new SqliteIdentityRepository({ filename: config.databasePath });
+const aiGatewayRepository = config.databaseUrl
+  ? new PostgresAiGatewayRepository({ connectionString: config.databaseUrl })
+  : new SqliteAiGatewayRepository({ filename: config.databasePath });
+const aiAuthoringRepository = config.databaseUrl
+  ? new PostgresAiAuthoringRepository({ connectionString: config.databaseUrl })
+  : new SqliteAiAuthoringRepository({ filename: config.databasePath });
 const identity = new EnterpriseIdentityService({ repository: identityRepository });
 const governance = new GovernanceService({
   repository: governanceRepository,
@@ -91,9 +103,18 @@ const search = new SearchService({
   schemas: [pageSchema],
   telemetry: observability.tenantTelemetry,
 });
+const aiAuthoring = new AiAuthoringService({
+  repository: aiAuthoringRepository,
+  gateway: new AiGatewayService({ repository: aiGatewayRepository }),
+  content,
+});
 const operations = new OperationsService({
   repository,
-  searchJobRunner: (job) => search.processJob(job),
+  searchJobRunner: async (job) => {
+    const lexical = await search.processJob(job);
+    const semantic = await aiAuthoring.processSearchJob(job);
+    return { ...lexical, semantic };
+  },
   webhookSigningSecret: config.webhookSigningSecret,
   ...(config.allowedWebhookHosts ? { allowedWebhookHosts: config.allowedWebhookHosts } : {}),
   telemetry: observability.tenantTelemetry,
@@ -195,6 +216,8 @@ const closeWorker = () => {
       () => releaseRepository.close(),
       () => governanceRepository.close(),
       () => identityRepository.close(),
+      () => aiGatewayRepository.close(),
+      () => aiAuthoringRepository.close(),
       () => observability.shutdown(),
     ]) {
       try {

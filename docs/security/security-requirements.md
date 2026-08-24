@@ -173,6 +173,16 @@ The event contract, adapter composition, aggregate limits, recovery, rollback, a
 
 The provider contract, route sequence, retrieval semantics, budget accounting, recovery behavior, and limitations are documented in [Governed AI gateway](../ai-gateway.md). `THREAT-0033` owns injection, scoped-source leakage, replay, model/prompt bypass, unbounded spend, provider leakage/unavailability, malformed metering/output, and stale kill-switch races.
 
+## Reviewed AI authoring and semantic search
+
+- `GS-SEC-038`: Authoring policy, evaluated proposals, provenance, and review evidence SHALL use complete-scope optimistic bounded persistence, private/no-store routes, disabled defaults, and fixed top-level text/slug target allowlists. Raw provider JSON, rendered prompts, source values, diagnostics, hidden reasoning, semantic queries, embeddings, and vectors SHALL have no persistence path.
+- Generation SHALL require `ai.execute`, a known enabled action and active prompt/model, exact current saved draft, ordinary target/source reads, a complete fixed `gridstory.authoring-suggestions.v1` result, unique declared changes, complete candidate validation, and every deterministic rule. Failure SHALL produce no approvable proposal.
+- `ai.review` SHALL be distinct from execute/manage, granted by default only to publisher/admin users, rejected for service-account/anonymous principals, allowed once only for a passed pending proposal, and recheck the target revision. Approval SHALL NOT save content, transition workflow, satisfy workflow approval, or publish. Studio handoff SHALL be visibly unsaved.
+- Semantic indexing SHALL reuse identifier-only durable search jobs, re-resolve authoritative content, select and redact only positive configured top-level text/slug fields, bound source text, call only the configured injected tenant-aware adapter/model, and treat all adapter indexes/vectors as derived rebuildable state.
+- Semantic queries SHALL be private, bounded, redacted, and non-persistent. Complete results SHALL fail closed on adapter/model/scope/perspective/index mismatch, duplicate or non-finite hits, disallowed fields, stale revisions, or failed ordinary content authorization. Adapter diagnostics SHALL be generic at retained boundaries.
+
+The full lifecycle, adapter contract, route sequence, recovery behavior, removal order, and limitations are documented in [Reviewed AI authoring and private semantic search](../ai-authoring-and-semantic-search.md). `THREAT-0034` owns proposal poisoning, non-human or replayed review, stale handoff, sensitive-field indexing, semantic poisoning/scope bleed, stale/hostile hits, and derived-index recovery assumptions.
+
 ## Logging, error handling, and operations
 
 - `GS-SEC-028`: a maintained log inventory SHALL define event, metadata, format, sink, access, retention, correlation, and alerting. At minimum cover authentication, failed authorization, privileged mutation, publication, workflow/release, import/export, credential lifecycle, adapter failure, and control bypass.

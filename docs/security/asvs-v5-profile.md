@@ -127,7 +127,13 @@ This control does not collect consent, enforce deployment admission rates, opera
 
 `GS-SEC-037` and `THREAT-0033` link strict AI schemas; complete-scope optimistic memory, SQLite, and qualified PostgreSQL policy; separate read/manage/execute authorization; immutable prompt versions and exact activation; explicit perspective/type/field retrieval with source reauthorization; deterministic outbound/inbound redaction; injected credential-free text adapters; conservative atomic request/token/cost reservation; bounded metadata-only receipts; generic errors/timeouts; untrusted non-mutating results; settlement-time kill-switch checks; typed REST/client/Studio controls; PostgreSQL persistence/logical restore; and live SQLite recovery.
 
-This control does not provide a deployed provider, complete PII/DLP discovery, provider TLS/egress/secret/region/retention/training/billing conformance, streaming, tools, agents, conversations, automatic fallback, semantic search, suggestions, provenance/evaluation, human approval, or content mutation. Deployment evidence and M7-005 must address those boundaries before making broader AI claims.
+This gateway control does not provide a deployed provider, complete PII/DLP discovery, provider TLS/egress/secret/region/retention/training/billing conformance, streaming, tools, agents, conversations, automatic fallback, or content mutation. M7-005 separately governs reviewed authoring proposals and private semantic search below; deployment evidence remains required before making provider-specific AI claims.
+
+## M7-005 evidence update
+
+`GS-SEC-038` and `THREAT-0034` link strict fixed authoring output; complete-scope optimistic memory, SQLite, and qualified PostgreSQL policy/proposal/review persistence; known prompt/action and top-level text/slug targets; exact saved-revision/source/model provenance; complete candidate and deterministic evaluation; separate human-user-only one-time review; revision-rechecked unsaved Studio handoff; private identifier-only durable semantic indexing; positive redacted field allowlists; injected adapter identity/model/index validation; current-revision and per-hit content authorization; generic adapter errors; typed REST/client/Studio controls; PostgreSQL persistence/logical restore; and live SQLite recovery.
+
+This control does not provide a deployed model/vector service, provider TLS/egress/secret/region/retention/training/billing/model-quality conformance, complete PII/DLP discovery, factuality/bias/brand/legal/safety certification, arbitrary schemas/evaluators, rich-content/translation/bulk authoring, tools/agents/conversations/memory, automatic writes/workflow/publication, public semantic delivery, recommendations, hybrid ranking, pgvector, or ANN tuning. Deployment, AI governance, security, privacy, search, and editorial owners retain those obligations.
 
 ## Highest-priority gaps
 

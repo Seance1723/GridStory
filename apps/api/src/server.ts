@@ -5,9 +5,12 @@ import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import formbody from '@fastify/formbody';
 import {
+  type AiAuthoringRepository,
+  AiAuthoringService,
   type AiGatewayRepository,
   AiGatewayService,
   type AiProviderAdapter,
+  type AiSemanticAdapter,
   type AssetContentInspector,
   type AnalyticsAdapter,
   type AnalyticsRepository,
@@ -67,6 +70,7 @@ import {
   PluginService,
   PortabilityService,
   PostgresCollaborationRepository,
+  PostgresAiAuthoringRepository,
   PostgresAiGatewayRepository,
   PostgresAnalyticsRepository,
   PostgresContentRepository,
@@ -86,6 +90,7 @@ import {
   type SearchAdapter,
   SearchService,
   SqliteAssetRepository,
+  SqliteAiAuthoringRepository,
   SqliteAiGatewayRepository,
   SqliteAnalyticsRepository,
   SqliteCollaborationRepository,
@@ -228,7 +233,9 @@ export interface BuildServerOptions {
   };
   ai?: {
     repository?: AiGatewayRepository;
+    authoringRepository?: AiAuthoringRepository;
     providers?: AiProviderAdapter[];
+    semanticAdapters?: AiSemanticAdapter[];
   };
 }
 
@@ -548,6 +555,11 @@ export async function buildServer({
     (databaseUrl
       ? new PostgresAiGatewayRepository({ connectionString: databaseUrl })
       : new SqliteAiGatewayRepository({ filename: databasePath }));
+  const resolvedAiAuthoringRepository: AiAuthoringRepository =
+    aiOptions?.authoringRepository ??
+    (databaseUrl
+      ? new PostgresAiAuthoringRepository({ connectionString: databaseUrl })
+      : new SqliteAiAuthoringRepository({ filename: databasePath }));
   const governance = new GovernanceService({
     repository: resolvedGovernanceRepository,
     ...(governanceOptions?.keyAdapter ? { keyAdapter: governanceOptions.keyAdapter } : {}),
@@ -695,6 +707,12 @@ export async function buildServer({
     ...(searchAdapter ? { adapter: searchAdapter } : {}),
     ...(resolvedTenantTelemetry ? { telemetry: resolvedTenantTelemetry } : {}),
   });
+  const authoring = new AiAuthoringService({
+    repository: resolvedAiAuthoringRepository,
+    gateway: ai,
+    content: service,
+    semanticAdapters: aiOptions?.semanticAdapters ?? [],
+  });
   const localization = new LocalizationService({
     repository,
     contentService: service,
@@ -705,7 +723,11 @@ export async function buildServer({
     webhookSigningSecret,
     ...(webhookTransport ? { webhookTransport } : {}),
     ...(cacheInvalidator ? { cacheInvalidator } : {}),
-    searchJobRunner: (job) => search.processJob(job),
+    searchJobRunner: async (job) => {
+      const lexical = await search.processJob(job);
+      const semantic = await authoring.processSearchJob(job);
+      return { ...lexical, semantic };
+    },
     analyticsLifecycleEnqueuer: ({ scope, event }) => analytics.enqueueLifecycle(scope, event),
     analyticsJobRunner: ({ scope, type, payload }) =>
       type === 'analytics.process'
@@ -790,7 +812,7 @@ export async function buildServer({
   await registerPersonalizationRoutes(server, { service: personalization, policy });
   await registerExperimentRoutes(server, { service: experiments, policy });
   await registerAnalyticsRoutes(server, { service: analytics, policy });
-  await registerAiRoutes(server, { service: ai, content: service, policy });
+  await registerAiRoutes(server, { service: ai, authoring, content: service, policy });
 
   server.addHook('onClose', async () => {
     await repository.close();
@@ -806,6 +828,7 @@ export async function buildServer({
     await resolvedPersonalizationRepository.close();
     await resolvedAnalyticsRepository.close();
     await resolvedAiGatewayRepository.close();
+    await resolvedAiAuthoringRepository.close();
   });
   server.addHook('onSend', async (request, reply, payload) => {
     if (request.url.startsWith('/api/v1/delivery/')) {

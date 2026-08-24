@@ -173,8 +173,26 @@ function runPostgresRecoveryDrill(containerName) {
     if (restoredAiGateway.stdout.trim() !== '1') {
       throw new Error('PostgreSQL restore did not recover the governed AI gateway policy.');
     }
+    const restoredAiAuthoring = run(
+      'docker',
+      [
+        'exec',
+        containerName,
+        'psql',
+        '--username=gridstory',
+        `--dbname=${targetDatabase}`,
+        '--tuples-only',
+        '--no-align',
+        '--command',
+        "SELECT count(*) FROM gridstory.gridstory_ai_authoring_documents WHERE tenant_id = 'postgres-tenant' AND payload->>'state' = 'enabled' AND payload->'actions'->0->>'id' = 'postgres-title';",
+      ],
+      { capture: true },
+    );
+    if (restoredAiAuthoring.stdout.trim() !== '1') {
+      throw new Error('PostgreSQL restore did not recover the reviewed AI authoring policy.');
+    }
     console.log(
-      'PostgreSQL logical backup/restore drill passed (published content, targeting, experiment lifecycle, analytics aggregate, and governed AI policy recovered).',
+      'PostgreSQL logical backup/restore drill passed (published content, targeting, experiment lifecycle, analytics aggregate, governed AI policy, and reviewed AI authoring policy recovered).',
     );
   } finally {
     run(

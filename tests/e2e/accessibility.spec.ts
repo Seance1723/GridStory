@@ -54,6 +54,14 @@ test('Studio critical authoring states have no detectable WCAG 2.2 A/AA violatio
     await expect(page.getByRole('region', { name: regionName })).toBeVisible();
   }
 
+  const aiWorkbench = page.getByRole('region', { name: 'Governed AI gateway workbench' });
+  await expect(aiWorkbench.getByLabel('Authoring policy JSON')).toBeVisible();
+  await expect(
+    aiWorkbench.getByRole('button', { name: 'Generate evaluated proposal' }),
+  ).toBeDisabled();
+  await expect(aiWorkbench.getByLabel('Bounded semantic query')).toBeVisible();
+  await expect(aiWorkbench.getByText(/semantic disabled/i)).toBeVisible();
+
   await expectNoDetectableWcagViolations(page, testInfo, 'studio-expanded-panels');
 });
 

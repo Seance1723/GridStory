@@ -8,6 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Added strict fixed-contract AI authoring schemas, bounded actions and deterministic evaluation, complete-scope optimistic memory/SQLite/PostgreSQL proposal and review persistence, exact prompt/model/source/target provenance, and a separate human-only one-time `ai.review` transition that never writes content (M7-005).
+- Added injected tenant-aware semantic adapter contracts, positive redacted text/slug indexing through existing identifier-only search jobs, private fail-closed current-revision search, typed REST/client/Studio controls, visible unsaved approved-value handoff, recovery/PostgreSQL/browser coverage, operator guidance, accepted ADR-0021, and verified `THREAT-0034`/`GS-SEC-038` evidence (M7-005).
 - Added strict governed-AI contracts; complete-scope optimistic memory, SQLite, and PostgreSQL policy persistence; immutable active prompts; explicit scoped field retrieval; deterministic outbound/inbound redaction; conservative atomic budgets; metadata-only receipts; generic provider failures; and settlement-safe kill switches (M7-004).
 - Added private AI authorization and REST routes, typed universal-client methods, a non-mutating Studio governance workbench, SQLite/PostgreSQL recovery coverage, operator guidance, accepted ADR-0020, and verified `THREAT-0033`/`GS-SEC-037` evidence (M7-004).
 - Added strict normalized analytics schemas, bounded complete-scope memory/SQLite/PostgreSQL aggregates, transactional content-lifecycle normalization, idempotent processing, independent durable adapter fan-out, and non-authoritative published/rolled-back release annotations (M7-003).
@@ -15,6 +17,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- Accepted the M7-005 boundary for fixed-contract AI field suggestions, provenance, deterministic evaluation, human-only review, unsaved-editor handoff, and private allowlisted semantic search through derived adapter indexes.
 - Recorded the accepted M7-004 governed AI gateway boundary: injected text-only providers, immutable active prompts, explicit allowlisted scoped retrieval, conservative usage/cost reservations, deterministic redaction, generic external failures, and rechecked kill switches without tools, raw histories, automatic fallback, or content mutation.
 - Recorded the accepted M7-003 analytics boundary: anonymous consent-gated published content/component events, durable provider-neutral adapter fan-out, bounded complete-scope aggregates, and non-authoritative release annotations without identity, raw-event warehousing, or provider credentials in core.
 - Recorded the accepted M7-002 governed-experiment decision: immutable running designs, consent-gated stateless deterministic allocation, externally computed bounded aggregate evidence, enforced allocation/metric guardrails, and explicit draft-only winner promotion without raw event ingestion or statistical-significance claims.
@@ -23,6 +26,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Preserved exact immutable AI action/evaluation provenance without retaining evaluation-failed suggested values, rebuilt the current package boundary for API verification, corrected Studio lint/accessibility and security-document drift, and used supported Windows formatting, child-process, config-inventory, and network verification paths (BUG-0332 through BUG-0339, M7-005).
+- Reran the focused schema suite through the approved Windows child-process path after the restricted sandbox denied Vitest workers, then corrected the recovery inventory to use exact Windows paths (BUG-0330, BUG-0331).
 - Confirmed a one-off WebKit process stall was non-reproducible through passing isolated and complete unchanged reruns of the standalone-preview vertical slice (BUG-0329).
 - Corrected the governed-AI regex, optional receipt guard, and API source-entry typing found by the root lint gate (BUG-0328).
 - Added the missing governed-AI operator/security guide required by verified `GS-SEC-037` evidence (BUG-0327).

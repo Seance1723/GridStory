@@ -285,6 +285,30 @@ describe('database recovery', () => {
       ).toMatchObject({ statusCode: 200 });
       expect(
         await server.inject({
+          method: 'PUT',
+          url: '/api/v1/ai/authoring/policy',
+          headers,
+          payload: {
+            expectedVersion: 0,
+            state: 'enabled',
+            actions: [
+              {
+                id: 'recovery-title',
+                name: 'Recovery title',
+                enabled: true,
+                promptId: 'recovery-summary',
+                contentType: 'page',
+                targetFields: ['title'],
+                maximumChanges: 1,
+                evaluationRules: [],
+              },
+            ],
+            semantic: { enabled: false },
+          },
+        }),
+      ).toMatchObject({ statusCode: 200 });
+      expect(
+        await server.inject({
           method: 'POST',
           url: '/api/v1/ai/kill-switch',
           headers,
@@ -370,6 +394,17 @@ describe('database recovery', () => {
         url: '/api/v1/ai/kill-switch',
         headers,
         payload: { expectedVersion: 4, state: 'disabled', reason: 'Changed after backup.' },
+      });
+      await server.inject({
+        method: 'PUT',
+        url: '/api/v1/ai/authoring/policy',
+        headers,
+        payload: {
+          expectedVersion: 1,
+          state: 'disabled',
+          actions: [],
+          semantic: { enabled: false },
+        },
       });
 
       await expect(restoreSqlite({ backupPath, targetPath: restoredPath })).resolves.toEqual(
@@ -475,6 +510,18 @@ describe('database recovery', () => {
         state: 'enabled',
         models: [{ providerId: 'recovery-provider', modelId: 'small' }],
         activePrompts: [{ promptId: 'recovery-summary', version: 1 }],
+      });
+      const recoveredAuthoring = await restored.inject({
+        method: 'GET',
+        url: '/api/v1/ai/authoring',
+        headers,
+      });
+      expect(recoveredAuthoring.statusCode, recoveredAuthoring.body).toBe(200);
+      expect(recoveredAuthoring.json()).toMatchObject({
+        version: 1,
+        state: 'enabled',
+        actions: [{ id: 'recovery-title', promptId: 'recovery-summary' }],
+        semantic: { enabled: false },
       });
     } finally {
       await restored?.close();
