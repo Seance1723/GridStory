@@ -41,7 +41,7 @@ Every ASVS chapter is explicitly represented so an omitted area cannot be mistak
 
 ## Evidence summary
 
-The machine profile contains 34 stable `GS-SEC-###` requirements:
+The machine profile contains 35 stable `GS-SEC-###` requirements:
 
 - Verified controls cover trusted-layer validation, parameterized persistence, SVG sanitization, atomic operations, exact origin messaging, tenant-bound deny-by-default authorization, credential/cache containment, signed token validation, approved platform cryptography, capability-isolated plugin execution, and fail-closed generic errors.
 - `GS-SEC-031` verifies the repository-owned guarded-governance boundary: explicit subject links, private complete scope, hold/restriction dominance, independent digest-bound approval, fresh authentication and backup evidence, execution-time revalidation, envelope encryption, narrow processors/KMS/placement adapters, receipts, and events.
@@ -49,6 +49,7 @@ The machine profile contains 34 stable `GS-SEC-###` requirements:
 - `GS-SEC-033` verifies the evidence-bound marketplace boundary: expiring DNS possession, distinct human publisher approval, signed compatibility/support/capability metadata, immutable releases, trusted exact-artifact inspection, fail-closed policy, distinct release approval, yanking, and disabled/no-grant installation.
 - `GS-SEC-039` verifies the provider-neutral regional boundary: trusted deployment-region selection, least-authority published readers, complete scope/topology/freshness/residency/cache evidence, explicit consistency/fallback, reviewed zero-loss or accepted bounded-loss failover, persisted idempotency, ambiguity reconciliation, and single-writer result validation without raw provider position or diagnostic exposure.
 - `GS-SEC-040` verifies signed published-only federation: complete-scope disabled offers/agreements, exact schema/revision/signature/attribution pinning, configured bounded same-origin HTTPS, live no-retention reads, reviewed idempotent read-only mirrors and withdrawal tombstones, minimized no-store delivery, and native recovery without draft/preview/credential paths.
+- `GS-SEC-041` verifies private derived knowledge and reviewed agent drafts: authorization-filtered bounded relation/taxonomy paths, exact deterministic contribution scores, a disabled fixed-read-tool runtime boundary without ambient authority, strict expiring single-draft text/slug plans, human-only review, ordinary draft-update reauthorization/revalidation, persisted idempotent execution, and native recovery without autonomous workflow or publication paths.
 - Partial controls cover structured rendering, SSRF/egress, browser headers, GraphQL cost/introspection, upload limits/scanning, external adapter configuration, sensitive-data policy, and minimal API fields.
 - Planned controls cover trusted production intermediary/identity configuration, cryptographic inventory/secret lifecycle, and production fail-safe configuration. Anti-automation, vulnerability/component lifecycle, GraphQL/upload bounds, and the resource-demand inventory are partial because distributed/deployment or hosted-release evidence remains.
 - Conditional controls cover deployed trusted-proxy/TLS/service communication and customer-specific IdP/secret-manager conformance; the repository-owned OIDC binding and persistent-session lifecycle are verified.
@@ -149,6 +150,12 @@ This control does not provision or certify replicas, databases, DNS/load balance
 
 This control does not certify source ownership/license/royalties/attribution placement, independent public-key acquisition, production signing/credential secret lifecycle, DNS/egress/TLS/rate/source availability, cross-instance incident response, a public federation standard, discovery, key rotation, push delivery, shared caching, multi-hop forwarding, rich relations/assets/components/text, remote drafts, source writes, local editorial mutation, or automated conflict/legal resolution. Those remain deployment/legal/content-governance evidence under `BETA-003`, `RC-005`, `RC-006`, and `GA-003`; signed attribution is not legal clearance.
 
+## M8-003 evidence update
+
+`GS-SEC-041` and `THREAT-0037` link strict graph/recommendation/agent schemas and resource limits; private on-demand relation/taxonomy derivation with complete scope, exact revisions, per-entry authorization, cycle-safe bounded traversal, truncation, deterministic contribution-equal scores, and no hidden user/analytics/semantic/model signals; complete-scope optimistic memory/SQLite/qualified PostgreSQL state; distinct knowledge/agent authorization; an active governed prompt plus fixed mediated draft-read callbacks; redaction, call/time/byte limits, metadata-only tool evidence, strict single-draft top-level text/slug output, complete candidate validation, expiring immutable digest, human-only review, ordinary exact-target draft-update authorization/revalidation, persisted idempotency/reconciliation, typed REST/client/neutral Studio controls, PostgreSQL persistence/logical restore, and live SQLite recovery.
+
+This control does not provision or certify a model/agent runtime, process/container isolation, provider credentials, TLS/egress/rates, retention/deletion/training/region/billing, protected diagnostics, DLP completeness, factuality/safety/bias/legal/editorial quality, RDF/SPARQL/MCP interoperability, a graph database, learned/behavioral personalization, dynamic/remote tools, conversations or persistent memory, multi-agent orchestration, scheduling, multi-entry/rich/relation/taxonomy/component/asset mutation, workflow/release transitions, or publication. Those remain deployment/product/security/editorial evidence under `BETA-003`, `RC-005`, `RC-006`, and `GA-003` or require a separately approved feature task.
+
 ## Highest-priority gaps
 
 | Gap | ASVS areas | Owner task |
@@ -162,6 +169,7 @@ This control does not certify source ownership/license/royalties/attribution pla
 | Backup storage/physical PITR, secret rotation, and orchestrator rollout proof | V13, V14, V15, V16 | `RC-006`, `GA-003`; identity lifecycle M6-002 |
 | Regional provider replication/fencing/traffic/cache conformance, failover drills, and measured RPO/RTO | V8, V11, V13, V14, V15, V16 | Repository boundary delivered by M8-001; deployment acceptance under `BETA-003`, `RC-005`, `RC-006`, `GA-003` |
 | Federation source legal authority/attribution placement, key and credential lifecycle, DNS/egress/TLS/rate/availability, and cross-instance incident response | V8, V11, V13, V14, V15, V16 | Repository boundary delivered by M8-002; deployment/legal acceptance under `BETA-003`, `RC-005`, `RC-006`, `GA-003` |
+| Agent runtime isolation, model credential/egress/retention/region/billing controls, DLP and output-quality evaluation, abuse monitoring, and editor accountability | V8, V11, V13, V14, V15, V16 | Repository least-authority boundary delivered by M8-003; deployment/security/editorial acceptance under `BETA-003`, `RC-005`, `RC-006`, `GA-003` |
 | Deployed HTML CSP/header conformance, arbitrary application rendering, and branded-browser/assistive-technology acceptance | V1, V3, V14 | `BETA-003`, `BETA-005`, `RC-005` |
 | Hosted release attestation/SBOM verification plus deployment rate, concurrency, saturation, quota, and retention evidence | V2, V4, V5, V15 | `RC-004`, `RC-006`; repository governance M6-003 |
 | Independent readiness/risk acceptance | All applicable chapters | `RC-005`, `GA-001` |

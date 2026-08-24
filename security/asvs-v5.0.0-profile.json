@@ -1219,6 +1219,55 @@
         "tests/e2e/accessibility.spec.ts"
       ],
       "taskIds": ["M8-002"]
+    },
+    {
+      "id": "GS-SEC-041",
+      "title": "Tenant-safe derived knowledge and human-reviewed least-authority agent draft operations",
+      "status": "verified",
+      "owner": "AI governance, security, platform, knowledge, and editorial owner",
+      "statement": "Knowledge graph and recommendation responses SHALL be private/no-store, derived from authoritative current relation/taxonomy content, completely tenant scoped, per-entry authorized, revision bound, cycle safe, finitely bounded, explicitly truncated, and deterministic with every visible contribution exactly summing to each score and no hidden identity, behavior, analytics, semantic, model, popularity, or exploration signal; knowledge-agent policy, plans, reviews, execution state, and receipts SHALL be complete-scope, optimistic, bounded, recoverable, disabled by default, and separately authorized; an injected runtime SHALL receive only a redacted bounded goal and fixed strictly parsed, counted, per-call-authorized read tools with no ambient repository, network, credential, plugin, filesystem, shell, workflow, release, publication, or write capability; final output SHALL target one exact saved draft and only positively allowlisted top-level text/slug fields, pass complete candidate validation, expose rationale and metadata-only tool provenance, and bind current policy/runtime/model/prompt/target/result/expiry evidence; review SHALL be one-time and human-user-only without mutation, while execution SHALL additionally require ordinary exact-target draft-update authorization, revalidate all evidence, persist before mutation, be idempotent/reconcilable, use normal draft revision history, and SHALL NOT create/delete, affect multiple entries, edit rich/relation/taxonomy/component/asset data, transition workflow/release state, or publish.",
+      "asvsRefs": [
+        "v5.0.0-2.2.2",
+        "v5.0.0-8.1.1",
+        "v5.0.0-11.2.1",
+        "v5.0.0-14.1.1",
+        "v5.0.0-14.2.1",
+        "v5.0.0-16.5.3"
+      ],
+      "threatRefs": [
+        "THREAT-0001",
+        "THREAT-0004",
+        "THREAT-0012",
+        "THREAT-0013",
+        "THREAT-0019",
+        "THREAT-0033",
+        "THREAT-0034",
+        "THREAT-0037"
+      ],
+      "evidence": [
+        "packages/schema/src/knowledge.ts",
+        "packages/core/src/knowledge-repository.ts",
+        "packages/core/src/knowledge-service.ts",
+        "packages/core/src/authorization.ts",
+        "apps/api/src/knowledge-routes.ts",
+        "apps/api/src/server.ts",
+        "packages/client/src/index.ts",
+        "apps/studio/src/App.tsx",
+        "docs/knowledge-and-reviewed-agents.md",
+        "docs/adr/0024-bounded-knowledge-and-reviewed-agent-operations.md"
+      ],
+      "verification": [
+        "packages/schema/test/knowledge.test.ts",
+        "packages/core/test/knowledge-service.test.ts",
+        "packages/core/test/postgres-conformance.test.ts",
+        "apps/api/test/knowledge.test.ts",
+        "apps/api/test/database-recovery.test.ts",
+        "apps/api/test/postgres-server.test.ts",
+        "packages/client/test/knowledge-client.test.ts",
+        "apps/studio/test/App.test.tsx",
+        "tests/e2e/accessibility.spec.ts"
+      ],
+      "taskIds": ["M8-003"]
     }
   ]
 }

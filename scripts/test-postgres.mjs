@@ -227,8 +227,26 @@ function runPostgresRecoveryDrill(containerName) {
     if (restoredFederation.stdout.trim() !== '1') {
       throw new Error('PostgreSQL restore did not recover the content federation state.');
     }
+    const restoredKnowledge = run(
+      'docker',
+      [
+        'exec',
+        containerName,
+        'psql',
+        '--username=gridstory',
+        `--dbname=${targetDatabase}`,
+        '--tuples-only',
+        '--no-align',
+        '--command',
+        "SELECT count(*) FROM gridstory.gridstory_knowledge_documents WHERE tenant_id = 'postgres-tenant' AND payload->>'version' = '1' AND payload->'policy'->>'enabled' = 'false';",
+      ],
+      { capture: true },
+    );
+    if (restoredKnowledge.stdout.trim() !== '1') {
+      throw new Error('PostgreSQL restore did not recover the knowledge agent policy.');
+    }
     console.log(
-      'PostgreSQL logical backup/restore drill passed (published content, targeting, experiment lifecycle, analytics aggregate, governed AI policy, reviewed AI authoring policy, regional topology, and content federation state recovered).',
+      'PostgreSQL logical backup/restore drill passed (published content, targeting, experiment lifecycle, analytics aggregate, governed AI policy, reviewed AI authoring policy, regional topology, content federation state, and knowledge agent policy recovered).',
     );
   } finally {
     run(

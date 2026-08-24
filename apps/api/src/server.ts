@@ -63,6 +63,9 @@ import {
   type MarketplaceDomainVerifier,
   type MarketplaceRepository,
   MarketplaceService,
+  type KnowledgeAgentRuntimeAdapter,
+  type KnowledgeRepository,
+  KnowledgeService,
   type MigrationRepository,
   MigrationService,
   type MigrationSourceAdapter,
@@ -83,6 +86,7 @@ import {
   PostgresIdentityRepository,
   PostgresMarketplaceRepository,
   PostgresMigrationRepository,
+  PostgresKnowledgeRepository,
   PostgresPersonalizationRepository,
   PostgresPluginRepository,
   PostgresRegionalRepository,
@@ -110,6 +114,7 @@ import {
   SqliteIdentityRepository,
   SqliteMarketplaceRepository,
   SqliteMigrationRepository,
+  SqliteKnowledgeRepository,
   SqlitePersonalizationRepository,
   SqlitePluginRepository,
   SqliteRegionalRepository,
@@ -179,6 +184,7 @@ import { registerIdentityRoutes } from './identity-routes.js';
 import { NodeDnsMarketplaceDomainVerifier } from './marketplace-adapters.js';
 import { registerMarketplaceRoutes } from './marketplace-routes.js';
 import { registerMigrationRoutes } from './migration-routes.js';
+import { registerKnowledgeRoutes } from './knowledge-routes.js';
 import type { GridStoryObservability } from './observability.js';
 import { registerPersonalizationRoutes } from './personalization-routes.js';
 import { registerRegionalRoutes } from './regional-routes.js';
@@ -264,6 +270,10 @@ export interface BuildServerOptions {
     repository?: ContentFederationRepository;
     signer?: ContentFederationSigner;
     sources?: ContentFederationSourceAdapter[];
+  };
+  knowledge?: {
+    repository?: KnowledgeRepository;
+    runtimes?: KnowledgeAgentRuntimeAdapter[];
   };
 }
 
@@ -537,6 +547,7 @@ export async function buildServer({
   ai: aiOptions,
   regional: regionalOptions,
   contentFederation: contentFederationOptions,
+  knowledge: knowledgeOptions,
 }: BuildServerOptions): Promise<FastifyInstance> {
   if (!databaseUrl && databasePath !== ':memory:') {
     mkdirSync(dirname(resolve(databasePath)), { recursive: true });
@@ -620,6 +631,11 @@ export async function buildServer({
     (databaseUrl
       ? new PostgresContentFederationRepository({ connectionString: databaseUrl })
       : new SqliteContentFederationRepository({ filename: databasePath }));
+  const resolvedKnowledgeRepository: KnowledgeRepository =
+    knowledgeOptions?.repository ??
+    (databaseUrl
+      ? new PostgresKnowledgeRepository({ connectionString: databaseUrl })
+      : new SqliteKnowledgeRepository({ filename: databasePath }));
   const governance = new GovernanceService({
     repository: resolvedGovernanceRepository,
     ...(governanceOptions?.keyAdapter ? { keyAdapter: governanceOptions.keyAdapter } : {}),
@@ -683,6 +699,14 @@ export async function buildServer({
   const ai = new AiGatewayService({
     repository: resolvedAiGatewayRepository,
     providers: aiOptions?.providers ?? [],
+  });
+  const knowledge = new KnowledgeService({
+    repository: resolvedKnowledgeRepository,
+    contentRepository: repository,
+    contentService: service,
+    schemas: contentSchemas,
+    aiGateway: ai,
+    runtimes: knowledgeOptions?.runtimes ?? [],
   });
   const migration = new MigrationService({
     repository: resolvedMigrationRepository,
@@ -902,6 +926,7 @@ export async function buildServer({
   await registerAiRoutes(server, { service: ai, authoring, content: service, policy });
   await registerRegionalRoutes(server, { service: regional, policy });
   await registerContentFederationRoutes(server, { service: contentFederation, policy });
+  await registerKnowledgeRoutes(server, { service: knowledge, policy });
 
   server.addHook('onClose', async () => {
     await repository.close();
@@ -920,6 +945,7 @@ export async function buildServer({
     await resolvedAiAuthoringRepository.close();
     await resolvedRegionalRepository.close();
     await resolvedContentFederationRepository.close();
+    await resolvedKnowledgeRepository.close();
   });
   server.addHook('onSend', async (request, reply, payload) => {
     if (request.url.startsWith('/api/v1/delivery/')) {

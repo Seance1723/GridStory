@@ -240,6 +240,13 @@ describe.skipIf(!connectionString)('GridStory API with PostgreSQL', () => {
       },
     });
     expect(regionalSaved.statusCode, regionalSaved.body).toBe(200);
+    const knowledgeSaved = await server.inject({
+      method: 'PUT',
+      url: '/api/v1/knowledge/agent/policy',
+      headers,
+      payload: { expectedVersion: 0, policy: { enabled: false } },
+    });
+    expect(knowledgeSaved.statusCode, knowledgeSaved.body).toBe(200);
     const federationRepository = new PostgresContentFederationRepository({ connectionString });
     const federationDocument = emptyContentFederationDocument(
       {
@@ -402,6 +409,18 @@ describe.skipIf(!connectionString)('GridStory API with PostgreSQL', () => {
       updatedBy: 'postgres-federation-admin',
       agreements: [],
       mirrors: [],
+    });
+    const knowledge = await server.inject({
+      method: 'GET',
+      url: '/api/v1/knowledge/agent',
+      headers,
+    });
+    expect(knowledge.statusCode, knowledge.body).toBe(200);
+    expect(knowledge.json()).toMatchObject({
+      version: 1,
+      policy: { enabled: false },
+      plans: [],
+      receipts: [],
     });
     const allocation = await server.inject({
       method: 'POST',

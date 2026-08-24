@@ -237,6 +237,16 @@ Live mode retains no record. Mirror mode creates an expiring exact-effect digest
 
 Residual production risk remains critical until operators prove source legal authority/license/attribution placement, independent key acquisition and rotation/revocation, service credential lifecycle, DNS/egress/TLS/rate/availability controls, cross-instance incident response, and contract-specific retention. GridStory makes source assertions signed and mandatory; it does not verify ownership, enforce royalties, implement a public federation standard, or guarantee source availability.
 
+## M8-003 evidence update
+
+`THREAT-0037` adds the authorized-content-to-derived-knowledge and mediated-runtime boundary. Relation/taxonomy graphs are request-local, private/no-store, revision-bound, reauthorized per content entry, cycle safe, and capped by source, seed, depth, node, edge, path, and result limits with explicit truncation. Recommendations use only visible direct/inverse relation, shared taxonomy, same-type, and bounded-path contributions whose weights exactly sum to deterministic scores.
+
+Complete-scope optimistic memory, SQLite, and PostgreSQL documents retain disabled-by-default policy, expiring plans, human decisions, pending execution, and receipts. One injected runtime/model must match an active immutable governed prompt and receives only a redacted bounded goal plus strict counted/authorized read callbacks. It receives no ambient repository, network, credential, plugin, filesystem, shell, content-write, workflow, release, or publication capability, and durable traces keep metadata digests rather than tool/provider payloads.
+
+One fixed-contract plan targets an exact current draft and allowed top-level text/slug fields, exposes rationale, and passes complete candidate validation. Human-only one-time review changes no content. Explicit execution additionally requires ordinary exact-target draft-update authority and rechecks policy/prompt/runtime/expiry/revision/checksum/schema/references before a persisted idempotent ordinary update; retries return or reconcile the same receipt. Rich/relation/taxonomy/component/asset, multi-entry, workflow, release, and publication effects have no path.
+
+Residual production risk remains critical until operators prove runtime process/container isolation, model credentials and egress, provider retention/deletion/training/regional/billing controls, protected diagnostics, prompt/model evaluation, complete DLP, abuse monitoring, editor accountability, and incident response. The repository makes plans inspectable and least-authority; it does not certify output correctness, factuality, safety, legality, editorial quality, or an external runtime.
+
 ## Review workflow
 
 Review at least quarterly, before every release candidate, and whenever identity, authorization, tenant scope, caching, preview, assets, imports, jobs, logging, external adapters, deployment topology, or sensitive-data classification changes.

@@ -17,6 +17,7 @@ import {
   emptyContentFederationDocument,
   emptyMarketplaceDocument,
   emptyMigrationDocument,
+  emptyKnowledgeDocument,
   emptyPersonalizationDocument,
   emptyRegionalDocument,
   GovernanceService,
@@ -30,6 +31,7 @@ import {
   PostgresIdentityRepository,
   PostgresMarketplaceRepository,
   PostgresMigrationRepository,
+  PostgresKnowledgeRepository,
   PostgresPersonalizationRepository,
   PostgresPluginRepository,
   PostgresRegionalRepository,
@@ -651,6 +653,49 @@ if (connectionString) {
       }
     });
   });
+  describe('PostgreSQL knowledge repository conformance', () => {
+    it('persists optimistic reviewed-agent state under the complete scope key', async () => {
+      const schema = `gridstory_knowledge_test_${process.pid}_${schemaSequence++}`;
+      const pool = new Pool({ connectionString });
+      const scope: ContentScope = {
+        organizationId: 'organization-a',
+        tenantId: 'knowledge-tenant-a',
+        workspaceId: 'workspace-a',
+        siteId: 'site-a',
+        environmentId: 'production',
+        locale: 'en',
+      };
+      const first = new PostgresKnowledgeRepository({ pool, schema });
+      try {
+        const initial = emptyKnowledgeDocument(scope, '2026-08-24T00:00:00.000Z');
+        await first.save(initial, null);
+        await first.close();
+
+        const second = new PostgresKnowledgeRepository({ pool, schema });
+        await expect(second.get(scope)).resolves.toEqual(initial);
+        await expect(second.get({ ...scope, tenantId: 'other-tenant' })).resolves.toBeNull();
+        const next = {
+          ...initial,
+          version: 1,
+          updatedBy: 'knowledge-admin',
+          updatedAt: '2026-08-24T00:01:00.000Z',
+        };
+        await second.save(next, 0);
+        await expect(second.get(scope)).resolves.toMatchObject({
+          version: 1,
+          policy: { enabled: false },
+          updatedBy: 'knowledge-admin',
+        });
+        await expect(second.save(next, 0)).rejects.toMatchObject({
+          code: 'knowledge_write_conflict',
+        });
+        await second.close();
+      } finally {
+        await pool.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);
+        await pool.end();
+      }
+    });
+  });
 } else {
   describe.skip('PostgreSQL repository conformance', () => {
     it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
@@ -689,6 +734,9 @@ if (connectionString) {
     it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
   });
   describe.skip('PostgreSQL content federation repository conformance', () => {
+    it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
+  });
+  describe.skip('PostgreSQL knowledge repository conformance', () => {
     it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
   });
 }

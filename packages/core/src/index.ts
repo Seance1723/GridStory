@@ -25,6 +25,8 @@ export * from './governance-repository.js';
 export * from './governance-service.js';
 export * from './identity.js';
 export * from './identity-repository.js';
+export * from './knowledge-repository.js';
+export * from './knowledge-service.js';
 export * from './localization-service.js';
 export * from './marketplace-repository.js';
 export * from './marketplace-service.js';

@@ -73,6 +73,16 @@ import type {
   IdentityProvider,
   IdentitySession,
   IdentitySnapshot,
+  KnowledgeAgentExecuteInput,
+  KnowledgeAgentPlanRequest,
+  KnowledgeAgentPolicyInput,
+  KnowledgeAgentReceipt,
+  KnowledgeAgentReviewInput,
+  KnowledgeDocument,
+  KnowledgeGraphQuery,
+  KnowledgeGraphResponse,
+  KnowledgeRecommendationQuery,
+  KnowledgeRecommendationResponse,
   LegalHold,
   LocaleConfiguration,
   LocalizedContentResolution,
@@ -2032,6 +2042,78 @@ export class GridStoryClient {
     });
   }
 
+  exploreKnowledgeGraph(
+    input: KnowledgeGraphQuery,
+    signal?: AbortSignal,
+  ): Promise<KnowledgeGraphResponse> {
+    return this.#request('/api/v1/knowledge/graph', {
+      method: 'POST',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  listKnowledgeRecommendations(
+    input: KnowledgeRecommendationQuery,
+    signal?: AbortSignal,
+  ): Promise<KnowledgeRecommendationResponse> {
+    return this.#request('/api/v1/knowledge/recommendations', {
+      method: 'POST',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  getKnowledgeAgent(signal?: AbortSignal): Promise<KnowledgeDocument> {
+    return this.#request('/api/v1/knowledge/agent', { ...(signal ? { signal } : {}) });
+  }
+
+  updateKnowledgeAgentPolicy(
+    input: KnowledgeAgentPolicyInput,
+    signal?: AbortSignal,
+  ): Promise<KnowledgeDocument> {
+    return this.#request('/api/v1/knowledge/agent/policy', {
+      method: 'PUT',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  createKnowledgeAgentPlan(
+    input: KnowledgeAgentPlanRequest,
+    signal?: AbortSignal,
+  ): Promise<KnowledgeDocument> {
+    return this.#request('/api/v1/knowledge/agent/plans', {
+      method: 'POST',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  reviewKnowledgeAgentPlan(
+    planId: string,
+    input: KnowledgeAgentReviewInput,
+    signal?: AbortSignal,
+  ): Promise<KnowledgeDocument> {
+    return this.#request(`/api/v1/knowledge/agent/plans/${encodeURIComponent(planId)}/review`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  executeKnowledgeAgentPlan(
+    planId: string,
+    input: KnowledgeAgentExecuteInput,
+    signal?: AbortSignal,
+  ): Promise<KnowledgeAgentReceipt> {
+    return this.#request(`/api/v1/knowledge/agent/plans/${encodeURIComponent(planId)}/execute`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
   getContentFederation(signal?: AbortSignal): Promise<ContentFederationDocument> {
     return this.#request('/api/v1/federation', { ...(signal ? { signal } : {}) });
   }
@@ -2528,6 +2610,16 @@ export type {
   IdentityProvider,
   IdentitySession,
   IdentitySnapshot,
+  KnowledgeAgentExecuteInput,
+  KnowledgeAgentPlanRequest,
+  KnowledgeAgentPolicyInput,
+  KnowledgeAgentReceipt,
+  KnowledgeAgentReviewInput,
+  KnowledgeDocument,
+  KnowledgeGraphQuery,
+  KnowledgeGraphResponse,
+  KnowledgeRecommendationQuery,
+  KnowledgeRecommendationResponse,
   LegalHold,
   LocaleConfiguration,
   LocalizedContentResolution,

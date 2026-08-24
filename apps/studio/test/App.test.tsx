@@ -11,6 +11,7 @@ import {
   type ExperimentDesign,
   type ExperimentMetricSnapshotInput,
   type ExperimentOverview,
+  type KnowledgeDocument,
   type MarketplaceOverviewRecord,
   type MigrationCutoverReport,
   type MigrationPlanSummary,
@@ -2201,6 +2202,156 @@ describe('GridStory Studio', () => {
     expect(save).toHaveBeenCalledWith(
       'published-pages',
       expect.objectContaining({ expectedVersion: 0, state: 'disabled' }),
+    );
+  });
+
+  it('explores bounded knowledge and requires explicit plan review before draft execution', async () => {
+    const user = userEvent.setup();
+    const client = createTestClient();
+    const plan: KnowledgeDocument['plans'][number] = {
+      id: 'agent-plan-a',
+      status: 'pending-review',
+      policyVersion: 1,
+      policyDigest: 'a'.repeat(64),
+      adapterId: 'runtime-a',
+      modelId: 'small',
+      promptId: 'knowledge-plan',
+      promptVersion: 1,
+      goal: 'Improve the headline.',
+      goalDigest: 'b'.repeat(64),
+      target: { entryId: 'one', contentType: 'page', draftRevisionId: 'one-revision-1' },
+      summary: 'Use a clearer headline.',
+      changes: [{ fieldPath: 'headline', value: 'Reviewed headline', rationale: 'Clearer.' }],
+      toolTrace: [
+        {
+          callId: 'tool-a',
+          tool: 'content.get',
+          inputDigest: 'c'.repeat(64),
+          outputDigest: 'd'.repeat(64),
+          resultCount: 1,
+          completedAt: now,
+        },
+      ],
+      resultChecksum: 'e'.repeat(64),
+      digest: 'f'.repeat(64),
+      createdBy: 'author-a',
+      createdAt: now,
+      expiresAt: '2026-08-25T00:00:00.000Z',
+    };
+    const document: KnowledgeDocument = {
+      organizationId: 'local',
+      tenantId: 'default',
+      workspaceId: 'default',
+      siteId: 'default',
+      environmentId: 'development',
+      locale: 'en',
+      schemaVersion: 1,
+      version: 2,
+      policy: {
+        enabled: true,
+        adapterId: 'runtime-a',
+        modelId: 'small',
+        promptId: 'knowledge-plan',
+        promptVersion: 1,
+        fieldRules: [{ contentType: 'page', fieldPaths: ['headline'] }],
+        tools: ['content.get'],
+        maximumToolCalls: 2,
+        timeoutMs: 1_000,
+        planLifetimeSeconds: 300,
+      },
+      plans: [plan],
+      receipts: [],
+      updatedAt: now,
+      updatedBy: 'author-a',
+    };
+    vi.spyOn(client, 'getKnowledgeAgent').mockResolvedValue(document);
+    const explore = vi.spyOn(client, 'exploreKnowledgeGraph').mockResolvedValue({
+      organizationId: 'local',
+      tenantId: 'default',
+      workspaceId: 'default',
+      siteId: 'default',
+      environmentId: 'development',
+      locale: 'en',
+      perspective: 'draft',
+      seedEntryIds: ['one'],
+      nodes: [
+        {
+          kind: 'content',
+          id: 'one',
+          contentType: 'page',
+          revisionId: 'one-revision-1',
+          status: 'draft',
+        },
+      ],
+      edges: [],
+      paths: [],
+      sourceEntries: 1,
+      truncated: false,
+    });
+    vi.spyOn(client, 'listKnowledgeRecommendations').mockResolvedValue({
+      organizationId: 'local',
+      tenantId: 'default',
+      workspaceId: 'default',
+      siteId: 'default',
+      environmentId: 'development',
+      locale: 'en',
+      perspective: 'draft',
+      source: {
+        kind: 'content',
+        id: 'one',
+        contentType: 'page',
+        revisionId: 'one-revision-1',
+        status: 'draft',
+      },
+      recommendations: [],
+      truncated: false,
+    });
+    const approved: KnowledgeDocument = {
+      ...document,
+      version: 3,
+      plans: [
+        {
+          ...plan,
+          status: 'approved',
+          review: { decision: 'approved', actorId: 'publisher-a', decidedAt: now },
+        },
+      ],
+    };
+    const review = vi.spyOn(client, 'reviewKnowledgeAgentPlan').mockResolvedValue(approved);
+    const execute = vi.spyOn(client, 'executeKnowledgeAgentPlan').mockResolvedValue({
+      id: 'receipt-a',
+      planId: plan.id,
+      digest: plan.digest,
+      idempotencyKey: 'execution-a',
+      actorId: 'publisher-a',
+      targetEntryId: 'one',
+      fromRevisionId: 'one-revision-1',
+      toRevisionId: 'one-revision-2',
+      resultChecksum: plan.resultChecksum,
+      completedAt: now,
+    });
+    render(<App client={client} />);
+
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Knowledge' }));
+    const panel = await screen.findByRole('region', {
+      name: 'Knowledge graph and reviewed agents',
+    });
+    expect(panel.textContent).toContain('never publish it');
+    expect(panel.textContent).toContain('Use a clearer headline.');
+    expect(panel.textContent).toContain('headline: Reviewed headline — Clearer.');
+    await user.click(within(panel).getByRole('button', { name: 'Explore graph' }));
+    expect(await within(panel).findByText('1 nodes · 0 edges · 0 paths')).toBeTruthy();
+    expect(explore).toHaveBeenCalledWith(expect.objectContaining({ seedEntryIds: ['one'] }));
+    await user.click(within(panel).getByRole('button', { name: 'Approve exact plan' }));
+    expect(review).toHaveBeenCalledWith(
+      plan.id,
+      expect.objectContaining({ expectedVersion: 2, digest: plan.digest, decision: 'approved' }),
+    );
+    await user.click(within(panel).getByRole('button', { name: 'Execute approved draft patch' }));
+    expect(execute).toHaveBeenCalledWith(
+      plan.id,
+      expect.objectContaining({ expectedVersion: 3, digest: plan.digest }),
     );
   });
 

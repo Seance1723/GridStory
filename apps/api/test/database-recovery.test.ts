@@ -334,6 +334,14 @@ describe('database recovery', () => {
           },
         }),
       ).toMatchObject({ statusCode: 200 });
+      expect(
+        await server.inject({
+          method: 'PUT',
+          url: '/api/v1/knowledge/agent/policy',
+          headers,
+          payload: { expectedVersion: 0, policy: { enabled: false } },
+        }),
+      ).toMatchObject({ statusCode: 200 });
       const federationRepository = new SqliteContentFederationRepository({ filename: sourcePath });
       try {
         const federationDocument = emptyContentFederationDocument(
@@ -596,6 +604,18 @@ describe('database recovery', () => {
         updatedBy: 'recovery-federation-admin',
         agreements: [],
         mirrors: [],
+      });
+      const recoveredKnowledge = await restored.inject({
+        method: 'GET',
+        url: '/api/v1/knowledge/agent',
+        headers,
+      });
+      expect(recoveredKnowledge.statusCode, recoveredKnowledge.body).toBe(200);
+      expect(recoveredKnowledge.json()).toMatchObject({
+        version: 1,
+        policy: { enabled: false },
+        plans: [],
+        receipts: [],
       });
     } finally {
       await restored?.close();

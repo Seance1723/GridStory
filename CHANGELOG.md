@@ -8,6 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Added private no-store on-demand relation/taxonomy knowledge graphs with per-entry authorization, cycle-safe bounded traversal, exact revision/path evidence, explicit truncation, and deterministic item recommendations whose visible contributions exactly sum to each score (M8-003).
+- Added disabled-by-default least-authority knowledge agents with governed prompt/runtime policy, fixed mediated draft-read tools, redaction and call/time/byte limits, strict expiring single-draft text/slug plans, metadata-only tool evidence, human-only review, ordinary draft-update reauthorization/revalidation, persisted idempotent reconciliation/receipts, complete-scope memory/SQLite/PostgreSQL recovery, typed REST/client and neutral Studio controls, and verified `THREAT-0037`/`GS-SEC-041` evidence (M8-003).
 - Added strict signed content-federation contracts, bounded immutable producer offers, pinned consumer agreements, published-only live external records, reviewed read-only mirror synchronization, explicit withdrawal tombstones, mandatory attribution, and complete-scope optimistic memory/SQLite/PostgreSQL persistence (M8-002).
 - Added separately authorized private federation management and source routes, no-store minimized public delivery, a bounded same-origin HTTPS adapter, typed client methods, a neutral-palette Studio Federation panel, recovery/PostgreSQL/browser coverage, operator guidance, accepted ADR 0023, and verified `THREAT-0036`/`GS-SEC-040` evidence (M8-002).
 - Added provider-neutral regional published delivery with strict topology/read evidence, explicit strong or bounded-staleness policy, trusted-local least-authority readers, response-bound cache partitions, digest-safe consistency headers, exact scope/revision/result validation, residency gating, and explicit primary fallback while remaining disabled and strong-primary by default (M8-001).
@@ -21,6 +23,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- Accepted the M8-003 bounded-knowledge and reviewed-agent boundary in ADR 0024: private on-demand relation/taxonomy graph exploration, deterministic path-explained recommendations, fixed mediated read tools, and expiring human-reviewed single-draft patches without autonomous publication, arbitrary code, network access, or hidden memory.
 - Accepted the M8-002 contract-bound content-federation boundary in ADR 0023: disabled complete-scope producer offers and pinned consumer agreements, signed published-only live reads, reviewed read-only mirror synchronization, explicit withdrawal tombstones, and mandatory source/version/license/credit attribution without remote or local editorial mutation.
 - Accepted the M8-001 single-writer regional-delivery boundary in ADR 0022: only published reads may use evidence-bearing regional adapters, while drafts, preview, control reads, and writes remain strong-primary and failover remains a reviewed external-adapter operation.
 - Accepted the M7-005 boundary for fixed-contract AI field suggestions, provenance, deterministic evaluation, human-only review, unsaved-editor handoff, and private allowlisted semantic search through derived adapter indexes.
@@ -32,6 +35,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Revalidated expiry and the current knowledge/AI policy before a crash-recovery retry may perform any still-needed agent draft mutation, with disabled-policy and expired-plan regressions proving fail-closed behavior (BUG-0365).
+- Removed the unused knowledge-service policy import so the complete lint and architectural-policy chain remains warning-free (BUG-0364).
+- Built the cycle-safety regression through valid revision-checked draft updates so existing reference-integrity validation remains exercised before graph traversal (BUG-0363).
+- Closed the bounded knowledge-agent content projection expression so the schema/core boundary compiles cleanly (BUG-0362).
 - Made the federation recovery fixture's timestamp deterministic and its direct SQLite handle unconditionally closable; the full recovery suite passes (BUG-0361).
 - Removed stale federation-service imports and aligned equivalent state guards with the repository's optional-chain quality contract (BUG-0360).
 - Made the API's deployed schema inventory injectable across schema-aware services so producers can explicitly offer supported text-only contracts, and aligned the API regression with durable source IDs and canonical attribution paths (BUG-0358, BUG-0359).

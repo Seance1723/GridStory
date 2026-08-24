@@ -13,6 +13,7 @@ export * from './design-system.js';
 export * from './governance.js';
 export * from './identity.js';
 export * from './lifecycle.js';
+export * from './knowledge.js';
 export * from './localization.js';
 export * from './marketplace.js';
 export * from './migration.js';

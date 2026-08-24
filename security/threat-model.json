@@ -294,6 +294,22 @@
         "accountability",
         "recoverability"
       ]
+    },
+    {
+      "id": "ASSET-025",
+      "name": "Derived knowledge graphs, recommendation evidence, agent policy, mediated tool traces, reviewed draft plans, and execution receipts",
+      "securityProperties": [
+        "confidentiality",
+        "integrity",
+        "tenant isolation",
+        "least privilege",
+        "data minimization",
+        "human oversight",
+        "revision binding",
+        "idempotency",
+        "accountability",
+        "recoverability"
+      ]
     }
   ],
   "trustBoundaries": [
@@ -497,6 +513,20 @@
         "published-only producer reads with no drafts, previews, assets, components, relations, rich text, credentials, or workflow state",
         "live no-retention reads and expiring digest-reviewed mirror plans with source revalidation, persisted execution, atomic idempotent effects, blockers, and withdrawal tombstones",
         "no-store public projection without remote scope, adapter configuration, key body, credentials, or raw diagnostics"
+      ]
+    },
+    {
+      "id": "BOUNDARY-020",
+      "name": "Authorized content through derived knowledge and mediated reviewed-agent operations",
+      "controls": [
+        "private no-store on-demand relation/taxonomy graphs with per-entry authorization, exact revisions, cycle-safe bounded breadth-first traversal, and explicit truncation",
+        "deterministic item recommendations whose visible bounded contributions exactly sum to the score without user, analytics, semantic, model, popularity, or hidden signals",
+        "disabled complete-scope optimistic policy with distinct knowledge read and agent read/manage/plan/review/execute authority",
+        "one configured runtime/model and active immutable governed prompt plus positive top-level text/slug field and fixed read-tool allowlists",
+        "redacted bounded goals, strict tool calls, per-call content authorization, call/time/byte limits, metadata-only digests, and no ambient repository/network/plugin/shell/write capability",
+        "strict single-current-draft plan output, complete candidate validation, visible rationale, expiring policy/prompt/model/target/result digest, and no hidden reasoning or raw tool/provider retention",
+        "human-user-only one-time review with no mutation, followed by ordinary content.draft.update authorization and exact execution-time policy, prompt, target, schema, reference, checksum, and expiry revalidation",
+        "persisted pending execution, stable caller idempotency, checksum reconciliation, normal draft revision history, bounded receipts, and no workflow/release/publication/bulk/rich/relation/taxonomy/component/asset operation"
       ]
     }
   ],
@@ -739,6 +769,20 @@
       "to": "BOUNDARY-019",
       "data": "no-store local agreement, namespaced type, and source-entry lookup returning validated published data with mandatory attribution",
       "assets": ["ASSET-002", "ASSET-003", "ASSET-010", "ASSET-024"]
+    },
+    {
+      "id": "FLOW-034",
+      "from": "ACTOR-002",
+      "to": "BOUNDARY-020",
+      "data": "private graph query, recommendation request, disabled agent policy, bounded redacted goal, exact plan digest, human decision, and explicit draft execution request",
+      "assets": ["ASSET-001", "ASSET-003", "ASSET-004", "ASSET-009", "ASSET-012", "ASSET-025"]
+    },
+    {
+      "id": "FLOW-035",
+      "from": "BOUNDARY-020",
+      "to": "ACTOR-007",
+      "data": "redacted bounded goal and fixed read-only mediated tool callback returning authorized bounded projections, followed by one strict untrusted draft plan",
+      "assets": ["ASSET-001", "ASSET-003", "ASSET-012", "ASSET-021", "ASSET-025"]
     }
   ],
   "assumptions": [
@@ -754,7 +798,8 @@
     "Applications send only anonymous allowlisted analytics events after a valid configured-purpose decision; deployments own public rate controls and provider adapter credentials, retention, deletion, egress, and independently protected diagnostics.",
     "AI provider adapters are composed only in the trusted server runtime, preserve structured instruction/data separation and output limits, honor abort signals where supported, and keep credentials, provider diagnostics, retention, regional processing, and egress policy outside browser, schema, core, persistence, and logs.",
     "Regional read and failover adapters are composed only in the trusted server runtime, truthfully attest deployment-controlled topology and residency, enforce provider fencing and idempotency, and keep credentials, raw replication positions, DNS/control-plane details, and protected diagnostics outside browser, schema, core persistence, delivery bodies, and public logs.",
-    "Federation signers and source adapters are composed only in the trusted server runtime; operators independently obtain and review source scopes, instances, public keys, schema allowlists, attribution terms, credentials, legal authority, and egress policy, while source availability, license truth, key rotation, revocation, and required attribution placement remain external obligations."
+    "Federation signers and source adapters are composed only in the trusted server runtime; operators independently obtain and review source scopes, instances, public keys, schema allowlists, attribution terms, credentials, legal authority, and egress policy, while source availability, license truth, key rotation, revocation, and required attribution placement remain external obligations.",
+    "Knowledge agent runtimes are separately isolated and composed only in the trusted server runtime, implement the fixed callback without retaining or forwarding data, honor abort and idempotency contracts, and keep model credentials, egress, diagnostics, memory, billing, retention, and regional processing outside GridStory state and browsers."
   ],
   "threats": [
     {
@@ -1934,6 +1979,64 @@
         "tests/e2e/accessibility.spec.ts",
         "docs/content-federation-and-syndication.md",
         "docs/adr/0023-contract-bound-content-federation.md"
+      ]
+    },
+    {
+      "id": "THREAT-0037",
+      "title": "Knowledge scope bleed, path explosion, opaque recommendation, prompt-injected excessive agency, non-human review, stale plan, or duplicate draft mutation",
+      "stride": [
+        "Spoofing",
+        "Tampering",
+        "Repudiation",
+        "Information Disclosure",
+        "Denial of Service",
+        "Elevation of Privilege"
+      ],
+      "scenario": "A graph traversal crosses tenant/content authorization or expands without bounds; a recommendation hides a user, analytics, semantic, model, popularity, or unexplained scoring signal; untrusted goal/content/tool output induces a runtime to call undeclared tools, reuse identities, exceed time/bytes, access ambient repository/network/credentials, retain sensitive data, or emit a multi-target, disallowed-field, workflow, release, or publication operation; a service account fabricates human review; or policy/prompt/target/schema/references/expiry drift, retry, or partial failure causes an unreviewed, stale, duplicate, or ambiguous draft mutation.",
+      "actors": ["ACTOR-002", "ACTOR-003", "ACTOR-004", "ACTOR-006", "ACTOR-007", "ACTOR-008"],
+      "assets": [
+        "ASSET-001",
+        "ASSET-003",
+        "ASSET-004",
+        "ASSET-008",
+        "ASSET-009",
+        "ASSET-012",
+        "ASSET-021",
+        "ASSET-025"
+      ],
+      "boundaries": [
+        "BOUNDARY-002",
+        "BOUNDARY-003",
+        "BOUNDARY-006",
+        "BOUNDARY-016",
+        "BOUNDARY-020"
+      ],
+      "likelihood": 4,
+      "impact": 5,
+      "risk": 20,
+      "response": "mitigate",
+      "owner": "AI governance, security, platform, knowledge, and editorial owner",
+      "mitigations": [
+        "Derive graphs on demand from authoritative relation/taxonomy data; validate complete scope on repository results, reauthorize every content entry, bind exact revisions, perform cycle-safe finite breadth-first traversal, cap source/depth/node/edge/path/result sizes, signal truncation, and keep responses private/no-store.",
+        "Calculate item recommendations only from fixed direct/inverse relation, shared taxonomy, same-type, and bounded-path contributions; expose exact evidence and weights, require score equality, deterministic sorting, and no identity, behavior, analytics, semantic, embedding, model, popularity, exploration, or hidden signal.",
+        "Keep agent policy disabled by default, complete-scope, optimistic, bounded, and separately authorized; require one injected runtime/model plus exact active governed prompt and positive content-type/top-level text/slug/tool/call/time/lifetime limits.",
+        "Redact and bound the goal; expose only strict content.get, graph.explore, and recommendation.list callbacks; parse/count/authorize each call, reject duplicate/late/disallowed calls, cap results, retain metadata digests only, and pass no repository, content service, credential, network, plugin, filesystem, shell, workflow, release, publication, or mutation capability.",
+        "Require one strict fixed-contract current-draft plan with unique allowed text/slug changes and visible rationale; independently re-resolve and validate the complete candidate, then bind policy/runtime/model/prompt/goal/tool/target/change/result/expiry evidence in a canonical digest without raw prompts, tool results, provider diagnostics, hidden reasoning, or conversation memory.",
+        "Require a human user for one digest-bound approval/rejection and preserve approval as non-mutating evidence; execution additionally requires ordinary exact-target content.draft.update authorization and rechecks policy, gateway, prompt, runtime, expiry, target revision, allowed fields, checksum, schema, and references without consulting the runtime.",
+        "Persist pending execution before the ordinary content update, bind a caller idempotency key, return the same receipt on retry, reconcile a checksum-identical partial update, retain bounded failure/receipt evidence, and exclude create/delete, multi-entry, rich/relation/taxonomy/component/asset, workflow, release, and publication effects."
+      ],
+      "verification": [
+        "packages/schema/test/knowledge.test.ts",
+        "packages/core/test/knowledge-service.test.ts",
+        "packages/core/test/postgres-conformance.test.ts",
+        "apps/api/test/knowledge.test.ts",
+        "apps/api/test/database-recovery.test.ts",
+        "apps/api/test/postgres-server.test.ts",
+        "packages/client/test/knowledge-client.test.ts",
+        "apps/studio/test/App.test.tsx",
+        "tests/e2e/accessibility.spec.ts",
+        "docs/knowledge-and-reviewed-agents.md",
+        "docs/adr/0024-bounded-knowledge-and-reviewed-agent-operations.md"
       ]
     }
   ],

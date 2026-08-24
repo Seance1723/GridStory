@@ -31,6 +31,10 @@ import {
   GridStoryApiError,
   type GridStoryClient,
   type IdentitySnapshot,
+  type KnowledgeAgentPolicyInput,
+  type KnowledgeDocument,
+  type KnowledgeGraphResponse,
+  type KnowledgeRecommendationResponse,
   type MarketplaceOverviewRecord,
   type MigrationOverviewRecord,
   type MigrationPlanSummary,
@@ -345,6 +349,14 @@ const defaultFederationAgreement = JSON.stringify(
         '-----BEGIN PUBLIC KEY-----\nreplace-with-reviewed-ed25519-key\n-----END PUBLIC KEY-----\n',
     },
   } satisfies Omit<FederationAgreementInspectionInput, 'expectedVersion'>,
+  null,
+  2,
+);
+
+const defaultKnowledgePolicy = JSON.stringify(
+  {
+    policy: { enabled: false },
+  } satisfies Omit<KnowledgeAgentPolicyInput, 'expectedVersion'>,
   null,
   2,
 );
@@ -782,6 +794,16 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
     defaultFederationAgreement,
   );
   const [federationBusy, setFederationBusy] = useState(false);
+  const [knowledge, setKnowledge] = useState<KnowledgeDocument | null>(null);
+  const [knowledgeGraph, setKnowledgeGraph] = useState<KnowledgeGraphResponse | null>(null);
+  const [knowledgeRecommendations, setKnowledgeRecommendations] =
+    useState<KnowledgeRecommendationResponse | null>(null);
+  const [knowledgePolicyJson, setKnowledgePolicyJson] = useState(defaultKnowledgePolicy);
+  const [knowledgeGoal, setKnowledgeGoal] = useState('Improve the selected draft title.');
+  const [knowledgeReviewReason, setKnowledgeReviewReason] = useState(
+    'Reviewed the exact target, changes, rationale, and tool evidence.',
+  );
+  const [knowledgeBusy, setKnowledgeBusy] = useState(false);
   const [identitySnapshot, setIdentitySnapshot] = useState<IdentitySnapshot | null>(null);
   const [identityProviderId, setIdentityProviderId] = useState('');
   const [identityProviderIssuer, setIdentityProviderIssuer] = useState('');
@@ -2594,6 +2616,166 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
       setAiBusy(false);
     }
   };
+  const applyKnowledge = (document: KnowledgeDocument, synchronizePolicy = false) => {
+    setKnowledge(document);
+    if (synchronizePolicy && document.version > 0) {
+      setKnowledgePolicyJson(JSON.stringify({ policy: document.policy }, null, 2));
+    }
+  };
+  const refreshKnowledge = async (synchronizePolicy = false) => {
+    applyKnowledge(await client.getKnowledgeAgent(), synchronizePolicy);
+  };
+  const toggleKnowledge = async () => {
+    if (knowledge) {
+      setKnowledge(null);
+      setKnowledgeGraph(null);
+      setKnowledgeRecommendations(null);
+      return;
+    }
+    setKnowledgeBusy(true);
+    try {
+      await refreshKnowledge(true);
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    } finally {
+      setKnowledgeBusy(false);
+    }
+  };
+  const exploreSelectedKnowledge = async () => {
+    if (!selected) return;
+    setKnowledgeBusy(true);
+    try {
+      setKnowledgeGraph(
+        await client.exploreKnowledgeGraph({
+          perspective: 'draft',
+          seedEntryIds: [selected.id],
+          maximumDepth: 2,
+          maximumNodes: 50,
+          maximumEdges: 100,
+        }),
+      );
+      setNotice({ tone: 'info', message: 'Private bounded knowledge graph explored.' });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    } finally {
+      setKnowledgeBusy(false);
+    }
+  };
+  const recommendSelectedKnowledge = async () => {
+    if (!selected) return;
+    setKnowledgeBusy(true);
+    try {
+      setKnowledgeRecommendations(
+        await client.listKnowledgeRecommendations({
+          perspective: 'draft',
+          entryId: selected.id,
+          first: 10,
+        }),
+      );
+      setNotice({ tone: 'info', message: 'Deterministic recommendations calculated.' });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    } finally {
+      setKnowledgeBusy(false);
+    }
+  };
+  const saveKnowledgePolicy = async () => {
+    if (!knowledge) return;
+    setKnowledgeBusy(true);
+    try {
+      const input = JSON.parse(knowledgePolicyJson) as Omit<
+        KnowledgeAgentPolicyInput,
+        'expectedVersion'
+      >;
+      applyKnowledge(
+        await client.updateKnowledgeAgentPolicy({
+          ...input,
+          expectedVersion: knowledge.version,
+        }),
+        true,
+      );
+      setNotice({ tone: 'success', message: 'Knowledge agent policy saved.' });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    } finally {
+      setKnowledgeBusy(false);
+    }
+  };
+  const createKnowledgePlan = async () => {
+    if (!knowledge || !selected) return;
+    if (dirty) {
+      setNotice({
+        tone: 'error',
+        message: 'Save or discard local edits before requesting a knowledge-agent plan.',
+      });
+      return;
+    }
+    setKnowledgeBusy(true);
+    try {
+      applyKnowledge(
+        await client.createKnowledgeAgentPlan({
+          expectedVersion: knowledge.version,
+          goal: knowledgeGoal,
+          targetEntryId: selected.id,
+        }),
+      );
+      setNotice({
+        tone: 'info',
+        message: 'Draft-only agent plan retained for explicit human review; content is unchanged.',
+      });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    } finally {
+      setKnowledgeBusy(false);
+    }
+  };
+  const reviewKnowledgePlan = async (
+    planId: string,
+    digest: string,
+    decision: 'approved' | 'rejected',
+  ) => {
+    if (!knowledge) return;
+    setKnowledgeBusy(true);
+    try {
+      applyKnowledge(
+        await client.reviewKnowledgeAgentPlan(planId, {
+          expectedVersion: knowledge.version,
+          digest,
+          decision,
+          ...(knowledgeReviewReason.trim() ? { reason: knowledgeReviewReason.trim() } : {}),
+        }),
+      );
+      setNotice({
+        tone: decision === 'approved' ? 'success' : 'info',
+        message: `Knowledge-agent plan ${decision}; content is unchanged.`,
+      });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+    } finally {
+      setKnowledgeBusy(false);
+    }
+  };
+  const executeKnowledgePlan = async (planId: string, digest: string) => {
+    if (!knowledge || !selected) return;
+    setKnowledgeBusy(true);
+    try {
+      await client.executeKnowledgeAgentPlan(planId, {
+        expectedVersion: knowledge.version,
+        digest,
+        idempotencyKey: crypto.randomUUID(),
+      });
+      await Promise.all([refreshKnowledge(), selectEntry(selected.id)]);
+      setNotice({
+        tone: 'success',
+        message: 'Approved plan applied to the saved draft through normal content validation.',
+      });
+    } catch (error) {
+      setNotice({ tone: 'error', message: messageFrom(error) });
+      await refreshKnowledge().catch(() => undefined);
+    } finally {
+      setKnowledgeBusy(false);
+    }
+  };
   const refreshIdentity = async () => {
     setIdentitySnapshot(await client.getIdentity());
   };
@@ -3624,6 +3806,15 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
           <button
             type="button"
             className="button button--secondary"
+            onClick={() => void toggleKnowledge()}
+            aria-expanded={knowledge !== null}
+            disabled={knowledgeBusy}
+          >
+            Knowledge
+          </button>{' '}
+          <button
+            type="button"
+            className="button button--secondary"
             onClick={() => void toggleContentFederation()}
             aria-expanded={contentFederation !== null}
             disabled={federationBusy}
@@ -4473,6 +4664,185 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               </dd>
             </div>
           </dl>
+        </section>
+      ) : null}
+      {knowledge ? (
+        <section className="knowledge-panel" aria-label="Knowledge graph and reviewed agents">
+          <div className="section-heading">
+            <div>
+              <span className="kicker">Private bounded knowledge</span>
+              <h2>Graph exploration, explained recommendations, and reviewed draft plans</h2>
+              <p>
+                Agent {knowledge.policy.enabled ? 'enabled' : 'disabled'} · policy r
+                {knowledge.version} · {knowledge.plans.length} retained plans ·{' '}
+                {knowledge.receipts.length} receipts
+              </p>
+            </div>
+            <button
+              type="button"
+              className="button button--secondary"
+              onClick={() => void refreshKnowledge(true)}
+              disabled={knowledgeBusy}
+            >
+              Refresh knowledge state
+            </button>
+          </div>
+          <p className="knowledge-panel__warning" role="note">
+            Graphs and recommendations are private, derived, and bounded. Agent runtimes receive
+            only mediated draft reads and can produce one expiring text/slug patch; a human must
+            review it, and execution can update only the saved draft—never publish it.
+          </p>
+          <div className="knowledge-panel__grid">
+            <fieldset>
+              <legend>Selected entry knowledge</legend>
+              <p>
+                {selected ? `${selected.contentType} · ${selected.id}` : 'Select an entry first.'}
+              </p>
+              <div className="knowledge-panel__actions">
+                <button
+                  type="button"
+                  className="button button--secondary"
+                  onClick={() => void exploreSelectedKnowledge()}
+                  disabled={knowledgeBusy || !selected}
+                >
+                  Explore graph
+                </button>
+                <button
+                  type="button"
+                  className="button button--secondary"
+                  onClick={() => void recommendSelectedKnowledge()}
+                  disabled={knowledgeBusy || !selected}
+                >
+                  Explain recommendations
+                </button>
+              </div>
+              <small aria-live="polite">
+                {knowledgeGraph
+                  ? `${knowledgeGraph.nodes.length} nodes · ${knowledgeGraph.edges.length} edges · ${knowledgeGraph.paths.length} paths${knowledgeGraph.truncated ? ' · truncated' : ''}`
+                  : 'No graph exploration result yet.'}
+              </small>
+              <div className="knowledge-panel__records" aria-live="polite">
+                {knowledgeRecommendations?.recommendations.map((recommendation) => (
+                  <article key={recommendation.entry.id}>
+                    <strong>
+                      {recommendation.entry.id} · score {recommendation.score}
+                    </strong>
+                    <small>
+                      {recommendation.contributions
+                        .map((contribution) => `${contribution.ruleId} +${contribution.weight}`)
+                        .join(' · ')}
+                    </small>
+                  </article>
+                ))}
+              </div>
+            </fieldset>
+            <fieldset>
+              <legend>Disabled-by-default agent policy</legend>
+              <label>
+                <span>Policy JSON</span>
+                <textarea
+                  value={knowledgePolicyJson}
+                  onChange={(event) => setKnowledgePolicyJson(event.target.value)}
+                />
+              </label>
+              <button
+                type="button"
+                className="button button--secondary"
+                onClick={() => void saveKnowledgePolicy()}
+                disabled={knowledgeBusy}
+              >
+                Save bounded agent policy
+              </button>
+            </fieldset>
+            <fieldset>
+              <legend>Plan and human review</legend>
+              <label>
+                <span>Goal for the selected saved draft</span>
+                <textarea
+                  value={knowledgeGoal}
+                  onChange={(event) => setKnowledgeGoal(event.target.value)}
+                />
+              </label>
+              <button
+                type="button"
+                className="button button--secondary"
+                onClick={() => void createKnowledgePlan()}
+                disabled={
+                  knowledgeBusy || !selected || !knowledge.policy.enabled || !knowledgeGoal.trim()
+                }
+              >
+                Create reviewable draft plan
+              </button>
+              <label>
+                <span>Human review reason</span>
+                <textarea
+                  value={knowledgeReviewReason}
+                  onChange={(event) => setKnowledgeReviewReason(event.target.value)}
+                />
+              </label>
+            </fieldset>
+          </div>
+          <div className="knowledge-panel__records" aria-live="polite">
+            <h3>Bounded plan history</h3>
+            {knowledge.plans
+              .slice()
+              .reverse()
+              .map((plan) => (
+                <article key={plan.id}>
+                  <div>
+                    <strong>
+                      {plan.target.contentType}/{plan.target.entryId} · {plan.status}
+                    </strong>
+                    <span>{plan.summary}</span>
+                    <ul>
+                      {plan.changes.map((change) => (
+                        <li key={change.fieldPath}>
+                          <code>{change.fieldPath}</code>: {change.value} — {change.rationale}
+                        </li>
+                      ))}
+                    </ul>
+                    <small>
+                      {plan.toolTrace.length} mediated tool call(s) · expires {plan.expiresAt}
+                    </small>
+                  </div>
+                  <div className="knowledge-panel__actions">
+                    {plan.status === 'pending-review' ? (
+                      <>
+                        <button
+                          type="button"
+                          className="button button--secondary"
+                          onClick={() => void reviewKnowledgePlan(plan.id, plan.digest, 'approved')}
+                          disabled={knowledgeBusy}
+                        >
+                          Approve exact plan
+                        </button>
+                        <button
+                          type="button"
+                          className="button button--secondary"
+                          onClick={() => void reviewKnowledgePlan(plan.id, plan.digest, 'rejected')}
+                          disabled={knowledgeBusy}
+                        >
+                          Reject plan
+                        </button>
+                      </>
+                    ) : null}
+                    {plan.status === 'approved' ? (
+                      <button
+                        type="button"
+                        className="button button--danger"
+                        onClick={() => void executeKnowledgePlan(plan.id, plan.digest)}
+                        disabled={knowledgeBusy || selected?.id !== plan.target.entryId}
+                      >
+                        Execute approved draft patch
+                      </button>
+                    ) : null}
+                  </div>
+                </article>
+              ))}
+            {knowledge.plans.length === 0 ? (
+              <p className="empty-copy">No knowledge-agent plan has been retained.</p>
+            ) : null}
+          </div>
         </section>
       ) : null}
       {contentFederation ? (

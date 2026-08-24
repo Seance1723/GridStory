@@ -76,6 +76,12 @@ export const GridStoryActions = {
   federationManage: 'federation.manage',
   federationConsume: 'federation.consume',
   federationSync: 'federation.sync',
+  knowledgeRead: 'knowledge.read',
+  agentRead: 'agent.read',
+  agentManage: 'agent.manage',
+  agentPlan: 'agent.plan',
+  agentReview: 'agent.review',
+  agentExecute: 'agent.execute',
 } as const;
 
 export type GridStoryAction = (typeof GridStoryActions)[keyof typeof GridStoryActions];
@@ -96,6 +102,8 @@ export interface AuthorizationResource {
     | 'ai'
     | 'regional'
     | 'federation'
+    | 'knowledge'
+    | 'agent'
     | 'governance'
     | 'migration'
     | 'delivery'
@@ -145,6 +153,8 @@ export const defaultRoles: RoleDefinition[] = [
       GridStoryActions.aiRead,
       GridStoryActions.regionalRead,
       GridStoryActions.federationRead,
+      GridStoryActions.knowledgeRead,
+      GridStoryActions.agentRead,
     ],
   },
   {
@@ -175,6 +185,9 @@ export const defaultRoles: RoleDefinition[] = [
       GridStoryActions.aiExecute,
       GridStoryActions.regionalRead,
       GridStoryActions.federationRead,
+      GridStoryActions.knowledgeRead,
+      GridStoryActions.agentRead,
+      GridStoryActions.agentPlan,
     ],
   },
   {
@@ -220,6 +233,12 @@ export const defaultRoles: RoleDefinition[] = [
       GridStoryActions.federationRead,
       GridStoryActions.federationManage,
       GridStoryActions.federationSync,
+      GridStoryActions.knowledgeRead,
+      GridStoryActions.agentRead,
+      GridStoryActions.agentManage,
+      GridStoryActions.agentPlan,
+      GridStoryActions.agentReview,
+      GridStoryActions.agentExecute,
     ],
   },
   { id: 'delivery', actions: [GridStoryActions.deliveryRead] },
