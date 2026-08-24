@@ -26,6 +26,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Restored the AI workbench to the established neutral Studio page/content palette and prevented its broad supporting-text rule from overriding safety-warning colors; browser regressions now pin the computed surface, copy, input, boundary, and warning colors (BUG-0340, STUDIO-008).
 - Preserved exact immutable AI action/evaluation provenance without retaining evaluation-failed suggested values, rebuilt the current package boundary for API verification, corrected Studio lint/accessibility and security-document drift, and used supported Windows formatting, child-process, config-inventory, and network verification paths (BUG-0332 through BUG-0339, M7-005).
 - Reran the focused schema suite through the approved Windows child-process path after the restricted sandbox denied Vitest workers, then corrected the recovery inventory to use exact Windows paths (BUG-0330, BUG-0331).
 - Confirmed a one-off WebKit process stall was non-reproducible through passing isolated and complete unchanged reruns of the standalone-preview vertical slice (BUG-0329).

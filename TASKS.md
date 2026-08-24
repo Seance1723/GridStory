@@ -79,6 +79,10 @@
 - [x] **STUDIO-007** Preserve an accessible Studio header palette when forced colors and 200% zoom are active across supported browsers.
   - Delivered: forced-colors header foreground, background, and boundary colors now resolve from the same system palette instead of mixing authored dark surfaces with browser system text colors.
   - Verification: the focused WebKit 200%-zoom/forced-colors accessibility regression passes; the complete Chromium, Firefox, and WebKit matrix is included in the M7-001 final gate.
+- [x] **STUDIO-008** Preserve the established neutral page and content palette in the AI workbench.
+  - Owner/start: Codex, 2026-08-24. Delivery tier: T0 because this is a user-requested, reversible CSS regression correction with no contract, dependency, data, or architectural change.
+  - Scope/acceptance: limit changes to `apps/studio/src/studio.css`, the existing browser accessibility regression, and mandatory ledgers. The AI workbench must use the same neutral page surface, supporting-copy color, content/input color, and card boundaries as existing Studio panels; warning/status colors and the editor/preview palette remain unchanged. Computed-color browser assertions, the complete cross-browser accessibility specification, Studio tests/build, formatting, ledger, and whitespace gates must pass before `[x]` and commit.
+  - Delivered/verification: restored the existing neutral surface, supporting-copy, content/input, and boundary tokens; reduced the broad supporting-text selector specificity so the safety warning retains its intended status color. The 27 Studio tests, both E2E builds, 9/9 computed-color/WCAG/keyboard/browser checks across Chromium, Firefox, and WebKit, and the complete `pnpm check` gate pass. BUG-0340 is resolved; editor and preview colors were not changed.
 
 ### Example React application and developer experience
 

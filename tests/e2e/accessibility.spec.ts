@@ -61,6 +61,17 @@ test('Studio critical authoring states have no detectable WCAG 2.2 A/AA violatio
   ).toBeDisabled();
   await expect(aiWorkbench.getByLabel('Bounded semantic query')).toBeVisible();
   await expect(aiWorkbench.getByText(/semantic disabled/i)).toBeVisible();
+  await expect(aiWorkbench).toHaveCSS('background-color', 'rgb(248, 250, 252)');
+  await expect(aiWorkbench.locator('.section-heading p')).toHaveCSS('color', 'rgb(71, 85, 105)');
+  await expect(aiWorkbench.getByLabel('Authoring policy JSON')).toHaveCSS(
+    'color',
+    'rgb(24, 33, 47)',
+  );
+  await expect(aiWorkbench.locator('fieldset').first()).toHaveCSS(
+    'border-color',
+    'rgb(203, 213, 225)',
+  );
+  await expect(aiWorkbench.getByRole('note')).toHaveCSS('color', 'rgb(154, 52, 18)');
 
   await expectNoDetectableWcagViolations(page, testInfo, 'studio-expanded-panels');
 });
