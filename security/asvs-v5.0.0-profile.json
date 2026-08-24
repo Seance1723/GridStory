@@ -1032,6 +1032,46 @@
         "tests/e2e/accessibility.spec.ts"
       ],
       "taskIds": ["M7-003"]
+    },
+    {
+      "id": "GS-SEC-037",
+      "title": "Governed provider-neutral AI generation and scoped retrieval",
+      "status": "verified",
+      "owner": "AI governance, security, platform, and editorial owner",
+      "statement": "AI policy and usage SHALL be completely tenant scoped with distinct private read/manage/execute permissions, immutable active prompts, explicit allowed provider/models, conservative bounded request/input/output/cost reservations, metadata-only receipts, and accountable kill-switch events; every explicit retrieval source SHALL be reauthorized for the configured perspective/content type and only positive allowlisted field paths may leave the CMS; credential/email/phone/IP redaction SHALL run before provider egress and after response; provider requests SHALL omit tenant routing and expose no tools or mutation authority; estimates/results SHALL be strictly validated, diagnostics generic, timeouts bounded, duplicate IDs denied, output marked untrusted, failed reservations retained, and state/prompt/model rechecked during atomic settlement so disablement discards in-flight output.",
+      "asvsRefs": [
+        "v5.0.0-2.2.2",
+        "v5.0.0-8.1.1",
+        "v5.0.0-11.2.1",
+        "v5.0.0-14.1.1",
+        "v5.0.0-14.2.1",
+        "v5.0.0-16.5.3"
+      ],
+      "threatRefs": ["THREAT-0001", "THREAT-0004", "THREAT-0013", "THREAT-0019", "THREAT-0033"],
+      "evidence": [
+        "packages/schema/src/ai.ts",
+        "packages/core/src/ai-gateway-repository.ts",
+        "packages/core/src/ai-gateway-service.ts",
+        "packages/core/src/authorization.ts",
+        "apps/api/src/ai-routes.ts",
+        "packages/client/src/index.ts",
+        "apps/studio/src/App.tsx",
+        "docs/ai-gateway.md",
+        "docs/adr/0020-governed-ai-gateway.md"
+      ],
+      "verification": [
+        "packages/schema/test/ai.test.ts",
+        "packages/core/test/ai-gateway-repository.test.ts",
+        "packages/core/test/ai-gateway-service.test.ts",
+        "packages/core/test/postgres-conformance.test.ts",
+        "apps/api/test/ai.test.ts",
+        "apps/api/test/database-recovery.test.ts",
+        "apps/api/test/postgres-server.test.ts",
+        "packages/client/test/client.test.ts",
+        "apps/studio/test/App.test.tsx",
+        "tests/e2e/accessibility.spec.ts"
+      ],
+      "taskIds": ["M7-004"]
     }
   ]
 }

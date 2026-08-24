@@ -5,6 +5,9 @@ import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import formbody from '@fastify/formbody';
 import {
+  type AiGatewayRepository,
+  AiGatewayService,
+  type AiProviderAdapter,
   type AssetContentInspector,
   type AnalyticsAdapter,
   type AnalyticsRepository,
@@ -64,6 +67,7 @@ import {
   PluginService,
   PortabilityService,
   PostgresCollaborationRepository,
+  PostgresAiGatewayRepository,
   PostgresAnalyticsRepository,
   PostgresContentRepository,
   PostgresGovernanceRepository,
@@ -82,6 +86,7 @@ import {
   type SearchAdapter,
   SearchService,
   SqliteAssetRepository,
+  SqliteAiGatewayRepository,
   SqliteAnalyticsRepository,
   SqliteCollaborationRepository,
   SqliteContentRepository,
@@ -139,6 +144,7 @@ import {
 } from '@gridstory/schema';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import { parseContentQuery } from './content-query.js';
+import { registerAiRoutes } from './ai-routes.js';
 import { defaultPageQualityPolicies, defaultWorkflowDefinitions } from './defaults.js';
 import { registerAnalyticsRoutes } from './analytics-routes.js';
 import { registerExperimentRoutes } from './experiment-routes.js';
@@ -219,6 +225,10 @@ export interface BuildServerOptions {
     repository?: AnalyticsRepository;
     adapters?: AnalyticsAdapter[];
     purposeId?: string;
+  };
+  ai?: {
+    repository?: AiGatewayRepository;
+    providers?: AiProviderAdapter[];
   };
 }
 
@@ -469,6 +479,7 @@ export async function buildServer({
   marketplace: marketplaceOptions,
   personalization: personalizationOptions,
   analytics: analyticsOptions,
+  ai: aiOptions,
 }: BuildServerOptions): Promise<FastifyInstance> {
   if (!databaseUrl && databasePath !== ':memory:') {
     mkdirSync(dirname(resolve(databasePath)), { recursive: true });
@@ -532,6 +543,11 @@ export async function buildServer({
     (databaseUrl
       ? new PostgresAnalyticsRepository({ connectionString: databaseUrl })
       : new SqliteAnalyticsRepository({ filename: databasePath }));
+  const resolvedAiGatewayRepository: AiGatewayRepository =
+    aiOptions?.repository ??
+    (databaseUrl
+      ? new PostgresAiGatewayRepository({ connectionString: databaseUrl })
+      : new SqliteAiGatewayRepository({ filename: databasePath }));
   const governance = new GovernanceService({
     repository: resolvedGovernanceRepository,
     ...(governanceOptions?.keyAdapter ? { keyAdapter: governanceOptions.keyAdapter } : {}),
@@ -576,6 +592,10 @@ export async function buildServer({
     jobRepository: repository,
     adapters: analyticsOptions?.adapters ?? [],
     ...(analyticsOptions?.purposeId ? { purposeId: analyticsOptions.purposeId } : {}),
+  });
+  const ai = new AiGatewayService({
+    repository: resolvedAiGatewayRepository,
+    providers: aiOptions?.providers ?? [],
   });
   const migration = new MigrationService({
     repository: resolvedMigrationRepository,
@@ -770,6 +790,7 @@ export async function buildServer({
   await registerPersonalizationRoutes(server, { service: personalization, policy });
   await registerExperimentRoutes(server, { service: experiments, policy });
   await registerAnalyticsRoutes(server, { service: analytics, policy });
+  await registerAiRoutes(server, { service: ai, content: service, policy });
 
   server.addHook('onClose', async () => {
     await repository.close();
@@ -784,6 +805,7 @@ export async function buildServer({
     await resolvedMarketplaceRepository.close();
     await resolvedPersonalizationRepository.close();
     await resolvedAnalyticsRepository.close();
+    await resolvedAiGatewayRepository.close();
   });
   server.addHook('onSend', async (request, reply, payload) => {
     if (request.url.startsWith('/api/v1/delivery/')) {

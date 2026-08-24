@@ -8,11 +8,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Added strict governed-AI contracts; complete-scope optimistic memory, SQLite, and PostgreSQL policy persistence; immutable active prompts; explicit scoped field retrieval; deterministic outbound/inbound redaction; conservative atomic budgets; metadata-only receipts; generic provider failures; and settlement-safe kill switches (M7-004).
+- Added private AI authorization and REST routes, typed universal-client methods, a non-mutating Studio governance workbench, SQLite/PostgreSQL recovery coverage, operator guidance, accepted ADR-0020, and verified `THREAT-0033`/`GS-SEC-037` evidence (M7-004).
 - Added strict normalized analytics schemas, bounded complete-scope memory/SQLite/PostgreSQL aggregates, transactional content-lifecycle normalization, idempotent processing, independent durable adapter fan-out, and non-authoritative published/rolled-back release annotations (M7-003).
 - Added consent/GPC-gated exact-published public event ingestion, private operational reports, typed universal-client methods, Studio content/component/release/adapter metrics, recovery/PostgreSQL/browser coverage, analytics guidance/ADR, and verified `THREAT-0032`/`GS-SEC-036` controls (M7-003).
 
 ### Changed
 
+- Recorded the accepted M7-004 governed AI gateway boundary: injected text-only providers, immutable active prompts, explicit allowlisted scoped retrieval, conservative usage/cost reservations, deterministic redaction, generic external failures, and rechecked kill switches without tools, raw histories, automatic fallback, or content mutation.
 - Recorded the accepted M7-003 analytics boundary: anonymous consent-gated published content/component events, durable provider-neutral adapter fan-out, bounded complete-scope aggregates, and non-authoritative release annotations without identity, raw-event warehousing, or provider credentials in core.
 - Recorded the accepted M7-002 governed-experiment decision: immutable running designs, consent-gated stateless deterministic allocation, externally computed bounded aggregate evidence, enforced allocation/metric guardrails, and explicit draft-only winner promotion without raw event ingestion or statistical-significance claims.
 - Recorded the accepted M7-001 consent-aware targeting decision: bounded typed attributes, purpose-specific consent/GPC handling, deterministic first-match rules, authenticated hypothetical preview, published-only edge evaluation, and conservative cache guidance without persistent profiles or experiment allocation.
@@ -20,6 +23,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Confirmed a one-off WebKit process stall was non-reproducible through passing isolated and complete unchanged reruns of the standalone-preview vertical slice (BUG-0329).
+- Corrected the governed-AI regex, optional receipt guard, and API source-entry typing found by the root lint gate (BUG-0328).
+- Added the missing governed-AI operator/security guide required by verified `GS-SEC-037` evidence (BUG-0327).
+- Corrected the AI route integration fixture to satisfy the current required component-tree page contract before exercising governed retrieval (BUG-0326).
 - Updated legacy API outbox/workflow job-count fixtures to include the intended normalized content-lifecycle analytics processing jobs (BUG-0325).
 - Made the analytics report's durable-job scope audit explicitly side-effect-only so the full repository lint gate remains warning-free (BUG-0324).
 - Redacted hostile analytics-adapter exception text into a stable generic delivery failure before durable job/report retention, while preserving independent retry and aggregate truth (BUG-0323).

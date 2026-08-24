@@ -3,7 +3,7 @@
   "model": {
     "id": "GRIDSTORY-TM-001",
     "title": "GridStory control plane and delivery threat model",
-    "version": "1.7.0",
+    "version": "1.8.0",
     "reviewedAt": "2026-08-24",
     "owners": ["GridStory security owner", "GridStory architecture owner"],
     "methodology": "OWASP four-question threat modeling with STRIDE categorization",
@@ -22,14 +22,15 @@
       "read-only CMS source adapters, private migration recipes, dry-run plans, checkpoints, links, receipts, and cutover evidence",
       "consent-aware targeting attributes, audiences, draft/published configuration, hypothetical preview, edge decisions, and cache guidance",
       "governed experiment designs, lifecycle, stateless weighted allocation, aggregate evidence, guardrails, and targeting-draft promotion",
-      "bounded published content/component analytics events, normalized lifecycle evidence, release annotations, aggregate metrics, and injected adapter delivery"
+      "bounded published content/component analytics events, normalized lifecycle evidence, release annotations, aggregate metrics, and injected adapter delivery",
+      "governed AI policy, immutable prompt versions, scoped allowlisted retrieval, provider-neutral text generation, redaction, budgets, usage receipts, and kill switches"
     ],
     "outOfScope": [
       "security of application-owned React components after validated data leaves GridStory",
       "identity-provider internals",
       "cloud, CDN, database, object-store, and network controls not configured by GridStory",
       "package binary hosting/download, scanner-engine internals, publisher business-legitimacy verification, and operating-system/container isolation supplied outside GridStory",
-      "customer profile storage, consent collection or legal interpretation, raw analytics warehousing/export, attribution/funnels/cohorts, provider credentials or provider-specific SDKs in core, statistical-significance engines, and automatic experiment winner selection or publication"
+      "customer profile storage, consent collection or legal interpretation, raw analytics warehousing/export, attribution/funnels/cohorts, provider credentials or provider-specific SDKs in core, statistical-significance engines, automatic experiment winner selection or publication, autonomous agents, tools, content mutation, semantic search, provider fallback, or raw AI invocation history"
     ],
     "riskModel": {
       "formula": "likelihood * impact",
@@ -83,7 +84,7 @@
       "name": "External adapter or webhook receiver",
       "trust": "external",
       "capabilities": [
-        "receive events or provide storage, search, cache, identity, scanning, and analytics delivery"
+        "receive events or provide storage, search, cache, identity, scanning, analytics delivery, and bounded AI text generation"
       ]
     },
     {
@@ -234,6 +235,20 @@
         "idempotency",
         "availability"
       ]
+    },
+    {
+      "id": "ASSET-021",
+      "name": "AI model policy, immutable prompts, retrieval allowlists, budgets, switch history, metadata-only usage receipts, and untrusted results",
+      "securityProperties": [
+        "confidentiality",
+        "integrity",
+        "tenant isolation",
+        "least privilege",
+        "data minimization",
+        "cost control",
+        "availability",
+        "accountability"
+      ]
     }
   ],
   "trustBoundaries": [
@@ -383,6 +398,20 @@
         "bounded event age, cardinality, aggregates, receipts, annotations, and report projection",
         "idempotent processing plus independent leased adapter jobs with retry, dead letter, and replay",
         "generic retained adapter errors and non-authoritative release annotation failure"
+      ]
+    },
+    {
+      "id": "BOUNDARY-016",
+      "name": "Authorized editors and scoped content through the AI gateway to external text providers",
+      "controls": [
+        "distinct private AI read, manage, and execute authorization with per-source content reauthorization",
+        "complete-scope optimistic policy persistence and explicit provider/model allowlists",
+        "immutable versioned prompts with one active pointer and bounded structured instruction/data separation",
+        "explicit source IDs, perspective, content types, and positive field-path allowlists with no ambient search",
+        "deterministic credential, email, phone, and IP redaction before egress and after response",
+        "conservative request/input/output/cost reservation with bounded metadata-only receipts",
+        "timeout, generic provider failures, duplicate request denial, and no tools or mutation authority",
+        "kill-switch checks before retrieval, before provider execution, and during atomic result settlement"
       ]
     }
   ],
@@ -548,6 +577,20 @@
       "to": "BOUNDARY-015",
       "data": "normalized lifecycle event or release annotation, bounded aggregate update, private idempotency receipt, and independently retried adapter evidence",
       "assets": ["ASSET-002", "ASSET-003", "ASSET-008", "ASSET-012", "ASSET-020"]
+    },
+    {
+      "id": "FLOW-023",
+      "from": "ACTOR-002",
+      "to": "BOUNDARY-016",
+      "data": "authorized complete scope, active prompt/model request, bounded redacted user input, explicit source IDs, reauthorized allowlisted source fields, metadata-only reservation, and untrusted redacted result",
+      "assets": ["ASSET-001", "ASSET-002", "ASSET-003", "ASSET-009", "ASSET-021"]
+    },
+    {
+      "id": "FLOW-024",
+      "from": "BOUNDARY-016",
+      "to": "ACTOR-007",
+      "data": "credential-free bounded structured text request and validated metered text response without tenant routing fields, tools, or mutation authority",
+      "assets": ["ASSET-002", "ASSET-003", "ASSET-012", "ASSET-021"]
     }
   ],
   "assumptions": [
@@ -560,7 +603,8 @@
     "Marketplace artifact inspectors are separately authenticated and operated trusted adapters whose policy, evidence storage, availability, and scanner-engine correctness require deployment conformance; a passing result or verified provenance is not a safety guarantee.",
     "CMS migration credentials are read-only, least privilege, and injected by the trusted server runtime; the source stays authoritative and recoverable until an externally operated cutover is accepted.",
     "Applications create and, when permitted, retain an unpredictable token separately for each experiment after consent; external experiment analytics still owns attribution, statistical validity, and retained evidence integrity.",
-    "Applications send only anonymous allowlisted analytics events after a valid configured-purpose decision; deployments own public rate controls and provider adapter credentials, retention, deletion, egress, and independently protected diagnostics."
+    "Applications send only anonymous allowlisted analytics events after a valid configured-purpose decision; deployments own public rate controls and provider adapter credentials, retention, deletion, egress, and independently protected diagnostics.",
+    "AI provider adapters are composed only in the trusted server runtime, preserve structured instruction/data separation and output limits, honor abort signals where supported, and keep credentials, provider diagnostics, retention, regional processing, and egress policy outside browser, schema, core, persistence, and logs."
   ],
   "threats": [
     {
@@ -1518,6 +1562,49 @@
         "tests/e2e/accessibility.spec.ts",
         "docs/analytics.md",
         "docs/adr/0019-bounded-content-analytics.md"
+      ]
+    },
+    {
+      "id": "THREAT-0033",
+      "title": "Prompt injection, scoped-source disclosure, unbounded spend, or stale AI disablement",
+      "stride": [
+        "Spoofing",
+        "Tampering",
+        "Repudiation",
+        "Information Disclosure",
+        "Denial of Service",
+        "Elevation of Privilege"
+      ],
+      "scenario": "An editor, hostile content source, tenant, or external model provider injects instructions or sensitive values; requests another scope, draft, type, or field; replays request IDs; selects an unapproved model; under-reports metering; exhausts cost/token/request limits; leaks provider diagnostics; returns malformed or oversized output; or races a kill switch so stale output is released or treated as authoritative content.",
+      "actors": ["ACTOR-002", "ACTOR-003", "ACTOR-004", "ACTOR-007", "ACTOR-008"],
+      "assets": ["ASSET-001", "ASSET-002", "ASSET-003", "ASSET-009", "ASSET-012", "ASSET-021"],
+      "boundaries": ["BOUNDARY-002", "BOUNDARY-003", "BOUNDARY-006", "BOUNDARY-016"],
+      "likelihood": 4,
+      "impact": 5,
+      "risk": 20,
+      "response": "mitigate",
+      "owner": "AI governance, security, platform, and editorial owner",
+      "mitigations": [
+        "Authorize private AI read, manage, and execute operations separately; derive complete scope from trusted context, reauthorize every source as content.read, and reject missing, cross-scope, disallowed-type, disallowed-field, draft/published-perspective, model, or active-prompt mismatches.",
+        "Persist one bounded complete-scope optimistic document; keep prompt versions immutable, active pointers explicit, state changes accountable, request UUIDs one-use, daily usage bounded, and invocation receipts metadata-only with no user input, source text, provider output, or thrown diagnostics.",
+        "Send only structured text requests with fixed prompt instructions separated from untrusted user/source data; allow explicit source IDs and positive field paths only, redact credentials/email/phone/IP before egress and after response, validate all estimates/results, label output untrusted, and expose no tools or content mutation path.",
+        "Reserve requests, estimated input, maximum output, and conservative cost atomically before provider execution; never refund failures or over-reservation violations, reconcile successful usage downward only, reject duplicates and exhausted budgets, and require separately validated provider billing reconciliation.",
+        "Inject provider adapters only at trusted server composition; omit tenant routing and credentials from the provider request, bound time/input/output/source/model values, abort on timeout, replace provider failures with generic errors, and require deployment TLS, egress, secrets, retention, regional, rate, billing, and incident controls.",
+        "Check enabled state and exact active prompt/model before retrieval, during reservation immediately before the provider, and during optimistic success settlement; discard and mark failed any response whose gateway, prompt, or model changed, so an in-flight kill switch prevents output release."
+      ],
+      "verification": [
+        "packages/schema/test/ai.test.ts",
+        "packages/core/test/ai-gateway-repository.test.ts",
+        "packages/core/test/ai-gateway-service.test.ts",
+        "packages/core/test/postgres-conformance.test.ts",
+        "apps/api/test/ai.test.ts",
+        "apps/api/test/database-recovery.test.ts",
+        "apps/api/test/postgres-server.test.ts",
+        "packages/client/test/client.test.ts",
+        "apps/studio/test/App.test.tsx",
+        "tests/e2e/accessibility.spec.ts",
+        "docs/ai-gateway.md",
+        "docs/adr/0020-governed-ai-gateway.md"
       ]
     }
   ],

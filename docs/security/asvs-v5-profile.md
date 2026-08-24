@@ -123,6 +123,12 @@ This control does not host package bytes, implement or certify scanners, prove p
 
 This control does not collect consent, enforce deployment admission rates, operate provider credentials/endpoints/egress, certify provider idempotency/availability, retain a raw warehouse, perform attribution/funnels/cohorts/bot filtering/statistics, prove retention/deletion/access policy, synthesize experiment evidence, or establish release causality. Those remain deployment/privacy/analytics-owner evidence under `BETA-003`, `RC-005`, `RC-006`, and `GA-003`.
 
+## M7-004 evidence update
+
+`GS-SEC-037` and `THREAT-0033` link strict AI schemas; complete-scope optimistic memory, SQLite, and qualified PostgreSQL policy; separate read/manage/execute authorization; immutable prompt versions and exact activation; explicit perspective/type/field retrieval with source reauthorization; deterministic outbound/inbound redaction; injected credential-free text adapters; conservative atomic request/token/cost reservation; bounded metadata-only receipts; generic errors/timeouts; untrusted non-mutating results; settlement-time kill-switch checks; typed REST/client/Studio controls; PostgreSQL persistence/logical restore; and live SQLite recovery.
+
+This control does not provide a deployed provider, complete PII/DLP discovery, provider TLS/egress/secret/region/retention/training/billing conformance, streaming, tools, agents, conversations, automatic fallback, semantic search, suggestions, provenance/evaluation, human approval, or content mutation. Deployment evidence and M7-005 must address those boundaries before making broader AI claims.
+
 ## Highest-priority gaps
 
 | Gap | ASVS areas | Owner task |

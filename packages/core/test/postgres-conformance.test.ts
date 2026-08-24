@@ -10,6 +10,7 @@ import { Pool } from 'pg';
 import { describe, expect, it } from 'vitest';
 import {
   CollaborationService,
+  emptyAiGatewayDocument,
   emptyAnalyticsDocument,
   emptyMarketplaceDocument,
   emptyPersonalizationDocument,
@@ -17,6 +18,7 @@ import {
   emptyMigrationDocument,
   GovernanceService,
   PostgresCollaborationRepository,
+  PostgresAiGatewayRepository,
   PostgresAnalyticsRepository,
   PostgresContentRepository,
   PostgresGovernanceRepository,
@@ -434,6 +436,58 @@ if (connectionString) {
       }
     });
   });
+  describe('PostgreSQL AI gateway repository conformance', () => {
+    it('persists governed policy under the complete scope key', async () => {
+      const schema = `gridstory_ai_test_${process.pid}_${schemaSequence++}`;
+      const pool = new Pool({ connectionString });
+      const scope: ContentScope = {
+        organizationId: 'organization-a',
+        tenantId: 'ai-tenant-a',
+        workspaceId: 'workspace-a',
+        siteId: 'site-a',
+        environmentId: 'production',
+        locale: 'en',
+      };
+      const first = new PostgresAiGatewayRepository({ pool, schema });
+      try {
+        const initial = emptyAiGatewayDocument(scope, '2026-08-24T00:00:00.000Z');
+        await first.save(initial, null);
+        await first.close();
+
+        const second = new PostgresAiGatewayRepository({ pool, schema });
+        await expect(second.get(scope)).resolves.toEqual(initial);
+        await expect(second.get({ ...scope, tenantId: 'other-tenant' })).resolves.toBeNull();
+        const next = {
+          ...initial,
+          version: 1,
+          models: [
+            {
+              providerId: 'provider',
+              modelId: 'small',
+              enabled: true,
+              maximumInputTokens: 1_000,
+              maximumOutputTokens: 100,
+              inputCostMicrosPerMillion: 10,
+              outputCostMicrosPerMillion: 20,
+            },
+          ],
+          updatedAt: '2026-08-24T00:01:00.000Z',
+        };
+        await second.save(next, 0);
+        await expect(second.get(scope)).resolves.toMatchObject({
+          version: 1,
+          models: [{ providerId: 'provider', modelId: 'small' }],
+        });
+        await expect(second.save(next, 0)).rejects.toMatchObject({
+          code: 'ai_gateway_write_conflict',
+        });
+        await second.close();
+      } finally {
+        await pool.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);
+        await pool.end();
+      }
+    });
+  });
 } else {
   describe.skip('PostgreSQL repository conformance', () => {
     it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
@@ -460,6 +514,9 @@ if (connectionString) {
     it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
   });
   describe.skip('PostgreSQL analytics repository conformance', () => {
+    it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
+  });
+  describe.skip('PostgreSQL AI gateway repository conformance', () => {
     it('requires GRIDSTORY_TEST_POSTGRES_URL', () => undefined);
   });
 }

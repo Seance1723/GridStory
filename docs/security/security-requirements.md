@@ -161,6 +161,18 @@ The integration, metric-evidence, lifecycle, recovery, rollback, and statistical
 
 The event contract, adapter composition, aggregate limits, recovery, rollback, and interpretation boundaries are documented in [Bounded content analytics](../analytics.md). `THREAT-0032` owns fabricated/identifying/replayed evidence, consent/scope/published-revision bypass, cardinality exhaustion, adapter leakage/unavailability, and false release-causality claims.
 
+## Governed AI gateway
+
+- `GS-SEC-037`: AI policy, prompt registry, budgets, state history, and usage receipts SHALL be stored under complete organization, tenant, workspace, site, environment, and locale scope. `ai.read`, `ai.manage`, and `ai.execute` SHALL be distinct private permissions; delivery and anonymous roles SHALL have no AI access.
+- Prompt versions SHALL be immutable and active pointers explicit. Every request SHALL select one enabled prompt-allowed provider/model, use a one-time UUID, and remain bounded by prompt/model input, output, cost, timeout, source, field, and text limits.
+- Retrieval SHALL accept explicit source IDs only. Every source SHALL be reauthorized with `content.read` for the configured draft/published perspective, match exact complete scope and configured content type, and expose only positive allowlisted field paths. Ambient search, wildcard fields, relation traversal, preview credentials, and published-cache writes SHALL NOT occur.
+- Fixed instructions, user input, and selected source fields SHALL remain structurally separate. Recognized credentials, email, phone, and IP values SHALL be redacted before provider egress; output SHALL be strictly validated, redacted again, marked untrusted, and SHALL have no tool, content-write, publication, or automatic-approval path.
+- Provider adapters SHALL be injected only in trusted server composition. Provider requests SHALL omit tenant routing and credentials; exceptions SHALL become generic responses; timeouts SHALL abort where supported; provider estimates/results SHALL be validated; and provider-specific SDKs, credentials, diagnostics, retention, training, regional, egress, and billing truth SHALL remain outside schema/core and persisted invocation history.
+- Request, estimated input, maximum output, and conservative cost SHALL be atomically reserved before execution. Duplicate IDs and exhausted daily budgets SHALL fail closed; failure or invalid/over-reservation results SHALL retain the reservation; successful usage MAY reconcile downward. Receipts SHALL retain metadata only and histories SHALL be bounded.
+- Enabled state and exact active prompt/model SHALL be checked before retrieval, during reservation immediately before provider execution, and during atomic success settlement. A disablement or incompatible policy change during execution SHALL discard output and mark the metadata receipt failed.
+
+The provider contract, route sequence, retrieval semantics, budget accounting, recovery behavior, and limitations are documented in [Governed AI gateway](../ai-gateway.md). `THREAT-0033` owns injection, scoped-source leakage, replay, model/prompt bypass, unbounded spend, provider leakage/unavailability, malformed metering/output, and stale kill-switch races.
+
 ## Logging, error handling, and operations
 
 - `GS-SEC-028`: a maintained log inventory SHALL define event, metadata, format, sink, access, retention, correlation, and alerting. At minimum cover authentication, failed authorization, privileged mutation, publication, workflow/release, import/export, credential lifecycle, adapter failure, and control bypass.
@@ -234,6 +246,12 @@ Repository evidence does not collect consent, generate or retain the application
 `GS-SEC-036` and `THREAT-0032` cover a strict identity-free public event union, configured-purpose/GPC gating, exact current published references, request-context complete scope, age/cardinality bounds, normalized transactional lifecycle evidence, non-authoritative release annotations, idempotent optimistic aggregates, independent durable adapter delivery, generic retained adapter failures, private receipt omission, and explicit report truncation. Memory, SQLite, and PostgreSQL persist the same analytics document; live SQLite recovery restores the earlier aggregate, and PostgreSQL verification covers persistence plus logical restore.
 
 Repository evidence does not collect consent, enforce public edge rates, operate provider credentials/endpoints/egress, prove provider idempotency or availability, retain raw event history, implement attribution/funnels/cohorts/bot rules/statistics, certify retention/deletion/access policy, supply experiment snapshots, or prove release causality. Those remain customer/application/analytics/privacy/deployment responsibilities; bounded operational counters are not billing, legal, experiment, or causal evidence.
+
+## M7-004 governed AI baseline
+
+`GS-SEC-037` and `THREAT-0033` cover complete-scope optimistic policy, separate permissions, immutable active prompts, explicit source/type/field retrieval with per-source authorization, deterministic redaction, credential-free structured provider requests, strict estimate/result validation, conservative atomic daily reservations, metadata-only receipts, generic errors, bounded timeouts, untrusted output, and settlement-time kill-switch enforcement. Memory, SQLite, and PostgreSQL persist the same document; live SQLite recovery restores the earlier enabled policy and PostgreSQL verification covers persistence plus logical restore.
+
+Repository evidence does not provision a model provider, certify provider TLS/egress/secrets/region/retention/training/billing, discover all sensitive data, provide streaming/tools/agents/memory/fallback/semantic search, evaluate suggestion quality/provenance, collect human approval, or mutate content. These remain deployment responsibilities or M7-005 scope.
 
 ## Verification ownership
 

@@ -39,6 +39,7 @@ test('Studio critical authoring states have no detectable WCAG 2.2 A/AA violatio
     ['Migrations', 'CMS migration workbench'],
     ['Marketplace', 'Plugin marketplace workbench'],
     ['Experiments', 'Content experiments workbench'],
+    ['AI gateway', 'Governed AI gateway workbench'],
     ['Workflows', 'Workflow action designer'],
     ['Releases', 'Release manager'],
     ['Search', 'Search and discovery'],

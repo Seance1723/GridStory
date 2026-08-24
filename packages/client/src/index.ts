@@ -1,4 +1,10 @@
 import type {
+  AiGatewayDocument,
+  AiGatewayPolicyInput,
+  AiGatewayStateInput,
+  AiGenerateInput,
+  AiGenerateResult,
+  AiPromptVersionInput,
   AssetDeliveryGrant,
   AnalyticsIngestionResult,
   AnalyticsReport,
@@ -1892,6 +1898,64 @@ export class GridStoryClient {
     });
   }
 
+  getAiGateway(signal?: AbortSignal): Promise<AiGatewayDocument> {
+    return this.#request('/api/v1/ai', { ...(signal ? { signal } : {}) });
+  }
+
+  updateAiGatewayPolicy(
+    input: AiGatewayPolicyInput,
+    signal?: AbortSignal,
+  ): Promise<AiGatewayDocument> {
+    return this.#request('/api/v1/ai/policy', {
+      method: 'PUT',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  createAiPromptVersion(
+    input: AiPromptVersionInput,
+    signal?: AbortSignal,
+  ): Promise<AiGatewayDocument> {
+    return this.#request('/api/v1/ai/prompts', {
+      method: 'POST',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  activateAiPrompt(
+    promptId: string,
+    version: number,
+    expectedVersion: number,
+    signal?: AbortSignal,
+  ): Promise<AiGatewayDocument> {
+    return this.#request(
+      `/api/v1/ai/prompts/${encodeURIComponent(promptId)}/versions/${version}/activate`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ expectedVersion }),
+        ...(signal ? { signal } : {}),
+      },
+    );
+  }
+
+  setAiGatewayState(input: AiGatewayStateInput, signal?: AbortSignal): Promise<AiGatewayDocument> {
+    return this.#request('/api/v1/ai/kill-switch', {
+      method: 'POST',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  generateAi(input: AiGenerateInput, signal?: AbortSignal): Promise<AiGenerateResult> {
+    return this.#request('/api/v1/ai/generate', {
+      method: 'POST',
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
   getContent(
     id: string,
     options: { perspective?: ContentPerspective; signal?: AbortSignal } = {},
@@ -2174,6 +2238,12 @@ export function createGridStoryClient(options: GridStoryClientOptions): GridStor
 }
 
 export type {
+  AiGatewayDocument,
+  AiGatewayPolicyInput,
+  AiGatewayStateInput,
+  AiGenerateInput,
+  AiGenerateResult,
+  AiPromptVersionInput,
   AnalyticsIngestionResult,
   AnalyticsReport,
   AssetDeliveryGrant,

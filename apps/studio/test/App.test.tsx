@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import {
+  type AiGatewayDocument,
   type AssetRecord,
   type AssetUploadSession,
   type ContentEntry,
@@ -556,6 +557,30 @@ function createTestClient(
     targetingPublishedRevision: 2,
     experiments: [],
   };
+  let aiGateway: AiGatewayDocument = {
+    organizationId: 'local',
+    tenantId: 'default',
+    workspaceId: 'default',
+    siteId: 'default',
+    environmentId: 'development',
+    locale: 'en',
+    schemaVersion: 1,
+    version: 0,
+    state: 'disabled',
+    models: [],
+    budgets: {
+      dailyRequests: 100,
+      dailyInputTokens: 200_000,
+      dailyOutputTokens: 50_000,
+      dailyCostMicros: 10_000_000,
+    },
+    promptVersions: [],
+    activePrompts: [],
+    dailyUsage: [],
+    receipts: [],
+    stateEvents: [],
+    updatedAt: now,
+  };
   const workflowInstances = new Map(
     testEntries.map((candidate) => [
       candidate.id,
@@ -903,6 +928,98 @@ function createTestClient(
           },
         ],
         deliveriesTruncated: false,
+      });
+    }
+    if (url.pathname === '/api/v1/ai' && init?.method === undefined) {
+      return json(aiGateway);
+    }
+    if (url.pathname === '/api/v1/ai/policy' && init?.method === 'PUT') {
+      const body = JSON.parse(String(init.body)) as Pick<AiGatewayDocument, 'models' | 'budgets'>;
+      aiGateway = {
+        ...aiGateway,
+        version: aiGateway.version + 1,
+        models: body.models,
+        budgets: body.budgets,
+        updatedAt: now,
+      };
+      return json(aiGateway);
+    }
+    if (url.pathname === '/api/v1/ai/prompts' && init?.method === 'POST') {
+      const body = JSON.parse(String(init.body)) as AiGatewayDocument['promptVersions'][number];
+      aiGateway = {
+        ...aiGateway,
+        version: aiGateway.version + 1,
+        promptVersions: [
+          ...aiGateway.promptVersions,
+          { ...body, createdBy: 'studio-local-admin', createdAt: now },
+        ],
+        updatedAt: now,
+      };
+      return json(aiGateway, 201);
+    }
+    const aiActivationMatch = url.pathname.match(
+      /^\/api\/v1\/ai\/prompts\/([^/]+)\/versions\/(\d+)\/activate$/,
+    );
+    if (aiActivationMatch && init?.method === 'POST') {
+      aiGateway = {
+        ...aiGateway,
+        version: aiGateway.version + 1,
+        activePrompts: [
+          {
+            promptId: decodeURIComponent(aiActivationMatch[1] ?? ''),
+            version: Number(aiActivationMatch[2]),
+          },
+        ],
+        updatedAt: now,
+      };
+      return json(aiGateway);
+    }
+    if (url.pathname === '/api/v1/ai/kill-switch' && init?.method === 'POST') {
+      const body = JSON.parse(String(init.body)) as {
+        state: 'enabled' | 'disabled';
+        reason: string;
+      };
+      aiGateway = {
+        ...aiGateway,
+        version: aiGateway.version + 1,
+        state: body.state,
+        stateEvents: [
+          ...aiGateway.stateEvents,
+          {
+            state: body.state,
+            actorId: 'studio-local-admin',
+            reason: body.reason,
+            occurredAt: now,
+          },
+        ],
+        updatedAt: now,
+      };
+      return json(aiGateway);
+    }
+    if (url.pathname === '/api/v1/ai/generate' && init?.method === 'POST') {
+      const body = JSON.parse(String(init.body)) as {
+        requestId: string;
+        promptId: string;
+        providerId: string;
+        modelId: string;
+      };
+      aiGateway = {
+        ...aiGateway,
+        version: aiGateway.version + 1,
+        dailyUsage: [
+          { day: '2026-07-17', requests: 1, inputTokens: 14, outputTokens: 8, costMicros: 80 },
+        ],
+        updatedAt: now,
+      };
+      return json({
+        ...body,
+        promptVersion: 1,
+        output: 'A bounded editorial summary.',
+        trust: 'untrusted',
+        sources: [],
+        usage: { requests: 1, inputTokens: 14, outputTokens: 8, costMicros: 80 },
+        redactions: { credentials: 0, emails: 0, phones: 0, ips: 0 },
+        finishReason: 'stop',
       });
     }
     if (url.pathname === '/api/v1/governance' && init?.method !== 'POST') {
@@ -1952,6 +2069,32 @@ describe('GridStory Studio', () => {
     expect(panel.textContent).toContain('Homepage hero copy · promoted');
     expect(panel.textContent).toContain('Draft promotion: uk');
   }, 15_000);
+
+  it('operates the governed AI policy, prompt, kill switch, and non-mutating test path', async () => {
+    const user = userEvent.setup();
+    render(<App client={createTestClient()} />);
+
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'AI gateway' }));
+    const panel = await screen.findByRole('region', { name: 'Governed AI gateway workbench' });
+    expect(panel.textContent).toContain('Retrieved fields and AI output are untrusted');
+    expect(panel.textContent).toContain('Gateway disabled');
+
+    await user.click(within(panel).getByRole('button', { name: 'Save AI policy' }));
+    expect(await screen.findByText('AI model and daily budget policy saved.')).toBeTruthy();
+    await user.click(within(panel).getByRole('button', { name: 'Create prompt version' }));
+    expect(await screen.findByText('Immutable AI prompt version created.')).toBeTruthy();
+    await user.click(within(panel).getByRole('button', { name: 'Activate exact prompt' }));
+    expect(await screen.findByText('Exact AI prompt version activated.')).toBeTruthy();
+    await user.click(within(panel).getByRole('button', { name: 'Enable AI gateway' }));
+    expect(await screen.findByText(/AI gateway enabled.*In-flight responses/i)).toBeTruthy();
+
+    await user.click(within(panel).getByRole('button', { name: 'Generate untrusted output' }));
+    const result = await within(panel).findByRole('region', { name: 'Untrusted AI result' });
+    expect(result.textContent).toContain('Untrusted output · review required');
+    expect(result.textContent).toContain('A bounded editorial summary.');
+    expect(await screen.findByText(/no content was changed/i)).toBeTruthy();
+  });
 
   it('starts and revokes a secure application iframe preview', async () => {
     const user = userEvent.setup();

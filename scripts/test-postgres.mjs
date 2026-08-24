@@ -155,8 +155,26 @@ function runPostgresRecoveryDrill(containerName) {
     if (restoredAnalytics.stdout.trim() !== '1') {
       throw new Error('PostgreSQL restore did not recover the bounded analytics aggregate.');
     }
+    const restoredAiGateway = run(
+      'docker',
+      [
+        'exec',
+        containerName,
+        'psql',
+        '--username=gridstory',
+        `--dbname=${targetDatabase}`,
+        '--tuples-only',
+        '--no-align',
+        '--command',
+        "SELECT count(*) FROM gridstory.gridstory_ai_gateway_documents WHERE tenant_id = 'postgres-tenant' AND payload->>'state' = 'enabled' AND payload->'activePrompts'->0->>'promptId' = 'postgres-summary';",
+      ],
+      { capture: true },
+    );
+    if (restoredAiGateway.stdout.trim() !== '1') {
+      throw new Error('PostgreSQL restore did not recover the governed AI gateway policy.');
+    }
     console.log(
-      'PostgreSQL logical backup/restore drill passed (published content, targeting, experiment lifecycle, and analytics aggregate recovered).',
+      'PostgreSQL logical backup/restore drill passed (published content, targeting, experiment lifecycle, analytics aggregate, and governed AI policy recovered).',
     );
   } finally {
     run(
