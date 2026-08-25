@@ -24,6 +24,63 @@ const studioManagementPanels = [
   ['Quality', 'Content quality report'],
 ] as const;
 
+async function openMobileStudioNavigation(page: Page): Promise<void> {
+  if ((page.viewportSize()?.width ?? Number.POSITIVE_INFINITY) > 900) return;
+  const toggle = page.getByRole('button', { name: 'Toggle navigation' });
+  const navigation = page.getByRole('complementary', { name: 'Primary Studio navigation' });
+  if ((await toggle.getAttribute('aria-expanded')) === 'false') {
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  }
+  await expect(navigation).toHaveClass(/studio-navigation--open/);
+  await expect
+    .poll(() => navigation.evaluate((element) => getComputedStyle(element).transform))
+    .toBe('matrix(1, 0, 0, 1, 0, 0)');
+}
+
+async function selectStudioPanel(
+  page: Page,
+  buttonName: (typeof studioManagementPanels)[number][0],
+  regionName: (typeof studioManagementPanels)[number][1],
+  previousRegionName?: string,
+): Promise<void> {
+  const navigation = page.getByRole('navigation', { name: 'Studio sections' });
+  const button = navigation.getByRole('button', { name: buttonName, exact: true });
+  if ((await button.getAttribute('aria-current')) !== 'page') {
+    await openMobileStudioNavigation(page);
+    await expect(button).toBeVisible();
+    await button.scrollIntoViewIfNeeded();
+    await button.click();
+  }
+  await expect(page.getByRole('region', { name: regionName })).toBeVisible();
+  await expect(page.locator('.studio-navigation__item[aria-current="page"]')).toHaveCount(1);
+  await expect(button).toHaveAttribute('aria-current', 'page');
+  await expect(page.locator('.studio-page > section')).toHaveCount(1);
+  await expect(page.locator('.studio-workspace')).toHaveCount(0);
+  if (previousRegionName && previousRegionName !== regionName) {
+    await expect(page.getByRole('region', { name: previousRegionName })).toHaveCount(0);
+  }
+}
+
+async function selectStudioPages(page: Page, previousRegionName?: string): Promise<void> {
+  const button = page
+    .getByRole('navigation', { name: 'Studio sections' })
+    .getByRole('button', { name: 'Pages', exact: true });
+  if ((await button.getAttribute('aria-current')) !== 'page') {
+    await openMobileStudioNavigation(page);
+    await expect(button).toBeVisible();
+    await button.scrollIntoViewIfNeeded();
+    await button.click();
+  }
+  await expect(page.locator('.studio-workspace')).toBeVisible();
+  await expect(page.locator('.studio-navigation__item[aria-current="page"]')).toHaveCount(1);
+  await expect(button).toHaveAttribute('aria-current', 'page');
+  await expect(page.locator('.studio-page > section')).toHaveCount(0);
+  if (previousRegionName) {
+    await expect(page.getByRole('region', { name: previousRegionName })).toHaveCount(0);
+  }
+}
+
 async function expectNoDetectableWcagViolations(
   page: Page,
   testInfo: TestInfo,
@@ -98,104 +155,93 @@ test('Studio shell follows the reference navigation, card, theme, and mobile dra
 test('Studio critical authoring states have no detectable WCAG 2.2 A/AA violations', async ({
   page,
 }, testInfo) => {
-  test.setTimeout(60_000);
+  test.setTimeout(240_000);
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Pages' })).toBeVisible();
+  await expect(page.locator('.studio-navigation__item[aria-current="page"]')).toHaveCount(1);
+  await expect(page.locator('.studio-page > section')).toHaveCount(0);
+  await expect(page.locator('.studio-workspace')).toBeVisible();
   await expectNoDetectableWcagViolations(page, testInfo, 'studio-default');
 
+  let previousRegionName: string | undefined;
   for (const [buttonName, regionName] of studioManagementPanels) {
-    await page.getByRole('button', { name: buttonName, exact: true }).click();
-    await expect(page.getByRole('region', { name: regionName })).toBeVisible();
+    await selectStudioPanel(page, buttonName, regionName, previousRegionName);
+    const panel = page.getByRole('region', { name: regionName });
+
+    if (buttonName === 'AI gateway') {
+      await expect(panel.getByLabel('Authoring policy JSON')).toBeVisible();
+      await expect(
+        panel.getByRole('button', { name: 'Generate evaluated proposal' }),
+      ).toBeDisabled();
+      await expect(panel.getByLabel('Bounded semantic query')).toBeVisible();
+      await expect(panel.getByText(/semantic disabled/i)).toBeVisible();
+      await expect(panel).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+      await expect(panel.locator('.section-heading p')).toHaveCSS('color', 'rgb(104, 110, 107)');
+      await expect(panel.getByLabel('Authoring policy JSON')).toHaveCSS('color', 'rgb(3, 14, 9)');
+      await expect(panel.locator('fieldset').first()).toHaveCSS(
+        'border-color',
+        'rgb(229, 230, 230)',
+      );
+      await expect(panel.getByRole('note')).toHaveCSS('color', 'rgb(154, 52, 18)');
+    }
+    if (buttonName === 'Knowledge') {
+      await expect(panel.getByLabel('Policy JSON')).toBeVisible();
+      await expect(
+        panel.getByRole('button', { name: 'Create reviewable draft plan' }),
+      ).toBeDisabled();
+      await expect(panel).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+      await expect(panel.locator('.section-heading p')).toHaveCSS('color', 'rgb(104, 110, 107)');
+      await expect(panel.getByLabel('Policy JSON')).toHaveCSS('color', 'rgb(3, 14, 9)');
+      await expect(panel.locator('fieldset').first()).toHaveCSS(
+        'border-color',
+        'rgb(229, 230, 230)',
+      );
+      await expect(panel.getByRole('note')).toHaveCSS('color', 'rgb(124, 45, 18)');
+    }
+    if (buttonName === 'Federation') {
+      await expect(panel.getByLabel('Offer JSON')).toBeVisible();
+      await expect(panel.getByLabel('Agreement JSON')).toBeVisible();
+      await expect(panel).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+      await expect(panel.locator('.section-heading p')).toHaveCSS('color', 'rgb(104, 110, 107)');
+      await expect(panel.getByLabel('Offer JSON')).toHaveCSS('color', 'rgb(3, 14, 9)');
+      await expect(panel.locator('fieldset').first()).toHaveCSS(
+        'border-color',
+        'rgb(229, 230, 230)',
+      );
+      await expect(panel.getByRole('note')).toHaveCSS('color', 'rgb(124, 45, 18)');
+    }
+    if (buttonName === 'Fleet') {
+      await expect(panel.getByLabel('Configured adapter ID')).toBeVisible();
+      await expect(panel.getByLabel('Expected instance ID')).toBeVisible();
+      await expect(panel).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+      await expect(panel.locator('.section-heading p')).toHaveCSS('color', 'rgb(104, 110, 107)');
+      await expect(panel.getByLabel('Configured adapter ID')).toHaveCSS('color', 'rgb(3, 14, 9)');
+      await expect(panel.locator('fieldset').first()).toHaveCSS(
+        'border-color',
+        'rgb(229, 230, 230)',
+      );
+      await expect(panel.getByRole('note')).toHaveCSS('color', 'rgb(124, 45, 18)');
+    }
+    if (buttonName === 'Regions') {
+      await expect(panel.getByLabel('Policy JSON')).toBeVisible();
+      await expect(panel.getByRole('button', { name: 'Record provider preflight' })).toBeDisabled();
+      await expect(panel).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+      await expect(panel.locator('.section-heading p')).toHaveCSS('color', 'rgb(104, 110, 107)');
+      await expect(panel.getByLabel('Policy JSON')).toHaveCSS('color', 'rgb(3, 14, 9)');
+      await expect(panel.getByRole('note')).toHaveCSS('color', 'rgb(124, 45, 18)');
+    }
+
+    await expectNoDetectableWcagViolations(
+      page,
+      testInfo,
+      `studio-${buttonName.toLowerCase().replaceAll(' ', '-')}`,
+    );
+    previousRegionName = regionName;
   }
 
-  const aiWorkbench = page.getByRole('region', { name: 'Governed AI gateway workbench' });
-  await expect(aiWorkbench.getByLabel('Authoring policy JSON')).toBeVisible();
-  await expect(
-    aiWorkbench.getByRole('button', { name: 'Generate evaluated proposal' }),
-  ).toBeDisabled();
-  await expect(aiWorkbench.getByLabel('Bounded semantic query')).toBeVisible();
-  await expect(aiWorkbench.getByText(/semantic disabled/i)).toBeVisible();
-  await expect(aiWorkbench).toHaveCSS('background-color', 'rgb(255, 255, 255)');
-  await expect(aiWorkbench.locator('.section-heading p')).toHaveCSS('color', 'rgb(104, 110, 107)');
-  await expect(aiWorkbench.getByLabel('Authoring policy JSON')).toHaveCSS('color', 'rgb(3, 14, 9)');
-  await expect(aiWorkbench.locator('fieldset').first()).toHaveCSS(
-    'border-color',
-    'rgb(229, 230, 230)',
-  );
-  await expect(aiWorkbench.getByRole('note')).toHaveCSS('color', 'rgb(154, 52, 18)');
-
-  const knowledgeControls = page.getByRole('region', {
-    name: 'Knowledge graph and reviewed agents',
-  });
-  await expect(knowledgeControls.getByLabel('Policy JSON')).toBeVisible();
-  await expect(
-    knowledgeControls.getByRole('button', { name: 'Create reviewable draft plan' }),
-  ).toBeDisabled();
-  await expect(knowledgeControls).toHaveCSS('background-color', 'rgb(255, 255, 255)');
-  await expect(knowledgeControls.locator('.section-heading p')).toHaveCSS(
-    'color',
-    'rgb(104, 110, 107)',
-  );
-  await expect(knowledgeControls.getByLabel('Policy JSON')).toHaveCSS('color', 'rgb(3, 14, 9)');
-  await expect(knowledgeControls.locator('fieldset').first()).toHaveCSS(
-    'border-color',
-    'rgb(229, 230, 230)',
-  );
-  await expect(knowledgeControls.getByRole('note')).toHaveCSS('color', 'rgb(124, 45, 18)');
-
-  const federationControls = page.getByRole('region', {
-    name: 'Content federation and syndication',
-  });
-  await expect(federationControls.getByLabel('Offer JSON')).toBeVisible();
-  await expect(federationControls.getByLabel('Agreement JSON')).toBeVisible();
-  await expect(federationControls).toHaveCSS('background-color', 'rgb(255, 255, 255)');
-  await expect(federationControls.locator('.section-heading p')).toHaveCSS(
-    'color',
-    'rgb(104, 110, 107)',
-  );
-  await expect(federationControls.getByLabel('Offer JSON')).toHaveCSS('color', 'rgb(3, 14, 9)');
-  await expect(federationControls.locator('fieldset').first()).toHaveCSS(
-    'border-color',
-    'rgb(229, 230, 230)',
-  );
-  await expect(federationControls.getByRole('note')).toHaveCSS('color', 'rgb(124, 45, 18)');
-
-  const fleetControls = page.getByRole('region', { name: 'Self-hosted fleet observations' });
-  await expect(fleetControls.getByLabel('Configured adapter ID')).toBeVisible();
-  await expect(fleetControls.getByLabel('Expected instance ID')).toBeVisible();
-  await expect(fleetControls).toHaveCSS('background-color', 'rgb(255, 255, 255)');
-  await expect(fleetControls.locator('.section-heading p')).toHaveCSS(
-    'color',
-    'rgb(104, 110, 107)',
-  );
-  await expect(fleetControls.getByLabel('Configured adapter ID')).toHaveCSS(
-    'color',
-    'rgb(3, 14, 9)',
-  );
-  await expect(fleetControls.locator('fieldset').first()).toHaveCSS(
-    'border-color',
-    'rgb(229, 230, 230)',
-  );
-  await expect(fleetControls.getByRole('note')).toHaveCSS('color', 'rgb(124, 45, 18)');
-
-  const regionalControls = page.getByRole('region', {
-    name: 'Regional delivery and failover controls',
-  });
-  await expect(regionalControls.getByLabel('Policy JSON')).toBeVisible();
-  await expect(
-    regionalControls.getByRole('button', { name: 'Record provider preflight' }),
-  ).toBeDisabled();
-  await expect(regionalControls).toHaveCSS('background-color', 'rgb(255, 255, 255)');
-  await expect(regionalControls.locator('.section-heading p')).toHaveCSS(
-    'color',
-    'rgb(104, 110, 107)',
-  );
-  await expect(regionalControls.getByLabel('Policy JSON')).toHaveCSS('color', 'rgb(3, 14, 9)');
-  await expect(regionalControls.getByRole('note')).toHaveCSS('color', 'rgb(124, 45, 18)');
-
-  await expectNoDetectableWcagViolations(page, testInfo, 'studio-expanded-panels');
-
   await page.getByRole('button', { name: 'Switch to dark theme' }).click();
+  await selectStudioPanel(page, 'AI gateway', 'Governed AI gateway workbench', previousRegionName);
+  const aiWorkbench = page.getByRole('region', { name: 'Governed AI gateway workbench' });
   await expect(aiWorkbench).toHaveCSS('background-color', 'rgb(3, 14, 9)');
   await expect(aiWorkbench.locator('.section-heading p')).toHaveCSS('color', 'rgb(166, 172, 169)');
   await expect(aiWorkbench.getByLabel('Authoring policy JSON')).toHaveCSS(
@@ -206,21 +252,18 @@ test('Studio critical authoring states have no detectable WCAG 2.2 A/AA violatio
     'border-color',
     'rgb(28, 38, 34)',
   );
-  await expectNoDetectableWcagViolations(page, testInfo, 'studio-expanded-panels-dark');
+  await expectNoDetectableWcagViolations(page, testInfo, 'studio-ai-gateway-dark');
+  await selectStudioPages(page, 'Governed AI gateway workbench');
+  await expectNoDetectableWcagViolations(page, testInfo, 'studio-pages-dark');
   await page.getByRole('button', { name: 'Switch to light theme' }).click();
 });
 
 test('every Studio surface contains readable text and controls at each responsive width', async ({
   page,
 }) => {
-  test.setTimeout(120_000);
+  test.setTimeout(300_000);
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Pages' })).toBeVisible();
-
-  for (const [buttonName, regionName] of studioManagementPanels) {
-    await page.getByRole('button', { name: buttonName, exact: true }).click();
-    await expect(page.getByRole('region', { name: regionName })).toBeVisible();
-  }
 
   const surfaces = page.locator('.studio-page > section, .studio-workspace');
   const viewports = [
@@ -335,8 +378,7 @@ test('every Studio surface contains readable text and controls at each responsiv
       }),
     );
 
-  for (const viewport of viewports) {
-    await page.setViewportSize(viewport);
+  const expectCurrentLayoutContained = async (context: string) => {
     const documentLayout = await page.evaluate(() => {
       const clientWidth = document.documentElement.clientWidth;
       const previousScroll = { x: window.scrollX, y: window.scrollY };
@@ -392,19 +434,36 @@ test('every Studio surface contains readable text and controls at each responsiv
     });
     expect(
       documentLayout.reachableScrollX,
-      `${viewport.width}px root width ${documentLayout.clientWidth}px / ${documentLayout.scrollWidth}px`,
+      `${context} root width ${documentLayout.clientWidth}px / ${documentLayout.scrollWidth}px`,
     ).toBe(0);
-    expect(documentLayout.uncontainedOffenders, `${viewport.width}px uncontained elements`).toEqual(
-      [],
-    );
-    expect(await collectContainmentIssues(), `${viewport.width}px containment`).toEqual([]);
+    expect(documentLayout.uncontainedOffenders, `${context} uncontained elements`).toEqual([]);
+    expect(await collectContainmentIssues(), `${context} containment`).toEqual([]);
+  };
+
+  for (const viewport of viewports) {
+    await page.setViewportSize(viewport);
+    await selectStudioPages(page);
+    await expectCurrentLayoutContained(`${viewport.width}px Pages`);
+
+    let previousRegionName: string | undefined;
+    for (const [buttonName, regionName] of studioManagementPanels) {
+      await selectStudioPanel(page, buttonName, regionName, previousRegionName);
+      await expectCurrentLayoutContained(`${viewport.width}px ${buttonName}`);
+      previousRegionName = regionName;
+    }
+
+    await selectStudioPages(page, previousRegionName);
+    await expectCurrentLayoutContained(`${viewport.width}px Pages return`);
   }
 
+  await selectStudioPanel(page, 'Search', 'Search and discovery');
   const searchResult = page
     .getByRole('region', { name: 'Search and discovery' })
     .getByRole('button', { name: 'Welcome to GridStory' });
   await expect(searchResult).toHaveCSS('min-height', '32px');
   await expect(searchResult).toHaveCSS('background-color', 'rgba(22, 90, 80, 0.12)');
+
+  await selectStudioPages(page, 'Search and discovery');
   await expect(page.locator('.entry-card__title').first()).toHaveCSS('white-space', 'normal');
   expect(
     await page
@@ -414,7 +473,15 @@ test('every Studio surface contains readable text and controls at each responsiv
   await expect(page.locator('.section-heading').first()).toHaveCSS('flex-direction', 'column');
 
   await page.getByRole('button', { name: 'Switch to dark theme' }).click();
-  expect(await collectContainmentIssues(), '320px dark containment').toEqual([]);
+  await expectCurrentLayoutContained('320px dark Pages');
+  let previousDarkRegionName: string | undefined;
+  for (const [buttonName, regionName] of studioManagementPanels) {
+    await selectStudioPanel(page, buttonName, regionName, previousDarkRegionName);
+    await expectCurrentLayoutContained(`320px dark ${buttonName}`);
+    previousDarkRegionName = regionName;
+  }
+  await selectStudioPages(page, previousDarkRegionName);
+  await expectCurrentLayoutContained('320px dark Pages return');
 });
 
 test('critical authoring remains keyboard-operable and adapts at 200% zoom', async ({
@@ -441,7 +508,9 @@ test('critical authoring remains keyboard-operable and adapts at 200% zoom', asy
   await expect(
     page.getByRole('region', { name: 'Enterprise identity administration' }),
   ).toBeVisible();
-  await expect(identityButton).toHaveAttribute('aria-expanded', 'true');
+  await expect(identityButton).toHaveAttribute('aria-current', 'page');
+  await expect(page.locator('.studio-navigation__item[aria-current="page"]')).toHaveCount(1);
+  await expect(page.locator('.studio-workspace')).toHaveCount(0);
 
   const undersizedTargets = await page
     .locator('a[href], button, input:not([type="hidden"]), select, textarea')

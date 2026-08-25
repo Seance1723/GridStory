@@ -2003,6 +2003,55 @@ describe('GridStory Studio', () => {
     expect(navigation.classList.contains('studio-navigation--open')).toBe(false);
   });
 
+  it('keeps exactly one navigation destination and one page surface active', async () => {
+    const user = userEvent.setup();
+    const client = createTestClient();
+    const listWorkflows = vi.spyOn(client, 'listWorkflows');
+    render(<App client={client} />);
+
+    await screen.findByLabelText('Headline');
+    const navigation = screen.getByRole('navigation', { name: 'Studio sections' });
+    const currentNavigationItems = () =>
+      within(navigation)
+        .getAllByRole('button')
+        .filter((button) => button.getAttribute('aria-current') === 'page');
+
+    expect(currentNavigationItems()).toHaveLength(1);
+    expect(currentNavigationItems()[0]?.textContent).toContain('Pages');
+    expect(document.querySelector('.studio-workspace')).toBeTruthy();
+    expect(document.querySelectorAll('.studio-page > section')).toHaveLength(0);
+
+    await user.click(within(navigation).getByRole('button', { name: 'Workflows' }));
+    await screen.findByRole('region', {
+      name: 'Workflow action designer',
+    });
+    const workflowLoadCount = listWorkflows.mock.calls.length;
+    expect(currentNavigationItems()).toHaveLength(1);
+    expect(currentNavigationItems()[0]?.textContent).toContain('Workflows');
+    expect(document.querySelector('.studio-workspace')).toBeNull();
+    expect(document.querySelectorAll('.studio-page > section')).toHaveLength(1);
+
+    await user.click(within(navigation).getByRole('button', { name: 'Releases' }));
+    await screen.findByRole('region', { name: 'Release manager' });
+    expect(currentNavigationItems()).toHaveLength(1);
+    expect(currentNavigationItems()[0]?.textContent).toContain('Releases');
+    expect(screen.queryByRole('region', { name: 'Workflow action designer' })).toBeNull();
+    expect(document.querySelector('.studio-workspace')).toBeNull();
+    expect(document.querySelectorAll('.studio-page > section')).toHaveLength(1);
+
+    await user.click(within(navigation).getByRole('button', { name: 'Workflows' }));
+    await screen.findByRole('region', { name: 'Workflow action designer' });
+    expect(listWorkflows).toHaveBeenCalledTimes(workflowLoadCount);
+    expect(screen.queryByRole('region', { name: 'Release manager' })).toBeNull();
+
+    await user.click(within(navigation).getByRole('button', { name: 'Pages' }));
+    await waitFor(() => expect(document.querySelector('.studio-workspace')).toBeTruthy());
+    expect(currentNavigationItems()).toHaveLength(1);
+    expect(currentNavigationItems()[0]?.textContent).toContain('Pages');
+    expect(document.querySelectorAll('.studio-page > section')).toHaveLength(0);
+    expect(screen.queryByRole('region', { name: 'Workflow action designer' })).toBeNull();
+  });
+
   it('derives content controls and composition storage from the active schema', async () => {
     render(<App client={createTestClient()} />);
 
@@ -2676,11 +2725,6 @@ describe('GridStory Studio', () => {
     expect(await screen.findByText(/content is unchanged/i)).toBeTruthy();
     await user.click(within(panel).getByRole('button', { name: 'Approve proposal' }));
     expect(await within(panel).findByText(/approved · improve-title/i)).toBeTruthy();
-    await user.click(within(panel).getByRole('button', { name: 'Use as unsaved editor changes' }));
-    expect((screen.getByLabelText('Headline') as HTMLInputElement).value).toBe(
-      'AI reviewed headline',
-    );
-    expect(screen.getByText('Unsaved changes')).toBeTruthy();
 
     await user.type(within(panel).getByLabelText('Bounded semantic query'), 'related homepage');
     await user.click(within(panel).getByRole('button', { name: 'Search private semantic index' }));
@@ -2693,6 +2737,13 @@ describe('GridStory Studio', () => {
     expect(result.textContent).toContain('Untrusted output · review required');
     expect(result.textContent).toContain('A bounded editorial summary.');
     expect(await screen.findByText(/no content was changed/i)).toBeTruthy();
+
+    await user.click(within(panel).getByRole('button', { name: 'Use as unsaved editor changes' }));
+    await user.click(screen.getByRole('button', { name: 'Pages' }));
+    expect(((await screen.findByLabelText('Headline')) as HTMLInputElement).value).toBe(
+      'AI reviewed headline',
+    );
+    expect(screen.getByText('Unsaved changes')).toBeTruthy();
   });
 
   it('starts and revokes a secure application iframe preview', async () => {
@@ -2970,6 +3021,7 @@ describe('GridStory Studio', () => {
       '2 references across 1 entries',
     );
 
+    await user.click(screen.getByRole('button', { name: 'Pages' }));
     const picker = screen.getByRole('region', { name: 'Social image' });
     await user.click(within(picker).getByRole('button', { name: /Managed hero/ }));
     expect((within(picker).getByLabelText('Alternative text') as HTMLInputElement).value).toBe(

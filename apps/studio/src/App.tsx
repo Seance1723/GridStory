@@ -735,6 +735,26 @@ export interface AppProps {
 }
 
 type StudioTheme = 'light' | 'dark';
+type StudioDestination =
+  | 'pages'
+  | 'workflows'
+  | 'releases'
+  | 'search'
+  | 'operations'
+  | 'identity'
+  | 'data-governance'
+  | 'migrations'
+  | 'marketplace'
+  | 'targeting'
+  | 'experiments'
+  | 'ai-gateway'
+  | 'knowledge'
+  | 'quality'
+  | 'federation'
+  | 'fleet'
+  | 'regions'
+  | 'components'
+  | 'assets';
 
 const studioNavigationIconPaths = {
   pages: 'M4 4h16v16H4zM8 4v16',
@@ -796,6 +816,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(true);
   const [studioTheme, setStudioTheme] = useState<StudioTheme>(initialStudioTheme);
+  const [activeStudioDestination, setActiveStudioDestination] =
+    useState<StudioDestination>('pages');
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
   const [navigationCondensed, setNavigationCondensed] = useState(false);
   const [mobileViewport, setMobileViewport] = useState(
@@ -3866,26 +3888,22 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
     [client],
   );
 
-  const anyManagementPanelOpen = Boolean(
-    workflowDesignerOpen ||
-      releasePanelOpen ||
-      searchPanelOpen ||
-      operationsDashboard ||
-      identitySnapshot ||
-      dataGovernance ||
-      migrationOverview ||
-      marketplaceOverview ||
-      personalization ||
-      experimentOverview ||
-      aiGateway ||
-      knowledge ||
-      contentFederation ||
-      fleet ||
-      regional ||
-      componentGovernance ||
-      assetLibraryOpen ||
-      qualityReport,
-  );
+  const selectNavigationItem = (
+    destination: StudioDestination,
+    loaded: boolean,
+    ensureLoaded?: () => void,
+  ) => {
+    setActiveStudioDestination(destination);
+    if (!loaded) ensureLoaded?.();
+    setMobileNavigationOpen(false);
+    if (destination === 'pages') {
+      requestAnimationFrame(() => document.getElementById('studio-editor')?.focus());
+    }
+  };
+
+  const selectSearchDestination = () => {
+    selectNavigationItem('search', searchPanelOpen, () => void toggleSearchPanel());
+  };
 
   const navigationGroups: Array<{
     label: string;
@@ -3903,26 +3921,32 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
         {
           label: 'Pages',
           icon: 'pages',
-          active: !anyManagementPanelOpen,
-          onSelect: () => document.getElementById('studio-editor')?.focus(),
+          active: activeStudioDestination === 'pages',
+          onSelect: () => selectNavigationItem('pages', true),
         },
         {
           label: 'Workflows',
           icon: 'workflows',
-          active: workflowDesignerOpen,
-          onSelect: () => void toggleWorkflowDesigner(),
+          active: activeStudioDestination === 'workflows',
+          onSelect: () =>
+            selectNavigationItem(
+              'workflows',
+              workflowDesignerOpen,
+              () => void toggleWorkflowDesigner(),
+            ),
         },
         {
           label: 'Releases',
           icon: 'releases',
-          active: releasePanelOpen,
-          onSelect: () => setReleasePanelOpen((current) => !current),
+          active: activeStudioDestination === 'releases',
+          onSelect: () =>
+            selectNavigationItem('releases', releasePanelOpen, () => setReleasePanelOpen(true)),
         },
         {
           label: 'Search',
           icon: 'search',
-          active: searchPanelOpen,
-          onSelect: () => void toggleSearchPanel(),
+          active: activeStudioDestination === 'search',
+          onSelect: selectSearchDestination,
         },
       ],
     },
@@ -3932,32 +3956,57 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
         {
           label: 'Operations',
           icon: 'operations',
-          active: operationsDashboard !== null,
-          onSelect: () => void toggleOperations(),
+          active: activeStudioDestination === 'operations',
+          onSelect: () =>
+            selectNavigationItem(
+              'operations',
+              operationsDashboard !== null && analyticsReport !== null,
+              () => void toggleOperations(),
+            ),
         },
         {
           label: 'Identity',
           icon: 'identity',
-          active: identitySnapshot !== null,
-          onSelect: () => void toggleIdentity(),
+          active: activeStudioDestination === 'identity',
+          onSelect: () =>
+            selectNavigationItem(
+              'identity',
+              identitySnapshot !== null,
+              () => void toggleIdentity(),
+            ),
         },
         {
           label: 'Data governance',
           icon: 'governance',
-          active: dataGovernance !== null,
-          onSelect: () => void toggleDataGovernance(),
+          active: activeStudioDestination === 'data-governance',
+          onSelect: () =>
+            selectNavigationItem(
+              'data-governance',
+              dataGovernance !== null,
+              () => void toggleDataGovernance(),
+            ),
         },
         {
           label: 'Migrations',
           icon: 'migrations',
-          active: migrationOverview !== null,
-          onSelect: () => void toggleMigrations(),
+          active: activeStudioDestination === 'migrations',
+          onSelect: () =>
+            selectNavigationItem(
+              'migrations',
+              migrationOverview !== null,
+              () => void toggleMigrations(),
+            ),
         },
         {
           label: 'Marketplace',
           icon: 'marketplace',
-          active: marketplaceOverview !== null,
-          onSelect: () => void toggleMarketplace(),
+          active: activeStudioDestination === 'marketplace',
+          onSelect: () =>
+            selectNavigationItem(
+              'marketplace',
+              marketplaceOverview !== null,
+              () => void toggleMarketplace(),
+            ),
         },
       ],
     },
@@ -3967,34 +4016,47 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
         {
           label: 'Targeting',
           icon: 'targeting',
-          active: personalization !== null,
-          onSelect: () => void togglePersonalization(),
+          active: activeStudioDestination === 'targeting',
+          onSelect: () =>
+            selectNavigationItem(
+              'targeting',
+              personalization !== null,
+              () => void togglePersonalization(),
+            ),
         },
         {
           label: 'Experiments',
           icon: 'experiments',
-          active: experimentOverview !== null,
-          onSelect: () => void toggleExperiments(),
+          active: activeStudioDestination === 'experiments',
+          onSelect: () =>
+            selectNavigationItem(
+              'experiments',
+              experimentOverview !== null,
+              () => void toggleExperiments(),
+            ),
         },
         {
           label: 'AI gateway',
           icon: 'ai',
-          active: aiGateway !== null,
-          onSelect: () => void toggleAiGateway(),
+          active: activeStudioDestination === 'ai-gateway',
+          onSelect: () =>
+            selectNavigationItem('ai-gateway', aiGateway !== null, () => void toggleAiGateway()),
         },
         {
           label: 'Knowledge',
           icon: 'knowledge',
-          active: knowledge !== null,
+          active: activeStudioDestination === 'knowledge',
           disabled: knowledgeBusy,
-          onSelect: () => void toggleKnowledge(),
+          onSelect: () =>
+            selectNavigationItem('knowledge', knowledge !== null, () => void toggleKnowledge()),
         },
         {
           label: 'Quality',
           icon: 'quality',
-          active: qualityReport !== null,
+          active: activeStudioDestination === 'quality',
           disabled: !selected || busy,
-          onSelect: () => void toggleQuality(),
+          onSelect: () =>
+            selectNavigationItem('quality', qualityReport !== null, () => void toggleQuality()),
         },
       ],
     },
@@ -4004,44 +4066,51 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
         {
           label: 'Federation',
           icon: 'federation',
-          active: contentFederation !== null,
+          active: activeStudioDestination === 'federation',
           disabled: federationBusy,
-          onSelect: () => void toggleContentFederation(),
+          onSelect: () =>
+            selectNavigationItem(
+              'federation',
+              contentFederation !== null,
+              () => void toggleContentFederation(),
+            ),
         },
         {
           label: 'Fleet',
           icon: 'fleet',
-          active: fleet !== null,
+          active: activeStudioDestination === 'fleet',
           disabled: fleetBusy,
-          onSelect: () => void toggleFleet(),
+          onSelect: () => selectNavigationItem('fleet', fleet !== null, () => void toggleFleet()),
         },
         {
           label: 'Regions',
           icon: 'regions',
-          active: regional !== null,
+          active: activeStudioDestination === 'regions',
           disabled: regionalBusy,
-          onSelect: () => void toggleRegional(),
+          onSelect: () =>
+            selectNavigationItem('regions', regional !== null, () => void toggleRegional()),
         },
         {
           label: 'Components',
           icon: 'components',
-          active: componentGovernance !== null,
-          onSelect: () => void toggleComponentGovernance(),
+          active: activeStudioDestination === 'components',
+          onSelect: () =>
+            selectNavigationItem(
+              'components',
+              componentGovernance !== null,
+              () => void toggleComponentGovernance(),
+            ),
         },
         {
           label: 'Assets',
           icon: 'assets',
-          active: assetLibraryOpen,
-          onSelect: () => setAssetLibraryOpen((current) => !current),
+          active: activeStudioDestination === 'assets',
+          onSelect: () =>
+            selectNavigationItem('assets', assetLibraryOpen, () => setAssetLibraryOpen(true)),
         },
       ],
     },
   ];
-
-  const selectNavigationItem = (onSelect: () => void) => {
-    onSelect();
-    setMobileNavigationOpen(false);
-  };
 
   const toggleNavigation = () => {
     if (mobileViewport) {
@@ -4102,9 +4171,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   className={`studio-navigation__item${item.active ? ' studio-navigation__item--active' : ''}`}
                   key={item.label}
                   aria-current={item.active ? 'page' : undefined}
-                  aria-expanded={item.active}
                   disabled={item.disabled}
-                  onClick={() => selectNavigationItem(item.onSelect)}
+                  onClick={item.onSelect}
                   title={navigationCondensed ? item.label : undefined}
                 >
                   <span className="studio-navigation__icon">
@@ -4144,7 +4212,11 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               <form
                 onSubmit={(event) => {
                   event.preventDefault();
-                  void (searchPanelOpen ? runSearch() : toggleSearchPanel());
+                  if (activeStudioDestination === 'search' && searchPanelOpen) {
+                    void runSearch();
+                    return;
+                  }
+                  selectSearchDestination();
                 }}
               >
                 <StudioNavigationIcon name="search" />
@@ -4160,8 +4232,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               type="button"
               className="studio-icon-button studio-mobile-search"
               aria-label="Open search"
-              aria-expanded={searchPanelOpen}
-              onClick={() => void toggleSearchPanel()}
+              aria-expanded={activeStudioDestination === 'search'}
+              onClick={selectSearchDestination}
             >
               <StudioNavigationIcon name="search" />
             </button>
@@ -4211,7 +4283,12 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
           </div>
         </header>
         <div className="studio-page">
-          {workflowDesignerOpen ? (
+          {activeStudioDestination !== 'pages' && notice ? (
+            <div className={`notice notice--${notice.tone}`} role="status">
+              {notice.message}
+            </div>
+          ) : null}
+          {activeStudioDestination === 'workflows' && workflowDesignerOpen ? (
             <section className="workflow-designer" aria-label="Workflow action designer">
               <div className="section-heading">
                 <div>
@@ -4531,7 +4608,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               </div>
             </section>
           ) : null}
-          {releasePanelOpen ? (
+          {activeStudioDestination === 'releases' && releasePanelOpen ? (
             <section className="release-panel" aria-label="Release manager">
               <div className="section-heading">
                 <div>
@@ -4775,7 +4852,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               </div>
             </section>
           ) : null}{' '}
-          {assetLibraryOpen ? (
+          {activeStudioDestination === 'assets' && assetLibraryOpen ? (
             <section className="asset-library-panel" aria-label="Asset library">
               <div className="section-heading">
                 <div>
@@ -4872,7 +4949,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               ) : null}
             </section>
           ) : null}
-          {searchPanelOpen ? (
+          {activeStudioDestination === 'search' && searchPanelOpen ? (
             <section className="search-panel" aria-label="Search and discovery">
               <div className="search-panel__query">
                 <div>
@@ -4969,7 +5046,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               </aside>
             </section>
           ) : null}{' '}
-          {operationsDashboard && analyticsReport ? (
+          {activeStudioDestination === 'operations' && operationsDashboard && analyticsReport ? (
             <section className="operations-panel" aria-label="Administrator operations">
               <div>
                 <span className="kicker">Administrator</span>
@@ -5025,7 +5102,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               </dl>
             </section>
           ) : null}
-          {knowledge ? (
+          {activeStudioDestination === 'knowledge' && knowledge ? (
             <section className="knowledge-panel" aria-label="Knowledge graph and reviewed agents">
               <div className="section-heading">
                 <div>
@@ -5213,7 +5290,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               </div>
             </section>
           ) : null}
-          {fleet ? (
+          {activeStudioDestination === 'fleet' && fleet ? (
             <section className="fleet-panel" aria-label="Self-hosted fleet observations">
               <div className="section-heading">
                 <div>
@@ -5369,7 +5446,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               </div>
             </section>
           ) : null}
-          {contentFederation ? (
+          {activeStudioDestination === 'federation' && contentFederation ? (
             <section className="federation-panel" aria-label="Content federation and syndication">
               <div className="section-heading">
                 <div>
@@ -5530,7 +5607,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               </div>
             </section>
           ) : null}
-          {regional ? (
+          {activeStudioDestination === 'regions' && regional ? (
             <section
               className="regional-panel"
               aria-label="Regional delivery and failover controls"
@@ -5683,7 +5760,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               </div>
             </section>
           ) : null}
-          {aiGateway ? (
+          {activeStudioDestination === 'ai-gateway' && aiGateway ? (
             <section className="ai-panel" aria-label="Governed AI gateway workbench">
               <div className="section-heading">
                 <div>
@@ -5983,7 +6060,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               </div>
             </section>
           ) : null}
-          {identitySnapshot ? (
+          {activeStudioDestination === 'identity' && identitySnapshot ? (
             <section className="identity-panel" aria-label="Enterprise identity administration">
               <div className="section-heading">
                 <div>
@@ -6209,7 +6286,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               </div>
             </section>
           ) : null}
-          {dataGovernance ? (
+          {activeStudioDestination === 'data-governance' && dataGovernance ? (
             <section className="data-governance-panel" aria-label="Data governance administration">
               <div className="section-heading">
                 <div>
@@ -6367,7 +6444,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               </div>
             </section>
           ) : null}
-          {migrationOverview ? (
+          {activeStudioDestination === 'migrations' && migrationOverview ? (
             <section className="migration-panel" aria-label="CMS migration workbench">
               <div className="section-heading">
                 <div>
@@ -6666,7 +6743,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               </div>
             </section>
           ) : null}
-          {marketplaceOverview ? (
+          {activeStudioDestination === 'marketplace' && marketplaceOverview ? (
             <section className="marketplace-panel" aria-label="Plugin marketplace workbench">
               <div className="section-heading">
                 <div>
@@ -7020,7 +7097,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               </div>
             </section>
           ) : null}
-          {personalization ? (
+          {activeStudioDestination === 'targeting' && personalization ? (
             <section
               className="personalization-panel"
               aria-label="Personalization targeting workbench"
@@ -7146,7 +7223,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               </div>
             </section>
           ) : null}
-          {experimentOverview ? (
+          {activeStudioDestination === 'experiments' && experimentOverview ? (
             <section className="experiment-panel" aria-label="Content experiments workbench">
               <div className="section-heading">
                 <div>
@@ -7355,7 +7432,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               </div>
             </section>
           ) : null}
-          {componentGovernance ? (
+          {activeStudioDestination === 'components' && componentGovernance ? (
             <section className="governance-panel" aria-label="Component governance">
               <div className="governance-panel__heading">
                 <span className="kicker">Component governance</span>
@@ -7431,7 +7508,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               </div>
             </section>
           ) : null}
-          {qualityReport ? (
+          {activeStudioDestination === 'quality' && qualityReport ? (
             <section className="quality-panel" aria-label="Content quality report">
               <div className="quality-panel__score">
                 <span className="kicker">Publish quality</span>
@@ -7477,308 +7554,482 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               )}
             </section>
           ) : null}{' '}
-          <div className="studio-workspace" aria-busy={busy}>
-            <aside className="content-sidebar" aria-label="Content entries">
-              <div className="sidebar-heading">
-                <div>
-                  <span className="kicker">Content</span>
-                  <h1>Pages</h1>
-                </div>
-                <button
-                  type="button"
-                  className="icon-button"
-                  onClick={() => void createPage()}
-                  aria-label="Create page"
-                >
-                  +
-                </button>
-              </div>
-              <nav>
-                {entries.map((entry) => (
+          {activeStudioDestination === 'pages' ? (
+            <div className="studio-workspace" aria-busy={busy}>
+              <aside className="content-sidebar" aria-label="Content entries">
+                <div className="sidebar-heading">
+                  <div>
+                    <span className="kicker">Content</span>
+                    <h1>Pages</h1>
+                  </div>
                   <button
                     type="button"
-                    className={`entry-card ${selected?.id === entry.id ? 'entry-card--active' : ''}`}
-                    key={entry.id}
-                    onClick={() => requestSelectEntry(entry.id)}
+                    className="icon-button"
+                    onClick={() => void createPage()}
+                    aria-label="Create page"
                   >
-                    <span className="entry-card__title">{entryTitle(entry, schemas)}</span>
-                    <span className="entry-card__meta">/{entrySlug(entry, schemas)}</span>
-                    <span className={`status status--${entry.status}`}>{entry.status}</span>
-                  </button>
-                ))}
-              </nav>
-              {entries.length === 0 && !busy ? (
-                <p className="empty-copy">No pages yet. Create the first one.</p>
-              ) : null}
-            </aside>
-
-            <main className="editor-panel" id="studio-editor" tabIndex={-1}>
-              {notice ? (
-                <div className={`notice notice--${notice.tone}`} role="status">
-                  {notice.message}
-                </div>
-              ) : null}
-              {busy && !draft ? (
-                <div className="loading-state" role="status" aria-live="polite">
-                  Loading GridStory…
-                </div>
-              ) : null}
-              {fatalError && !draft ? (
-                <div className="loading-state" role="alert">
-                  <p>GridStory could not load: {fatalError}</p>
-                  <button
-                    type="button"
-                    className="button button--secondary"
-                    onClick={() => setReloadToken((current) => current + 1)}
-                  >
-                    Try again
+                    +
                   </button>
                 </div>
-              ) : null}
-              {draft && selected ? (
-                <>
-                  <section className="document-heading">
-                    <div>
-                      <span className="kicker">Page entry</span>
-                      <h2>
-                        {String(draft[activeSchema?.titleField ?? 'title'] || 'Untitled page')}
-                      </h2>
-                    </div>
-                    <span className={`status status--${selected.status}`}>{selected.status}</span>
-                  </section>
-                  <section className="document-fields" aria-label="Page fields">
-                    {activeSchema?.fields.map((field) => {
-                      if (field.type === 'component-tree') return null;
-                      return (
-                        <SchemaFieldControl
-                          key={field.id}
-                          definition={field}
-                          value={draft[field.name]}
-                          entries={entries}
-                          assets={assetChoices}
-                          onChange={(value) =>
-                            changeDraft((current) => ({ ...current, [field.name]: value }))
-                          }
-                        />
-                      );
-                    })}
-                  </section>
+                <nav>
+                  {entries.map((entry) => (
+                    <button
+                      type="button"
+                      className={`entry-card ${selected?.id === entry.id ? 'entry-card--active' : ''}`}
+                      key={entry.id}
+                      onClick={() => requestSelectEntry(entry.id)}
+                    >
+                      <span className="entry-card__title">{entryTitle(entry, schemas)}</span>
+                      <span className="entry-card__meta">/{entrySlug(entry, schemas)}</span>
+                      <span className={`status status--${entry.status}`}>{entry.status}</span>
+                    </button>
+                  ))}
+                </nav>
+                {entries.length === 0 && !busy ? (
+                  <p className="empty-copy">No pages yet. Create the first one.</p>
+                ) : null}
+              </aside>
 
-                  <section className="workflow-panel" aria-label="Editorial workflow">
-                    <div className="section-heading">
+              <main className="editor-panel" id="studio-editor" tabIndex={-1}>
+                {notice ? (
+                  <div className={`notice notice--${notice.tone}`} role="status">
+                    {notice.message}
+                  </div>
+                ) : null}
+                {busy && !draft ? (
+                  <div className="loading-state" role="status" aria-live="polite">
+                    Loading GridStory…
+                  </div>
+                ) : null}
+                {fatalError && !draft ? (
+                  <div className="loading-state" role="alert">
+                    <p>GridStory could not load: {fatalError}</p>
+                    <button
+                      type="button"
+                      className="button button--secondary"
+                      onClick={() => setReloadToken((current) => current + 1)}
+                    >
+                      Try again
+                    </button>
+                  </div>
+                ) : null}
+                {draft && selected ? (
+                  <>
+                    <section className="document-heading">
                       <div>
-                        <span className="kicker">Governance</span>
-                        <h2>Editorial workflow</h2>
-                        <p>
-                          {activeWorkflow?.name ?? 'Configured workflow'} · version{' '}
-                          {workflowInstance?.workflowVersion ?? '—'}
-                        </p>
+                        <span className="kicker">Page entry</span>
+                        <h2>
+                          {String(draft[activeSchema?.titleField ?? 'title'] || 'Untitled page')}
+                        </h2>
                       </div>
-                      <span
-                        className={`workflow-state workflow-state--${workflowState?.kind ?? 'draft'}`}
-                      >
-                        {workflowState?.label ?? workflowInstance?.stateId ?? 'Loading'}
-                      </span>
-                    </div>
+                      <span className={`status status--${selected.status}`}>{selected.status}</span>
+                    </section>
+                    <section className="document-fields" aria-label="Page fields">
+                      {activeSchema?.fields.map((field) => {
+                        if (field.type === 'component-tree') return null;
+                        return (
+                          <SchemaFieldControl
+                            key={field.id}
+                            definition={field}
+                            value={draft[field.name]}
+                            entries={entries}
+                            assets={assetChoices}
+                            onChange={(value) =>
+                              changeDraft((current) => ({ ...current, [field.name]: value }))
+                            }
+                          />
+                        );
+                      })}
+                    </section>
 
-                    <div className="workflow-grid">
-                      <div className="workflow-actions">
-                        <h3>Available actions</h3>
-                        <div className="workflow-action-row">
-                          {availableWorkflowTransitions
-                            .filter((transition) => transition.id !== publishWorkflowTransition?.id)
-                            .map((transition) => (
+                    <section className="workflow-panel" aria-label="Editorial workflow">
+                      <div className="section-heading">
+                        <div>
+                          <span className="kicker">Governance</span>
+                          <h2>Editorial workflow</h2>
+                          <p>
+                            {activeWorkflow?.name ?? 'Configured workflow'} · version{' '}
+                            {workflowInstance?.workflowVersion ?? '—'}
+                          </p>
+                        </div>
+                        <span
+                          className={`workflow-state workflow-state--${workflowState?.kind ?? 'draft'}`}
+                        >
+                          {workflowState?.label ?? workflowInstance?.stateId ?? 'Loading'}
+                        </span>
+                      </div>
+
+                      <div className="workflow-grid">
+                        <div className="workflow-actions">
+                          <h3>Available actions</h3>
+                          <div className="workflow-action-row">
+                            {availableWorkflowTransitions
+                              .filter(
+                                (transition) => transition.id !== publishWorkflowTransition?.id,
+                              )
+                              .map((transition) => (
+                                <button
+                                  key={transition.id}
+                                  type="button"
+                                  className="button button--secondary"
+                                  disabled={busy || workflowInstance?.pendingApproval !== undefined}
+                                  onClick={() => void runWorkflowTransition(transition.id)}
+                                >
+                                  {transition.label}
+                                </button>
+                              ))}
+                            {availableWorkflowTransitions.length === 0 ? (
+                              <span className="empty-copy">
+                                Save a new draft to restart editorial review.
+                              </span>
+                            ) : null}
+                          </div>
+
+                          {workflowInstance?.pendingApproval ? (
+                            <article className="approval-card">
+                              <div>
+                                <strong>Approval pending</strong>
+                                <p>
+                                  Requested by {workflowInstance.pendingApproval.requestedBy}
+                                  {workflowInstance.pendingApproval.dueAt
+                                    ? ` · due ${new Date(
+                                        workflowInstance.pendingApproval.dueAt,
+                                      ).toLocaleString()}`
+                                    : ''}
+                                </p>
+                                <small>
+                                  {
+                                    workflowInstance.pendingApproval.decisions.filter(
+                                      (decision) => decision.decision === 'approved',
+                                    ).length
+                                  }{' '}
+                                  approvals recorded
+                                  {workflowInstance.pendingApproval.escalatedAt
+                                    ? ' · escalated'
+                                    : ''}
+                                </small>
+                              </div>
+                              <div className="workflow-action-row">
+                                <button
+                                  type="button"
+                                  className="button button--primary"
+                                  disabled={busy || dirty}
+                                  onClick={() => void decideWorkflow('approved')}
+                                >
+                                  Approve
+                                </button>
+                                <button
+                                  type="button"
+                                  className="button button--secondary"
+                                  disabled={busy || dirty}
+                                  onClick={() => void decideWorkflow('rejected')}
+                                >
+                                  Reject and request changes
+                                </button>
+                              </div>
+                            </article>
+                          ) : null}
+
+                          {publishWorkflowTransition ? (
+                            <div className="workflow-scheduler">
+                              <h3>Schedule publication</h3>
+                              <label className="gs-field">
+                                <span>Date and time</span>
+                                <input
+                                  type="datetime-local"
+                                  value={workflowScheduleAt}
+                                  onChange={(event) => setWorkflowScheduleAt(event.target.value)}
+                                />
+                              </label>
+                              <label className="gs-field">
+                                <span>IANA time zone</span>
+                                <input
+                                  value={workflowTimeZone}
+                                  onChange={(event) => setWorkflowTimeZone(event.target.value)}
+                                />
+                              </label>
                               <button
-                                key={transition.id}
                                 type="button"
                                 className="button button--secondary"
-                                disabled={busy || workflowInstance?.pendingApproval !== undefined}
-                                onClick={() => void runWorkflowTransition(transition.id)}
+                                disabled={!workflowScheduleAt || busy}
+                                onClick={() =>
+                                  void scheduleWorkflowTransition(publishWorkflowTransition.id)
+                                }
                               >
-                                {transition.label}
+                                Schedule publish
                               </button>
-                            ))}
-                          {availableWorkflowTransitions.length === 0 ? (
-                            <span className="empty-copy">
-                              Save a new draft to restart editorial review.
-                            </span>
+                            </div>
                           ) : null}
                         </div>
 
-                        {workflowInstance?.pendingApproval ? (
-                          <article className="approval-card">
-                            <div>
-                              <strong>Approval pending</strong>
-                              <p>
-                                Requested by {workflowInstance.pendingApproval.requestedBy}
-                                {workflowInstance.pendingApproval.dueAt
-                                  ? ` · due ${new Date(
-                                      workflowInstance.pendingApproval.dueAt,
-                                    ).toLocaleString()}`
-                                  : ''}
-                              </p>
-                              <small>
-                                {
-                                  workflowInstance.pendingApproval.decisions.filter(
-                                    (decision) => decision.decision === 'approved',
-                                  ).length
-                                }{' '}
-                                approvals recorded
-                                {workflowInstance.pendingApproval.escalatedAt ? ' · escalated' : ''}
-                              </small>
-                            </div>
-                            <div className="workflow-action-row">
-                              <button
-                                type="button"
-                                className="button button--primary"
-                                disabled={busy || dirty}
-                                onClick={() => void decideWorkflow('approved')}
-                              >
-                                Approve
-                              </button>
-                              <button
-                                type="button"
-                                className="button button--secondary"
-                                disabled={busy || dirty}
-                                onClick={() => void decideWorkflow('rejected')}
-                              >
-                                Reject and request changes
-                              </button>
-                            </div>
-                          </article>
-                        ) : null}
-
-                        {publishWorkflowTransition ? (
-                          <div className="workflow-scheduler">
-                            <h3>Schedule publication</h3>
-                            <label className="gs-field">
-                              <span>Date and time</span>
-                              <input
-                                type="datetime-local"
-                                value={workflowScheduleAt}
-                                onChange={(event) => setWorkflowScheduleAt(event.target.value)}
-                              />
-                            </label>
-                            <label className="gs-field">
-                              <span>IANA time zone</span>
-                              <input
-                                value={workflowTimeZone}
-                                onChange={(event) => setWorkflowTimeZone(event.target.value)}
-                              />
-                            </label>
-                            <button
-                              type="button"
-                              className="button button--secondary"
-                              disabled={!workflowScheduleAt || busy}
-                              onClick={() =>
-                                void scheduleWorkflowTransition(publishWorkflowTransition.id)
-                              }
-                            >
-                              Schedule publish
-                            </button>
-                          </div>
-                        ) : null}
+                        <div className="workflow-activity">
+                          <h3>Schedules and notifications</h3>
+                          {workflowInstance?.schedules.length ? (
+                            <ul className="workflow-list">
+                              {workflowInstance.schedules
+                                .slice()
+                                .reverse()
+                                .slice(0, 4)
+                                .map((schedule) => (
+                                  <li key={schedule.id}>
+                                    <div>
+                                      <strong>{schedule.transitionId}</strong>
+                                      <small>
+                                        {new Date(schedule.runAt).toLocaleString()} ·{' '}
+                                        {schedule.timeZone} · {schedule.state}
+                                      </small>
+                                    </div>
+                                    {schedule.state === 'pending' ? (
+                                      <button
+                                        type="button"
+                                        className="button button--danger button--compact"
+                                        disabled={busy}
+                                        onClick={() => void cancelWorkflowSchedule(schedule.id)}
+                                      >
+                                        Cancel
+                                      </button>
+                                    ) : null}
+                                  </li>
+                                ))}
+                            </ul>
+                          ) : null}
+                          {workflowInstance?.notifications.length ? (
+                            <ol className="workflow-list workflow-notifications">
+                              {workflowInstance.notifications
+                                .slice()
+                                .reverse()
+                                .slice(0, 5)
+                                .map((notification) => (
+                                  <li key={notification.id}>
+                                    <div>
+                                      <strong>{notification.message}</strong>
+                                      <small>
+                                        {new Date(notification.createdAt).toLocaleString()}
+                                        {notification.audienceRoles.length
+                                          ? ` · ${notification.audienceRoles.join(', ')}`
+                                          : ''}
+                                      </small>
+                                    </div>
+                                  </li>
+                                ))}
+                            </ol>
+                          ) : (
+                            <p className="empty-copy">No workflow activity yet.</p>
+                          )}
+                        </div>
                       </div>
+                    </section>
 
-                      <div className="workflow-activity">
-                        <h3>Schedules and notifications</h3>
-                        {workflowInstance?.schedules.length ? (
-                          <ul className="workflow-list">
-                            {workflowInstance.schedules
-                              .slice()
-                              .reverse()
-                              .slice(0, 4)
-                              .map((schedule) => (
-                                <li key={schedule.id}>
-                                  <div>
-                                    <strong>{schedule.transitionId}</strong>
-                                    <small>
-                                      {new Date(schedule.runAt).toLocaleString()} ·{' '}
-                                      {schedule.timeZone} · {schedule.state}
-                                    </small>
-                                  </div>
-                                  {schedule.state === 'pending' ? (
+                    <section className="collaboration-panel" aria-label="Collaboration workspace">
+                      <div className="section-heading">
+                        <div>
+                          <span className="kicker">Collaboration</span>
+                          <h2>Branches, suggestions, and comments</h2>
+                        </div>
+                        <ul className="presence-list" aria-label="Active editors">
+                          {collaboration.presence.length > 0 ? (
+                            collaboration.presence.map((participant) => (
+                              <li className="presence-chip" key={participant.actorId}>
+                                {participant.displayName}
+                                {participant.field ? ` · ${participant.field}` : ''}
+                              </li>
+                            ))
+                          ) : (
+                            <li className="presence-chip presence-chip--idle">No active editors</li>
+                          )}
+                        </ul>
+                      </div>
+                      <div className="collaboration-workbench">
+                        <div className="collaboration-controls">
+                          <label className="gs-field">
+                            <span>Working branch</span>
+                            <select
+                              value={collaborationBranchId}
+                              onChange={(event) => setCollaborationBranchId(event.target.value)}
+                            >
+                              {collaboration.branches.map((candidate) => (
+                                <option key={candidate.id} value={candidate.id}>
+                                  {candidate.name} · {candidate.status}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="gs-field">
+                            <span>Shared field or block</span>
+                            <select
+                              value={collaborationTargetField}
+                              onChange={(event) => setCollaborationTargetField(event.target.value)}
+                            >
+                              <option value="">Choose a field</option>
+                              {activeSchema?.fields.map((field) => (
+                                <option key={field.id} value={field.name}>
+                                  {field.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <button
+                            type="button"
+                            className="button button--secondary"
+                            disabled={
+                              !collaborationTargetField || selectedCollaborationValue === undefined
+                            }
+                            onClick={() => void shareCollaborationValue()}
+                          >
+                            Share current value
+                          </button>
+                          <span className="collaboration-version">
+                            {collaboration.operations.length} operations · document v
+                            {collaboration.version}
+                          </span>
+                        </div>
+
+                        <div className="collaboration-create-row">
+                          <label className="gs-field">
+                            <span>New branch from current</span>
+                            <input
+                              placeholder="Campaign revision"
+                              value={collaborationBranchName}
+                              onChange={(event) => setCollaborationBranchName(event.target.value)}
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            className="button button--secondary"
+                            disabled={!collaborationBranchName.trim()}
+                            onClick={() => void createCollaborationBranch()}
+                          >
+                            Create branch
+                          </button>
+                          <button
+                            type="button"
+                            className="button button--primary"
+                            disabled={
+                              collaborationBranchId === 'main' ||
+                              collaboration.branches.find(
+                                (candidate) => candidate.id === collaborationBranchId,
+                              )?.status !== 'open'
+                            }
+                            onClick={() => void mergeCollaborationBranch()}
+                          >
+                            Merge into Main
+                          </button>
+                        </div>
+
+                        <div className="collaboration-create-row collaboration-suggestion-composer">
+                          <label className="gs-field">
+                            <span>Proposed value</span>
+                            <textarea
+                              rows={2}
+                              placeholder="Suggest a replacement value for the selected field or block"
+                              value={collaborationSuggestionValue}
+                              onChange={(event) =>
+                                setCollaborationSuggestionValue(event.target.value)
+                              }
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            className="button button--secondary"
+                            disabled={
+                              !collaborationTargetField || !collaborationSuggestionValue.trim()
+                            }
+                            onClick={() => void createCollaborationSuggestion()}
+                          >
+                            Open suggestion
+                          </button>
+                        </div>
+
+                        {collaboration.suggestions.length > 0 ? (
+                          <section className="collaboration-review-list" aria-label="Suggestions">
+                            <h3>Suggestions</h3>
+                            {collaboration.suggestions.map((suggestion) => (
+                              <article key={suggestion.id} className="collaboration-review-card">
+                                <div>
+                                  <strong>{suggestion.target.field}</strong>
+                                  {suggestion.target.nodeId ? ` · ${suggestion.target.nodeId}` : ''}
+                                  <p>{collaborationValueLabel(suggestion.value)}</p>
+                                  <small>
+                                    {suggestion.createdBy} · {suggestion.status}
+                                  </small>
+                                </div>
+                                {suggestion.status === 'open' ? (
+                                  <div className="collaboration-card-actions">
+                                    <button
+                                      type="button"
+                                      className="button button--primary button--compact"
+                                      onClick={() =>
+                                        void reviewCollaborationSuggestion(suggestion.id, 'accept')
+                                      }
+                                    >
+                                      Accept
+                                    </button>
                                     <button
                                       type="button"
                                       className="button button--danger button--compact"
-                                      disabled={busy}
-                                      onClick={() => void cancelWorkflowSchedule(schedule.id)}
+                                      onClick={() =>
+                                        void reviewCollaborationSuggestion(suggestion.id, 'reject')
+                                      }
                                     >
-                                      Cancel
+                                      Reject
                                     </button>
-                                  ) : null}
-                                </li>
-                              ))}
-                          </ul>
-                        ) : null}
-                        {workflowInstance?.notifications.length ? (
-                          <ol className="workflow-list workflow-notifications">
-                            {workflowInstance.notifications
-                              .slice()
-                              .reverse()
-                              .slice(0, 5)
-                              .map((notification) => (
-                                <li key={notification.id}>
-                                  <div>
-                                    <strong>{notification.message}</strong>
-                                    <small>
-                                      {new Date(notification.createdAt).toLocaleString()}
-                                      {notification.audienceRoles.length
-                                        ? ` · ${notification.audienceRoles.join(', ')}`
-                                        : ''}
-                                    </small>
                                   </div>
-                                </li>
-                              ))}
-                          </ol>
-                        ) : (
-                          <p className="empty-copy">No workflow activity yet.</p>
-                        )}
-                      </div>
-                    </div>
-                  </section>
-
-                  <section className="collaboration-panel" aria-label="Collaboration workspace">
-                    <div className="section-heading">
-                      <div>
-                        <span className="kicker">Collaboration</span>
-                        <h2>Branches, suggestions, and comments</h2>
-                      </div>
-                      <ul className="presence-list" aria-label="Active editors">
-                        {collaboration.presence.length > 0 ? (
-                          collaboration.presence.map((participant) => (
-                            <li className="presence-chip" key={participant.actorId}>
-                              {participant.displayName}
-                              {participant.field ? ` · ${participant.field}` : ''}
-                            </li>
-                          ))
-                        ) : (
-                          <li className="presence-chip presence-chip--idle">No active editors</li>
-                        )}
-                      </ul>
-                    </div>
-                    <div className="collaboration-workbench">
-                      <div className="collaboration-controls">
-                        <label className="gs-field">
-                          <span>Working branch</span>
-                          <select
-                            value={collaborationBranchId}
-                            onChange={(event) => setCollaborationBranchId(event.target.value)}
-                          >
-                            {collaboration.branches.map((candidate) => (
-                              <option key={candidate.id} value={candidate.id}>
-                                {candidate.name} · {candidate.status}
-                              </option>
+                                ) : null}
+                              </article>
                             ))}
-                          </select>
-                        </label>
-                        <label className="gs-field">
-                          <span>Shared field or block</span>
-                          <select
-                            value={collaborationTargetField}
-                            onChange={(event) => setCollaborationTargetField(event.target.value)}
+                          </section>
+                        ) : null}
+
+                        {collaboration.conflicts.some((conflict) => conflict.status === 'open') ? (
+                          <section
+                            className="collaboration-review-list"
+                            aria-label="Merge conflicts"
                           >
-                            <option value="">Choose a field</option>
+                            <h3>Merge conflicts</h3>
+                            {collaboration.conflicts
+                              .filter((conflict) => conflict.status === 'open')
+                              .map((conflict) => (
+                                <article
+                                  key={conflict.id}
+                                  className="collaboration-review-card collaboration-conflict-card"
+                                >
+                                  <div>
+                                    <strong>{conflict.target.field}</strong>
+                                    {conflict.target.nodeId ? ` · ${conflict.target.nodeId}` : ''}
+                                    <p>Choose the value that should become the causal successor.</p>
+                                  </div>
+                                  <div className="collaboration-conflict-variants">
+                                    {conflict.variants.map((variant) => (
+                                      <button
+                                        type="button"
+                                        key={variant.operationId}
+                                        onClick={() =>
+                                          void resolveCollaborationConflict(
+                                            conflict.id,
+                                            variant.operationId,
+                                          )
+                                        }
+                                      >
+                                        <strong>{variant.branchId}</strong>
+                                        <span>{collaborationValueLabel(variant.value)}</span>
+                                        <small>{variant.actorId}</small>
+                                      </button>
+                                    ))}
+                                  </div>
+                                </article>
+                              ))}
+                          </section>
+                        ) : null}
+                      </div>
+                      <h3 className="collaboration-comments-heading">Comments</h3>
+                      <div className="comment-composer">
+                        <label className="gs-field">
+                          <span>Comment target</span>
+                          <select
+                            value={commentTargetField}
+                            onChange={(event) => setCommentTargetField(event.target.value)}
+                          >
+                            <option value="">Whole entry</option>
                             {activeSchema?.fields.map((field) => (
                               <option key={field.id} value={field.name}>
                                 {field.label}
@@ -7786,359 +8037,166 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                             ))}
                           </select>
                         </label>
-                        <button
-                          type="button"
-                          className="button button--secondary"
-                          disabled={
-                            !collaborationTargetField || selectedCollaborationValue === undefined
-                          }
-                          onClick={() => void shareCollaborationValue()}
-                        >
-                          Share current value
-                        </button>
-                        <span className="collaboration-version">
-                          {collaboration.operations.length} operations · document v
-                          {collaboration.version}
-                        </span>
-                      </div>
-
-                      <div className="collaboration-create-row">
-                        <label className="gs-field">
-                          <span>New branch from current</span>
-                          <input
-                            placeholder="Campaign revision"
-                            value={collaborationBranchName}
-                            onChange={(event) => setCollaborationBranchName(event.target.value)}
-                          />
-                        </label>
-                        <button
-                          type="button"
-                          className="button button--secondary"
-                          disabled={!collaborationBranchName.trim()}
-                          onClick={() => void createCollaborationBranch()}
-                        >
-                          Create branch
-                        </button>
-                        <button
-                          type="button"
-                          className="button button--primary"
-                          disabled={
-                            collaborationBranchId === 'main' ||
-                            collaboration.branches.find(
-                              (candidate) => candidate.id === collaborationBranchId,
-                            )?.status !== 'open'
-                          }
-                          onClick={() => void mergeCollaborationBranch()}
-                        >
-                          Merge into Main
-                        </button>
-                      </div>
-
-                      <div className="collaboration-create-row collaboration-suggestion-composer">
-                        <label className="gs-field">
-                          <span>Proposed value</span>
+                        <label className="gs-field comment-body-field">
+                          <span>New comment</span>
                           <textarea
-                            rows={2}
-                            placeholder="Suggest a replacement value for the selected field or block"
-                            value={collaborationSuggestionValue}
-                            onChange={(event) =>
-                              setCollaborationSuggestionValue(event.target.value)
-                            }
+                            rows={3}
+                            placeholder="Write a comment and mention @reviewer"
+                            value={commentBody}
+                            onChange={(event) => setCommentBody(event.target.value)}
+                          />
+                        </label>
+                        <label className="gs-field">
+                          <span>Assign to</span>
+                          <input
+                            placeholder="actor-id"
+                            value={commentAssignee}
+                            onChange={(event) => setCommentAssignee(event.target.value)}
+                          />
+                        </label>
+                        <label className="gs-field">
+                          <span>Due date</span>
+                          <input
+                            type="datetime-local"
+                            value={commentDueAt}
+                            onChange={(event) => setCommentDueAt(event.target.value)}
                           />
                         </label>
                         <button
                           type="button"
                           className="button button--secondary"
-                          disabled={
-                            !collaborationTargetField || !collaborationSuggestionValue.trim()
-                          }
-                          onClick={() => void createCollaborationSuggestion()}
+                          disabled={!commentBody.trim()}
+                          onClick={() => void createComment()}
                         >
-                          Open suggestion
+                          Add comment
                         </button>
                       </div>
-
-                      {collaboration.suggestions.length > 0 ? (
-                        <section className="collaboration-review-list" aria-label="Suggestions">
-                          <h3>Suggestions</h3>
-                          {collaboration.suggestions.map((suggestion) => (
-                            <article key={suggestion.id} className="collaboration-review-card">
+                      <div className="comment-thread-list">
+                        {collaboration.threads.map((thread) => (
+                          <article
+                            className={`comment-thread${thread.resolvedAt ? ' comment-thread--resolved' : ''}`}
+                            key={thread.id}
+                          >
+                            <header>
                               <div>
-                                <strong>{suggestion.target.field}</strong>
-                                {suggestion.target.nodeId ? ` · ${suggestion.target.nodeId}` : ''}
-                                <p>{collaborationValueLabel(suggestion.value)}</p>
+                                <strong>
+                                  {thread.target.field ?? 'Entry'}
+                                  {thread.target.nodeId ? ` · ${thread.target.nodeId}` : ''}
+                                </strong>
                                 <small>
-                                  {suggestion.createdBy} · {suggestion.status}
+                                  {thread.assigneeId
+                                    ? `Assigned to ${thread.assigneeId}`
+                                    : 'Unassigned'}
+                                  {thread.dueAt
+                                    ? ` · due ${new Date(thread.dueAt).toLocaleDateString()}`
+                                    : ''}
                                 </small>
                               </div>
-                              {suggestion.status === 'open' ? (
-                                <div className="collaboration-card-actions">
-                                  <button
-                                    type="button"
-                                    className="button button--primary button--compact"
-                                    onClick={() =>
-                                      void reviewCollaborationSuggestion(suggestion.id, 'accept')
-                                    }
-                                  >
-                                    Accept
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="button button--danger button--compact"
-                                    onClick={() =>
-                                      void reviewCollaborationSuggestion(suggestion.id, 'reject')
-                                    }
-                                  >
-                                    Reject
-                                  </button>
-                                </div>
-                              ) : null}
-                            </article>
-                          ))}
-                        </section>
-                      ) : null}
-
-                      {collaboration.conflicts.some((conflict) => conflict.status === 'open') ? (
-                        <section className="collaboration-review-list" aria-label="Merge conflicts">
-                          <h3>Merge conflicts</h3>
-                          {collaboration.conflicts
-                            .filter((conflict) => conflict.status === 'open')
-                            .map((conflict) => (
-                              <article
-                                key={conflict.id}
-                                className="collaboration-review-card collaboration-conflict-card"
+                              <button
+                                type="button"
+                                className="button button--secondary button--compact"
+                                onClick={() =>
+                                  void setThreadResolved(thread.id, !thread.resolvedAt)
+                                }
                               >
-                                <div>
-                                  <strong>{conflict.target.field}</strong>
-                                  {conflict.target.nodeId ? ` · ${conflict.target.nodeId}` : ''}
-                                  <p>Choose the value that should become the causal successor.</p>
-                                </div>
-                                <div className="collaboration-conflict-variants">
-                                  {conflict.variants.map((variant) => (
-                                    <button
-                                      type="button"
-                                      key={variant.operationId}
-                                      onClick={() =>
-                                        void resolveCollaborationConflict(
-                                          conflict.id,
-                                          variant.operationId,
-                                        )
-                                      }
-                                    >
-                                      <strong>{variant.branchId}</strong>
-                                      <span>{collaborationValueLabel(variant.value)}</span>
-                                      <small>{variant.actorId}</small>
-                                    </button>
-                                  ))}
-                                </div>
-                              </article>
-                            ))}
-                        </section>
-                      ) : null}
-                    </div>
-                    <h3 className="collaboration-comments-heading">Comments</h3>
-                    <div className="comment-composer">
-                      <label className="gs-field">
-                        <span>Comment target</span>
-                        <select
-                          value={commentTargetField}
-                          onChange={(event) => setCommentTargetField(event.target.value)}
-                        >
-                          <option value="">Whole entry</option>
-                          {activeSchema?.fields.map((field) => (
-                            <option key={field.id} value={field.name}>
-                              {field.label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="gs-field comment-body-field">
-                        <span>New comment</span>
-                        <textarea
-                          rows={3}
-                          placeholder="Write a comment and mention @reviewer"
-                          value={commentBody}
-                          onChange={(event) => setCommentBody(event.target.value)}
-                        />
-                      </label>
-                      <label className="gs-field">
-                        <span>Assign to</span>
-                        <input
-                          placeholder="actor-id"
-                          value={commentAssignee}
-                          onChange={(event) => setCommentAssignee(event.target.value)}
-                        />
-                      </label>
-                      <label className="gs-field">
-                        <span>Due date</span>
-                        <input
-                          type="datetime-local"
-                          value={commentDueAt}
-                          onChange={(event) => setCommentDueAt(event.target.value)}
-                        />
-                      </label>
-                      <button
-                        type="button"
-                        className="button button--secondary"
-                        disabled={!commentBody.trim()}
-                        onClick={() => void createComment()}
-                      >
-                        Add comment
-                      </button>
-                    </div>
-                    <div className="comment-thread-list">
-                      {collaboration.threads.map((thread) => (
-                        <article
-                          className={`comment-thread${thread.resolvedAt ? ' comment-thread--resolved' : ''}`}
-                          key={thread.id}
-                        >
-                          <header>
-                            <div>
-                              <strong>
-                                {thread.target.field ?? 'Entry'}
-                                {thread.target.nodeId ? ` · ${thread.target.nodeId}` : ''}
-                              </strong>
-                              <small>
-                                {thread.assigneeId
-                                  ? `Assigned to ${thread.assigneeId}`
-                                  : 'Unassigned'}
-                                {thread.dueAt
-                                  ? ` · due ${new Date(thread.dueAt).toLocaleDateString()}`
-                                  : ''}
-                              </small>
+                                {thread.resolvedAt ? 'Reopen' : 'Resolve'}
+                              </button>
+                            </header>
+                            <ol>
+                              {thread.messages.map((message) => (
+                                <li key={message.id}>
+                                  <strong>{message.actorId}</strong>
+                                  <p>{message.body}</p>
+                                  {message.mentions.length > 0 ? (
+                                    <small>Mentioned: {message.mentions.join(', ')}</small>
+                                  ) : null}
+                                </li>
+                              ))}
+                            </ol>
+                            <div className="comment-reply">
+                              <input
+                                aria-label={`Reply to comment ${thread.id}`}
+                                placeholder="Reply…"
+                                value={replyBodies[thread.id] ?? ''}
+                                onChange={(event) =>
+                                  setReplyBodies((current) => ({
+                                    ...current,
+                                    [thread.id]: event.target.value,
+                                  }))
+                                }
+                              />
+                              <button
+                                type="button"
+                                className="button button--secondary button--compact"
+                                onClick={() => void replyToThread(thread.id)}
+                              >
+                                Reply
+                              </button>
                             </div>
-                            <button
-                              type="button"
-                              className="button button--secondary button--compact"
-                              onClick={() => void setThreadResolved(thread.id, !thread.resolvedAt)}
-                            >
-                              {thread.resolvedAt ? 'Reopen' : 'Resolve'}
-                            </button>
-                          </header>
-                          <ol>
-                            {thread.messages.map((message) => (
-                              <li key={message.id}>
-                                <strong>{message.actorId}</strong>
-                                <p>{message.body}</p>
-                                {message.mentions.length > 0 ? (
-                                  <small>Mentioned: {message.mentions.join(', ')}</small>
-                                ) : null}
-                              </li>
-                            ))}
-                          </ol>
-                          <div className="comment-reply">
-                            <input
-                              aria-label={`Reply to comment ${thread.id}`}
-                              placeholder="Reply…"
-                              value={replyBodies[thread.id] ?? ''}
-                              onChange={(event) =>
-                                setReplyBodies((current) => ({
-                                  ...current,
-                                  [thread.id]: event.target.value,
-                                }))
-                              }
-                            />
-                            <button
-                              type="button"
-                              className="button button--secondary button--compact"
-                              onClick={() => void replyToThread(thread.id)}
-                            >
-                              Reply
-                            </button>
-                          </div>
-                        </article>
-                      ))}
-                      {collaboration.threads.length === 0 ? (
-                        <p className="empty-copy">No comment threads for this entry.</p>
-                      ) : null}
-                    </div>
-                  </section>
+                          </article>
+                        ))}
+                        {collaboration.threads.length === 0 ? (
+                          <p className="empty-copy">No comment threads for this entry.</p>
+                        ) : null}
+                      </div>
+                    </section>
 
-                  <section className="blocks-section">
-                    <div className="section-heading">
-                      <div>
-                        <span className="kicker">Composition</span>
-                        <h2>{componentField?.label ?? 'Page blocks'}</h2>
+                    <section className="blocks-section">
+                      <div className="section-heading">
+                        <div>
+                          <span className="kicker">Composition</span>
+                          <h2>{componentField?.label ?? 'Page blocks'}</h2>
+                        </div>
+                        <div className="composition-toolbar">
+                          <span>{layers.length} components</span>
+                          <button
+                            type="button"
+                            onClick={() => restoreComposition('undo')}
+                            disabled={compositionHistory.past.length === 0}
+                            aria-label="Undo composition change"
+                          >
+                            Undo
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => restoreComposition('redo')}
+                            disabled={compositionHistory.future.length === 0}
+                            aria-label="Redo composition change"
+                          >
+                            Redo
+                          </button>
+                        </div>
                       </div>
-                      <div className="composition-toolbar">
-                        <span>{layers.length} components</span>
+                      <section className="layers-panel" aria-label="Composition layers">
+                        <span>Layers</span>
+                        <p className="composition-help" id="composition-keyboard-help">
+                          Select a layer, then use arrow keys to reorder or nest it. Press Delete to
+                          remove it.
+                        </p>
                         <button
                           type="button"
-                          onClick={() => restoreComposition('undo')}
-                          disabled={compositionHistory.past.length === 0}
-                          aria-label="Undo composition change"
-                        >
-                          Undo
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => restoreComposition('redo')}
-                          disabled={compositionHistory.future.length === 0}
-                          aria-label="Redo composition change"
-                        >
-                          Redo
-                        </button>
-                      </div>
-                    </div>
-                    <section className="layers-panel" aria-label="Composition layers">
-                      <span>Layers</span>
-                      <p className="composition-help" id="composition-keyboard-help">
-                        Select a layer, then use arrow keys to reorder or nest it. Press Delete to
-                        remove it.
-                      </p>
-                      <button
-                        type="button"
-                        className="layer-root-drop"
-                        onClick={() => {
-                          if (compositionHistory.selectedId) {
-                            applyComposition(
-                              moveNode(
-                                draftBlocks,
+                          className="layer-root-drop"
+                          onClick={() => {
+                            if (compositionHistory.selectedId) {
+                              applyComposition(
+                                moveNode(
+                                  draftBlocks,
+                                  compositionHistory.selectedId,
+                                  { index: draftBlocks.length },
+                                  compositionRules,
+                                ),
                                 compositionHistory.selectedId,
-                                { index: draftBlocks.length },
-                                compositionRules,
-                              ),
-                              compositionHistory.selectedId,
-                            );
-                          }
-                        }}
-                        onDragOver={(event) => event.preventDefault()}
-                        onDrop={() => {
-                          if (draggedNodeId) {
-                            applyComposition(
-                              moveNode(
-                                draftBlocks,
-                                draggedNodeId,
-                                { index: draftBlocks.length },
-                                compositionRules,
-                              ),
-                              draggedNodeId,
-                            );
-                          }
-                          setDraggedNodeId(null);
-                        }}
-                      >
-                        Move selected to root
-                      </button>
-                      {layers.map((layer) => (
-                        <button
-                          type="button"
-                          className={`layer-row ${compositionHistory.selectedId === layer.node.id ? 'layer-row--selected' : ''}`}
-                          key={layer.node.id}
-                          aria-describedby="composition-keyboard-help"
-                          style={{ paddingLeft: `${0.75 + layer.depth * 1.1}rem` }}
-                          draggable
-                          onDragStart={() => setDraggedNodeId(layer.node.id)}
-                          onDragEnd={() => setDraggedNodeId(null)}
+                              );
+                            }
+                          }}
                           onDragOver={(event) => event.preventDefault()}
-                          onDrop={(event) => {
-                            event.preventDefault();
-                            if (draggedNodeId && draggedNodeId !== layer.node.id) {
+                          onDrop={() => {
+                            if (draggedNodeId) {
                               applyComposition(
                                 moveNode(
                                   draftBlocks,
                                   draggedNodeId,
-                                  targetAt(layer.location, layer.location.index),
+                                  { index: draftBlocks.length },
                                   compositionRules,
                                 ),
                                 draggedNodeId,
@@ -8146,593 +8204,625 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                             }
                             setDraggedNodeId(null);
                           }}
-                          onClick={() =>
-                            setCompositionHistory((current) => ({
-                              ...current,
-                              selectedId: layer.node.id,
-                            }))
-                          }
-                          onKeyDown={(event) => {
-                            if (
-                              [
-                                'ArrowUp',
-                                'ArrowDown',
-                                'ArrowLeft',
-                                'ArrowRight',
-                                'Delete',
-                              ].includes(event.key)
-                            ) {
-                              event.preventDefault();
-                              moveByKeyboard(layer.node.id, event.key);
-                            }
-                          }}
                         >
-                          <span>
-                            {manifestById.get(layer.node.component)?.name ?? layer.node.component}
-                          </span>
-                          <small>
-                            {layer.location.slotName ? `${layer.location.slotName} · ` : ''}
-                            {layer.node.id}
-                          </small>
+                          Move selected to root
                         </button>
-                      ))}
-                    </section>
-                    <div className="block-list">
-                      {draftBlocks.map((node, index) => {
-                        const manifest = manifestById.get(node.component);
-                        return (
-                          <article
-                            className={`block-editor ${compositionHistory.selectedId === node.id ? 'block-editor--selected' : ''}`}
-                            key={node.id}
+                        {layers.map((layer) => (
+                          <button
+                            type="button"
+                            className={`layer-row ${compositionHistory.selectedId === layer.node.id ? 'layer-row--selected' : ''}`}
+                            key={layer.node.id}
+                            aria-describedby="composition-keyboard-help"
+                            style={{ paddingLeft: `${0.75 + layer.depth * 1.1}rem` }}
+                            draggable
+                            onDragStart={() => setDraggedNodeId(layer.node.id)}
+                            onDragEnd={() => setDraggedNodeId(null)}
+                            onDragOver={(event) => event.preventDefault()}
+                            onDrop={(event) => {
+                              event.preventDefault();
+                              if (draggedNodeId && draggedNodeId !== layer.node.id) {
+                                applyComposition(
+                                  moveNode(
+                                    draftBlocks,
+                                    draggedNodeId,
+                                    targetAt(layer.location, layer.location.index),
+                                    compositionRules,
+                                  ),
+                                  draggedNodeId,
+                                );
+                              }
+                              setDraggedNodeId(null);
+                            }}
+                            onClick={() =>
+                              setCompositionHistory((current) => ({
+                                ...current,
+                                selectedId: layer.node.id,
+                              }))
+                            }
+                            onKeyDown={(event) => {
+                              if (
+                                [
+                                  'ArrowUp',
+                                  'ArrowDown',
+                                  'ArrowLeft',
+                                  'ArrowRight',
+                                  'Delete',
+                                ].includes(event.key)
+                              ) {
+                                event.preventDefault();
+                                moveByKeyboard(layer.node.id, event.key);
+                              }
+                            }}
                           >
-                            <header>
-                              <button
-                                type="button"
-                                className="block-select"
-                                onClick={() =>
-                                  setCompositionHistory((current) => ({
+                            <span>
+                              {manifestById.get(layer.node.component)?.name ?? layer.node.component}
+                            </span>
+                            <small>
+                              {layer.location.slotName ? `${layer.location.slotName} · ` : ''}
+                              {layer.node.id}
+                            </small>
+                          </button>
+                        ))}
+                      </section>
+                      <div className="block-list">
+                        {draftBlocks.map((node, index) => {
+                          const manifest = manifestById.get(node.component);
+                          return (
+                            <article
+                              className={`block-editor ${compositionHistory.selectedId === node.id ? 'block-editor--selected' : ''}`}
+                              key={node.id}
+                            >
+                              <header>
+                                <button
+                                  type="button"
+                                  className="block-select"
+                                  onClick={() =>
+                                    setCompositionHistory((current) => ({
+                                      ...current,
+                                      selectedId: node.id,
+                                    }))
+                                  }
+                                >
+                                  <span className="block-number">
+                                    {String(index + 1).padStart(2, '0')}
+                                  </span>
+                                  <span>
+                                    <strong>{manifest?.name ?? node.component}</strong>
+                                    <small>{manifest?.description}</small>
+                                  </span>
+                                </button>
+                                <div className="block-actions">
+                                  <button
+                                    type="button"
+                                    aria-label="Move block up"
+                                    disabled={index === 0}
+                                    onClick={() =>
+                                      applyComposition(
+                                        moveNode(
+                                          draftBlocks,
+                                          node.id,
+                                          { index: index - 1 },
+                                          compositionRules,
+                                        ),
+                                        node.id,
+                                      )
+                                    }
+                                  >
+                                    ↑
+                                  </button>
+                                  <button
+                                    type="button"
+                                    aria-label="Move block down"
+                                    disabled={index === draftBlocks.length - 1}
+                                    onClick={() =>
+                                      applyComposition(
+                                        moveNode(
+                                          draftBlocks,
+                                          node.id,
+                                          { index: index + 2 },
+                                          compositionRules,
+                                        ),
+                                        node.id,
+                                      )
+                                    }
+                                  >
+                                    ↓
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="danger"
+                                    aria-label="Remove block"
+                                    disabled={draftBlocks.length <= (componentField?.minimum ?? 0)}
+                                    onClick={() =>
+                                      applyComposition(
+                                        removeNode(draftBlocks, node.id, compositionRules),
+                                      )
+                                    }
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                              </header>
+                              <div className="block-fields">
+                                {manifest
+                                  ? editablePropsFor(node, manifest).map((prop) => (
+                                      <FieldControl
+                                        key={prop.id}
+                                        idPrefix={node.id}
+                                        definition={prop}
+                                        value={node.props[prop.name]}
+                                        onChange={(value) =>
+                                          changeBlocks(
+                                            (current) =>
+                                              updateNodeProps(current, node.id, {
+                                                ...node.props,
+                                                [prop.name]: value,
+                                              }),
+                                            node.id,
+                                          )
+                                        }
+                                      />
+                                    ))
+                                  : null}
+                              </div>
+                            </article>
+                          );
+                        })}
+                      </div>
+                      <div className="component-palette">
+                        <span>Add at root</span>
+                        {manifests
+                          .filter(
+                            (manifest) =>
+                              rootAccepts.length === 0 || rootAccepts.includes(manifest.id),
+                          )
+                          .map((manifest) => (
+                            <button
+                              type="button"
+                              key={manifest.id}
+                              onClick={() => {
+                                const node = newNode(manifest);
+                                applyComposition(
+                                  addNode(
+                                    draftBlocks,
+                                    node,
+                                    { index: draftBlocks.length },
+                                    compositionRules,
+                                  ),
+                                  node.id,
+                                );
+                              }}
+                            >
+                              + {manifest.name}
+                            </button>
+                          ))}
+                      </div>
+                      <div className="design-library">
+                        <fieldset className="component-palette">
+                          <legend>Reusable symbols</legend>
+                          {designSystem.symbols.map((symbol) => (
+                            <button
+                              type="button"
+                              key={symbol.id}
+                              onClick={() => addSymbolAtRoot(symbol.id)}
+                            >
+                              + {symbol.name}
+                            </button>
+                          ))}
+                        </fieldset>
+                        <fieldset className="component-palette">
+                          <legend>Page templates</legend>
+                          {designSystem.templates.map((template) => (
+                            <button
+                              type="button"
+                              key={template.id}
+                              onClick={() => addTemplateAtRoot(template.id)}
+                            >
+                              Apply {template.name}
+                            </button>
+                          ))}
+                        </fieldset>
+                      </div>
+                      {selectedNode && selectedManifest ? (
+                        <section
+                          className="component-inspector"
+                          aria-label="Selected component inspector"
+                        >
+                          <header>
+                            <div>
+                              <span className="kicker">Selected component</span>
+                              <h3>{selectedManifest.name}</h3>
+                              <code>{selectedNode.id}</code>
+                            </div>
+                            <button
+                              type="button"
+                              className="danger-link"
+                              onClick={() =>
+                                applyComposition(
+                                  removeNode(draftBlocks, selectedNode.id, compositionRules),
+                                )
+                              }
+                            >
+                              Remove
+                            </button>
+                          </header>
+                          {selectedSymbol ? (
+                            <p className="symbol-notice">
+                              Linked to {selectedSymbol.name}. Only approved overrides are editable;
+                              governed values update from the design system.
+                            </p>
+                          ) : null}
+                          {editablePropsFor(selectedNode, selectedManifest).length > 0 ? (
+                            <div className="block-fields">
+                              {editablePropsFor(selectedNode, selectedManifest).map((prop) => (
+                                <FieldControl
+                                  key={prop.id}
+                                  idPrefix={`inspector-${selectedNode.id}`}
+                                  definition={prop}
+                                  value={selectedNode.props[prop.name]}
+                                  onChange={(value) =>
+                                    changeBlocks(
+                                      (current) =>
+                                        updateNodeProps(current, selectedNode.id, {
+                                          ...selectedNode.props,
+                                          [prop.name]: value,
+                                        }),
+                                      selectedNode.id,
+                                    )
+                                  }
+                                />
+                              ))}
+                            </div>
+                          ) : null}
+                          <section className="presentation-editor" aria-label="Design bindings">
+                            <label className="gs-field">
+                              <span>Component variant</span>
+                              <select
+                                value={selectedNode.presentation?.variantId ?? ''}
+                                onChange={(event) =>
+                                  changePresentation(selectedNode, (current) => ({
                                     ...current,
-                                    selectedId: node.id,
+                                    ...(event.target.value
+                                      ? { variantId: event.target.value }
+                                      : { variantId: undefined }),
                                   }))
                                 }
                               >
-                                <span className="block-number">
-                                  {String(index + 1).padStart(2, '0')}
-                                </span>
-                                <span>
-                                  <strong>{manifest?.name ?? node.component}</strong>
-                                  <small>{manifest?.description}</small>
-                                </span>
-                              </button>
-                              <div className="block-actions">
-                                <button
-                                  type="button"
-                                  aria-label="Move block up"
-                                  disabled={index === 0}
-                                  onClick={() =>
-                                    applyComposition(
-                                      moveNode(
-                                        draftBlocks,
-                                        node.id,
-                                        { index: index - 1 },
-                                        compositionRules,
-                                      ),
-                                      node.id,
-                                    )
-                                  }
-                                >
-                                  ↑
-                                </button>
-                                <button
-                                  type="button"
-                                  aria-label="Move block down"
-                                  disabled={index === draftBlocks.length - 1}
-                                  onClick={() =>
-                                    applyComposition(
-                                      moveNode(
-                                        draftBlocks,
-                                        node.id,
-                                        { index: index + 2 },
-                                        compositionRules,
-                                      ),
-                                      node.id,
-                                    )
-                                  }
-                                >
-                                  ↓
-                                </button>
-                                <button
-                                  type="button"
-                                  className="danger"
-                                  aria-label="Remove block"
-                                  disabled={draftBlocks.length <= (componentField?.minimum ?? 0)}
-                                  onClick={() =>
-                                    applyComposition(
-                                      removeNode(draftBlocks, node.id, compositionRules),
-                                    )
-                                  }
-                                >
-                                  ×
-                                </button>
-                              </div>
-                            </header>
-                            <div className="block-fields">
-                              {manifest
-                                ? editablePropsFor(node, manifest).map((prop) => (
-                                    <FieldControl
-                                      key={prop.id}
-                                      idPrefix={node.id}
-                                      definition={prop}
-                                      value={node.props[prop.name]}
-                                      onChange={(value) =>
-                                        changeBlocks(
-                                          (current) =>
-                                            updateNodeProps(current, node.id, {
-                                              ...node.props,
-                                              [prop.name]: value,
-                                            }),
-                                          node.id,
-                                        )
-                                      }
-                                    />
-                                  ))
-                                : null}
-                            </div>
-                          </article>
-                        );
-                      })}
-                    </div>
-                    <div className="component-palette">
-                      <span>Add at root</span>
-                      {manifests
-                        .filter(
-                          (manifest) =>
-                            rootAccepts.length === 0 || rootAccepts.includes(manifest.id),
-                        )
-                        .map((manifest) => (
-                          <button
-                            type="button"
-                            key={manifest.id}
-                            onClick={() => {
-                              const node = newNode(manifest);
-                              applyComposition(
-                                addNode(
-                                  draftBlocks,
-                                  node,
-                                  { index: draftBlocks.length },
-                                  compositionRules,
-                                ),
-                                node.id,
-                              );
-                            }}
-                          >
-                            + {manifest.name}
-                          </button>
-                        ))}
-                    </div>
-                    <div className="design-library">
-                      <fieldset className="component-palette">
-                        <legend>Reusable symbols</legend>
-                        {designSystem.symbols.map((symbol) => (
-                          <button
-                            type="button"
-                            key={symbol.id}
-                            onClick={() => addSymbolAtRoot(symbol.id)}
-                          >
-                            + {symbol.name}
-                          </button>
-                        ))}
-                      </fieldset>
-                      <fieldset className="component-palette">
-                        <legend>Page templates</legend>
-                        {designSystem.templates.map((template) => (
-                          <button
-                            type="button"
-                            key={template.id}
-                            onClick={() => addTemplateAtRoot(template.id)}
-                          >
-                            Apply {template.name}
-                          </button>
-                        ))}
-                      </fieldset>
-                    </div>
-                    {selectedNode && selectedManifest ? (
-                      <section
-                        className="component-inspector"
-                        aria-label="Selected component inspector"
-                      >
-                        <header>
-                          <div>
-                            <span className="kicker">Selected component</span>
-                            <h3>{selectedManifest.name}</h3>
-                            <code>{selectedNode.id}</code>
-                          </div>
-                          <button
-                            type="button"
-                            className="danger-link"
-                            onClick={() =>
-                              applyComposition(
-                                removeNode(draftBlocks, selectedNode.id, compositionRules),
-                              )
-                            }
-                          >
-                            Remove
-                          </button>
-                        </header>
-                        {selectedSymbol ? (
-                          <p className="symbol-notice">
-                            Linked to {selectedSymbol.name}. Only approved overrides are editable;
-                            governed values update from the design system.
-                          </p>
-                        ) : null}
-                        {editablePropsFor(selectedNode, selectedManifest).length > 0 ? (
-                          <div className="block-fields">
-                            {editablePropsFor(selectedNode, selectedManifest).map((prop) => (
-                              <FieldControl
-                                key={prop.id}
-                                idPrefix={`inspector-${selectedNode.id}`}
-                                definition={prop}
-                                value={selectedNode.props[prop.name]}
-                                onChange={(value) =>
-                                  changeBlocks(
-                                    (current) =>
-                                      updateNodeProps(current, selectedNode.id, {
-                                        ...selectedNode.props,
-                                        [prop.name]: value,
-                                      }),
-                                    selectedNode.id,
-                                  )
-                                }
-                              />
-                            ))}
-                          </div>
-                        ) : null}
-                        <section className="presentation-editor" aria-label="Design bindings">
-                          <label className="gs-field">
-                            <span>Component variant</span>
-                            <select
-                              value={selectedNode.presentation?.variantId ?? ''}
-                              onChange={(event) =>
-                                changePresentation(selectedNode, (current) => ({
-                                  ...current,
-                                  ...(event.target.value
-                                    ? { variantId: event.target.value }
-                                    : { variantId: undefined }),
-                                }))
-                              }
-                            >
-                              <option value="">Default</option>
-                              {selectedVariants.map((variant) => (
-                                <option key={variant.id} value={variant.id}>
-                                  {variant.name}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <div className="binding-list">
-                            {editablePropsFor(selectedNode, selectedManifest).map((prop) => {
-                              const tokens = designSystem.tokens.filter((token) =>
-                                tokenCompatible(prop, token.value),
-                              );
-                              return (
-                                <div className="binding-row" key={prop.id}>
-                                  <label>
-                                    <span>{prop.label} token</span>
-                                    <select
-                                      value={
-                                        selectedNode.presentation?.tokenBindings?.[prop.name] ?? ''
-                                      }
-                                      onChange={(event) =>
-                                        changePresentation(selectedNode, (current) => {
-                                          const tokenBindings = {
-                                            ...current.tokenBindings,
-                                          };
-                                          if (event.target.value)
-                                            tokenBindings[prop.name] = event.target.value;
-                                          else delete tokenBindings[prop.name];
-                                          return { ...current, tokenBindings };
-                                        })
-                                      }
-                                    >
-                                      <option value="">Unbound</option>
-                                      {tokens.map((token) => (
-                                        <option key={token.id} value={token.id}>
-                                          {token.name}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  </label>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      changePresentation(selectedNode, (current) => ({
-                                        ...current,
-                                        responsive: {
-                                          ...current.responsive,
-                                          [prop.name]: {
-                                            ...current.responsive?.[prop.name],
-                                            [previewBreakpoint]: selectedNode.props[prop.name],
-                                          },
-                                        },
-                                      }))
-                                    }
-                                  >
-                                    Capture for {previewBreakpoint}
-                                  </button>
-                                  {Object.hasOwn(
-                                    selectedNode.presentation?.responsive?.[prop.name] ?? {},
-                                    previewBreakpoint,
-                                  ) ? (
+                                <option value="">Default</option>
+                                {selectedVariants.map((variant) => (
+                                  <option key={variant.id} value={variant.id}>
+                                    {variant.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <div className="binding-list">
+                              {editablePropsFor(selectedNode, selectedManifest).map((prop) => {
+                                const tokens = designSystem.tokens.filter((token) =>
+                                  tokenCompatible(prop, token.value),
+                                );
+                                return (
+                                  <div className="binding-row" key={prop.id}>
+                                    <label>
+                                      <span>{prop.label} token</span>
+                                      <select
+                                        value={
+                                          selectedNode.presentation?.tokenBindings?.[prop.name] ??
+                                          ''
+                                        }
+                                        onChange={(event) =>
+                                          changePresentation(selectedNode, (current) => {
+                                            const tokenBindings = {
+                                              ...current.tokenBindings,
+                                            };
+                                            if (event.target.value)
+                                              tokenBindings[prop.name] = event.target.value;
+                                            else delete tokenBindings[prop.name];
+                                            return { ...current, tokenBindings };
+                                          })
+                                        }
+                                      >
+                                        <option value="">Unbound</option>
+                                        {tokens.map((token) => (
+                                          <option key={token.id} value={token.id}>
+                                            {token.name}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </label>
                                     <button
                                       type="button"
                                       onClick={() =>
-                                        changePresentation(selectedNode, (current) => {
-                                          const values = { ...current.responsive?.[prop.name] };
-                                          delete values[previewBreakpoint];
-                                          return {
-                                            ...current,
-                                            responsive: {
-                                              ...current.responsive,
-                                              [prop.name]: values,
+                                        changePresentation(selectedNode, (current) => ({
+                                          ...current,
+                                          responsive: {
+                                            ...current.responsive,
+                                            [prop.name]: {
+                                              ...current.responsive?.[prop.name],
+                                              [previewBreakpoint]: selectedNode.props[prop.name],
                                             },
-                                          };
-                                        })
+                                          },
+                                        }))
                                       }
                                     >
-                                      Clear {previewBreakpoint}
+                                      Capture for {previewBreakpoint}
                                     </button>
-                                  ) : null}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </section>
-                        {selectedManifest.slots.length > 0 ? (
-                          <div className="slot-list">
-                            {selectedManifest.slots.map((slot) => {
-                              const children = selectedNode.slots?.[slot.name] ?? [];
-                              return (
-                                <section className="slot-editor" key={slot.id}>
-                                  <header>
-                                    <div>
-                                      <strong className="slot-title">{slot.label}</strong>
-                                      <span className="slot-count">
-                                        {children.length}
-                                        {slot.max === undefined ? '' : ` / ${slot.max}`} components
-                                      </span>
-                                    </div>
-                                    <small className="slot-rule">
-                                      Minimum {slot.min}; accepts{' '}
-                                      {slot.accepts.length > 0
-                                        ? slot.accepts.join(', ')
-                                        : 'any component'}
-                                    </small>
-                                  </header>
-                                  <button
-                                    type="button"
-                                    className="slot-drop-zone"
-                                    onClick={() =>
-                                      setNotice({
-                                        tone: 'info',
-                                        message:
-                                          'To nest without dragging, focus the layer after a compatible container and press ArrowRight.',
-                                      })
-                                    }
-                                    onDragOver={(event) => event.preventDefault()}
-                                    onDrop={(event) => {
-                                      event.preventDefault();
-                                      if (draggedNodeId) {
-                                        applyComposition(
-                                          moveNode(
-                                            draftBlocks,
-                                            draggedNodeId,
-                                            {
-                                              parentId: selectedNode.id,
-                                              slotName: slot.name,
-                                              index: children.length,
-                                            },
-                                            compositionRules,
-                                          ),
-                                          draggedNodeId,
-                                        );
+                                    {Object.hasOwn(
+                                      selectedNode.presentation?.responsive?.[prop.name] ?? {},
+                                      previewBreakpoint,
+                                    ) ? (
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          changePresentation(selectedNode, (current) => {
+                                            const values = { ...current.responsive?.[prop.name] };
+                                            delete values[previewBreakpoint];
+                                            return {
+                                              ...current,
+                                              responsive: {
+                                                ...current.responsive,
+                                                [prop.name]: values,
+                                              },
+                                            };
+                                          })
+                                        }
+                                      >
+                                        Clear {previewBreakpoint}
+                                      </button>
+                                    ) : null}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </section>
+                          {selectedManifest.slots.length > 0 ? (
+                            <div className="slot-list">
+                              {selectedManifest.slots.map((slot) => {
+                                const children = selectedNode.slots?.[slot.name] ?? [];
+                                return (
+                                  <section className="slot-editor" key={slot.id}>
+                                    <header>
+                                      <div>
+                                        <strong className="slot-title">{slot.label}</strong>
+                                        <span className="slot-count">
+                                          {children.length}
+                                          {slot.max === undefined ? '' : ` / ${slot.max}`}{' '}
+                                          components
+                                        </span>
+                                      </div>
+                                      <small className="slot-rule">
+                                        Minimum {slot.min}; accepts{' '}
+                                        {slot.accepts.length > 0
+                                          ? slot.accepts.join(', ')
+                                          : 'any component'}
+                                      </small>
+                                    </header>
+                                    <button
+                                      type="button"
+                                      className="slot-drop-zone"
+                                      onClick={() =>
+                                        setNotice({
+                                          tone: 'info',
+                                          message:
+                                            'To nest without dragging, focus the layer after a compatible container and press ArrowRight.',
+                                        })
                                       }
-                                      setDraggedNodeId(null);
-                                    }}
-                                  >
-                                    Drop a layer into {slot.label} · keyboard help
-                                  </button>
-                                  <fieldset className="slot-palette">
-                                    <legend>Add to {slot.label}</legend>
-                                    {manifests
-                                      .filter(
-                                        (manifest) =>
-                                          slot.accepts.length === 0 ||
-                                          slot.accepts.includes(manifest.id),
-                                      )
-                                      .map((manifest) => (
-                                        <button
-                                          type="button"
-                                          key={manifest.id}
-                                          disabled={
-                                            slot.max !== undefined && children.length >= slot.max
-                                          }
-                                          onClick={() => {
-                                            const node = newNode(manifest);
-                                            applyComposition(
-                                              addNode(
-                                                draftBlocks,
-                                                node,
-                                                {
-                                                  parentId: selectedNode.id,
-                                                  slotName: slot.name,
-                                                  index: children.length,
-                                                },
-                                                compositionRules,
-                                              ),
-                                              node.id,
-                                            );
-                                          }}
-                                        >
-                                          + {manifest.name}
-                                        </button>
-                                      ))}
-                                  </fieldset>
-                                </section>
-                              );
-                            })}
-                          </div>
-                        ) : null}
-                      </section>
-                    ) : null}
-                  </section>
-
-                  <section className="history-section">
-                    <div className="section-heading">
-                      <div>
-                        <span className="kicker">History</span>
-                        <h2>Immutable revisions</h2>
-                      </div>
-                      <span>{revisions.length} saved</span>
-                    </div>
-                    <ol>
-                      {revisions.map((revision) => (
-                        <li key={revision.id}>
-                          <strong>Revision {revision.sequence}</strong>
-                          <span>{new Date(revision.createdAt).toLocaleString()}</span>
-                          <code>{revision.actorId}</code>
-                        </li>
-                      ))}
-                    </ol>
-                  </section>
-                </>
-              ) : null}
-            </main>
-
-            <aside className="preview-panel" aria-label="Live page preview">
-              <div className="preview-toolbar">
-                <div>
-                  <span className="kicker">Live React preview</span>
-                  <strong>
-                    {externalPreview
-                      ? `${externalPreview.mode} · ${externalPreview.ready ? 'connected' : 'connecting'}`
-                      : `${previewBreakpoint} · 100%`}
-                  </strong>
-                </div>
-                <div className="preview-controls">
-                  <fieldset className="segmented" aria-label="Preview breakpoint">
-                    {designSystem.breakpoints.map((breakpoint) => (
-                      <button
-                        type="button"
-                        key={breakpoint.id}
-                        className={previewBreakpoint === breakpoint.id ? 'active' : ''}
-                        onClick={() => setPreviewBreakpoint(breakpoint.id)}
-                      >
-                        {breakpoint.name}
-                      </button>
-                    ))}
-                  </fieldset>
-                  <fieldset className="segmented" aria-label="Preview perspective">
-                    <button
-                      type="button"
-                      className={previewPerspective === 'draft' ? 'active' : ''}
-                      onClick={() => setPreviewPerspective('draft')}
-                    >
-                      Draft
-                    </button>
-                    <button
-                      type="button"
-                      className={previewPerspective === 'published' ? 'active' : ''}
-                      onClick={() => setPreviewPerspective('published')}
-                      disabled={!published}
-                    >
-                      Published
-                    </button>
-                  </fieldset>
-                  <fieldset className="segmented" aria-label="Application preview">
-                    <button
-                      type="button"
-                      className={externalPreview?.mode === 'iframe' ? 'active' : ''}
-                      onClick={() => void startExternalPreview('iframe')}
-                      disabled={!selected}
-                    >
-                      App iframe
-                    </button>
-                    <button
-                      type="button"
-                      className={externalPreview?.mode === 'standalone' ? 'active' : ''}
-                      onClick={() => void startExternalPreview('standalone')}
-                      disabled={!selected}
-                    >
-                      Standalone
-                    </button>
-                    {externalPreview ? (
-                      <button type="button" onClick={() => void closeExternalPreview()}>
-                        Close app preview
-                      </button>
-                    ) : null}
-                  </fieldset>
-                </div>
-              </div>
-              <div className="preview-canvas">
-                <div className="preview-browser-bar">
-                  <span />
-                  <span />
-                  <span />
-                  <div>{externalPreview?.route ?? `/${previewSlug}`}</div>
-                </div>
-                <div
-                  className={`preview-page${externalPreview?.mode === 'iframe' ? ' preview-page--external' : ''}`}
-                >
-                  {externalPreview?.mode === 'iframe' ? (
-                    <iframe
-                      ref={previewFrameRef}
-                      src={externalPreview.grant.previewUrl}
-                      title="Application draft preview"
-                      sandbox="allow-scripts allow-same-origin"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : previewContent ? (
-                    <>
-                      {previewPerspective === 'draft' && selectedNode && selectedManifest ? (
-                        <section className="inline-editor" aria-label="Inline component editor">
-                          <span className="kicker">Inline edit · {selectedManifest.name}</span>
-                          <div>
-                            {editablePropsFor(selectedNode, selectedManifest).map((prop) => (
-                              <FieldControl
-                                key={prop.id}
-                                idPrefix={`inline-${selectedNode.id}`}
-                                definition={prop}
-                                value={selectedNode.props[prop.name]}
-                                onChange={(value) =>
-                                  changeBlocks(
-                                    (current) =>
-                                      updateNodeProps(current, selectedNode.id, {
-                                        ...selectedNode.props,
-                                        [prop.name]: value,
-                                      }),
-                                    selectedNode.id,
-                                  )
-                                }
-                              />
-                            ))}
-                          </div>
+                                      onDragOver={(event) => event.preventDefault()}
+                                      onDrop={(event) => {
+                                        event.preventDefault();
+                                        if (draggedNodeId) {
+                                          applyComposition(
+                                            moveNode(
+                                              draftBlocks,
+                                              draggedNodeId,
+                                              {
+                                                parentId: selectedNode.id,
+                                                slotName: slot.name,
+                                                index: children.length,
+                                              },
+                                              compositionRules,
+                                            ),
+                                            draggedNodeId,
+                                          );
+                                        }
+                                        setDraggedNodeId(null);
+                                      }}
+                                    >
+                                      Drop a layer into {slot.label} · keyboard help
+                                    </button>
+                                    <fieldset className="slot-palette">
+                                      <legend>Add to {slot.label}</legend>
+                                      {manifests
+                                        .filter(
+                                          (manifest) =>
+                                            slot.accepts.length === 0 ||
+                                            slot.accepts.includes(manifest.id),
+                                        )
+                                        .map((manifest) => (
+                                          <button
+                                            type="button"
+                                            key={manifest.id}
+                                            disabled={
+                                              slot.max !== undefined && children.length >= slot.max
+                                            }
+                                            onClick={() => {
+                                              const node = newNode(manifest);
+                                              applyComposition(
+                                                addNode(
+                                                  draftBlocks,
+                                                  node,
+                                                  {
+                                                    parentId: selectedNode.id,
+                                                    slotName: slot.name,
+                                                    index: children.length,
+                                                  },
+                                                  compositionRules,
+                                                ),
+                                                node.id,
+                                              );
+                                            }}
+                                          >
+                                            + {manifest.name}
+                                          </button>
+                                        ))}
+                                    </fieldset>
+                                  </section>
+                                );
+                              })}
+                            </div>
+                          ) : null}
                         </section>
                       ) : null}
-                      <GridStoryRenderer
-                        nodes={previewBlocks}
-                        registry={exampleComponentRegistry}
-                        designSystem={designSystem}
-                        breakpoint={previewBreakpoint}
-                        preview={previewPerspective === 'draft'}
-                      />
-                    </>
-                  ) : (
-                    <div className="preview-empty">This page has not been published yet.</div>
-                  )}
+                    </section>
+
+                    <section className="history-section">
+                      <div className="section-heading">
+                        <div>
+                          <span className="kicker">History</span>
+                          <h2>Immutable revisions</h2>
+                        </div>
+                        <span>{revisions.length} saved</span>
+                      </div>
+                      <ol>
+                        {revisions.map((revision) => (
+                          <li key={revision.id}>
+                            <strong>Revision {revision.sequence}</strong>
+                            <span>{new Date(revision.createdAt).toLocaleString()}</span>
+                            <code>{revision.actorId}</code>
+                          </li>
+                        ))}
+                      </ol>
+                    </section>
+                  </>
+                ) : null}
+              </main>
+
+              <aside className="preview-panel" aria-label="Live page preview">
+                <div className="preview-toolbar">
+                  <div>
+                    <span className="kicker">Live React preview</span>
+                    <strong>
+                      {externalPreview
+                        ? `${externalPreview.mode} · ${externalPreview.ready ? 'connected' : 'connecting'}`
+                        : `${previewBreakpoint} · 100%`}
+                    </strong>
+                  </div>
+                  <div className="preview-controls">
+                    <fieldset className="segmented" aria-label="Preview breakpoint">
+                      {designSystem.breakpoints.map((breakpoint) => (
+                        <button
+                          type="button"
+                          key={breakpoint.id}
+                          className={previewBreakpoint === breakpoint.id ? 'active' : ''}
+                          onClick={() => setPreviewBreakpoint(breakpoint.id)}
+                        >
+                          {breakpoint.name}
+                        </button>
+                      ))}
+                    </fieldset>
+                    <fieldset className="segmented" aria-label="Preview perspective">
+                      <button
+                        type="button"
+                        className={previewPerspective === 'draft' ? 'active' : ''}
+                        onClick={() => setPreviewPerspective('draft')}
+                      >
+                        Draft
+                      </button>
+                      <button
+                        type="button"
+                        className={previewPerspective === 'published' ? 'active' : ''}
+                        onClick={() => setPreviewPerspective('published')}
+                        disabled={!published}
+                      >
+                        Published
+                      </button>
+                    </fieldset>
+                    <fieldset className="segmented" aria-label="Application preview">
+                      <button
+                        type="button"
+                        className={externalPreview?.mode === 'iframe' ? 'active' : ''}
+                        onClick={() => void startExternalPreview('iframe')}
+                        disabled={!selected}
+                      >
+                        App iframe
+                      </button>
+                      <button
+                        type="button"
+                        className={externalPreview?.mode === 'standalone' ? 'active' : ''}
+                        onClick={() => void startExternalPreview('standalone')}
+                        disabled={!selected}
+                      >
+                        Standalone
+                      </button>
+                      {externalPreview ? (
+                        <button type="button" onClick={() => void closeExternalPreview()}>
+                          Close app preview
+                        </button>
+                      ) : null}
+                    </fieldset>
+                  </div>
                 </div>
-              </div>
-            </aside>
-          </div>
+                <div className="preview-canvas">
+                  <div className="preview-browser-bar">
+                    <span />
+                    <span />
+                    <span />
+                    <div>{externalPreview?.route ?? `/${previewSlug}`}</div>
+                  </div>
+                  <div
+                    className={`preview-page${externalPreview?.mode === 'iframe' ? ' preview-page--external' : ''}`}
+                  >
+                    {externalPreview?.mode === 'iframe' ? (
+                      <iframe
+                        ref={previewFrameRef}
+                        src={externalPreview.grant.previewUrl}
+                        title="Application draft preview"
+                        sandbox="allow-scripts allow-same-origin"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : previewContent ? (
+                      <>
+                        {previewPerspective === 'draft' && selectedNode && selectedManifest ? (
+                          <section className="inline-editor" aria-label="Inline component editor">
+                            <span className="kicker">Inline edit · {selectedManifest.name}</span>
+                            <div>
+                              {editablePropsFor(selectedNode, selectedManifest).map((prop) => (
+                                <FieldControl
+                                  key={prop.id}
+                                  idPrefix={`inline-${selectedNode.id}`}
+                                  definition={prop}
+                                  value={selectedNode.props[prop.name]}
+                                  onChange={(value) =>
+                                    changeBlocks(
+                                      (current) =>
+                                        updateNodeProps(current, selectedNode.id, {
+                                          ...selectedNode.props,
+                                          [prop.name]: value,
+                                        }),
+                                      selectedNode.id,
+                                    )
+                                  }
+                                />
+                              ))}
+                            </div>
+                          </section>
+                        ) : null}
+                        <GridStoryRenderer
+                          nodes={previewBlocks}
+                          registry={exampleComponentRegistry}
+                          designSystem={designSystem}
+                          breakpoint={previewBreakpoint}
+                          preview={previewPerspective === 'draft'}
+                        />
+                      </>
+                    ) : (
+                      <div className="preview-empty">This page has not been published yet.</div>
+                    )}
+                  </div>
+                </div>
+              </aside>
+            </div>
+          ) : null}
         </div>
       </div>
     </div>
