@@ -8,6 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Added a cross-browser Studio visual-containment regression that opens all 19 existing destinations and verifies readable text, control geometry, card/surface containment, intentional local scrolling, root scroll locking, responsive stacking, and dark-theme behavior at 1440px, 1024px, 768px, 390px, and 320px (STUDIO-010).
 - Added a NiceDash-inspired responsive Studio shell with the inspected 270px categorized rail, 70px search/action top bar, green/lime token system, rounded card/control treatment, locally persisted light/dark themes, and an accessible off-canvas mobile drawer without importing reference branding, content, assets, Angular code, or dependencies (STUDIO-009).
 - Added four generated, committed Draft 2020-12 interoperability schemas/examples for the existing logical archive, canonical schema IR, serializable component manifest, and preview-only node source map; stable public discovery exposes only instance/service/protocol/specification identity and canonical digests with bounded public caching and ETags (M8-004).
 - Added empty-by-default complete-scope fleet inventory with memory/SQLite/PostgreSQL persistence, distinct read/manage/check authorization, configured pull-only observation, strict freshness and exact contract compatibility conditions, private REST/client/neutral Studio controls, recovery/PostgreSQL/browser coverage, and verified `THREAT-0038`/`GS-SEC-042` evidence without any remote write or deployment authority (M8-004).
@@ -26,6 +27,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- Normalized existing Studio search, workflow, collaboration, comment, heading, form, select, fieldset, editor, and preview presentation so actions remain visually consistent and all long content wraps or scrolls within its owning surface without changing any feature, label, state, API, or application preview content (STUDIO-010).
 - Reorganized every existing Studio workflow into four navigation groups while retaining the established labels, scoped panels, authoring behavior, save/publish controls, framework-neutral boundaries, and application-owned content (STUDIO-009).
 - Accepted ADR 0025's generated-interoperability and pull-only fleet boundary: canonical contract generation and minimized public discovery are separate from private scoped observations, while arbitrary discovery, credentials, agents, scheduling, provisioning, remote mutation, deployment, upgrade, rollback, traffic, content, and publication control remain excluded.
 - Accepted the M8-003 bounded-knowledge and reviewed-agent boundary in ADR 0024: private on-demand relation/taxonomy graph exploration, deterministic path-explained recommendations, fixed mediated read tools, and expiring human-reviewed single-draft patches without autonomous publication, arbitrary code, network access, or hidden memory.
@@ -40,6 +42,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Corrected inconsistent buttons, clipped entry metadata, escaping headings/actions/comments, transient tablet width, preview-toolbar wrapping, WebKit select/legend/fieldset intrinsic sizing, narrow workflow-state cadence, and reachable page-level horizontal scrolling found during the complete Studio visual pass; the final responsive suite passes 15/15 across Chromium, Firefox, and WebKit (BUG-0384 through BUG-0390, STUDIO-010).
 - Corrected desktop-only mobile-close visibility, selected-entry/workflow/dark-panel contrast, search target/icon semantics, workflow-map keyboard access, cross-engine editor controls, and final accessibility lint findings discovered during the Studio re-theme; the complete repository gate and exact 12/12 Chromium/Firefox/WebKit suite pass (BUG-0375 through BUG-0383, STUDIO-009).
 - Sized the expanded Studio accessibility sweep for WebKit's runtime while preserving the complete multi-panel Axe and color checks (BUG-0374).
 - Serialized root package test suites while preserving package-internal parallelism so heavyweight API/core work cannot starve Studio interaction tests (BUG-0373).

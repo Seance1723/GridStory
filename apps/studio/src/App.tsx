@@ -4916,7 +4916,11 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                 <ul>
                   {searchResponse?.hits.map((hit) => (
                     <li key={hit.entry.id}>
-                      <button type="button" onClick={() => void selectEntry(hit.entry.id)}>
+                      <button
+                        type="button"
+                        className="button button--secondary button--compact search-result-button"
+                        onClick={() => void selectEntry(hit.entry.id)}
+                      >
                         {entryTitle(hit.entry, schemas)}
                       </button>
                       <span>Score {hit.score}</span>
@@ -7263,7 +7267,9 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   </div>
                 </fieldset>
                 <fieldset>
-                  <legend>Aggregate metric evidence and promotion</legend>
+                  <legend className="experiment-panel__metric-legend">
+                    Aggregate metric evidence and promotion
+                  </legend>
                   <label>
                     <span>Aggregate metric snapshot JSON</span>
                     <textarea
@@ -7694,6 +7700,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                                   {schedule.state === 'pending' ? (
                                     <button
                                       type="button"
+                                      className="button button--danger button--compact"
                                       disabled={busy}
                                       onClick={() => void cancelWorkflowSchedule(schedule.id)}
                                     >
@@ -7868,6 +7875,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                                 <div className="collaboration-card-actions">
                                   <button
                                     type="button"
+                                    className="button button--primary button--compact"
                                     onClick={() =>
                                       void reviewCollaborationSuggestion(suggestion.id, 'accept')
                                     }
@@ -7876,6 +7884,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                                   </button>
                                   <button
                                     type="button"
+                                    className="button button--danger button--compact"
                                     onClick={() =>
                                       void reviewCollaborationSuggestion(suggestion.id, 'reject')
                                     }
@@ -8000,6 +8009,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                             </div>
                             <button
                               type="button"
+                              className="button button--secondary button--compact"
                               onClick={() => void setThreadResolved(thread.id, !thread.resolvedAt)}
                             >
                               {thread.resolvedAt ? 'Reopen' : 'Resolve'}
@@ -8028,7 +8038,11 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                                 }))
                               }
                             />
-                            <button type="button" onClick={() => void replyToThread(thread.id)}>
+                            <button
+                              type="button"
+                              className="button button--secondary button--compact"
+                              onClick={() => void replyToThread(thread.id)}
+                            >
                               Reply
                             </button>
                           </div>

@@ -4,6 +4,7 @@
     Onest, Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
   font-synthesis: none;
+  overflow-x: clip;
   text-rendering: optimizeLegibility;
 }
 
@@ -2909,8 +2910,10 @@ button:disabled {
   list-style: none;
   gap: 8px;
   margin: 18px 0;
+  max-width: 100%;
+  min-width: 0;
   overflow-x: auto;
-  padding-bottom: 6px;
+  padding: 0 0 6px;
 }
 
 .workflow-state-node {
@@ -3690,12 +3693,27 @@ button:disabled {
   font-size: 0.8rem;
   font-weight: 700;
   justify-content: center;
+  line-height: 1.3;
+  max-width: 100%;
   min-height: 40px;
+  overflow-wrap: normal;
   padding: 0.55rem 0.9rem;
+  text-align: center;
+  white-space: normal;
   transition:
     background-color 150ms ease,
     border-color 150ms ease,
     color 150ms ease;
+}
+
+.button--compact {
+  font-size: 0.74rem;
+  min-height: 32px;
+  padding: 0.38rem 0.7rem;
+}
+
+.button :where(span, strong) {
+  overflow-wrap: normal;
 }
 
 .button--primary {
@@ -3726,6 +3744,101 @@ button:disabled {
 
 .kicker {
   color: var(--studio-primary);
+  font-size: 0.7rem;
+  line-height: 1.4;
+}
+
+.status {
+  font-size: 0.68rem;
+  line-height: 1.2;
+}
+
+.studio-page
+  :where(h1, h2, h3, h4, p, small, strong, code, dt, dd, li, label, legend, span):not(
+    .preview-page *
+  ) {
+  overflow-wrap: anywhere;
+}
+
+.studio-page fieldset legend {
+  display: block;
+  max-width: 100%;
+  white-space: normal;
+}
+
+.studio-page fieldset {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.studio-page
+  :where(
+    .section-heading,
+    .release-card-heading,
+    .marketplace-card__heading,
+    .workflow-transition-heading,
+    .workflow-action-definition-heading,
+    .asset-library-title-row,
+    .comment-thread header
+  ) {
+  gap: 1rem;
+}
+
+.studio-page
+  :where(
+    .section-heading,
+    .release-card-heading,
+    .marketplace-card__heading,
+    .workflow-transition-heading,
+    .workflow-action-definition-heading,
+    .asset-library-title-row,
+    .comment-thread header
+  )
+  > * {
+  min-width: 0;
+}
+
+.section-heading > :where(.button, .asset-upload-button) {
+  flex: 0 0 auto;
+}
+
+.entry-card__title,
+.entry-card__meta {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.studio-shell .search-panel__results .search-result-button {
+  background: var(--studio-primary-soft);
+  border: 1px solid var(--studio-border);
+  color: var(--studio-primary);
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.studio-shell .search-panel__results .search-result-button:hover:not(:disabled) {
+  background: var(--studio-primary);
+  border-color: var(--studio-primary);
+  color: #fff;
+}
+
+.studio-shell .workflow-list .button--danger {
+  background: #991b1b;
+  border-color: #7f1d1d;
+  color: #fff;
+}
+
+.comment-composer {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.comment-body-field {
+  grid-column: 1 / -1;
+}
+
+.comment-composer .button {
+  width: 100%;
 }
 
 .studio-shell :where(h1, h2, h3, h4, strong, legend, label) {
@@ -3765,6 +3878,16 @@ button:disabled {
   border-radius: 12px;
   box-shadow: var(--studio-control-shadow);
   color: var(--studio-text);
+}
+
+.studio-shell.studio-shell select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7470' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-position: right 0.75rem center;
+  background-repeat: no-repeat;
+  background-size: 1rem;
+  max-width: 100%;
+  padding-right: 2.5rem;
 }
 
 .studio-shell.studio-shell :where(input, textarea, select):focus {
@@ -4238,6 +4361,7 @@ button:disabled {
   .studio-content,
   .studio-shell--navigation-condensed .studio-content {
     margin-left: 0;
+    transition: none;
   }
 
   .studio-shell--navigation-condensed .studio-navigation {
@@ -4315,6 +4439,21 @@ button:disabled {
     ) {
     padding: 20px;
   }
+
+  .preview-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+    height: auto;
+    min-height: 4rem;
+    padding-block: 12px;
+  }
+
+  .preview-controls {
+    flex-wrap: wrap;
+    min-width: 0;
+    width: 100%;
+  }
 }
 
 @media (max-width: 620px) {
@@ -4345,6 +4484,35 @@ button:disabled {
 
   .studio-page {
     padding-inline: 12px;
+  }
+
+  .section-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .section-heading > :where(.button, .asset-upload-button) {
+    width: 100%;
+  }
+
+  .section-heading > :where(.workflow-state, .release-state) {
+    align-self: flex-start;
+  }
+
+  .comment-composer {
+    grid-template-columns: 1fr;
+  }
+
+  .comment-body-field {
+    grid-column: auto;
+  }
+
+  .workflow-state-node {
+    min-width: 120px;
+  }
+
+  .experiment-panel__metric-legend {
+    width: calc(100% - 1.7rem);
   }
 
   .content-sidebar,

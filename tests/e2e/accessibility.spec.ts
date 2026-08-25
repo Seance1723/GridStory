@@ -3,6 +3,27 @@ import { expect, type Page, type TestInfo, test } from '@playwright/test';
 
 const wcagTags = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 
+const studioManagementPanels = [
+  ['Identity', 'Enterprise identity administration'],
+  ['Data governance', 'Data governance administration'],
+  ['Migrations', 'CMS migration workbench'],
+  ['Marketplace', 'Plugin marketplace workbench'],
+  ['Targeting', 'Personalization targeting workbench'],
+  ['Experiments', 'Content experiments workbench'],
+  ['AI gateway', 'Governed AI gateway workbench'],
+  ['Knowledge', 'Knowledge graph and reviewed agents'],
+  ['Federation', 'Content federation and syndication'],
+  ['Fleet', 'Self-hosted fleet observations'],
+  ['Regions', 'Regional delivery and failover controls'],
+  ['Workflows', 'Workflow action designer'],
+  ['Releases', 'Release manager'],
+  ['Search', 'Search and discovery'],
+  ['Operations', 'Administrator operations'],
+  ['Components', 'Component governance'],
+  ['Assets', 'Asset library'],
+  ['Quality', 'Content quality report'],
+] as const;
+
 async function expectNoDetectableWcagViolations(
   page: Page,
   testInfo: TestInfo,
@@ -82,27 +103,7 @@ test('Studio critical authoring states have no detectable WCAG 2.2 A/AA violatio
   await expect(page.getByRole('heading', { name: 'Pages' })).toBeVisible();
   await expectNoDetectableWcagViolations(page, testInfo, 'studio-default');
 
-  const panels = [
-    ['Identity', 'Enterprise identity administration'],
-    ['Data governance', 'Data governance administration'],
-    ['Migrations', 'CMS migration workbench'],
-    ['Marketplace', 'Plugin marketplace workbench'],
-    ['Experiments', 'Content experiments workbench'],
-    ['AI gateway', 'Governed AI gateway workbench'],
-    ['Knowledge', 'Knowledge graph and reviewed agents'],
-    ['Federation', 'Content federation and syndication'],
-    ['Fleet', 'Self-hosted fleet observations'],
-    ['Regions', 'Regional delivery and failover controls'],
-    ['Workflows', 'Workflow action designer'],
-    ['Releases', 'Release manager'],
-    ['Search', 'Search and discovery'],
-    ['Operations', 'Administrator operations'],
-    ['Components', 'Component governance'],
-    ['Assets', 'Asset library'],
-    ['Quality', 'Content quality report'],
-  ] as const;
-
-  for (const [buttonName, regionName] of panels) {
+  for (const [buttonName, regionName] of studioManagementPanels) {
     await page.getByRole('button', { name: buttonName, exact: true }).click();
     await expect(page.getByRole('region', { name: regionName })).toBeVisible();
   }
@@ -207,6 +208,213 @@ test('Studio critical authoring states have no detectable WCAG 2.2 A/AA violatio
   );
   await expectNoDetectableWcagViolations(page, testInfo, 'studio-expanded-panels-dark');
   await page.getByRole('button', { name: 'Switch to light theme' }).click();
+});
+
+test('every Studio surface contains readable text and controls at each responsive width', async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Pages' })).toBeVisible();
+
+  for (const [buttonName, regionName] of studioManagementPanels) {
+    await page.getByRole('button', { name: buttonName, exact: true }).click();
+    await expect(page.getByRole('region', { name: regionName })).toBeVisible();
+  }
+
+  const surfaces = page.locator('.studio-page > section, .studio-workspace');
+  const viewports = [
+    { width: 1440, height: 900 },
+    { width: 1024, height: 768 },
+    { width: 768, height: 900 },
+    { width: 390, height: 844 },
+    { width: 320, height: 720 },
+  ];
+
+  const collectContainmentIssues = () =>
+    surfaces.evaluateAll((visibleSurfaces) =>
+      visibleSurfaces.flatMap((surface) => {
+        const surfaceElement = surface as HTMLElement;
+        const surfaceName =
+          surfaceElement.getAttribute('aria-label') ?? surfaceElement.className ?? 'surface';
+        const issues: string[] = [];
+        if (surfaceElement.scrollWidth > surfaceElement.clientWidth + 1) {
+          const intrinsicContributors = [...surfaceElement.querySelectorAll<HTMLElement>('*')]
+            .filter((element) => element.scrollWidth > element.clientWidth + 1)
+            .sort(
+              (left, right) =>
+                right.scrollWidth - right.clientWidth - (left.scrollWidth - left.clientWidth),
+            )
+            .slice(0, 4)
+            .map(
+              (element) =>
+                `${element.tagName.toLowerCase()}.${element.className} ${element.clientWidth}/${element.scrollWidth}`,
+            );
+          issues.push(
+            `${surfaceName}: surface ${surfaceElement.clientWidth}px / ${surfaceElement.scrollWidth}px (${intrinsicContributors.join(', ')})`,
+          );
+        }
+
+        const controls = surfaceElement.querySelectorAll<HTMLElement>(
+          'button, input:not([type="hidden"]), select, textarea',
+        );
+        for (const control of controls) {
+          const style = getComputedStyle(control);
+          const rectangle = control.getBoundingClientRect();
+          if (
+            style.display === 'none' ||
+            style.visibility === 'hidden' ||
+            rectangle.width === 0 ||
+            rectangle.height === 0 ||
+            control.closest('.preview-page')
+          ) {
+            continue;
+          }
+
+          const boundary =
+            control.closest<HTMLElement>('.editor-panel, .content-sidebar, .preview-panel') ??
+            surfaceElement;
+          let ancestor = control.parentElement;
+          let intentionallyScrollable = false;
+          while (ancestor && ancestor !== boundary) {
+            const ancestorStyle = getComputedStyle(ancestor);
+            if (['auto', 'scroll'].includes(ancestorStyle.overflowX)) {
+              intentionallyScrollable = true;
+              break;
+            }
+            ancestor = ancestor.parentElement;
+          }
+          if (!intentionallyScrollable) {
+            const boundaryRectangle = boundary.getBoundingClientRect();
+            if (
+              rectangle.left < boundaryRectangle.left - 1 ||
+              rectangle.right > boundaryRectangle.right + 1
+            ) {
+              issues.push(
+                `${surfaceName}: ${control.tagName.toLowerCase()} ${control.getAttribute('aria-label') ?? control.textContent?.trim() ?? control.getAttribute('type') ?? ''} escapes ${boundary.className}`,
+              );
+            }
+          }
+          if (
+            control instanceof HTMLButtonElement &&
+            (rectangle.width < 24 || rectangle.height < 24)
+          ) {
+            issues.push(
+              `${surfaceName}: button ${control.getAttribute('aria-label') ?? control.textContent?.trim() ?? ''} is ${rectangle.width.toFixed(1)}x${rectangle.height.toFixed(1)}`,
+            );
+          }
+        }
+
+        const textElements = surfaceElement.querySelectorAll<HTMLElement>(
+          'h1, h2, h3, h4, p, small, strong, code, dt, dd, li, label, legend, span',
+        );
+        for (const textElement of textElements) {
+          const style = getComputedStyle(textElement);
+          const rectangle = textElement.getBoundingClientRect();
+          if (
+            rectangle.width <= 4 ||
+            rectangle.height <= 4 ||
+            textElement.closest('.preview-page') ||
+            textElement.closest('.studio-navigation')
+          ) {
+            continue;
+          }
+          const clipsHorizontally =
+            textElement.scrollWidth > textElement.clientWidth + 2 &&
+            ['clip', 'hidden'].includes(style.overflowX);
+          const clipsVertically =
+            textElement.scrollHeight > textElement.clientHeight + 2 &&
+            ['clip', 'hidden'].includes(style.overflowY);
+          if (clipsHorizontally || clipsVertically) {
+            issues.push(
+              `${surfaceName}: clipped ${textElement.tagName.toLowerCase()} ${(textElement.textContent ?? '').trim().slice(0, 60)}`,
+            );
+          }
+        }
+        return issues;
+      }),
+    );
+
+  for (const viewport of viewports) {
+    await page.setViewportSize(viewport);
+    const documentLayout = await page.evaluate(() => {
+      const clientWidth = document.documentElement.clientWidth;
+      const previousScroll = { x: window.scrollX, y: window.scrollY };
+      window.scrollTo(100, previousScroll.y);
+      const reachableScrollX = window.scrollX;
+      window.scrollTo(previousScroll.x, previousScroll.y);
+      return {
+        clientWidth,
+        reachableScrollX,
+        scrollWidth: document.documentElement.scrollWidth,
+        uncontainedOffenders: [...document.querySelectorAll<HTMLElement>('*')]
+          .flatMap((element) => {
+            const style = getComputedStyle(element);
+            const rectangle = element.getBoundingClientRect();
+            let ancestor = element.parentElement;
+            let intentionallyScrollable = false;
+            while (ancestor) {
+              const ancestorStyle = getComputedStyle(ancestor);
+              if (
+                ['auto', 'scroll'].includes(ancestorStyle.overflowX) &&
+                ancestor.scrollWidth > ancestor.clientWidth + 1
+              ) {
+                intentionallyScrollable = true;
+                break;
+              }
+              ancestor = ancestor.parentElement;
+            }
+            if (
+              style.display === 'none' ||
+              style.visibility === 'hidden' ||
+              rectangle.width === 0 ||
+              rectangle.height === 0 ||
+              intentionallyScrollable ||
+              element.closest('.studio-navigation, .preview-page') ||
+              (rectangle.left >= -1 && rectangle.right <= clientWidth + 1)
+            ) {
+              return [];
+            }
+            return [
+              {
+                label: `${element.tagName.toLowerCase()}.${element.className} (${rectangle.left.toFixed(1)}..${rectangle.right.toFixed(1)}) ${(element.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 48)}`,
+                priority:
+                  rectangle.right > clientWidth + 1
+                    ? 10_000 + rectangle.right - clientWidth
+                    : -rectangle.left,
+              },
+            ];
+          })
+          .sort((left, right) => right.priority - left.priority)
+          .slice(0, 8)
+          .map(({ label }) => label),
+      };
+    });
+    expect(
+      documentLayout.reachableScrollX,
+      `${viewport.width}px root width ${documentLayout.clientWidth}px / ${documentLayout.scrollWidth}px`,
+    ).toBe(0);
+    expect(documentLayout.uncontainedOffenders, `${viewport.width}px uncontained elements`).toEqual(
+      [],
+    );
+    expect(await collectContainmentIssues(), `${viewport.width}px containment`).toEqual([]);
+  }
+
+  const searchResult = page
+    .getByRole('region', { name: 'Search and discovery' })
+    .getByRole('button', { name: 'Welcome to GridStory' });
+  await expect(searchResult).toHaveCSS('min-height', '32px');
+  await expect(searchResult).toHaveCSS('background-color', 'rgba(22, 90, 80, 0.12)');
+  await expect(page.locator('.entry-card__title').first()).toHaveCSS('white-space', 'normal');
+  expect(
+    await page
+      .locator('.comment-composer')
+      .evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(' ').length),
+  ).toBe(1);
+  await expect(page.locator('.section-heading').first()).toHaveCSS('flex-direction', 'column');
+
+  await page.getByRole('button', { name: 'Switch to dark theme' }).click();
+  expect(await collectContainmentIssues(), '320px dark containment').toEqual([]);
 });
 
 test('critical authoring remains keyboard-operable and adapts at 200% zoom', async ({

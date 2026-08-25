@@ -2854,7 +2854,11 @@ describe('GridStory Studio', () => {
     await user.click(screen.getByRole('button', { name: 'Open suggestion' }));
     const suggestions = await screen.findByRole('region', { name: 'Suggestions' });
     expect(suggestions.textContent).toContain('A collaborative headline');
-    await user.click(within(suggestions).getByRole('button', { name: 'Accept' }));
+    const acceptSuggestion = within(suggestions).getByRole('button', { name: 'Accept' });
+    const rejectSuggestion = within(suggestions).getByRole('button', { name: 'Reject' });
+    expect(acceptSuggestion.className).toContain('button--primary');
+    expect(rejectSuggestion.className).toContain('button--danger');
+    await user.click(acceptSuggestion);
     await waitFor(() => expect(suggestions.textContent).toContain('accepted'));
     await user.click(screen.getByRole('button', { name: 'Merge into Main' }));
     const conflict = await screen.findByRole('region', { name: 'Merge conflicts' });
@@ -2874,6 +2878,12 @@ describe('GridStory Studio', () => {
     const thread = screen.getByText('Assigned to reviewer').closest('.comment-thread');
     expect(thread?.textContent).toContain('story');
     expect(thread?.textContent).not.toContain('one-hero-a');
+    expect(
+      within(thread as HTMLElement).getByRole('button', { name: 'Resolve' }).className,
+    ).toContain('button--secondary');
+    expect(
+      within(thread as HTMLElement).getByRole('button', { name: 'Reply' }).className,
+    ).toContain('button--secondary');
   }, 15_000);
 
   it('shows scoped component usage and visual regression hooks in governance', async () => {
@@ -3093,6 +3103,9 @@ describe('GridStory Studio', () => {
     expect(panel.textContent).toContain('Topics · 1 terms');
     expect(panel.textContent).toContain('repository-scan');
     expect(panel.textContent).toContain('same content type');
+    const searchResult = within(panel).getByRole('button', { name: 'Second page' });
+    expect(searchResult.className).toContain('search-result-button');
+    expect(searchResult.className).toContain('button--secondary');
 
     const input = within(panel).getByLabelText('Search terms');
     await user.type(input, 'second');
