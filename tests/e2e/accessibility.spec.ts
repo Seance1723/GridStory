@@ -127,11 +127,36 @@ test('Studio shell follows the reference navigation, card, theme, and mobile dra
   await expect(page.getByRole('search').locator('svg')).toHaveCSS('fill', 'none');
   await expect(page.getByRole('search').locator('svg')).toHaveCSS('stroke', 'rgb(104, 110, 107)');
 
+  const assetOption = page
+    .getByRole('region', { name: 'Social image' })
+    .getByRole('button', { name: /Campaign landscape/ });
+  const relationOption = page
+    .getByRole('region', { name: 'Related pages' })
+    .getByRole('button', { name: /Welcome to GridStory/ });
+  await expect(assetOption).toHaveClass(/button--outline/);
+  await expect(assetOption).toHaveClass(/button--option-card/);
+  await expect(assetOption).toHaveCSS('min-height', '52px');
+  await expect(assetOption).toHaveCSS('border-radius', '10px');
+  await expect(assetOption).toHaveCSS('border-color', 'rgb(229, 230, 230)');
+  await expect(assetOption).toHaveAttribute('aria-pressed', 'false');
+  await expect(relationOption).toHaveClass(/button--option-card/);
+  await expect(relationOption).toHaveCSS('min-height', '52px');
+  await relationOption.hover();
+  await expect(relationOption).toHaveCSS('border-color', 'rgb(22, 90, 80)');
+  await relationOption.focus();
+  await expect(relationOption).toBeFocused();
+  await assetOption.click();
+  await expect(assetOption).toHaveAttribute('aria-pressed', 'true');
+  await expect(assetOption).toHaveCSS('border-color', 'rgb(22, 90, 80)');
+
   await page.getByRole('button', { name: 'Switch to dark theme' }).click();
   await expect(shell).toHaveAttribute('data-theme', 'dark');
   await expect(navigation).toHaveCSS('background-color', 'rgb(3, 14, 9)');
   await expect(page.locator('.studio-page')).toHaveCSS('background-color', 'rgb(20, 26, 24)');
   await expect(header).toHaveCSS('color', 'rgb(255, 255, 255)');
+  await expect(assetOption).toHaveCSS('background-color', 'rgba(194, 253, 117, 0.11)');
+  await expect(assetOption).toHaveCSS('color', 'rgb(194, 253, 117)');
+  await expect(assetOption).toHaveCSS('border-color', 'rgb(194, 253, 117)');
   await page.getByRole('button', { name: 'Switch to light theme' }).click();
 
   await page.setViewportSize({ width: 390, height: 844 });

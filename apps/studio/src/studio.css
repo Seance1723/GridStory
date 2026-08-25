@@ -2187,13 +2187,6 @@ button:disabled {
   padding: 0.65rem 0.75rem;
   width: 100%;
 }
-.picker-grid button {
-  background: #fff;
-  color: #111827;
-  display: grid;
-  min-width: 10rem;
-  text-align: left;
-}
 .picker-grid small,
 .selected-reference span,
 .comment-thread small {
@@ -3753,6 +3746,53 @@ button:disabled {
   color: #fff;
 }
 
+.button--outline {
+  background: var(--studio-surface);
+  border-color: var(--studio-border);
+  color: var(--studio-text);
+}
+
+.button--outline:hover:not(:disabled) {
+  background: var(--studio-primary-soft);
+  border-color: var(--studio-primary);
+  color: var(--studio-primary);
+}
+
+.button--option-card {
+  align-items: start;
+  display: grid;
+  flex: 1 1 10rem;
+  gap: 0.15rem;
+  justify-content: stretch;
+  justify-items: start;
+  min-height: 52px;
+  min-width: min(10rem, 100%);
+  padding: 0.65rem 0.75rem;
+  text-align: left;
+}
+
+.button--option-card small {
+  color: var(--studio-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.button--option-card[aria-pressed="true"] {
+  background: var(--studio-primary-soft);
+  border-color: var(--studio-primary);
+  box-shadow: inset 3px 0 0 var(--studio-primary);
+  color: var(--studio-primary);
+}
+
+.button--icon {
+  flex: 0 0 32px;
+  min-height: 32px;
+  min-width: 32px;
+  padding: 0;
+  width: 32px;
+}
+
 .button--danger {
   border-radius: 10px;
 }
@@ -3911,15 +3951,6 @@ button:disabled {
   outline: 0;
 }
 
-.studio-shell.studio-shell :where(.rich-text-toolbar, .block-adder, .rich-text-block) button {
-  background: var(--studio-surface-soft);
-  border: 1px solid var(--studio-border);
-  border-radius: 8px;
-  color: var(--studio-text);
-  min-height: 32px;
-  padding: 0.4rem 0.65rem;
-}
-
 .studio-shell.studio-shell input::placeholder,
 .studio-shell.studio-shell textarea::placeholder {
   color: var(--studio-muted);
@@ -4023,9 +4054,20 @@ button:disabled {
     .workflow-delivery-state,
     .kicker,
     .button--secondary,
+    .button--outline:hover:not(:disabled),
+    .button--option-card[aria-pressed="true"],
     .icon-button
   ) {
   color: var(--studio-accent);
+}
+
+.studio-shell[data-theme="dark"]
+  :where(.button--outline:hover:not(:disabled), .button--option-card[aria-pressed="true"]) {
+  border-color: var(--studio-accent);
+}
+
+.studio-shell[data-theme="dark"] .button--option-card[aria-pressed="true"] {
+  box-shadow: inset 3px 0 0 var(--studio-accent);
 }
 
 .studio-shell[data-theme="dark"]
@@ -4111,7 +4153,6 @@ button:disabled {
     .personalization-preview-result,
     .experiment-status,
     .collaboration-review-card,
-    .picker-grid button,
     .asset-library-card,
     .asset-usage-summary,
     .workflow-list li,

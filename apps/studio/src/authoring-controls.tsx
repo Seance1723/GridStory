@@ -1,4 +1,3 @@
-import { useMemo, useState, type ReactNode } from 'react';
 import type { ContentEntry } from '@gridstory/client';
 import type {
   AssetReference,
@@ -9,6 +8,7 @@ import type {
   RichTextInline,
   RichTextMark,
 } from '@gridstory/schema';
+import { type ReactNode, useMemo, useState } from 'react';
 
 type RichTextField = Extract<FieldDefinition, { type: 'rich-text' }>;
 type AssetField = Extract<FieldDefinition, { type: 'asset' }>;
@@ -120,10 +120,12 @@ function entryLabel(entry: ContentEntry): string {
 function ReferenceChoices({
   entries,
   targets,
+  selectedIds = [],
   onSelect,
 }: {
   entries: ContentEntry[];
   targets: string[];
+  selectedIds?: string[];
   onSelect: (reference: ContentReference) => void;
 }): ReactNode {
   const [query, setQuery] = useState('');
@@ -144,7 +146,9 @@ function ReferenceChoices({
         {choices.map((entry) => (
           <button
             type="button"
+            className="button button--outline button--option-card"
             key={entry.id}
+            aria-pressed={selectedIds.includes(entry.id)}
             onClick={() => onSelect({ id: entry.id, contentType: entry.contentType })}
           >
             <strong>{entryLabel(entry)}</strong>
@@ -204,6 +208,7 @@ export function RichTextControl({
         {(['bold', 'italic', 'underline', 'code'] as const).map((type) => (
           <button
             type="button"
+            className="button button--outline button--compact"
             key={type}
             disabled={!active || !('content' in active)}
             onClick={() => active && update(active.id, (block) => withMark(block, { type }))}
@@ -218,6 +223,7 @@ export function RichTextControl({
         />
         <button
           type="button"
+          className="button button--outline button--compact"
           disabled={!active || !('content' in active) || !URL.canParse(link)}
           onClick={() =>
             active && update(active.id, (block) => withMark(block, { type: 'link', href: link }))
@@ -241,6 +247,7 @@ export function RichTextControl({
               </strong>
               <button
                 type="button"
+                className="button button--danger button--compact"
                 aria-label={`Remove ${block.type} block ${index + 1}`}
                 onClick={() =>
                   onChange({
@@ -256,6 +263,7 @@ export function RichTextControl({
               <ReferenceChoices
                 entries={entries}
                 targets={[block.reference.contentType]}
+                selectedIds={[block.reference.id]}
                 onSelect={(reference) => update(block.id, () => ({ ...block, reference }))}
               />
             ) : (
@@ -275,6 +283,7 @@ export function RichTextControl({
         {allowed.map((type) => (
           <button
             type="button"
+            className="button button--secondary button--compact"
             key={type}
             onClick={() => {
               const block = emptyBlock(type);
@@ -329,14 +338,24 @@ export function AssetControl({
               />
             </label>
           ) : null}
-          <button type="button" onClick={() => onChange(undefined)}>
+          <button
+            type="button"
+            className="button button--secondary button--compact"
+            onClick={() => onChange(undefined)}
+          >
             Clear asset
           </button>
         </div>
       ) : null}
       <div className="picker-grid">
         {choices.map((asset) => (
-          <button type="button" key={asset.id} onClick={() => onChange(asset)}>
+          <button
+            type="button"
+            className="button button--outline button--option-card"
+            key={asset.id}
+            aria-pressed={selected?.id === asset.id}
+            onClick={() => onChange(asset)}
+          >
             <strong>{asset.title}</strong>
             <small>{asset.kind}</small>
           </button>
@@ -392,6 +411,7 @@ export function RelationControl({
               {entry ? entryLabel(entry) : reference.id}
               <button
                 type="button"
+                className="button button--danger button--compact button--icon"
                 aria-label={`Remove reference ${entry ? entryLabel(entry) : reference.id}`}
                 onClick={() => {
                   const rest = selected.filter((candidate) => candidate.id !== reference.id);
@@ -404,7 +424,12 @@ export function RelationControl({
           );
         })}
       </div>
-      <ReferenceChoices entries={entries} targets={definition.targets} onSelect={add} />
+      <ReferenceChoices
+        entries={entries}
+        targets={definition.targets}
+        selectedIds={selected.map((reference) => reference.id)}
+        onSelect={add}
+      />
     </section>
   );
 }

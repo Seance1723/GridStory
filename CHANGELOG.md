@@ -44,6 +44,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Applied the formatter-required layout to the new dark option-card selector and restored a clean complete delivery gate (BUG-0399, STUDIO-013).
+- Replaced native browser styling and container-specific fallbacks across asset, relation, rich-text, add, clear, and remove controls with the global Studio button taxonomy; shared outlined option cards now expose consistent enabled, hover, focus, pressed, disabled, light, dark, and responsive states (BUG-0398, STUDIO-013).
 - Confirmed a one-off downstream WebKit draft-save confirmation miss after the new popup assertions was non-reproducible through persisted revision evidence and an unchanged isolated passing rerun (BUG-0397, STUDIO-012).
 - Reran the focused Studio suite through the approved Windows child-process path after the restricted sandbox denied Vitest startup; all 33 tests pass (BUG-0396, STUDIO-012).
 - Restored valid isolated delivery verification by rebuilding the E2E-mode bundles after the production gate and running each browser against fresh in-memory server state; the unchanged authoring-to-published-delivery workflow passes 3/3 (BUG-0395, STUDIO-011).

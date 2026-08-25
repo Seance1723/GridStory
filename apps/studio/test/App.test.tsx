@@ -2886,12 +2886,24 @@ describe('GridStory Studio', () => {
     fireEvent.change(headingBlock, { target: { value: 'A semantic story' } });
 
     const asset = screen.getByRole('region', { name: 'Social image' });
-    await user.click(within(asset).getByRole('button', { name: /Campaign landscape/ }));
+    const assetOption = within(asset).getByRole('button', { name: /Campaign landscape/ });
+    expect(assetOption.className).toBe('button button--outline button--option-card');
+    expect(assetOption.getAttribute('aria-pressed')).toBe('false');
+    await user.click(assetOption);
+    expect(assetOption.getAttribute('aria-pressed')).toBe('true');
     expect(within(asset).getByLabelText('Alternative text')).toBeTruthy();
+    expect(within(asset).getByRole('button', { name: 'Clear asset' }).className).toBe(
+      'button button--secondary button--compact',
+    );
 
     const relations = screen.getByRole('region', { name: 'Related pages' });
-    await user.click(within(relations).getByRole('button', { name: /Second page/ }));
+    const relationOption = within(relations).getByRole('button', { name: /Second page/ });
+    expect(relationOption.className).toBe('button button--outline button--option-card');
+    expect(relationOption.getAttribute('aria-pressed')).toBe('false');
+    await user.click(relationOption);
+    expect(relationOption.getAttribute('aria-pressed')).toBe('true');
     expect(relations.textContent).toContain('1 selected / 2');
+    expect(document.querySelectorAll('.authoring-field button:not([class])')).toHaveLength(0);
 
     await user.click(screen.getByRole('button', { name: /Hero.*one-hero-a/ }));
     const inlineEditor = screen.getByRole('region', { name: 'Inline component editor' });
