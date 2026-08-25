@@ -126,6 +126,36 @@ test('Studio shell follows the reference navigation, card, theme, and mobile dra
   await expect(page.getByRole('search')).toHaveCSS('width', '248px');
   await expect(page.getByRole('search').locator('svg')).toHaveCSS('fill', 'none');
   await expect(page.getByRole('search').locator('svg')).toHaveCSS('stroke', 'rgb(104, 110, 107)');
+  const previewPopout = header.getByRole('button', { name: 'Open live preview in new window' });
+  await expect(previewPopout).toBeVisible();
+  await expect(previewPopout).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('.preview-panel')).toHaveCount(0);
+
+  const textControl = page.getByLabel('Title').first();
+  const selectControl = page.getByLabel('Working branch');
+  await expect(textControl).toBeVisible();
+  await expect(selectControl).toBeVisible();
+  const sharedControlProperties = async (control: typeof textControl) =>
+    control.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        backgroundColor: style.backgroundColor,
+        borderColor: style.borderColor,
+        borderRadius: style.borderRadius,
+        color: style.color,
+        minHeight: style.minHeight,
+        paddingBottom: Math.round(Number.parseFloat(style.paddingBottom) * 10) / 10,
+        paddingLeft: style.paddingLeft,
+        paddingTop: Math.round(Number.parseFloat(style.paddingTop) * 10) / 10,
+      };
+    });
+  expect(await sharedControlProperties(selectControl)).toEqual(
+    await sharedControlProperties(textControl),
+  );
+  await expect(textControl).toHaveCSS('min-height', '44px');
+  await expect(textControl).toHaveCSS('border-radius', '12px');
+  await expect(selectControl).not.toHaveCSS('background-image', 'none');
+  await expect(page.locator('.document-heading')).toHaveCSS('margin-bottom', '16px');
 
   const assetOption = page
     .getByRole('region', { name: 'Social image' })
@@ -334,15 +364,13 @@ test('every Studio surface contains readable text and controls at each responsiv
             style.display === 'none' ||
             style.visibility === 'hidden' ||
             rectangle.width === 0 ||
-            rectangle.height === 0 ||
-            control.closest('.preview-page')
+            rectangle.height === 0
           ) {
             continue;
           }
 
           const boundary =
-            control.closest<HTMLElement>('.editor-panel, .content-sidebar, .preview-panel') ??
-            surfaceElement;
+            control.closest<HTMLElement>('.editor-panel, .content-sidebar') ?? surfaceElement;
           let ancestor = control.parentElement;
           let intentionallyScrollable = false;
           while (ancestor && ancestor !== boundary) {
@@ -392,7 +420,6 @@ test('every Studio surface contains readable text and controls at each responsiv
             rectangle.height <= 0 ||
             intentionallyVisuallyHidden ||
             textElement.matches('.workflow-action-adders legend') ||
-            textElement.closest('.preview-page') ||
             textElement.closest('.studio-navigation')
           ) {
             continue;
@@ -471,7 +498,7 @@ test('every Studio surface contains readable text and controls at each responsiv
               rectangle.width === 0 ||
               rectangle.height === 0 ||
               intentionallyScrollable ||
-              element.closest('.studio-navigation, .preview-page') ||
+              element.closest('.studio-navigation') ||
               (rectangle.left >= -1 && rectangle.right <= clientWidth + 1)
             ) {
               return [];
@@ -630,14 +657,17 @@ test('critical authoring remains keyboard-operable and adapts at 200% zoom', asy
     .toBe(true);
 
   await page.emulateMedia({ reducedMotion: 'reduce', forcedColors: 'active' });
-  const movingElements = await page.locator('*').evaluateAll(
-    (elements) =>
-      elements.filter((element) => {
-        const style = getComputedStyle(element);
-        return style.animationDuration !== '0s' || style.transitionDuration !== '0s';
-      }).length,
+  const movingElements = await page.locator('*').evaluateAll((elements) =>
+    elements.flatMap((element) => {
+      const style = getComputedStyle(element);
+      return style.animationDuration !== '0s' || style.transitionDuration !== '0s'
+        ? [
+            `${element.tagName.toLowerCase()}.${(element as HTMLElement).className} animation=${style.animationDuration} transition=${style.transitionDuration}`,
+          ]
+        : [];
+    }),
   );
-  expect(movingElements).toBe(0);
+  expect(movingElements).toEqual([]);
   await expectNoDetectableWcagViolations(page, testInfo, 'studio-adapted');
 });
 

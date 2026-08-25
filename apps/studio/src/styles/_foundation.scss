@@ -1,0 +1,117 @@
+:root {
+  color: #030e09;
+  font-family:
+    Onest, Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  font-synthesis: none;
+  overflow-x: clip;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  min-width: 320px;
+  background: #f5f5f5;
+  overflow-x: hidden;
+}
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+button {
+  cursor: pointer;
+}
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.skip-link {
+  background: #fff;
+  border: 2px solid #111827;
+  border-radius: 0.45rem;
+  color: #111827;
+  font-weight: 800;
+  left: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  position: fixed;
+  top: 0.75rem;
+  transform: translateY(-200%);
+  z-index: 100;
+}
+.skip-link:focus {
+  transform: translateY(0);
+}
+:where(a, button, input, textarea, select, [tabindex]):focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skip-link {
+    transition: none;
+  }
+}
+
+.studio-shell {
+  min-height: 100vh;
+}
+.studio-header {
+  align-items: center;
+  background: #111827;
+  color: white;
+  display: flex;
+  gap: 0.85rem;
+  height: 4.5rem;
+  padding: 0 1.25rem;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.studio-header p {
+  font-size: 1rem;
+  font-weight: 800;
+  margin: 0;
+}
+.brand-copy > span {
+  color: #9ca3af;
+  font-size: 0.74rem;
+}
+.brand-mark {
+  display: grid;
+  gap: 2px;
+  grid-template-columns: repeat(3, 7px);
+  height: 22px;
+  transform: skewY(-12deg);
+}
+.brand-mark span {
+  background: #818cf8;
+  border-radius: 2px;
+}
+.brand-mark span:nth-child(2) {
+  background: #f472b6;
+  transform: translateY(-3px);
+}
+.brand-mark span:nth-child(3) {
+  background: #34d399;
+  transform: translateY(-6px);
+}
+.header-actions {
+  align-items: center;
+  display: flex;
+  gap: 0.65rem;
+  margin-left: auto;
+}
+.save-state {
+  color: #a7f3d0;
+  font-weight: 700;
+  margin-right: 0.5rem;
+}
+.save-state--dirty {
+  color: #fde68a;
+}

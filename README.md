@@ -74,6 +74,12 @@ The first start creates `.gridstory/gridstory.db`, initializes the schema, and i
 
 Optional environment settings are documented in `.env.example`. The applications also have safe local defaults, so copying the file is not required for the first run.
 
+### Studio styles and preview
+
+GridStory Studio imports one `apps/studio/src/styles/studio.scss` entry. It composes ordered Sass `@use` partials for foundation/tokens, management surfaces, authoring, collaboration/assets, workflow/search, shell/navigation, calls to action, typography, forms, cards/spacing, states/themes, responsive layout, and accessibility. Shared native-control appearance belongs in `_form.scss`; button variants belong in `_cta.scss`; card surfaces and structural gaps belong in `_cards.scss`; readable text behavior belongs in `_typographic.scss`. Keep feature-only layout in its feature partial and do not add a second global override layer.
+
+The authoring workspace does not embed application content. Its header preview button creates one scoped standalone draft-preview session in an application-only window; the same button closes the window and revokes the session. Responsive component values remain authored through the component inspector's **Responsive override** selector.
+
 ## Verification
 
 ```bash

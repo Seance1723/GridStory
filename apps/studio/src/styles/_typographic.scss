@@ -1,0 +1,112 @@
+.kicker {
+  color: var(--studio-primary);
+  font-size: 0.7rem;
+  line-height: 1.4;
+}
+
+.status {
+  font-size: 0.68rem;
+  line-height: 1.2;
+}
+
+.studio-page
+  :where(h1, h2, h3, h4, p, small, strong, dt, dd, li, label, legend, span):not(.button *) {
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+.studio-page :where(code, pre) {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.studio-page .release-entry-picker :where(label, span, small) {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.studio-page .release-entry-picker small {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.studio-page fieldset:not(.workflow-action-adders) > legend {
+  display: block;
+  max-width: 100%;
+  white-space: normal;
+}
+
+.studio-page fieldset {
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.studio-page
+  :where(
+    .section-heading,
+    .release-card-heading,
+    .marketplace-card__heading,
+    .workflow-transition-heading,
+    .workflow-action-definition-heading,
+    .asset-library-title-row,
+    .comment-thread header
+  ) {
+  gap: 1rem;
+}
+
+.studio-page
+  :where(
+    .section-heading,
+    .release-card-heading,
+    .marketplace-card__heading,
+    .workflow-transition-heading,
+    .workflow-action-definition-heading,
+    .asset-library-title-row,
+    .comment-thread header
+  )
+  > * {
+  min-width: 0;
+}
+
+.section-heading > :where(.button, .asset-upload-button) {
+  flex: 0 0 auto;
+}
+
+.entry-card__title,
+.entry-card__meta {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.studio-shell :where(h1, h2, h3, h4, strong, legend, label) {
+  color: var(--studio-text);
+}
+
+.studio-shell.studio-shell
+  :where(
+    .operations-panel p,
+    .operations-panel dt,
+    .identity-panel .section-heading p,
+    .data-governance-panel .section-heading p,
+    .migration-panel .section-heading p,
+    .marketplace-panel .section-heading p,
+    .personalization-panel .section-heading p,
+    .experiment-panel .section-heading p,
+    .ai-panel .section-heading p,
+    .knowledge-panel .section-heading p,
+    .federation-panel .section-heading p,
+    .fleet-panel .section-heading p,
+    .regional-panel .section-heading p,
+    .governance-panel .section-heading p,
+    .asset-library-panel .section-heading p,
+    .quality-panel .section-heading p,
+    .search-panel p,
+    .search-panel li,
+    .empty-copy,
+    .entry-card__meta,
+    small
+  ) {
+  color: var(--studio-muted);
+}

@@ -1,0 +1,238 @@
+.studio-shell--navigation-condensed .studio-navigation {
+  width: 86px;
+}
+
+.studio-shell--navigation-condensed .studio-content {
+  margin-left: 86px;
+}
+
+.studio-shell--navigation-condensed .studio-navigation__brand {
+  justify-content: center;
+  padding-inline: 0;
+}
+
+.studio-shell--navigation-condensed
+  :where(
+    .studio-navigation .brand-copy,
+    .studio-navigation__caption,
+    .studio-navigation__label,
+    .studio-navigation__footer div
+  ) {
+  display: none;
+}
+
+.studio-shell--navigation-condensed .studio-navigation__scroll {
+  padding-inline: 18px;
+}
+
+.studio-shell--navigation-condensed .studio-navigation__item {
+  justify-content: center;
+  padding-inline: 0;
+}
+
+.studio-shell--navigation-condensed .studio-navigation__footer {
+  justify-content: center;
+  margin-inline: 16px;
+  padding-inline: 8px;
+}
+
+@media (max-width: 1500px) {
+  .studio-workspace {
+    grid-template-columns: minmax(14rem, 0.55fr) minmax(27rem, 1.15fr);
+  }
+}
+
+@media (max-width: 1180px) {
+  .studio-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .operations-panel {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .header-actions .save-state {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .studio-navigation {
+    box-shadow: 8px 0 36px rgb(3 14 9 / 18%);
+    transform: translateX(-101%);
+    width: 270px;
+  }
+
+  .studio-navigation--open {
+    transform: translateX(0);
+  }
+
+  .studio-navigation-backdrop {
+    background: rgb(3 14 9 / 48%);
+    border: 0;
+    bottom: 0;
+    display: block;
+    left: 0;
+    padding: 0;
+    position: fixed;
+    right: 0;
+    top: 0;
+    width: 100%;
+    z-index: 29;
+  }
+
+  .studio-navigation .studio-navigation__close {
+    display: inline-flex;
+    margin-left: auto;
+  }
+
+  .studio-content,
+  .studio-shell--navigation-condensed .studio-content {
+    margin-left: 0;
+    transition: none;
+  }
+
+  .studio-shell--navigation-condensed .studio-navigation {
+    width: 270px;
+  }
+
+  .studio-shell--navigation-condensed .studio-navigation__brand {
+    justify-content: flex-start;
+    padding: 0 20px;
+  }
+
+  .studio-shell--navigation-condensed
+    :where(
+      .studio-navigation .brand-copy,
+      .studio-navigation__caption,
+      .studio-navigation__label,
+      .studio-navigation__footer div
+    ) {
+    display: initial;
+  }
+
+  .studio-shell--navigation-condensed .studio-navigation__scroll {
+    padding-inline: 20px;
+  }
+
+  .studio-shell--navigation-condensed .studio-navigation__item {
+    justify-content: flex-start;
+    padding: 0 14px 0 11px;
+  }
+
+  .studio-shell--navigation-condensed .studio-navigation__footer {
+    justify-content: flex-start;
+    margin-inline: 20px;
+    padding-inline: 12px;
+  }
+
+  .studio-header {
+    padding-inline: 16px;
+  }
+
+  .studio-search {
+    display: none;
+  }
+
+  .studio-mobile-search {
+    display: inline-flex;
+  }
+
+  .studio-page {
+    padding: 30px 16px 20px;
+  }
+
+  .studio-page
+    > :where(
+      .workflow-designer,
+      .release-panel,
+      .search-panel,
+      .operations-panel,
+      .identity-panel,
+      .data-governance-panel,
+      .migration-panel,
+      .marketplace-panel,
+      .personalization-panel,
+      .experiment-panel,
+      .ai-panel,
+      .knowledge-panel,
+      .federation-panel,
+      .fleet-panel,
+      .regional-panel,
+      .governance-panel,
+      .asset-library-panel,
+      .quality-panel,
+      .workflow-panel,
+      .collaboration-panel
+    ) {
+    padding: 20px;
+  }
+
+}
+
+@media (max-width: 620px) {
+  .studio-header {
+    gap: 8px;
+  }
+
+  .studio-header__leading,
+  .header-actions {
+    gap: 4px;
+  }
+
+  .header-actions .button--secondary,
+  .studio-avatar {
+    display: none;
+  }
+
+  .header-actions .button--primary {
+    min-height: 38px;
+    padding-inline: 12px;
+  }
+
+  .studio-icon-button {
+    flex-basis: 38px;
+    height: 38px;
+    width: 38px;
+  }
+
+  .studio-page {
+    padding-inline: 12px;
+  }
+
+  .section-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .section-heading > :where(.button, .asset-upload-button) {
+    width: 100%;
+  }
+
+  .section-heading > :where(.workflow-state, .release-state) {
+    align-self: flex-start;
+  }
+
+  .comment-composer {
+    grid-template-columns: 1fr;
+  }
+
+  .comment-body-field {
+    grid-column: auto;
+  }
+
+  .workflow-state-node {
+    min-width: 120px;
+  }
+
+  .experiment-panel__metric-legend {
+    width: calc(100% - 1.7rem);
+  }
+
+  .content-sidebar,
+  .editor-panel {
+    padding: 20px 16px;
+  }
+
+}

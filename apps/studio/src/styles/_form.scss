@@ -1,0 +1,179 @@
+.studio-shell.studio-shell
+  :where(
+    input:not([type]),
+    input[type="text"],
+    input[type="search"],
+    input[type="email"],
+    input[type="url"],
+    input[type="tel"],
+    input[type="password"],
+    input[type="number"],
+    input[type="date"],
+    input[type="datetime-local"],
+    input[type="time"],
+    textarea,
+    select
+  ) {
+  background: var(--studio-surface);
+  border: 1px solid var(--studio-border);
+  border-radius: 12px;
+  box-shadow: var(--studio-control-shadow);
+  color: var(--studio-text);
+  display: block;
+  line-height: 1.35;
+  max-width: 100%;
+  min-height: 44px;
+  min-width: 0;
+  padding: 0.68rem 0.8rem;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+  width: 100%;
+}
+
+.studio-shell.studio-shell select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7470' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-position: right 0.75rem center;
+  background-repeat: no-repeat;
+  background-size: 1rem;
+  padding-right: 2.5rem;
+}
+
+.studio-shell.studio-shell textarea {
+  min-height: 7rem;
+  resize: vertical;
+}
+
+.studio-shell.studio-shell
+  :where(
+    input:not([type]),
+    input[type="text"],
+    input[type="search"],
+    input[type="email"],
+    input[type="url"],
+    input[type="tel"],
+    input[type="password"],
+    input[type="number"],
+    input[type="date"],
+    input[type="datetime-local"],
+    input[type="time"],
+    textarea,
+    select
+  ):hover:not(:disabled):not(:focus) {
+  border-color: color-mix(in srgb, var(--studio-primary) 48%, var(--studio-border));
+}
+
+.studio-shell.studio-shell
+  :where(
+    input:not([type]),
+    input[type="text"],
+    input[type="search"],
+    input[type="email"],
+    input[type="url"],
+    input[type="tel"],
+    input[type="password"],
+    input[type="number"],
+    input[type="date"],
+    input[type="datetime-local"],
+    input[type="time"],
+    textarea,
+    select
+  ):focus {
+  border-color: var(--studio-primary);
+  box-shadow: 0 0 0 3px var(--studio-primary-soft);
+  outline: 0;
+}
+
+.studio-shell.studio-shell input::placeholder,
+.studio-shell.studio-shell textarea::placeholder {
+  color: var(--studio-muted);
+  opacity: 1;
+}
+
+.studio-shell.studio-shell
+  :where(
+    input:not([type]),
+    input[type="text"],
+    input[type="search"],
+    input[type="email"],
+    input[type="url"],
+    input[type="tel"],
+    input[type="password"],
+    input[type="number"],
+    input[type="date"],
+    input[type="datetime-local"],
+    input[type="time"],
+    textarea,
+    select
+  ):disabled {
+  background: var(--studio-surface-soft);
+  border-color: var(--studio-border);
+  box-shadow: none;
+  color: var(--studio-muted);
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+.studio-shell.studio-shell
+  :where(
+    input:not([type]),
+    input[type="text"],
+    input[type="search"],
+    input[type="email"],
+    input[type="url"],
+    input[type="tel"],
+    input[type="password"],
+    input[type="number"],
+    input[type="date"],
+    input[type="datetime-local"],
+    input[type="time"],
+    textarea
+  ):read-only:not(:disabled) {
+  background: var(--studio-surface-soft);
+}
+
+.studio-shell.studio-shell .studio-search input {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  color: var(--studio-text);
+  height: 100%;
+  min-height: 0;
+  padding: 0;
+}
+
+.studio-shell.studio-shell .studio-search input:hover:not(:disabled):not(:focus),
+.studio-shell.studio-shell .studio-search input:focus {
+  border: 0;
+  box-shadow: none;
+}
+
+.studio-page :where(.gs-field, .comment-body-field, .binding-row label) {
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.comment-composer {
+  gap: 0.75rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.comment-body-field {
+  grid-column: 1 / -1;
+}
+
+.comment-composer .button {
+  width: 100%;
+}
+
+.presentation-editor {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.presentation-editor .binding-list {
+  margin-top: 0;
+}

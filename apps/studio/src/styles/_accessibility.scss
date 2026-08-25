@@ -1,0 +1,42 @@
+@media (prefers-reduced-motion: reduce) {
+  .studio-navigation,
+  .studio-content,
+  .studio-navigation__item,
+  .studio-icon-button,
+  .button,
+  .studio-shell.studio-shell input,
+  .studio-shell.studio-shell textarea,
+  .studio-shell.studio-shell select {
+    transition: none;
+  }
+}
+
+@media (forced-colors: active) {
+  :where(a, button, input, textarea, select, [tabindex]):focus-visible {
+    outline-color: Highlight;
+  }
+  .studio-header {
+    background: Canvas;
+    border-bottom: 1px solid CanvasText;
+    color: CanvasText;
+  }
+  .studio-navigation {
+    background: Canvas;
+    border-right: 1px solid CanvasText;
+  }
+  .studio-navigation__item--active,
+  .studio-navigation__footer,
+  .studio-avatar,
+  .studio-navigation__footer-icon {
+    border: 1px solid CanvasText;
+    forced-color-adjust: none;
+  }
+  .brand-copy > span {
+    color: CanvasText;
+  }
+  .studio-shell.studio-shell select {
+    appearance: auto;
+    background-image: none;
+    padding-right: 0.8rem;
+  }
+}

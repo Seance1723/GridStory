@@ -2746,22 +2746,23 @@ describe('GridStory Studio', () => {
     expect(screen.getByText('Unsaved changes')).toBeTruthy();
   });
 
-  it('starts and revokes a secure application iframe preview', async () => {
-    const user = userEvent.setup();
+  it('keeps preview out of the workspace and places its only launcher in the Studio header', async () => {
     render(<App client={createTestClient()} />);
 
+    const popout = screen.getByRole('button', {
+      name: 'Open live preview in new window',
+    }) as HTMLButtonElement;
+    expect(popout.disabled).toBe(true);
+    expect(popout.closest('.studio-header')).toBeTruthy();
+    expect(document.querySelector('.preview-panel')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'App iframe' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Standalone' })).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Preview perspective' })).toBeNull();
     await screen.findByLabelText('Headline');
-    await user.click(screen.getByRole('button', { name: 'App iframe' }));
-    const frame = await screen.findByTitle('Application draft preview');
-    expect(frame.getAttribute('src')).toBe('http://localhost:5174/');
-    expect(frame.getAttribute('sandbox')).toBe('allow-scripts allow-same-origin');
-    expect(screen.getByText(/iframe .*connecting/)).toBeTruthy();
-
-    await user.click(screen.getByRole('button', { name: 'Close app preview' }));
-    expect(screen.queryByTitle('Application draft preview')).toBeNull();
+    expect(popout.disabled).toBe(false);
   });
 
-  it('opens a preview-only window from the Live preview header icon', async () => {
+  it('opens and revokes a preview-only window from the Studio header', async () => {
     const user = userEvent.setup();
     const replace = vi.fn();
     const popup = {
@@ -2771,7 +2772,9 @@ describe('GridStory Studio', () => {
       postMessage: vi.fn(),
     } as unknown as Window;
     const open = vi.spyOn(window, 'open').mockReturnValue(popup);
-    render(<App client={createTestClient()} />);
+    const client = createTestClient();
+    const revokePreviewSession = vi.spyOn(client, 'revokePreviewSession');
+    render(<App client={client} />);
 
     const popout = screen.getByRole('button', {
       name: 'Open live preview in new window',
@@ -2780,7 +2783,6 @@ describe('GridStory Studio', () => {
     await screen.findByLabelText('Headline');
     expect(popout.disabled).toBe(false);
     expect(popout.querySelector('svg')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Standalone' })).toBeTruthy();
     await user.click(popout);
     expect(open).toHaveBeenCalledWith(
       'about:blank',
@@ -2788,7 +2790,17 @@ describe('GridStory Studio', () => {
       'popup,width=1280,height=900',
     );
     await waitFor(() => expect(replace).toHaveBeenCalledWith('http://localhost:5174/'));
-    expect(screen.getByText(/standalone .*connecting/)).toBeTruthy();
+    const closePreview = screen.getByRole('button', { name: 'Close live preview window' });
+    expect(closePreview.getAttribute('aria-pressed')).toBe('true');
+    expect(closePreview.closest('.studio-header')).toBeTruthy();
+    await user.click(closePreview);
+    await waitFor(() => expect(popup.close).toHaveBeenCalled());
+    await waitFor(() => expect(revokePreviewSession).toHaveBeenCalledWith('preview-session-1'));
+    expect(
+      screen
+        .getByRole('button', { name: 'Open live preview in new window' })
+        .getAttribute('aria-pressed'),
+    ).toBe('false');
   });
   it('edits nested compositions through layers, slots, keyboard movement, and history', async () => {
     const user = userEvent.setup();
@@ -2831,7 +2843,7 @@ describe('GridStory Studio', () => {
     expect(screen.getByRole('button', { name: /Hero.*content.*one-hero-b/ })).toBeTruthy();
   });
 
-  it('binds variants and tokens, previews responsive values, and inserts governed reuse', async () => {
+  it('binds variants and tokens, captures responsive values, and inserts governed reuse', async () => {
     const user = userEvent.setup();
     render(<App client={createTestClient()} />);
 
@@ -2845,8 +2857,8 @@ describe('GridStory Studio', () => {
     );
     await user.selectOptions(toneToken, 'tone.brand');
 
-    const breakpointPicker = screen.getByRole('group', { name: 'Preview breakpoint' });
-    await user.click(within(breakpointPicker).getByRole('button', { name: 'Mobile' }));
+    const breakpointPicker = within(inspector).getByLabelText('Responsive override');
+    await user.selectOptions(breakpointPicker, 'mobile');
     const headingBinding = within(inspector)
       .getByLabelText('Heading token')
       .closest('.binding-row');
@@ -2857,13 +2869,13 @@ describe('GridStory Studio', () => {
     const heading = within(inspector).getByLabelText('Heading');
     await user.clear(heading);
     await user.type(heading, 'Wide hero');
-    expect(screen.getByRole('heading', { name: 'Second hero' })).toBeTruthy();
+    expect((heading as HTMLInputElement).value).toBe('Wide hero');
     await user.click(
       within(headingBinding as HTMLElement).getByRole('button', { name: 'Clear mobile' }),
     );
-    expect(screen.getByRole('heading', { name: 'Wide hero' })).toBeTruthy();
-    await user.click(within(breakpointPicker).getByRole('button', { name: 'Desktop' }));
-    expect(screen.getByRole('heading', { name: 'Wide hero' })).toBeTruthy();
+    expect((heading as HTMLInputElement).value).toBe('Wide hero');
+    await user.selectOptions(breakpointPicker, 'desktop');
+    expect((heading as HTMLInputElement).value).toBe('Wide hero');
 
     await user.click(screen.getByRole('button', { name: '+ Portability callout' }));
     inspector = screen.getByRole('region', { name: 'Selected component inspector' });
@@ -2906,10 +2918,13 @@ describe('GridStory Studio', () => {
     expect(document.querySelectorAll('.authoring-field button:not([class])')).toHaveLength(0);
 
     await user.click(screen.getByRole('button', { name: /Hero.*one-hero-a/ }));
-    const inlineEditor = screen.getByRole('region', { name: 'Inline component editor' });
-    const inlineHeading = within(inlineEditor).getByLabelText('Heading');
-    fireEvent.change(inlineHeading, { target: { value: 'Edited directly in preview' } });
-    expect(screen.getByRole('heading', { name: 'Edited directly in preview' })).toBeTruthy();
+    const componentInspector = screen.getByRole('region', {
+      name: 'Selected component inspector',
+    });
+    const componentHeading = within(componentInspector).getByLabelText('Heading');
+    fireEvent.change(componentHeading, { target: { value: 'Edited in the component inspector' } });
+    expect((componentHeading as HTMLInputElement).value).toBe('Edited in the component inspector');
+    expect(screen.queryByRole('region', { name: 'Inline component editor' })).toBeNull();
 
     await waitFor(() => expect(screen.getByText(/Studio editor/)).toBeTruthy());
     await user.selectOptions(screen.getByLabelText('Shared field or block'), 'headline');

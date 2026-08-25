@@ -1,0 +1,104 @@
+.studio-shell.studio-shell :where(fieldset, article, table, th, td) {
+  border-color: var(--studio-border);
+}
+
+.studio-shell
+  :where(
+    .identity-panel fieldset,
+    .data-governance-panel article,
+    .migration-panel article,
+    .marketplace-panel article,
+    .personalization-panel article,
+    .experiment-panel article,
+    .ai-panel article,
+    .knowledge-panel article,
+    .federation-panel article,
+    .fleet-panel article,
+    .regional-panel article,
+    .governance-panel article,
+    .asset-library-panel article,
+    .quality-panel article,
+    .workflow-transition-card,
+    .workflow-action-definitions > li,
+    .workflow-delivery-log li,
+    .ai-proposal,
+    .ai-result,
+    .release-card,
+    .entry-card:hover
+  ) {
+  background: var(--studio-surface-soft);
+  border-color: var(--studio-border);
+  color: var(--studio-text);
+}
+
+.entry-card {
+  color: var(--studio-text);
+}
+
+.entry-card--active,
+.entry-card--active:hover {
+  background: var(--studio-primary-soft);
+  border-color: var(--studio-primary);
+}
+
+.entry-card--active .entry-card__meta {
+  color: #555d59;
+}
+
+.icon-button {
+  background: var(--studio-primary-soft);
+  color: var(--studio-primary);
+}
+
+.studio-page
+  :where(
+    .section-heading,
+    .document-heading,
+    .sidebar-heading,
+    .component-inspector > header,
+    .authoring-field > header,
+    .comment-thread > header,
+    .rich-text-block > header
+  ) {
+  column-gap: var(--studio-space-4);
+  row-gap: var(--studio-space-2);
+}
+
+.studio-page
+  > :where(
+    .workflow-designer,
+    .release-panel,
+    .search-panel,
+    .operations-panel,
+    .identity-panel,
+    .data-governance-panel,
+    .migration-panel,
+    .marketplace-panel,
+    .personalization-panel,
+    .experiment-panel,
+    .ai-panel,
+    .knowledge-panel,
+    .federation-panel,
+    .fleet-panel,
+    .regional-panel,
+    .governance-panel,
+    .asset-library-panel,
+    .quality-panel,
+    .workflow-panel,
+    .collaboration-panel
+  )
+  > .section-heading {
+  margin-bottom: var(--studio-space-5);
+}
+
+.studio-workspace :where(.sidebar-heading, .document-heading) {
+  margin-bottom: var(--studio-space-4);
+}
+
+.studio-page :where(.section-heading, .document-heading, .sidebar-heading) p {
+  margin: var(--studio-space-1) 0 0;
+}
+
+.studio-page fieldset > legend {
+  margin-bottom: var(--studio-space-2);
+}

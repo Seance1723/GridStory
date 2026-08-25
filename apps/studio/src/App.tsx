@@ -64,8 +64,6 @@ import {
 } from '@gridstory/client/preview';
 import { exampleDesignSystem } from '@gridstory/example-kit/design-system';
 import { componentManifests } from '@gridstory/example-kit/manifests';
-import { exampleComponentRegistry } from '@gridstory/example-kit/react';
-import { GridStoryRenderer } from '@gridstory/react';
 import type {
   AssetReference,
   CollaborationOperation,
@@ -106,10 +104,8 @@ const defaultClient = createGridStoryClient({
 });
 
 type Notice = { tone: 'success' | 'error' | 'info'; message: string } | null;
-type PreviewPerspective = 'draft' | 'published';
 type ExternalPreviewState = {
   grant: PreviewSessionGrant;
-  mode: 'iframe' | 'standalone';
   entryId: string;
   route: string;
   ready: boolean;
@@ -803,7 +799,6 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   const [entries, setEntries] = useState<ContentEntry[]>([]);
   const [selected, setSelected] = useState<ContentEntry | null>(null);
   const [draft, setDraft] = useState<EditableContent | null>(null);
-  const [published, setPublished] = useState<EditableContent | null>(null);
   const [revisions, setRevisions] = useState<ContentRevision[]>([]);
   const [schemas, setSchemas] = useState<ContentSchemaDefinition[]>([]);
   const [manifests, setManifests] = useState<ComponentManifest[]>(componentManifests);
@@ -826,13 +821,11 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   const [notice, setNotice] = useState<Notice>(null);
   const [qualityReport, setQualityReport] = useState<ContentQualityReport | null>(null);
   const [fatalError, setFatalError] = useState<string | null>(null);
-  const [previewPerspective, setPreviewPerspective] = useState<PreviewPerspective>('draft');
-  const [previewBreakpoint, setPreviewBreakpoint] = useState('desktop');
+  const [responsiveBreakpoint, setResponsiveBreakpoint] = useState('desktop');
   const [externalPreview, setExternalPreview] = useState<ExternalPreviewState | null>(null);
   const previewControllerRef = useRef<GridStoryPreviewController | null>(null);
   const previewGrantRef = useRef<PreviewSessionGrant | null>(null);
   const previewPopupRef = useRef<Window | null>(null);
-  const previewFrameRef = useRef<HTMLIFrameElement | null>(null);
   const lastPreviewSlugRef = useRef<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
   const [operationsDashboard, setOperationsDashboard] = useState<OperationsDashboardRecord | null>(
@@ -1035,25 +1028,19 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
       setBusy(true);
       setNotice(null);
       try {
-        const [entry, history, publishedEntry, workflowState] = await Promise.all([
+        const [entry, history, workflowState] = await Promise.all([
           client.getContent(id, { perspective: 'draft' }),
           client.listRevisions(id),
-          client.getContent(id, { perspective: 'published' }).catch((error: unknown) => {
-            if (error instanceof GridStoryApiError && error.status === 404) return null;
-            throw error;
-          }),
           client.getContentWorkflow(id),
         ]);
         setSelected(entry);
         setDraft(asEditableContent(entry));
-        setPublished(publishedEntry ? asEditableContent(publishedEntry) : null);
         setRevisions(history);
         setWorkflowInstance(workflowState);
         setWorkflowScheduleAt('');
         setQualityReport(null);
         setCompositionHistory(createCompositionHistory(compositionFrom(entry, componentFieldName)));
         setDirty(false);
-        setPreviewPerspective('draft');
       } catch (error) {
         setNotice({ tone: 'error', message: messageFrom(error) });
       } finally {
@@ -1251,14 +1238,6 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   const selectedVariants = selectedNode
     ? designSystem.variants.filter((variant) => variant.component === selectedNode.component)
     : [];
-  const publishedBlocks = useMemo(
-    () =>
-      componentField && Array.isArray(published?.[componentField.name])
-        ? (published[componentField.name] as ComponentNode[])
-        : [],
-    [componentField, published],
-  );
-
   const refreshAssets = useCallback(async () => {
     setAssets(await client.listAssets());
   }, [client]);
@@ -1694,7 +1673,6 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
     try {
       const result = await client.publish(publishable.id, publishable.draftRevisionId);
       setSelected(result);
-      setPublished(asEditableContent(result));
       setEntries((current) => current.map((entry) => (entry.id === result.id ? result : entry)));
       setWorkflowInstance(await client.getContentWorkflow(result.id));
       setNotice({
@@ -3753,10 +3731,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
     }
   };
 
-  const previewContent = previewPerspective === 'draft' ? draft : published;
-  const previewBlocks = previewPerspective === 'draft' ? draftBlocks : publishedBlocks;
   const slugField = activeSchema?.fields.find((field) => field.type === 'slug');
-  const previewSlug = String(previewContent?.[slugField?.name ?? 'slug'] ?? 'preview');
+  const previewSlug = String(draft?.[slugField?.name ?? 'slug'] ?? 'preview');
 
   const closeExternalPreview = useCallback(async () => {
     previewControllerRef.current?.dispose();
@@ -3807,14 +3783,14 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
     controller.start();
   }, []);
 
-  const startExternalPreview = async (mode: 'iframe' | 'standalone') => {
+  const startExternalPreview = async () => {
     if (!selected || !draft) return;
-    setPreviewPerspective('draft');
-    const popup =
-      mode === 'standalone'
-        ? window.open('about:blank', 'gridstory-standalone-preview', 'popup,width=1280,height=900')
-        : null;
-    if (mode === 'standalone' && !popup) {
+    const popup = window.open(
+      'about:blank',
+      'gridstory-standalone-preview',
+      'popup,width=1280,height=900',
+    );
+    if (!popup) {
       setNotice({ tone: 'error', message: 'The standalone preview popup was blocked.' });
       return;
     }
@@ -3824,32 +3800,19 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
       const grant = await client.createPreviewSession({
         previewUrl: import.meta.env.VITE_GRIDSTORY_PREVIEW_URL ?? 'http://localhost:5174/',
         route,
-        mode,
+        mode: 'standalone',
         entryId: selected.id,
       });
       previewGrantRef.current = grant;
-      setExternalPreview({ grant, mode, entryId: selected.id, route, ready: false });
-      if (popup) {
-        previewPopupRef.current = popup;
-        popup.location.replace(grant.previewUrl);
-        connectPreviewTarget(popup, grant);
-      }
+      setExternalPreview({ grant, entryId: selected.id, route, ready: false });
+      previewPopupRef.current = popup;
+      popup.location.replace(grant.previewUrl);
+      connectPreviewTarget(popup, grant);
     } catch (error) {
-      popup?.close();
+      popup.close();
       setNotice({ tone: 'error', message: messageFrom(error) });
     }
   };
-
-  useEffect(() => {
-    if (
-      externalPreview?.mode !== 'iframe' ||
-      previewControllerRef.current ||
-      !previewFrameRef.current?.contentWindow
-    ) {
-      return;
-    }
-    connectPreviewTarget(previewFrameRef.current.contentWindow, externalPreview.grant);
-  }, [connectPreviewTarget, externalPreview]);
 
   useEffect(() => {
     const controller = previewControllerRef.current;
@@ -3876,6 +3839,14 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
       void closeExternalPreview();
     }
   }, [closeExternalPreview, externalPreview, selected?.id]);
+
+  useEffect(() => {
+    if (!externalPreview) return undefined;
+    const interval = window.setInterval(() => {
+      if (previewPopupRef.current?.closed) void closeExternalPreview();
+    }, 500);
+    return () => window.clearInterval(interval);
+  }, [closeExternalPreview, externalPreview]);
 
   useEffect(
     () => () => {
@@ -4243,6 +4214,31 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               <span aria-hidden="true" />
               {dirty ? 'Unsaved changes' : 'Saved'}
             </span>
+            <button
+              type="button"
+              className={`studio-icon-button preview-popout-button${externalPreview ? ' is-active' : ''}`}
+              aria-label={
+                externalPreview ? 'Close live preview window' : 'Open live preview in new window'
+              }
+              aria-pressed={Boolean(externalPreview)}
+              title={
+                externalPreview
+                  ? `Close live preview window · ${externalPreview.ready ? 'connected' : 'connecting'}`
+                  : 'Open live preview in new window'
+              }
+              onClick={() =>
+                void (externalPreview ? closeExternalPreview() : startExternalPreview())
+              }
+              disabled={!externalPreview && (!selected || !draft)}
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                {externalPreview ? (
+                  <path d="M6 6l12 12M18 6 6 18" />
+                ) : (
+                  <path d="M14 4h6v6M10 14 20 4M20 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h5" />
+                )}
+              </svg>
+            </button>
             <button
               type="button"
               className="studio-icon-button studio-theme-toggle"
@@ -8496,6 +8492,19 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                                 ))}
                               </select>
                             </label>
+                            <label className="gs-field">
+                              <span>Responsive override</span>
+                              <select
+                                value={responsiveBreakpoint}
+                                onChange={(event) => setResponsiveBreakpoint(event.target.value)}
+                              >
+                                {designSystem.breakpoints.map((breakpoint) => (
+                                  <option key={breakpoint.id} value={breakpoint.id}>
+                                    {breakpoint.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
                             <div className="binding-list">
                               {editablePropsFor(selectedNode, selectedManifest).map((prop) => {
                                 const tokens = designSystem.tokens.filter((token) =>
@@ -8539,24 +8548,24 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                                             ...current.responsive,
                                             [prop.name]: {
                                               ...current.responsive?.[prop.name],
-                                              [previewBreakpoint]: selectedNode.props[prop.name],
+                                              [responsiveBreakpoint]: selectedNode.props[prop.name],
                                             },
                                           },
                                         }))
                                       }
                                     >
-                                      Capture for {previewBreakpoint}
+                                      Capture for {responsiveBreakpoint}
                                     </button>
                                     {Object.hasOwn(
                                       selectedNode.presentation?.responsive?.[prop.name] ?? {},
-                                      previewBreakpoint,
+                                      responsiveBreakpoint,
                                     ) ? (
                                       <button
                                         type="button"
                                         onClick={() =>
                                           changePresentation(selectedNode, (current) => {
                                             const values = { ...current.responsive?.[prop.name] };
-                                            delete values[previewBreakpoint];
+                                            delete values[responsiveBreakpoint];
                                             return {
                                               ...current,
                                               responsive: {
@@ -8567,7 +8576,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                                           })
                                         }
                                       >
-                                        Clear {previewBreakpoint}
+                                        Clear {responsiveBreakpoint}
                                       </button>
                                     ) : null}
                                   </div>
@@ -8696,145 +8705,6 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   </>
                 ) : null}
               </main>
-
-              <aside className="preview-panel" aria-label="Live page preview">
-                <div className="preview-toolbar">
-                  <div className="preview-toolbar__heading">
-                    <div>
-                      <span className="kicker">Live React preview</span>
-                      <strong>
-                        {externalPreview
-                          ? `${externalPreview.mode} · ${externalPreview.ready ? 'connected' : 'connecting'}`
-                          : `${previewBreakpoint} · 100%`}
-                      </strong>
-                    </div>
-                    <button
-                      type="button"
-                      className="studio-icon-button preview-popout-button"
-                      aria-label="Open live preview in new window"
-                      title="Open live preview in new window"
-                      onClick={() => void startExternalPreview('standalone')}
-                      disabled={!selected || !draft}
-                    >
-                      <svg aria-hidden="true" viewBox="0 0 24 24">
-                        <path d="M14 4h6v6M10 14 20 4M20 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h5" />
-                      </svg>
-                    </button>
-                  </div>
-                  <div className="preview-controls">
-                    <fieldset className="segmented" aria-label="Preview breakpoint">
-                      {designSystem.breakpoints.map((breakpoint) => (
-                        <button
-                          type="button"
-                          key={breakpoint.id}
-                          className={previewBreakpoint === breakpoint.id ? 'active' : ''}
-                          onClick={() => setPreviewBreakpoint(breakpoint.id)}
-                        >
-                          {breakpoint.name}
-                        </button>
-                      ))}
-                    </fieldset>
-                    <fieldset className="segmented" aria-label="Preview perspective">
-                      <button
-                        type="button"
-                        className={previewPerspective === 'draft' ? 'active' : ''}
-                        onClick={() => setPreviewPerspective('draft')}
-                      >
-                        Draft
-                      </button>
-                      <button
-                        type="button"
-                        className={previewPerspective === 'published' ? 'active' : ''}
-                        onClick={() => setPreviewPerspective('published')}
-                        disabled={!published}
-                      >
-                        Published
-                      </button>
-                    </fieldset>
-                    <fieldset className="segmented" aria-label="Application preview">
-                      <button
-                        type="button"
-                        className={externalPreview?.mode === 'iframe' ? 'active' : ''}
-                        onClick={() => void startExternalPreview('iframe')}
-                        disabled={!selected}
-                      >
-                        App iframe
-                      </button>
-                      <button
-                        type="button"
-                        className={externalPreview?.mode === 'standalone' ? 'active' : ''}
-                        onClick={() => void startExternalPreview('standalone')}
-                        disabled={!selected}
-                      >
-                        Standalone
-                      </button>
-                      {externalPreview ? (
-                        <button type="button" onClick={() => void closeExternalPreview()}>
-                          Close app preview
-                        </button>
-                      ) : null}
-                    </fieldset>
-                  </div>
-                </div>
-                <div className="preview-canvas">
-                  <div className="preview-browser-bar">
-                    <span />
-                    <span />
-                    <span />
-                    <div>{externalPreview?.route ?? `/${previewSlug}`}</div>
-                  </div>
-                  <div
-                    className={`preview-page${externalPreview?.mode === 'iframe' ? ' preview-page--external' : ''}`}
-                  >
-                    {externalPreview?.mode === 'iframe' ? (
-                      <iframe
-                        ref={previewFrameRef}
-                        src={externalPreview.grant.previewUrl}
-                        title="Application draft preview"
-                        sandbox="allow-scripts allow-same-origin"
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : previewContent ? (
-                      <>
-                        {previewPerspective === 'draft' && selectedNode && selectedManifest ? (
-                          <section className="inline-editor" aria-label="Inline component editor">
-                            <span className="kicker">Inline edit · {selectedManifest.name}</span>
-                            <div>
-                              {editablePropsFor(selectedNode, selectedManifest).map((prop) => (
-                                <FieldControl
-                                  key={prop.id}
-                                  idPrefix={`inline-${selectedNode.id}`}
-                                  definition={prop}
-                                  value={selectedNode.props[prop.name]}
-                                  onChange={(value) =>
-                                    changeBlocks(
-                                      (current) =>
-                                        updateNodeProps(current, selectedNode.id, {
-                                          ...selectedNode.props,
-                                          [prop.name]: value,
-                                        }),
-                                      selectedNode.id,
-                                    )
-                                  }
-                                />
-                              ))}
-                            </div>
-                          </section>
-                        ) : null}
-                        <GridStoryRenderer
-                          nodes={previewBlocks}
-                          registry={exampleComponentRegistry}
-                          designSystem={designSystem}
-                          breakpoint={previewBreakpoint}
-                          preview={previewPerspective === 'draft'}
-                        />
-                      </>
-                    ) : (
-                      <div className="preview-empty">This page has not been published yet.</div>
-                    )}
-                  </div>
-                </div>
-              </aside>
             </div>
           ) : null}
         </div>

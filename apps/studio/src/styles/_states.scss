@@ -1,0 +1,286 @@
+.search-taxonomies span {
+  background: var(--studio-surface-soft);
+  border-color: var(--studio-border);
+}
+
+.status--published,
+.workflow-delivery-state--succeeded {
+  background: rgb(50 160 113 / 16%);
+  color: #0f6545;
+}
+
+.status--changed,
+.workflow-action-kind,
+.workflow-delivery-state {
+  background: var(--studio-primary-soft);
+  color: var(--studio-primary);
+}
+
+.studio-shell[data-theme="dark"] :where(.status--published, .workflow-delivery-state--succeeded) {
+  color: #7ae2ae;
+}
+
+.studio-shell[data-theme="dark"] .entry-card--active .entry-card__meta {
+  color: #c2cac6;
+}
+
+.studio-shell[data-theme="dark"]
+  :where(
+    .status--changed,
+    .workflow-action-kind,
+    .workflow-delivery-state,
+    .kicker,
+    .button--secondary,
+    .button--outline:hover:not(:disabled),
+    .button--option-card[aria-pressed="true"],
+    .icon-button
+  ) {
+  color: var(--studio-accent);
+}
+
+.studio-shell[data-theme="dark"]
+  :where(.button--outline:hover:not(:disabled), .button--option-card[aria-pressed="true"]) {
+  border-color: var(--studio-accent);
+}
+
+.studio-shell[data-theme="dark"] .button--option-card[aria-pressed="true"] {
+  box-shadow: inset 3px 0 0 var(--studio-accent);
+}
+
+.studio-shell[data-theme="dark"]
+  :where(.notice--info, .collaboration-banner, .workflow-banner, .asset-upload-zone) {
+  background: var(--studio-surface-soft);
+  border-color: var(--studio-border);
+  color: var(--studio-text);
+}
+
+.studio-shell[data-theme="dark"] :where(.notice--success) {
+  background: rgb(50 160 113 / 14%);
+  border-color: rgb(50 160 113 / 38%);
+  color: #8ce4b9;
+}
+
+.studio-shell[data-theme="dark"] :where(.notice--error) {
+  background: rgb(220 38 38 / 12%);
+  border-color: rgb(248 113 113 / 34%);
+  color: #fca5a5;
+}
+
+.studio-shell[data-theme="dark"]
+  :where(
+    .content-sidebar,
+    .editor-panel,
+    .document-fields,
+    .blocks-section,
+    .history-section,
+    .presentation-editor,
+    .layers-panel,
+    .slot-editor,
+    .collaboration-review-list
+  ) {
+  color: var(--studio-text);
+}
+
+.studio-shell.studio-shell[data-theme="dark"]
+  :where(
+    .workflow-designer,
+    .release-panel,
+    .search-panel,
+    .operations-panel,
+    .identity-panel,
+    .data-governance-panel,
+    .migration-panel,
+    .marketplace-panel,
+    .personalization-panel,
+    .experiment-panel,
+    .ai-panel,
+    .knowledge-panel,
+    .federation-panel,
+    .fleet-panel,
+    .regional-panel,
+    .governance-panel,
+    .asset-library-panel,
+    .quality-panel,
+    .workflow-panel,
+    .collaboration-panel,
+    .content-sidebar,
+    .editor-panel
+  )
+  :where(
+    fieldset,
+    article,
+    section,
+    table,
+    thead,
+    tbody,
+    tr,
+    th,
+    td,
+    .workflow-definition-editor,
+    .workflow-delivery-log,
+    .workflow-state-node,
+    .release-builder,
+    .release-workbench,
+    .release-card,
+    .release-selector button,
+    .migration-panel__evidence > section,
+    .marketplace-panel__catalog > section,
+    .personalization-preview-result,
+    .experiment-status,
+    .collaboration-review-card,
+    .asset-library-card,
+    .asset-usage-summary,
+    .workflow-list li,
+    .layer-row,
+    .block-editor
+  ) {
+  background: var(--studio-surface-soft);
+  border-color: var(--studio-border);
+  color: var(--studio-text);
+}
+
+.studio-shell.studio-shell[data-theme="dark"]
+  :where(
+    .workflow-designer,
+    .release-panel,
+    .search-panel,
+    .operations-panel,
+    .identity-panel,
+    .data-governance-panel,
+    .migration-panel,
+    .marketplace-panel,
+    .personalization-panel,
+    .experiment-panel,
+    .ai-panel,
+    .knowledge-panel,
+    .federation-panel,
+    .fleet-panel,
+    .regional-panel,
+    .governance-panel,
+    .asset-library-panel,
+    .quality-panel,
+    .workflow-panel,
+    .collaboration-panel,
+    .content-sidebar,
+    .editor-panel
+  )
+  :where(
+    p,
+    small,
+    code,
+    label > span,
+    .empty-copy,
+    .entry-card__meta,
+    .section-heading > span,
+    .composition-toolbar > span,
+    .history-section li > span
+  ) {
+  color: var(--studio-muted);
+}
+
+.studio-shell.studio-shell[data-theme="dark"]
+  :where(
+    .workflow-designer,
+    .release-panel,
+    .search-panel,
+    .operations-panel,
+    .identity-panel,
+    .data-governance-panel,
+    .migration-panel,
+    .marketplace-panel,
+    .personalization-panel,
+    .experiment-panel,
+    .ai-panel,
+    .knowledge-panel,
+    .federation-panel,
+    .fleet-panel,
+    .regional-panel,
+    .governance-panel,
+    .asset-library-panel,
+    .quality-panel,
+    .workflow-panel,
+    .collaboration-panel,
+    .content-sidebar,
+    .editor-panel
+  )
+  :where(label, legend, strong, h1, h2, h3, h4) {
+  color: var(--studio-text);
+}
+
+.studio-shell.studio-shell[data-theme="dark"]
+  :where(
+    [role="note"],
+    .ai-panel__warning,
+    .knowledge-panel__warning,
+    .federation-panel__warning,
+    .fleet-panel__warning,
+    .regional-panel__warning
+  ),
+.studio-shell.studio-shell[data-theme="dark"]
+  :where(
+    [role="note"],
+    .ai-panel__warning,
+    .knowledge-panel__warning,
+    .federation-panel__warning,
+    .fleet-panel__warning,
+    .regional-panel__warning
+  )
+  :where(p, span, small) {
+  color: #fdba74;
+}
+
+.studio-shell.studio-shell[data-theme="dark"]
+  :where(
+    [role="note"],
+    .ai-panel__warning,
+    .knowledge-panel__warning,
+    .federation-panel__warning,
+    .fleet-panel__warning,
+    .regional-panel__warning,
+    .data-governance-panel__warning,
+    .migration-panel__warning,
+    .marketplace-panel__warning,
+    .experiment-panel__warning
+  ) {
+  background: #2c1d10;
+  border-color: #8b5b2f;
+  color: #fdba74;
+}
+
+.studio-shell.studio-shell[data-theme="dark"]
+  :where(.search-panel__results li button, .search-taxonomies span, .kicker) {
+  color: var(--studio-accent);
+}
+
+.studio-shell.studio-shell[data-theme="dark"] .asset-upload-button {
+  background: var(--studio-accent);
+  color: #030e09;
+}
+
+.studio-shell.studio-shell[data-theme="dark"] .quality-panel__score > strong {
+  color: var(--studio-accent);
+}
+
+.studio-shell.studio-shell[data-theme="dark"]
+  :where(
+    .search-index-summary > span:last-of-type,
+    .quality-panel__score > span:last-child,
+    .layers-panel > span,
+    .gs-field > span,
+    .collaboration-version
+  ) {
+  color: var(--studio-muted);
+}
+
+.studio-shell.studio-shell[data-theme="dark"]
+  :where(.workflow-actions, .workflow-activity, .collaboration-workbench, .presence-chip) {
+  background: var(--studio-surface-soft);
+  border-color: var(--studio-border);
+  color: var(--studio-text);
+}
+
+.studio-shell.studio-shell[data-theme="dark"] .workflow-state {
+  background: var(--studio-primary-soft);
+  border-color: var(--studio-primary);
+  color: var(--studio-accent);
+}
