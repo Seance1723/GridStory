@@ -18,9 +18,9 @@
     "typecheck": "pnpm --filter @gridstory/schema build && pnpm --filter @gridstory/core build && pnpm --filter @gridstory/example-kit build && tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@fastify/cookie": "11.0.2",
+    "@fastify/cookie": "11.1.2",
     "@fastify/cors": "11.3.0",
-    "@fastify/formbody": "8.0.2",
+    "@fastify/formbody": "9.0.0",
     "@gridstory/core": "workspace:*",
     "@gridstory/example-kit": "workspace:*",
     "@gridstory/schema": "workspace:*",
@@ -36,8 +36,8 @@
     "@opentelemetry/sdk-node": "0.221.0",
     "@opentelemetry/semantic-conventions": "1.43.0",
     "@simplewebauthn/server": "13.3.2",
-    "fastify": "5.10.0",
-    "graphql": "16.11.0",
+    "fastify": "5.12.1",
+    "graphql": "17.0.2",
     "mercurius": "16.10.0",
     "openid-client": "6.8.7"
   },
