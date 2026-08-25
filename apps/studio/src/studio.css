@@ -2235,7 +2235,7 @@ button:disabled {
   gap: 0.75rem;
 }
 .collaboration-controls {
-  grid-template-columns: minmax(10rem, 0.8fr) minmax(12rem, 1fr) auto auto;
+  grid-template-columns: minmax(10rem, 0.8fr) minmax(12rem, 1fr) auto;
 }
 .collaboration-create-row {
   grid-template-columns: minmax(14rem, 1fr) auto auto;
@@ -2246,7 +2246,11 @@ button:disabled {
 .collaboration-version {
   color: #4b5563;
   font-size: 0.78rem;
+  grid-column: 1 / -1;
+  justify-self: end;
+  max-width: 100%;
   padding-bottom: 0.7rem;
+  text-align: right;
 }
 .collaboration-review-list {
   display: grid;
@@ -3809,13 +3813,30 @@ button:disabled {
 }
 
 .studio-page
-  :where(h1, h2, h3, h4, p, small, strong, code, dt, dd, li, label, legend, span):not(
-    .preview-page *
+  :where(h1, h2, h3, h4, p, small, strong, dt, dd, li, label, legend, span):not(
+    .preview-page *,
+    .button *
   ) {
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 
-.studio-page fieldset legend {
+.studio-page :where(code, pre):not(.preview-page *) {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.studio-page .release-entry-picker :where(label, span, small) {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.studio-page .release-entry-picker small {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.studio-page fieldset:not(.workflow-action-adders) > legend {
   display: block;
   max-width: 100%;
   white-space: normal;
@@ -3823,6 +3844,7 @@ button:disabled {
 
 .studio-page fieldset {
   max-width: 100%;
+  min-width: 0;
   overflow-x: hidden;
 }
 

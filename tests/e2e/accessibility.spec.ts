@@ -293,6 +293,7 @@ test('every Studio surface contains readable text and controls at each responsiv
   const surfaces = page.locator('.studio-page > section, .studio-workspace');
   const viewports = [
     { width: 1440, height: 900 },
+    { width: 1280, height: 720 },
     { width: 1024, height: 768 },
     { width: 768, height: 900 },
     { width: 390, height: 844 },
@@ -379,13 +380,46 @@ test('every Studio surface contains readable text and controls at each responsiv
         for (const textElement of textElements) {
           const style = getComputedStyle(textElement);
           const rectangle = textElement.getBoundingClientRect();
+          const intentionallyVisuallyHidden =
+            style.position === 'absolute' &&
+            rectangle.width <= 2 &&
+            rectangle.height <= 2 &&
+            style.overflow === 'hidden';
           if (
-            rectangle.width <= 4 ||
-            rectangle.height <= 4 ||
+            style.display === 'none' ||
+            style.visibility === 'hidden' ||
+            rectangle.width <= 0 ||
+            rectangle.height <= 0 ||
+            intentionallyVisuallyHidden ||
+            textElement.matches('.workflow-action-adders legend') ||
             textElement.closest('.preview-page') ||
             textElement.closest('.studio-navigation')
           ) {
             continue;
+          }
+          if (!textElement.matches('code, pre') && !textElement.closest('code, pre')) {
+            const directTextNodes = [...textElement.childNodes].filter(
+              (node): node is Text => node.nodeType === Node.TEXT_NODE,
+            );
+            for (const textNode of directTextNodes) {
+              for (const match of textNode.data.matchAll(/[A-Za-z]{5,}/g)) {
+                const start = match.index;
+                if (start === undefined) continue;
+                const range = document.createRange();
+                range.setStart(textNode, start);
+                range.setEnd(textNode, start + match[0].length);
+                const renderedLines = new Set(
+                  [...range.getClientRects()]
+                    .filter((line) => line.width > 0 && line.height > 0)
+                    .map((line) => line.top.toFixed(1)),
+                );
+                if (renderedLines.size > 2) {
+                  issues.push(
+                    `${surfaceName}: word ${match[0]} fragments across ${renderedLines.size} lines in ${textElement.tagName.toLowerCase()}.${textElement.className}`,
+                  );
+                }
+              }
+            }
           }
           const clipsHorizontally =
             textElement.scrollWidth > textElement.clientWidth + 2 &&
@@ -468,6 +502,31 @@ test('every Studio surface contains readable text and controls at each responsiv
   for (const viewport of viewports) {
     await page.setViewportSize(viewport);
     await selectStudioPages(page);
+    if (viewport.width === 1280) {
+      const collaborationVersion = page.locator('.collaboration-version');
+      await expect(collaborationVersion).toHaveCSS('overflow-wrap', 'break-word');
+      expect(
+        await collaborationVersion.evaluate((element) => {
+          let maximumRenderedLines = 0;
+          for (const textNode of [...element.childNodes].filter(
+            (node): node is Text => node.nodeType === Node.TEXT_NODE,
+          )) {
+            for (const match of textNode.data.matchAll(/[A-Za-z]{5,}/g)) {
+              const start = match.index;
+              if (start === undefined) continue;
+              const range = document.createRange();
+              range.setStart(textNode, start);
+              range.setEnd(textNode, start + match[0].length);
+              maximumRenderedLines = Math.max(
+                maximumRenderedLines,
+                new Set([...range.getClientRects()].map((line) => line.top.toFixed(1))).size,
+              );
+            }
+          }
+          return maximumRenderedLines;
+        }),
+      ).toBeLessThanOrEqual(2);
+    }
     await expectCurrentLayoutContained(`${viewport.width}px Pages`);
 
     let previousRegionName: string | undefined;

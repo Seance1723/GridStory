@@ -8,6 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Added a rendered-word fragmentation regression and a 1280px checkpoint to the existing all-destination, cross-browser Studio containment sweep so near-zero prose tracks cannot be hidden as nominally contained content (STUDIO-014, BUG-0400).
 - Added an accessible Live page preview pop-out icon that reuses the secure standalone session to open only the synchronized application draft in a new window while retaining every existing preview control (STUDIO-012).
 - Added sequential Studio navigation regressions that require one current destination, one page surface, and removal of the previous surface across every sidebar destination and responsive viewport (STUDIO-011, BUG-0392).
 - Added a cross-browser Studio visual-containment regression that opens all 19 existing destinations and verifies readable text, control geometry, card/surface containment, intentional local scrolling, root scroll locking, responsive stacking, and dark-theme behavior at 1440px, 1024px, 768px, 390px, and 320px (STUDIO-010).
@@ -29,6 +30,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- Replaced character-level wrapping for ordinary Studio language with a global readable word policy, while retaining aggressive containment for code and technical identifiers and leaving application preview content untouched (STUDIO-014).
 - Normalized existing Studio search, workflow, collaboration, comment, heading, form, select, fieldset, editor, and preview presentation so actions remain visually consistent and all long content wraps or scrolls within its owning surface without changing any feature, label, state, API, or application preview content (STUDIO-010).
 - Reorganized every existing Studio workflow into four navigation groups while retaining the established labels, scoped panels, authoring behavior, save/publish controls, framework-neutral boundaries, and application-owned content (STUDIO-009).
 - Accepted ADR 0025's generated-interoperability and pull-only fleet boundary: canonical contract generation and minimized public discovery are separate from private scoped observations, while arbitrary discovery, credentials, agents, scheduling, provisioning, remote mutation, deployment, upgrade, rollback, traffic, content, and publication control remain excluded.
@@ -44,6 +46,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Moved collaboration version metadata onto a readable full-width grid row and hardened zero-minimum fieldset/technical-token containment so normal words no longer form vertical character columns and the Releases picker remains inside Firefox at 320px (BUG-0400, BUG-0402, STUDIO-014).
+- Used the approved Windows child-process path for the unchanged E2E build after the restricted sandbox denied pnpm's worker spawn, and confirmed a one-off full-run WebKit Axe timeout as non-reproducible through an unchanged isolated passing rerun (BUG-0401, BUG-0403, STUDIO-014).
+- Verified the correction through live 1280px light/dark inspection, 15/15 Chromium/Firefox/WebKit scenario evidence across all destinations and six responsive widths, and the complete repository gate with 385 active tests, 17 documented PostgreSQL-only skips, React 18.3.1 SSR certification, and production builds (STUDIO-014).
 - Applied the formatter-required layout to the new dark option-card selector and restored a clean complete delivery gate (BUG-0399, STUDIO-013).
 - Replaced native browser styling and container-specific fallbacks across asset, relation, rich-text, add, clear, and remove controls with the global Studio button taxonomy; shared outlined option cards now expose consistent enabled, hover, focus, pressed, disabled, light, dark, and responsive states (BUG-0398, STUDIO-013).
 - Confirmed a one-off downstream WebKit draft-save confirmation miss after the new popup assertions was non-reproducible through persisted revision evidence and an unchanged isolated passing rerun (BUG-0397, STUDIO-012).
