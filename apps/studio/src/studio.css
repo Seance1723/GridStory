@@ -1904,6 +1904,24 @@ button:disabled {
   display: block;
   font-size: 0.77rem;
 }
+.preview-toolbar__heading {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.preview-toolbar__heading > div {
+  min-width: 0;
+}
+.preview-popout-button {
+  background: var(--studio-surface-soft);
+  border-color: var(--studio-border);
+  color: var(--studio-primary);
+  flex-basis: 36px;
+  height: 36px;
+  width: 36px;
+}
 .preview-controls {
   display: flex;
   gap: 0.5rem;
@@ -4444,6 +4462,11 @@ button:disabled {
     height: auto;
     min-height: 4rem;
     padding-block: 12px;
+  }
+
+  .preview-toolbar__heading {
+    justify-content: space-between;
+    width: 100%;
   }
 
   .preview-controls {

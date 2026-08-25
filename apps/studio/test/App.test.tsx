@@ -2761,7 +2761,7 @@ describe('GridStory Studio', () => {
     expect(screen.queryByTitle('Application draft preview')).toBeNull();
   });
 
-  it('opens standalone preview before awaiting the scoped session grant', async () => {
+  it('opens a preview-only window from the Live preview header icon', async () => {
     const user = userEvent.setup();
     const replace = vi.fn();
     const popup = {
@@ -2773,8 +2773,15 @@ describe('GridStory Studio', () => {
     const open = vi.spyOn(window, 'open').mockReturnValue(popup);
     render(<App client={createTestClient()} />);
 
+    const popout = screen.getByRole('button', {
+      name: 'Open live preview in new window',
+    }) as HTMLButtonElement;
+    expect(popout.disabled).toBe(true);
     await screen.findByLabelText('Headline');
-    await user.click(screen.getByRole('button', { name: 'Standalone' }));
+    expect(popout.disabled).toBe(false);
+    expect(popout.querySelector('svg')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Standalone' })).toBeTruthy();
+    await user.click(popout);
     expect(open).toHaveBeenCalledWith(
       'about:blank',
       'gridstory-standalone-preview',

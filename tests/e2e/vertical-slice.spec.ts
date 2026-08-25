@@ -31,11 +31,16 @@ test('edits, protects, governs, publishes, and delivers React content', async ({
   await expect(page.getByTitle('Application draft preview')).toHaveCount(0);
 
   const popupPromise = page.waitForEvent('popup');
-  await page.getByRole('button', { name: 'Standalone' }).click();
+  await expect(page.getByRole('button', { name: 'Standalone' })).toBeVisible();
+  await page.getByRole('button', { name: 'Open live preview in new window' }).click();
   const popup = await popupPromise;
   await expect(
     popup.getByRole('heading', { name: 'Live through the secure preview bridge' }),
   ).toBeVisible();
+  await expect(
+    popup.locator('.studio-shell, .studio-navigation, .studio-header, .preview-panel'),
+  ).toHaveCount(0);
+  await expect(popup.getByRole('button', { name: 'Save draft' })).toHaveCount(0);
   await heroHeading.fill('Published from the browser walkthrough');
   await expect(
     popup.getByRole('heading', { name: 'Published from the browser walkthrough' }),

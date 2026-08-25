@@ -8699,13 +8699,27 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
 
               <aside className="preview-panel" aria-label="Live page preview">
                 <div className="preview-toolbar">
-                  <div>
-                    <span className="kicker">Live React preview</span>
-                    <strong>
-                      {externalPreview
-                        ? `${externalPreview.mode} · ${externalPreview.ready ? 'connected' : 'connecting'}`
-                        : `${previewBreakpoint} · 100%`}
-                    </strong>
+                  <div className="preview-toolbar__heading">
+                    <div>
+                      <span className="kicker">Live React preview</span>
+                      <strong>
+                        {externalPreview
+                          ? `${externalPreview.mode} · ${externalPreview.ready ? 'connected' : 'connecting'}`
+                          : `${previewBreakpoint} · 100%`}
+                      </strong>
+                    </div>
+                    <button
+                      type="button"
+                      className="studio-icon-button preview-popout-button"
+                      aria-label="Open live preview in new window"
+                      title="Open live preview in new window"
+                      onClick={() => void startExternalPreview('standalone')}
+                      disabled={!selected || !draft}
+                    >
+                      <svg aria-hidden="true" viewBox="0 0 24 24">
+                        <path d="M14 4h6v6M10 14 20 4M20 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h5" />
+                      </svg>
+                    </button>
                   </div>
                   <div className="preview-controls">
                     <fieldset className="segmented" aria-label="Preview breakpoint">

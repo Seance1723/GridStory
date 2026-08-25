@@ -8,6 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Added an accessible Live page preview pop-out icon that reuses the secure standalone session to open only the synchronized application draft in a new window while retaining every existing preview control (STUDIO-012).
 - Added sequential Studio navigation regressions that require one current destination, one page surface, and removal of the previous surface across every sidebar destination and responsive viewport (STUDIO-011, BUG-0392).
 - Added a cross-browser Studio visual-containment regression that opens all 19 existing destinations and verifies readable text, control geometry, card/surface containment, intentional local scrolling, root scroll locking, responsive stacking, and dark-theme behavior at 1440px, 1024px, 768px, 390px, and 320px (STUDIO-010).
 - Added a NiceDash-inspired responsive Studio shell with the inspected 270px categorized rail, 70px search/action top bar, green/lime token system, rounded card/control treatment, locally persisted light/dark themes, and an accessible off-canvas mobile drawer without importing reference branding, content, assets, Angular code, or dependencies (STUDIO-009).
@@ -43,6 +44,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Confirmed a one-off downstream WebKit draft-save confirmation miss after the new popup assertions was non-reproducible through persisted revision evidence and an unchanged isolated passing rerun (BUG-0397, STUDIO-012).
+- Reran the focused Studio suite through the approved Windows child-process path after the restricted sandbox denied Vitest startup; all 33 tests pass (BUG-0396, STUDIO-012).
 - Restored valid isolated delivery verification by rebuilding the E2E-mode bundles after the production gate and running each browser against fresh in-memory server state; the unchanged authoring-to-published-delivery workflow passes 3/3 (BUG-0395, STUDIO-011).
 - Replaced accumulated independent sidebar panels with a single active Studio destination while retaining each feature's loaded state, keeping the Pages workspace exclusive to Pages, preserving visible management-action feedback outside that workspace, and removing the non-compliant intermediate contrast caused by nav color transitions (BUG-0391, BUG-0393, BUG-0394, STUDIO-011).
 - Corrected inconsistent buttons, clipped entry metadata, escaping headings/actions/comments, transient tablet width, preview-toolbar wrapping, WebKit select/legend/fieldset intrinsic sizing, narrow workflow-state cadence, and reachable page-level horizontal scrolling found during the complete Studio visual pass; the final responsive suite passes 15/15 across Chromium, Firefox, and WebKit (BUG-0384 through BUG-0390, STUDIO-010).
