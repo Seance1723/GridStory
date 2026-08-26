@@ -8,6 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Recorded the proposed CMS-002 location/history contract in ADR 0028: finite hash destinations, page-entry context, guarded owned/unowned history, stale-read and preview-lifetime safeguards, exact Studio-only files, rollback and negative/three-browser acceptance. This is a documentation-only approval checkpoint, not shipped navigation behavior (CMS-002).
+- Verified the CMS-002 planning checkpoint with lint/format/ledger/whitespace checks, the unchanged Studio build, and read-only scope/link/history/pointer audits; all 136 task states are retained, CMS-002 remains planned, and runtime implementation/testing still awaits approval (CMS-002, BUG-0420).
 - Added task-oriented disclosure navigation for all 19 existing Studio destinations under Content, Media, Design, SEO & quality, Insights, Apps, Tools and Advanced; one finite typed metadata map supplies names/icons, with no placeholder screens or new dependency. Added metadata, dirty-state, keyboard, group-isolation, compact/mobile and all-destination browser regressions (CMS-001).
 - Added a source-backed CMS administration feasibility/gap analysis covering all 13 supplied reference categories, detailed submenu dispositions, the exact future homes of all 19 current Studio destinations, and a dependency-ordered CMS-001 through CMS-031 task queue with acceptance, scope, risk and optional-product decision gates (GOV-006).
 - Added proposed ADR 0027 for task-oriented administration that reuses current content, identity, design, asset, plugin and governance foundations; it distinguishes missing visitor menus/settings/SEO/lifecycle behavior from optional commerce, marketing/CRM and public-comment programs without authorizing their implementation (GOV-006).
@@ -34,6 +36,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- Linked CMS-002 to its scoped T2 proposal and logged the source-confirmed search-result dirty-guard bypass for the approved implementation to reproduce and repair; no runtime fix is claimed in this planning pass (BUG-0421, CMS-002).
 - Reused Studio's existing single-destination selection and on-demand feature loaders within the new groups. The former Assets, Quality and Identity leaves are now Library, Page checks and Identity providers; their panels/actions, current theme, global controls and header-only preview are unchanged. Documented the shipped navigation and kept URL/history and broader administration work separate (CMS-001, ADR 0027).
 - Updated the product blueprint with explicit administration gap closure and an executable phased queue; preserved all completed milestone history, existing application behavior/colors/preview, and separate beta/RC/GA no-go evidence. The current task is documentation only; no runtime feature, provider, dependency or data was changed (GOV-006).
 - Replaced the three-column Studio workspace and embedded preview controls with a two-column authoring workspace whose header-owned toggle opens, reports, closes, and revokes the existing secure application-only standalone preview while retaining live draft patches, node selection, and responsive override authoring in the component inspector (STUDIO-015).
@@ -53,6 +56,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Corrected the administration queue's stale single-next-action pointer from completed CMS-001 to CMS-002 plan approval, consistent with the verified task state and gap-analysis handoff (BUG-0420, CMS-002).
 - Corrected the compact-sidebar help-text hide rule's specificity and restored its grid layout on mobile; the narrow desktop rail no longer leaks explanatory text into the content area (BUG-0418, CMS-001).
 - Removed Studio's fixed body minimum so a 320px viewport can use its actual available width when native scrollbars reserve space; added a stable-gutter mobile regression (BUG-0419, CMS-001).
 - Verified CMS-001 through 37 Studio tests, the full repository gate, repeated final lint/format/build checks, and 21/21 Chromium/Firefox/WebKit scenarios across all 19 destinations, six widths, themes, keyboard, zoom/forced colors, accessibility and preview/published delivery. The real in-app desktop/mobile walkthrough found and verified both recorded visual fixes; no new backend/provider certification is claimed (CMS-001, BUG-0418, BUG-0419).
