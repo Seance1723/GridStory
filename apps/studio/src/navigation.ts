@@ -1,4 +1,6 @@
 // Finite Studio metadata, not an extension registry. Selection and feature state stay in App.
+import type { StudioCapabilities } from '@gridstory/schema';
+
 export const studioDestinations = {
   pages: { label: 'Pages', icon: 'M4 4h16v16H4zM8 4v16' },
   workflows: { label: 'Workflows', icon: 'M5 5h5v5H5zM14 14h5v5h-5zM10 7h4a3 3 0 0 1 3 3v4' },
@@ -79,3 +81,12 @@ export const studioNavigationGroups = [
 }>;
 
 export type StudioNavigationGroupId = (typeof studioNavigationGroups)[number]['id'];
+
+export function permittedNavigation(capabilities: StudioCapabilities) {
+  return studioNavigationGroups
+    .map((group) => ({
+      ...group,
+      destinations: group.destinations.filter((destination) => capabilities.screens[destination]),
+    }))
+    .filter((group) => group.destinations.length > 0);
+}

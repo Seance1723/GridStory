@@ -156,17 +156,34 @@ test('manual fragments, unavailable entries and denied destinations remain truth
     })
     .click();
   await expect(title).toHaveValue('Navigation recovery');
-  await page.route('**/api/v1/identity', (route) =>
-    route.fulfill({
+  let deniedIdentityRequests = 0;
+  let contextRechecks = 0;
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname === '/api/v1/studio/context') contextRechecks += 1;
+  });
+  await page.route('**/api/v1/identity', (route) => {
+    deniedIdentityRequests += 1;
+    return route.fulfill({
       status: 403,
       json: { error: { code: 'forbidden', message: 'Identity administration unavailable.' } },
-    }),
-  );
+    });
+  });
   await page.getByRole('button', { name: 'Identity providers' }).click();
-  await expect(page.getByText('Identity administration unavailable.')).toBeVisible();
+  await expect(page.getByRole('alert')).toHaveText(
+    'The requested operation is unavailable. Permissions were rechecked; contact your administrator or retry when access changes.',
+  );
+  expect(deniedIdentityRequests).toBe(1);
+  expect(contextRechecks).toBe(1);
+  await expect(page.locator('.studio-shell')).toHaveCount(0);
+  await expect(page.getByText('Identity administration unavailable.')).toHaveCount(0);
   await expect(
     page.getByRole('region', { name: 'Enterprise identity administration' }),
   ).toHaveCount(0);
+  await page.unroute('**/api/v1/identity');
+  await page.getByRole('button', { name: 'Retry access' }).click();
+  await expect(
+    page.getByRole('region', { name: 'Enterprise identity administration' }),
+  ).toBeVisible();
   await expect(page.locator('[data-destination="identity"]')).toHaveAttribute(
     'aria-current',
     'page',

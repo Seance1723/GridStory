@@ -27,7 +27,13 @@ import {
 import * as previewClient from '@gridstory/client/preview';
 import { exampleDesignSystem } from '@gridstory/example-kit/design-system';
 import { componentManifests } from '@gridstory/example-kit/manifests';
-import type { ContentSchemaDefinition } from '@gridstory/schema';
+import {
+  type ContentSchemaDefinition,
+  type StudioContext,
+  type StudioOperation,
+  studioOperations,
+  studioDestinations as studioScreens,
+} from '@gridstory/schema';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { StrictMode } from 'react';
@@ -153,6 +159,7 @@ function json(body: unknown, status = 200): Response {
 
 function createTestClient(
   options: {
+    context?: StudioContext;
     schema?: ContentSchemaDefinition;
     entries?: ContentEntry[];
     assets?: AssetRecord[];
@@ -630,6 +637,26 @@ function createTestClient(
   );
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
+    if (url.pathname === '/api/v1/studio/context')
+      return json(
+        options.context ?? {
+          version: 1,
+          scope: {
+            organizationId: 'local',
+            tenantId: 'default',
+            workspaceId: 'default',
+            siteId: 'default',
+            environmentId: 'development',
+            locale: 'en',
+          },
+          principalId: 'local-admin',
+          capabilities: {
+            screens: Object.fromEntries(studioScreens.map((screen) => [screen, true])),
+            operations: Object.fromEntries(studioOperations.map((operation) => [operation, true])),
+          },
+          selection: { mode: 'current-only', choices: [] },
+        },
+      );
     if (url.pathname === '/api/v1/schemas') return json([testSchema]);
     if (url.pathname === '/api/v1/components') return json(componentManifests);
     if (url.pathname === '/api/v1/design-system') return json(exampleDesignSystem);
@@ -1979,6 +2006,153 @@ afterEach(() => {
 });
 
 describe('GridStory Studio', () => {
+  function restrictedContext(
+    operations: StudioOperation[],
+    screens: Array<keyof StudioContext['capabilities']['screens']>,
+  ): StudioContext {
+    return {
+      version: 1,
+      scope: {
+        organizationId: 'local',
+        tenantId: 'default',
+        workspaceId: 'default',
+        siteId: 'default',
+        environmentId: 'development',
+        locale: 'en',
+      },
+      principalId: 'restricted-editor',
+      capabilities: {
+        screens: Object.fromEntries(
+          studioScreens.map((screen) => [screen, screens.includes(screen)]),
+        ) as StudioContext['capabilities']['screens'],
+        operations: Object.fromEntries(
+          studioOperations.map((operation) => [operation, operations.includes(operation)]),
+        ) as StudioContext['capabilities']['operations'],
+      },
+      selection: { mode: 'current-only', choices: [] },
+    };
+  }
+
+  it('loads context first and supports an operations-only account without content or authoring calls', async () => {
+    const client = createTestClient({
+      context: restrictedContext(['operations.read'], ['operations']),
+    });
+    const pending = Promise.withResolvers<StudioContext>();
+    vi.spyOn(client, 'getStudioContext').mockReturnValueOnce(pending.promise);
+    const reads = [
+      'listContent',
+      'getContent',
+      'getSchemas',
+      'getComponentManifests',
+      'getDesignSystem',
+      'listAssets',
+      'listWorkflows',
+      'listReleases',
+      'getCollaboration',
+    ] as const;
+    const spies = reads.map((name) => vi.spyOn(client, name));
+    render(<App client={client} />);
+    expect(screen.queryByRole('navigation')).toBeNull();
+    for (const spy of spies) expect(spy).not.toHaveBeenCalled();
+    await act(async () => {
+      pending.resolve(restrictedContext(['operations.read'], ['operations']));
+    });
+    await screen.findByRole('region', { name: 'Administrator operations' });
+    expect(window.location.hash).toBe('#/operations');
+    expect(screen.queryByRole('button', { name: 'Pages', exact: true })).toBeNull();
+    expect(screen.queryByRole('textbox', { name: 'Search Studio' })).toBeNull();
+    for (const spy of spies) expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('renders no-access and denied-deep-link states without denied feature requests', async () => {
+    const client = createTestClient({ context: restrictedContext([], []) });
+    const list = vi.spyOn(client, 'listContent');
+    render(<App client={client} />);
+    await screen.findByRole('heading', { name: 'No Studio access' });
+    expect(document.querySelectorAll('[data-destination]')).toHaveLength(0);
+    expect(list).not.toHaveBeenCalled();
+    cleanup();
+    window.history.replaceState(null, '', '/#/identity');
+    const operations = createTestClient({
+      context: restrictedContext(['operations.read'], ['operations']),
+    });
+    const identity = vi.spyOn(operations, 'getIdentity');
+    render(<App client={operations} />);
+    await screen.findByRole('heading', { name: 'Access unavailable' });
+    fireEvent.click(screen.getByRole('button', { name: 'Open Operations' }));
+    await screen.findByRole('region', { name: 'Administrator operations' });
+    expect(identity).not.toHaveBeenCalled();
+  });
+
+  it('keeps page-type list grants separate from untyped details and metadata', async () => {
+    const client = createTestClient({
+      context: restrictedContext(['pages.list', 'pages.create'], ['pages']),
+    });
+    const detail = vi.spyOn(client, 'getContent');
+    const schemas = vi.spyOn(client, 'getSchemas');
+    render(<App client={client} />);
+    await screen.findByText(/Listing permission does not grant access/);
+    const list = within(screen.getByRole('complementary', { name: 'Content entries' }));
+    await list.findByText('one', { exact: true });
+    expect(list.getByText('two', { exact: true })).toBeTruthy();
+    expect(screen.queryByRole('textbox', { name: 'Headline' })).toBeNull();
+    expect(detail).not.toHaveBeenCalled();
+    expect(schemas).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Create page' })).toHaveProperty('disabled', true);
+  });
+
+  it('shows read-only fields and skips optional history, workflow, collaboration and asset reads', async () => {
+    const client = createTestClient({
+      context: restrictedContext(
+        ['pages.list', 'content.read', 'schema.read', 'component.read'],
+        ['pages', 'components'],
+      ),
+    });
+    const optional = [
+      'listRevisions',
+      'getContentWorkflow',
+      'listWorkflows',
+      'getCollaboration',
+      'heartbeatPresence',
+      'listAssets',
+      'listReleases',
+    ] as const;
+    const spies = optional.map((name) => vi.spyOn(client, name));
+    const save = vi.spyOn(client, 'saveDraft');
+    const preview = vi.spyOn(client, 'createPreviewSession');
+    render(<App client={client} />);
+    const headline = await screen.findByRole('textbox', { name: 'Headline' });
+    expect(headline.matches(':disabled')).toBe(true);
+    expect(screen.getByText(/Read-only page/)).toBeTruthy();
+    expect(screen.queryByRole('region', { name: 'Editorial workflow' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Collaboration workspace' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Immutable revisions' })).toBeNull();
+    for (const name of [
+      'Save draft',
+      'Publish',
+      'Create page',
+      'Open live preview in new window',
+    ]) {
+      const button = screen.getByRole('button', { name, exact: true });
+      expect(button).toHaveProperty('disabled', true);
+      fireEvent.click(button);
+    }
+    expect(save).not.toHaveBeenCalled();
+    expect(preview).not.toHaveBeenCalled();
+    for (const spy of spies) expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('allows knowledge-only access without inventing agent configuration', async () => {
+    const client = createTestClient({
+      context: restrictedContext(['knowledge.read'], ['knowledge']),
+    });
+    const agent = vi.spyOn(client, 'getKnowledgeAgent');
+    render(<App client={client} />);
+    await screen.findByText(/Agent configuration is not available/);
+    expect(screen.queryByRole('group', { name: 'Disabled-by-default agent policy' })).toBeNull();
+    expect(agent).not.toHaveBeenCalled();
+  });
+
   it.each(['navigation', 'search'] as const)(
     'respects the %s focus owner when deferred Pages navigation completes (BUG-0441)',
     async (owner) => {
@@ -2441,10 +2615,10 @@ describe('GridStory Studio', () => {
 
     render(<App client={createTestClient()} />);
 
-    const shell = document.querySelector('.studio-shell');
-    const navigation = screen.getByRole('complementary', {
+    const navigation = await screen.findByRole('complementary', {
       name: 'Primary Studio navigation',
     });
+    const shell = document.querySelector('.studio-shell');
     expect(shell?.getAttribute('data-theme')).toBe('light');
     expect(screen.getByRole('button', { name: 'Pages' }).getAttribute('aria-current')).toBe('page');
 
@@ -2514,9 +2688,9 @@ describe('GridStory Studio', () => {
   it('derives content controls and composition storage from the active schema', async () => {
     render(<App client={createTestClient()} />);
 
-    expect(screen.getByRole('link', { name: 'Skip to page editor' }).getAttribute('href')).toBe(
-      '#studio-editor',
-    );
+    expect(
+      (await screen.findByRole('link', { name: 'Skip to page editor' })).getAttribute('href'),
+    ).toBe('#studio-editor');
     expect(document.querySelector('main')?.id).toBe('studio-editor');
     expect(((await screen.findByLabelText('Headline')) as HTMLInputElement).value).toBe(
       'First page',
@@ -3233,17 +3407,23 @@ describe('GridStory Studio', () => {
   });
 
   it('keeps preview out of the workspace and places its only launcher in the Studio header', async () => {
-    render(<App client={createTestClient()} />);
+    const client = createTestClient();
+    const pendingEntry = Promise.withResolvers<ContentEntry>();
+    vi.spyOn(client, 'getContent').mockReturnValueOnce(pendingEntry.promise);
+    render(<App client={client} />);
 
-    const popout = screen.getByRole('button', {
+    const popout = (await screen.findByRole('button', {
       name: 'Open live preview in new window',
-    }) as HTMLButtonElement;
+    })) as HTMLButtonElement;
     expect(popout.disabled).toBe(true);
     expect(popout.closest('.studio-header')).toBeTruthy();
     expect(document.querySelector('.preview-panel')).toBeNull();
     expect(screen.queryByRole('button', { name: 'App iframe' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Standalone' })).toBeNull();
     expect(screen.queryByRole('group', { name: 'Preview perspective' })).toBeNull();
+    await act(async () => {
+      pendingEntry.resolve(entries[0] as ContentEntry);
+    });
     await screen.findByLabelText('Headline');
     expect(popout.disabled).toBe(false);
   });
@@ -3260,12 +3440,17 @@ describe('GridStory Studio', () => {
     const open = vi.spyOn(window, 'open').mockReturnValue(popup);
     const client = createTestClient();
     const revokePreviewSession = vi.spyOn(client, 'revokePreviewSession');
+    const pendingEntry = Promise.withResolvers<ContentEntry>();
+    vi.spyOn(client, 'getContent').mockReturnValueOnce(pendingEntry.promise);
     render(<App client={client} />);
 
-    const popout = screen.getByRole('button', {
+    const popout = (await screen.findByRole('button', {
       name: 'Open live preview in new window',
-    }) as HTMLButtonElement;
+    })) as HTMLButtonElement;
     expect(popout.disabled).toBe(true);
+    await act(async () => {
+      pendingEntry.resolve(entries[0] as ContentEntry);
+    });
     await screen.findByLabelText('Headline');
     expect(popout.disabled).toBe(false);
     expect(popout.querySelector('svg')).toBeTruthy();

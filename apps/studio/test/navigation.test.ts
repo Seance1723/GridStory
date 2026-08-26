@@ -1,7 +1,29 @@
 import { describe, expect, it } from 'vitest';
-import { studioDestinations, studioNavigationGroups } from '../src/navigation.js';
+import { studioCapabilitiesSchema, studioOperations } from '@gridstory/schema';
+import {
+  permittedNavigation,
+  studioDestinations,
+  studioNavigationGroups,
+} from '../src/navigation.js';
 
 describe('Studio navigation metadata', () => {
+  it('filters unavailable leaves and empty groups without changing permitted ordering', () => {
+    const capabilities = studioCapabilitiesSchema.parse({
+      screens: Object.fromEntries(
+        Object.keys(studioDestinations).map((id) => [id, id === 'operations' || id === 'assets']),
+      ),
+      operations: Object.fromEntries(studioOperations.map((id) => [id, false])),
+    });
+    expect(
+      permittedNavigation(capabilities).map(({ id, destinations }) => [id, destinations]),
+    ).toEqual([
+      ['media', ['assets']],
+      ['advanced', ['operations']],
+    ]);
+    capabilities.screens.assets = false;
+    capabilities.screens.operations = false;
+    expect(permittedNavigation(capabilities)).toEqual([]);
+  });
   it('retains every original destination exactly once in the agreed nonempty groups', () => {
     expect(studioNavigationGroups.map(({ id, destinations }) => [id, [...destinations]])).toEqual([
       ['content', ['pages', 'workflows', 'releases', 'search']],
