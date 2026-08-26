@@ -189,6 +189,8 @@ import {
   WebAuthnAdapter,
 } from './identity-adapters.js';
 import { registerIdentityRoutes } from './identity-routes.js';
+import { StudioContextProjection, validateStudioTopology } from './studio-context.js';
+import type { PlatformTopology } from '@gridstory/schema';
 import { NodeDnsMarketplaceDomainVerifier } from './marketplace-adapters.js';
 import { registerMarketplaceRoutes } from './marketplace-routes.js';
 import { registerMigrationRoutes } from './migration-routes.js';
@@ -208,6 +210,7 @@ export interface BuildServerOptions {
   redirects?: RedirectDefinition[];
   cursorSecret?: string;
   locales?: LocaleConfiguration[];
+  studioTopology?: PlatformTopology;
   webhookSigningSecret?: string;
   webhookTransport?: WebhookTransport;
   cacheInvalidator?: CacheInvalidator;
@@ -563,7 +566,11 @@ export async function buildServer({
   contentFederation: contentFederationOptions,
   knowledge: knowledgeOptions,
   fleet: fleetOptions,
+  studioTopology,
 }: BuildServerOptions): Promise<FastifyInstance> {
+  // Validate trusted discovery configuration before opening databases or other resources.
+  const validatedStudioTopology =
+    studioTopology === undefined ? undefined : validateStudioTopology(studioTopology, locales);
   if (!databaseUrl && databasePath !== ':memory:') {
     mkdirSync(dirname(resolve(databasePath)), { recursive: true });
   }
@@ -877,6 +884,7 @@ export async function buildServer({
     componentManifests,
   });
   const policy = new AuthorizationPolicy();
+  const studioContext = new StudioContextProjection(policy, validatedStudioTopology);
   const server = Fastify({
     logger,
     forceCloseConnections: 'idle',
@@ -1057,6 +1065,17 @@ export async function buildServer({
     const context = requestContext(request, 'draft');
     authorize(policy, context, GridStoryActions.contentRead, { kind: 'platform' });
     return context;
+  });
+  server.get('/api/v1/studio/context', async (request, reply) => {
+    reply.header('cache-control', 'private, no-store');
+    if (Object.keys(request.query as Record<string, unknown>).length > 0) {
+      throw new GridStoryError(
+        'Studio context does not accept query parameters.',
+        'invalid_request',
+        400,
+      );
+    }
+    return studioContext.project(requestContext(request, 'draft'));
   });
   server.get('/api/v1/schemas', async (request) => {
     const context = requestContext(request, 'draft');

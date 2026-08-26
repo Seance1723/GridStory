@@ -99,6 +99,18 @@ Changing screens preserves unsaved entry edits and the same-entry preview. Openi
 
 Studio stores no drafts, credentials, search terms or preview sessions in its location/history metadata. The native reload/exit warning is registered only while dirty and is best effort, not autosave or crash recovery. Unknown/manual/restored history slots use a conservative replacement fallback on cancellation and may leave a duplicate address; subsequent known navigation remains usable. Authorized context selection and non-page authoring remain separate queued tasks in [the CMS gap analysis](docs/cms-admin-gap-analysis.md).
 
+### Authorized Studio context API
+
+`GET /api/v1/studio/context` is the version-1 private, no-store capability endpoint. It returns the current six-part scope, the caller's own principal ID, explicit booleans for existing screen/operation checks, and permitted site/environment/locale choices. It never returns the principal's roles, grants, attributes or raw topology. Existing `GET /api/v1/context` remains compatible. Production requires a workforce session; a preview token alone cannot call this endpoint.
+
+Trusted API composition may provide `studioTopology`, or operators may set `GRIDSTORY_STUDIO_TOPOLOGY_JSON` using the example in `.env.example`. The catalog is not a permission grant. Each entity array and the selectable tuple set are limited to 256; duplicate IDs, invalid ownership, oversized values and locale drift fail startup without echoing configuration. Only active same-organization/tenant/workspace choices permitted by the current principal are returned. Without a catalog, discovery returns only the permitted current context. No other tenant/workspace is listed; no data or topology is provisioned.
+
+The universal client exposes `getStudioContext({ signal? })` and `withStudioScope({ siteId, environmentId, locale })`. A clone preserves the identity transport and organization/tenant/workspace, leaving the original unchanged. Always validate a candidate using its new context call before using it; cloning itself does not authorize anything. Unsupported/malformed or wrong-scope responses fail closed. Operation booleans represent policy preconditions, not entry existence, workflow readiness, provider availability or an authorization credential. Typed page list/create checks remain separate from untyped entry and preview checks.
+
+CMS-032 supplies this API/client foundation only. Studio does not yet consume it: permission-aware navigation is CMS-033, and guarded visible scope controls/preview cleanup are CMS-034. No existing Studio feature, color or location behavior changed. See [ADR 0030](docs/adr/0030-studio-capabilities-and-scope-selection.md) and [troubleshooting](docs/troubleshooting.md) for the bounded contract and configuration guidance.
+
+Delivery status: this foundation is a WIP checkpoint, not verified completion. The full repository gate passes, but the existing WebKit dirty-history scenario fails in complete browser runs (BUG-0441); repeated-fixture ambiguity is separately tracked as BUG-0442. The small Studio/test repair amendment in ADR 0030 needs approval before CMS-032 can close. No production readiness or deployment is claimed.
+
 ### Studio styles and preview
 
 GridStory Studio imports one `apps/studio/src/styles/studio.scss` entry. It composes ordered Sass `@use` partials for foundation/tokens, management surfaces, authoring, collaboration/assets, workflow/search, shell/navigation, calls to action, typography, forms, cards/spacing, states/themes, responsive layout, and accessibility. Shared native-control appearance belongs in `_form.scss`; button variants belong in `_cta.scss`; card surfaces and structural gaps belong in `_cards.scss`; readable text behavior belongs in `_typographic.scss`. Keep feature-only layout in its feature partial and do not add a second global override layer.
@@ -202,6 +214,7 @@ The CMS stores component IDs, versions, validated props, and slots. It does not 
 ## API snapshot
 
 - `GET /health`, `GET /ready`
+- `GET /api/v1/studio/context` (minimized private capabilities and permitted context choices)
 - `GET /api/v1/interoperability`, `GET /api/v1/interoperability/specifications/:kind/1`
 - `GET /api/v1/fleet`, `PUT|DELETE /api/v1/fleet/members/:memberId`, `POST /api/v1/fleet/members/:memberId/state|check`
 - `GET /api/v1/schemas`, `GET /api/v1/components`

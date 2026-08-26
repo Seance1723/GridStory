@@ -14,6 +14,16 @@ Unsaved entry changes are guarded for entry-list, Search and browser-history nav
 
 Known Back/Forward cancellation returns to the accepted stack entry. Manually typed fragments or restored history without trusted metadata cannot provide an exact stack distance: cancellation replaces that current unknown slot, which may leave a duplicate address. Reload restores saved content only; the browser's dirty warning is best effort, especially on mobile. No drafts are persisted automatically. Reverting CMS-002 requires no data migration, but its fragment bookmarks cease restoring selections on older Studio versions.
 
+## Studio capability discovery or catalog configuration fails
+
+CMS-032 adds `GET /api/v1/studio/context` and the client methods only. The existing Studio still uses its original bootstrap; permission-aware screens and visible context selection arrive in CMS-033/034. Do not expect a selector merely from configuring the API catalog.
+
+The new endpoint requires the current production workforce session plus organization/tenant routing headers and the complete selected scope. A 401 means the session is absent/invalid/revoked; preview grants alone are not accepted. A generic 403 means the requested configured scope is unavailable, without disclosing hidden topology. Invalid scope syntax or any query parameters return 400. A valid scope may have zero permitted screens; do not infer admin from successful authentication. Client `invalid_studio_context` means an unsupported/malformed or wrong-scope response, not permission to fall back to legacy identity data.
+
+Omit `GRIDSTORY_STUDIO_TOPOLOGY_JSON` for current-context-only discovery. To configure choices, use the complete example in `.env.example`, unique entity IDs, correct parent IDs, bounded names, and locale records consistent with `GRIDSTORY_LOCALES_JSON` (including enabled/default/required, route prefix and fallback order). At most 256 entries per entity array and 256 active complete tuples are accepted. Inactive parents, locked environments and disabled locales are not selectable; this does not add a global write lock to existing APIs. ScopeRegistry uses globally unique IDs within each entity kind, not repeated environment IDs across different sites.
+
+The API rejects invalid catalog configuration before opening databases. Correct the deployment-owned configuration; never paste credentials or raw topology into a bug report. No runtime topology editing or permissions are added. A clone from `withStudioScope` keeps the original client and fixed organization/tenant/workspace unchanged; validate the clone with `getStudioContext()` before use. The response is private/no-store and must not be persisted in published caches or browser storage. Identity administration uses the existing server gate; other flags reuse exact action/resource decisions and do not replace entry/workflow/step-up checks.
+
 ## Studio reports a CORS error
 
 Add the exact Studio and application origins to `GRIDSTORY_ALLOWED_ORIGINS`. Origins include scheme, host, and port; `localhost` and `127.0.0.1` are different origins.

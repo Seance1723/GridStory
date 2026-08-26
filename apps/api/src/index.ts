@@ -15,6 +15,7 @@ const server = await buildServer({
   assetDeliverySigningSecret: config.assetDeliverySigningSecret,
   allowedPreviewOrigins: config.allowedPreviewOrigins,
   locales: config.locales,
+  ...(config.studioTopology ? { studioTopology: config.studioTopology } : {}),
   webhookSigningSecret: config.webhookSigningSecret,
   ...(config.allowedWebhookHosts ? { allowedWebhookHosts: config.allowedWebhookHosts } : {}),
   seed: true,

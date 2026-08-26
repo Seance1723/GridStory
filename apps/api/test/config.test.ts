@@ -1,7 +1,31 @@
 import { describe, expect, it } from 'vitest';
+import { createLocalTopology } from '@gridstory/core';
 import { loadConfig } from '../src/config.js';
 
 describe('API configuration', () => {
+  it('keeps Studio discovery opt-in and validates topology without echoing raw JSON', () => {
+    expect(loadConfig({}).studioTopology).toBeUndefined();
+    const topology = createLocalTopology();
+    topology.locales = loadConfig({}).locales;
+    expect(
+      loadConfig({ GRIDSTORY_STUDIO_TOPOLOGY_JSON: JSON.stringify(topology) }).studioTopology,
+    ).toEqual(topology);
+    for (const value of [
+      '',
+      'private-invalid-json',
+      '{}',
+      JSON.stringify({ ...topology, credentials: 'do-not-echo' }),
+    ]) {
+      expect(() => loadConfig({ GRIDSTORY_STUDIO_TOPOLOGY_JSON: value })).toThrow(
+        /GRIDSTORY_STUDIO_TOPOLOGY_JSON/,
+      );
+      try {
+        loadConfig({ GRIDSTORY_STUDIO_TOPOLOGY_JSON: value });
+      } catch (error) {
+        expect(String(error)).not.toMatch(/private-invalid-json|do-not-echo/);
+      }
+    }
+  });
   it('prefers a trimmed PostgreSQL URL when configured', () => {
     expect(
       loadConfig({

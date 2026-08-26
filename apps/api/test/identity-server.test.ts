@@ -86,7 +86,7 @@ describe('production enterprise identity API', () => {
       'bearer gsp_invalid',
       'Bearer\tgsp_invalid',
     ]) {
-      for (const url of ['/api/v1/context', '/api/v1/schemas']) {
+      for (const url of ['/api/v1/context', '/api/v1/schemas', '/api/v1/studio/context']) {
         const response = await server.inject({
           method: 'GET',
           url,
@@ -325,6 +325,7 @@ describe('production enterprise identity API', () => {
     const denyManagement = async (token: string) => {
       for (const [method, url] of [
         ['GET', '/api/v1/context'],
+        ['GET', '/api/v1/studio/context'],
         ['GET', '/api/v1/schemas'],
         ['POST', '/api/v1/content'],
         ['PUT', `/api/v1/content/${entry.id}/draft`],
