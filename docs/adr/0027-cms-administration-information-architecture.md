@@ -4,6 +4,8 @@
 - Date: 2026-08-26.
 - Author: Codex.
 - Planning task: GOV-006. Proposed delivery: CMS-001 through CMS-031.
+- Implementation checkpoint: 2026-08-26, CMS-001 only authorized by the user's instruction to proceed. The broader T2/T3 program remains proposed. Reuse current loaders/selection with a finite typed leaf/group map, native `aria-expanded`/`aria-controls` disclosure buttons and nested lists; keep all existing leaves reachable in compact mode. This adapts the [WAI disclosure navigation pattern](https://www.w3.org/WAI/ARIA/apg/patterns/disclosure/examples/disclosure-navigation/) without copying its example implementation or adding menu-widget semantics, URL routing or dependencies.
+- CMS-001 delivery evidence: 37 Studio tests, the complete repository gate, final production/E2E builds and 21 browser scenarios pass; the in-app walkthrough additionally verified compact/mobile behavior and fixed BUG-0418/0419. This checkpoint accepts only that reversible presentation slice, not the remaining proposed program or CMS-002's URL strategy.
 
 ## Context
 

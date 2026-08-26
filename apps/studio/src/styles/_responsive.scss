@@ -12,12 +12,11 @@
 }
 
 .studio-shell--navigation-condensed
-  :where(
-    .studio-navigation .brand-copy,
-    .studio-navigation__caption,
-    .studio-navigation__label,
-    .studio-navigation__footer div
-  ) {
+  :where(.studio-navigation .brand-copy, .studio-navigation__label) {
+  display: none;
+}
+
+.studio-shell--navigation-condensed .studio-navigation__footer > div {
   display: none;
 }
 
@@ -103,13 +102,12 @@
   }
 
   .studio-shell--navigation-condensed
-    :where(
-      .studio-navigation .brand-copy,
-      .studio-navigation__caption,
-      .studio-navigation__label,
-      .studio-navigation__footer div
-    ) {
+    :where(.studio-navigation .brand-copy, .studio-navigation__label) {
     display: initial;
+  }
+
+  .studio-shell--navigation-condensed .studio-navigation__footer > div {
+    display: grid;
   }
 
   .studio-shell--navigation-condensed .studio-navigation__scroll {

@@ -78,6 +78,12 @@ import type {
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AssetControl, RelationControl, RichTextControl } from './authoring-controls.js';
 import {
+  studioDestinations,
+  studioNavigationGroups,
+  type StudioDestination,
+  type StudioNavigationGroupId,
+} from './navigation.js';
+import {
   addNode,
   type CompositionResult,
   commitComposition,
@@ -731,57 +737,10 @@ export interface AppProps {
 }
 
 type StudioTheme = 'light' | 'dark';
-type StudioDestination =
-  | 'pages'
-  | 'workflows'
-  | 'releases'
-  | 'search'
-  | 'operations'
-  | 'identity'
-  | 'data-governance'
-  | 'migrations'
-  | 'marketplace'
-  | 'targeting'
-  | 'experiments'
-  | 'ai-gateway'
-  | 'knowledge'
-  | 'quality'
-  | 'federation'
-  | 'fleet'
-  | 'regions'
-  | 'components'
-  | 'assets';
-
-const studioNavigationIconPaths = {
-  pages: 'M4 4h16v16H4zM8 4v16',
-  workflows: 'M5 5h5v5H5zM14 14h5v5h-5zM10 7h4a3 3 0 0 1 3 3v4',
-  releases: 'M5 19V5h14v14zM8 9h8M8 13h5',
-  search: 'm20 20-4.4-4.4M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15z',
-  operations: 'M4 18V9m6 9V4m6 14v-6m4 6H2',
-  identity: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0',
-  governance: 'M12 3 4 6v5c0 5 3.4 8.2 8 10 4.6-1.8 8-5 8-10V6zM9 12l2 2 4-5',
-  migrations: 'M7 7h10M7 7l3-3M7 7l3 3M17 17H7m10 0-3-3m3 3-3 3',
-  marketplace: 'M4 8h16l-1 12H5zM8 8a4 4 0 0 1 8 0',
-  targeting:
-    'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2z',
-  experiments: 'M9 3v5l-5 9a3 3 0 0 0 3 4h10a3 3 0 0 0 3-4l-5-9V3M7 15h10',
-  ai: 'M12 3l1.4 4.1L17 5l-2.1 3.6L19 10l-4.1 1.4L17 15l-3.6-2.1L12 17l-1.4-4.1L7 15l2.1-3.6L5 10l4.1-1.4L7 5l3.6 2.1z',
-  knowledge: 'M4 5h6a3 3 0 0 1 3 3v12a3 3 0 0 0-3-3H4zM20 5h-6a3 3 0 0 0-3 3v12a3 3 0 0 1 3-3h6z',
-  federation: 'M8 7h8M8 12h8M8 17h8M4 4h16v16H4z',
-  fleet: 'M5 6h14v12H5zM8 18v3m8-3v3M9 10h.01M12 10h.01M15 10h.01',
-  regions:
-    'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18',
-  components: 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z',
-  assets: 'M4 5h16v14H4zM4 15l4-4 4 4 3-3 5 5M16 9h.01',
-  quality: 'M12 3l2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z',
-} as const;
-
-type StudioNavigationIconName = keyof typeof studioNavigationIconPaths;
-
-function StudioNavigationIcon({ name }: { name: StudioNavigationIconName }): ReactNode {
+function StudioNavigationIcon({ name }: { name: StudioDestination }): ReactNode {
   return (
     <svg aria-hidden="true" viewBox="0 0 24 24">
-      <path d={studioNavigationIconPaths[name]} />
+      <path d={studioDestinations[name].icon} />
     </svg>
   );
 }
@@ -815,6 +774,9 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
     useState<StudioDestination>('pages');
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
   const [navigationCondensed, setNavigationCondensed] = useState(false);
+  const [expandedNavigationGroups, setExpandedNavigationGroups] = useState<
+    ReadonlySet<StudioNavigationGroupId>
+  >(() => new Set(studioNavigationGroups.map(({ id }) => id)));
   const [mobileViewport, setMobileViewport] = useState(
     () => typeof window !== 'undefined' && window.innerWidth <= 900,
   );
@@ -3865,6 +3827,10 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
     ensureLoaded?: () => void,
   ) => {
     setActiveStudioDestination(destination);
+    const group = studioNavigationGroups.find(({ destinations }) =>
+      destinations.some((id) => id === destination),
+    );
+    if (group) setExpandedNavigationGroups((current) => new Set(current).add(group.id));
     if (!loaded) ensureLoaded?.();
     setMobileNavigationOpen(false);
     if (destination === 'pages') {
@@ -3876,212 +3842,77 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
     selectNavigationItem('search', searchPanelOpen, () => void toggleSearchPanel());
   };
 
-  const navigationGroups: Array<{
-    label: string;
-    items: Array<{
-      label: string;
-      icon: StudioNavigationIconName;
-      active: boolean;
-      disabled?: boolean;
-      onSelect: () => void;
-    }>;
-  }> = [
-    {
-      label: 'Workspace',
-      items: [
-        {
-          label: 'Pages',
-          icon: 'pages',
-          active: activeStudioDestination === 'pages',
-          onSelect: () => selectNavigationItem('pages', true),
-        },
-        {
-          label: 'Workflows',
-          icon: 'workflows',
-          active: activeStudioDestination === 'workflows',
-          onSelect: () =>
-            selectNavigationItem(
-              'workflows',
-              workflowDesignerOpen,
-              () => void toggleWorkflowDesigner(),
-            ),
-        },
-        {
-          label: 'Releases',
-          icon: 'releases',
-          active: activeStudioDestination === 'releases',
-          onSelect: () =>
-            selectNavigationItem('releases', releasePanelOpen, () => setReleasePanelOpen(true)),
-        },
-        {
-          label: 'Search',
-          icon: 'search',
-          active: activeStudioDestination === 'search',
-          onSelect: selectSearchDestination,
-        },
-      ],
+  const navigationActions: Record<
+    StudioDestination,
+    { loaded: boolean; ensureLoaded?: () => void; disabled?: boolean }
+  > = {
+    pages: { loaded: true },
+    workflows: { loaded: workflowDesignerOpen, ensureLoaded: () => void toggleWorkflowDesigner() },
+    releases: { loaded: releasePanelOpen, ensureLoaded: () => setReleasePanelOpen(true) },
+    search: { loaded: searchPanelOpen, ensureLoaded: () => void toggleSearchPanel() },
+    operations: {
+      loaded: operationsDashboard !== null && analyticsReport !== null,
+      ensureLoaded: () => void toggleOperations(),
     },
-    {
-      label: 'Control plane',
-      items: [
-        {
-          label: 'Operations',
-          icon: 'operations',
-          active: activeStudioDestination === 'operations',
-          onSelect: () =>
-            selectNavigationItem(
-              'operations',
-              operationsDashboard !== null && analyticsReport !== null,
-              () => void toggleOperations(),
-            ),
-        },
-        {
-          label: 'Identity',
-          icon: 'identity',
-          active: activeStudioDestination === 'identity',
-          onSelect: () =>
-            selectNavigationItem(
-              'identity',
-              identitySnapshot !== null,
-              () => void toggleIdentity(),
-            ),
-        },
-        {
-          label: 'Data governance',
-          icon: 'governance',
-          active: activeStudioDestination === 'data-governance',
-          onSelect: () =>
-            selectNavigationItem(
-              'data-governance',
-              dataGovernance !== null,
-              () => void toggleDataGovernance(),
-            ),
-        },
-        {
-          label: 'Migrations',
-          icon: 'migrations',
-          active: activeStudioDestination === 'migrations',
-          onSelect: () =>
-            selectNavigationItem(
-              'migrations',
-              migrationOverview !== null,
-              () => void toggleMigrations(),
-            ),
-        },
-        {
-          label: 'Marketplace',
-          icon: 'marketplace',
-          active: activeStudioDestination === 'marketplace',
-          onSelect: () =>
-            selectNavigationItem(
-              'marketplace',
-              marketplaceOverview !== null,
-              () => void toggleMarketplace(),
-            ),
-        },
-      ],
+    identity: { loaded: identitySnapshot !== null, ensureLoaded: () => void toggleIdentity() },
+    'data-governance': {
+      loaded: dataGovernance !== null,
+      ensureLoaded: () => void toggleDataGovernance(),
     },
-    {
-      label: 'Experience',
-      items: [
-        {
-          label: 'Targeting',
-          icon: 'targeting',
-          active: activeStudioDestination === 'targeting',
-          onSelect: () =>
-            selectNavigationItem(
-              'targeting',
-              personalization !== null,
-              () => void togglePersonalization(),
-            ),
-        },
-        {
-          label: 'Experiments',
-          icon: 'experiments',
-          active: activeStudioDestination === 'experiments',
-          onSelect: () =>
-            selectNavigationItem(
-              'experiments',
-              experimentOverview !== null,
-              () => void toggleExperiments(),
-            ),
-        },
-        {
-          label: 'AI gateway',
-          icon: 'ai',
-          active: activeStudioDestination === 'ai-gateway',
-          onSelect: () =>
-            selectNavigationItem('ai-gateway', aiGateway !== null, () => void toggleAiGateway()),
-        },
-        {
-          label: 'Knowledge',
-          icon: 'knowledge',
-          active: activeStudioDestination === 'knowledge',
-          disabled: knowledgeBusy,
-          onSelect: () =>
-            selectNavigationItem('knowledge', knowledge !== null, () => void toggleKnowledge()),
-        },
-        {
-          label: 'Quality',
-          icon: 'quality',
-          active: activeStudioDestination === 'quality',
-          disabled: !selected || busy,
-          onSelect: () =>
-            selectNavigationItem('quality', qualityReport !== null, () => void toggleQuality()),
-        },
-      ],
+    migrations: {
+      loaded: migrationOverview !== null,
+      ensureLoaded: () => void toggleMigrations(),
     },
-    {
-      label: 'Delivery',
-      items: [
-        {
-          label: 'Federation',
-          icon: 'federation',
-          active: activeStudioDestination === 'federation',
-          disabled: federationBusy,
-          onSelect: () =>
-            selectNavigationItem(
-              'federation',
-              contentFederation !== null,
-              () => void toggleContentFederation(),
-            ),
-        },
-        {
-          label: 'Fleet',
-          icon: 'fleet',
-          active: activeStudioDestination === 'fleet',
-          disabled: fleetBusy,
-          onSelect: () => selectNavigationItem('fleet', fleet !== null, () => void toggleFleet()),
-        },
-        {
-          label: 'Regions',
-          icon: 'regions',
-          active: activeStudioDestination === 'regions',
-          disabled: regionalBusy,
-          onSelect: () =>
-            selectNavigationItem('regions', regional !== null, () => void toggleRegional()),
-        },
-        {
-          label: 'Components',
-          icon: 'components',
-          active: activeStudioDestination === 'components',
-          onSelect: () =>
-            selectNavigationItem(
-              'components',
-              componentGovernance !== null,
-              () => void toggleComponentGovernance(),
-            ),
-        },
-        {
-          label: 'Assets',
-          icon: 'assets',
-          active: activeStudioDestination === 'assets',
-          onSelect: () =>
-            selectNavigationItem('assets', assetLibraryOpen, () => setAssetLibraryOpen(true)),
-        },
-      ],
+    marketplace: {
+      loaded: marketplaceOverview !== null,
+      ensureLoaded: () => void toggleMarketplace(),
     },
-  ];
+    targeting: {
+      loaded: personalization !== null,
+      ensureLoaded: () => void togglePersonalization(),
+    },
+    experiments: {
+      loaded: experimentOverview !== null,
+      ensureLoaded: () => void toggleExperiments(),
+    },
+    'ai-gateway': { loaded: aiGateway !== null, ensureLoaded: () => void toggleAiGateway() },
+    knowledge: {
+      loaded: knowledge !== null,
+      ensureLoaded: () => void toggleKnowledge(),
+      disabled: knowledgeBusy,
+    },
+    quality: {
+      loaded: qualityReport !== null,
+      ensureLoaded: () => void toggleQuality(),
+      disabled: !selected || busy,
+    },
+    federation: {
+      loaded: contentFederation !== null,
+      ensureLoaded: () => void toggleContentFederation(),
+      disabled: federationBusy,
+    },
+    fleet: { loaded: fleet !== null, ensureLoaded: () => void toggleFleet(), disabled: fleetBusy },
+    regions: {
+      loaded: regional !== null,
+      ensureLoaded: () => void toggleRegional(),
+      disabled: regionalBusy,
+    },
+    components: {
+      loaded: componentGovernance !== null,
+      ensureLoaded: () => void toggleComponentGovernance(),
+    },
+    assets: { loaded: assetLibraryOpen, ensureLoaded: () => setAssetLibraryOpen(true) },
+  };
+
+  const compactNavigation = navigationCondensed && !mobileViewport;
+  const toggleNavigationGroup = (id: StudioNavigationGroupId) => {
+    setExpandedNavigationGroups((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const toggleNavigation = () => {
     if (mobileViewport) {
@@ -4133,27 +3964,61 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
           </button>
         </div>
         <nav className="studio-navigation__scroll" aria-label="Studio sections">
-          {navigationGroups.map((group) => (
-            <section className="studio-navigation__group" key={group.label}>
-              <p className="studio-navigation__caption">{group.label}</p>
-              {group.items.map((item) => (
-                <button
-                  type="button"
-                  className={`studio-navigation__item${item.active ? ' studio-navigation__item--active' : ''}`}
-                  key={item.label}
-                  aria-current={item.active ? 'page' : undefined}
-                  disabled={item.disabled}
-                  onClick={item.onSelect}
-                  title={navigationCondensed ? item.label : undefined}
-                >
-                  <span className="studio-navigation__icon">
-                    <StudioNavigationIcon name={item.icon} />
-                  </span>
-                  <span className="studio-navigation__label">{item.label}</span>
-                </button>
-              ))}
-            </section>
-          ))}
+          <ul className="studio-navigation__groups">
+            {studioNavigationGroups.map((group) => {
+              const expanded = compactNavigation || expandedNavigationGroups.has(group.id);
+              const listId = `studio-navigation-${group.id}`;
+              return (
+                <li className="studio-navigation__group" key={group.id} data-group={group.id}>
+                  {!compactNavigation ? (
+                    <button
+                      type="button"
+                      className="studio-navigation__group-toggle"
+                      aria-expanded={expanded}
+                      aria-controls={listId}
+                      onClick={() => toggleNavigationGroup(group.id)}
+                    >
+                      <span>{group.label}</span>
+                      <span className="studio-navigation__chevron" aria-hidden="true" />
+                    </button>
+                  ) : null}
+                  <ul
+                    id={listId}
+                    className="studio-navigation__items"
+                    aria-label={group.label}
+                    hidden={!expanded}
+                  >
+                    {group.destinations.map((destination) => {
+                      const item = studioDestinations[destination];
+                      const action = navigationActions[destination];
+                      const active = activeStudioDestination === destination;
+                      return (
+                        <li key={destination}>
+                          <button
+                            type="button"
+                            className={`studio-navigation__item${active ? ' studio-navigation__item--active' : ''}`}
+                            data-destination={destination}
+                            aria-label={item.label}
+                            aria-current={active ? 'page' : undefined}
+                            disabled={action.disabled}
+                            onClick={() =>
+                              selectNavigationItem(destination, action.loaded, action.ensureLoaded)
+                            }
+                            title={item.label}
+                          >
+                            <span className="studio-navigation__icon">
+                              <StudioNavigationIcon name={destination} />
+                            </span>
+                            <span className="studio-navigation__label">{item.label}</span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </li>
+              );
+            })}
+          </ul>
         </nav>
         <div className="studio-navigation__footer">
           <span className="studio-navigation__footer-icon" aria-hidden="true">

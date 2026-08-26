@@ -74,6 +74,25 @@ The first start creates `.gridstory/gridstory.db`, initializes the schema, and i
 
 Optional environment settings are documented in `.env.example`. The applications also have safe local defaults, so copying the file is not required for the first run.
 
+### Studio navigation
+
+The Studio sidebar groups all 19 existing destinations by task:
+
+| Group | Destinations |
+|---|---|
+| Content | Pages, Workflows, Releases, Search |
+| Media | Library (the existing Asset library) |
+| Design | Components |
+| SEO & quality | Page checks |
+| Insights | Targeting, Experiments |
+| Apps | Marketplace |
+| Tools | Migrations |
+| Advanced | Operations, Identity providers, Data governance, Federation, Fleet, Regions, AI gateway, Knowledge |
+
+Group headings expand or collapse their links using a click, Enter or Space; they do not select a page or reload its data. Exactly one destination is selected at a time. The header search shortcut opens Content when needed. Desktop compact mode exposes every destination as a named icon with a tooltip, while retaining group preferences for the expanded rail and mobile drawer. These preferences last for the current Studio session. Selecting a mobile destination closes the drawer.
+
+Only implemented destinations appear. Stable URLs/history, authorized context selection and the remaining CMS administration upgrades are separate queued tasks in [the CMS gap analysis](docs/cms-admin-gap-analysis.md); grouping existing screens does not add those capabilities.
+
 ### Studio styles and preview
 
 GridStory Studio imports one `apps/studio/src/styles/studio.scss` entry. It composes ordered Sass `@use` partials for foundation/tokens, management surfaces, authoring, collaboration/assets, workflow/search, shell/navigation, calls to action, typography, forms, cards/spacing, states/themes, responsive layout, and accessibility. Shared native-control appearance belongs in `_form.scss`; button variants belong in `_cta.scss`; card surfaces and structural gaps belong in `_cards.scss`; readable text behavior belongs in `_typographic.scss`. Keep feature-only layout in its feature partial and do not add a second global override layer.

@@ -1976,6 +1976,93 @@ afterEach(() => {
 });
 
 describe('GridStory Studio', () => {
+  it('discloses navigation groups without selecting, loading or losing dirty editor state', async () => {
+    const user = userEvent.setup();
+    const client = createTestClient();
+    const listWorkflows = vi.spyOn(client, 'listWorkflows');
+    const saveDraft = vi.spyOn(client, 'saveDraft');
+    render(<App client={client} />);
+    const headline = await screen.findByLabelText('Headline');
+    await user.clear(headline);
+    await user.type(headline, 'Keep this draft');
+    const loadCount = listWorkflows.mock.calls.length;
+    const navigation = screen.getByRole('navigation', { name: 'Studio sections' });
+    const content = within(navigation).getByRole('button', { name: 'Content', exact: true });
+    expect(content.getAttribute('aria-controls')).toBe('studio-navigation-content');
+    expect(content.getAttribute('aria-current')).toBeNull();
+    expect(within(navigation).getAllByRole('list')).toHaveLength(9);
+    await user.click(content);
+    expect(content.getAttribute('aria-expanded')).toBe('false');
+    expect(within(navigation).queryByRole('button', { name: 'Pages', exact: true })).toBeNull();
+    expect(document.querySelectorAll('.studio-navigation__item[aria-current="page"]')).toHaveLength(
+      1,
+    );
+    expect(document.querySelectorAll('.studio-workspace')).toHaveLength(1);
+    expect((headline as HTMLInputElement).value).toBe('Keep this draft');
+    expect(screen.getByText('Unsaved changes')).toBeTruthy();
+    await user.keyboard(' ');
+    expect(content.getAttribute('aria-expanded')).toBe('true');
+    expect(
+      within(navigation)
+        .getByRole('button', { name: 'Pages', exact: true })
+        .getAttribute('aria-current'),
+    ).toBe('page');
+    await user.keyboard('{Enter}');
+    expect(content.getAttribute('aria-expanded')).toBe('false');
+    expect(listWorkflows).toHaveBeenCalledTimes(loadCount);
+    expect(saveDraft).not.toHaveBeenCalled();
+
+    await user.type(screen.getByRole('textbox', { name: 'Search Studio' }), 'draft{Enter}');
+    await screen.findByRole('region', { name: 'Search and discovery' });
+    expect(content.getAttribute('aria-expanded')).toBe('true');
+    expect(
+      within(navigation)
+        .getByRole('button', { name: 'Search', exact: true })
+        .getAttribute('aria-current'),
+    ).toBe('page');
+    await user.click(within(navigation).getByRole('button', { name: 'Pages', exact: true }));
+    expect(((await screen.findByLabelText('Headline')) as HTMLInputElement).value).toBe(
+      'Keep this draft',
+    );
+  });
+
+  it('keeps all named destinations reachable in compact mode and restores disclosure preferences', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1280 });
+    const user = userEvent.setup();
+    render(<App client={createTestClient()} />);
+    await screen.findByLabelText('Headline');
+    const navigation = screen.getByRole('navigation', { name: 'Studio sections' });
+    await user.click(within(navigation).getByRole('button', { name: 'Advanced', exact: true }));
+    expect(
+      within(navigation).queryByRole('button', { name: 'Identity providers', exact: true }),
+    ).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Toggle navigation' }));
+    expect(within(navigation).getAllByRole('button')).toHaveLength(19);
+    expect(
+      within(navigation)
+        .getByRole('button', { name: 'Identity providers', exact: true })
+        .getAttribute('title'),
+    ).toBe('Identity providers');
+    await user.click(within(navigation).getByRole('button', { name: 'Library', exact: true }));
+    await screen.findByRole('region', { name: 'Asset library' });
+    expect(document.querySelectorAll('.studio-page > section')).toHaveLength(1);
+    await user.click(screen.getByRole('button', { name: 'Toggle navigation' }));
+    expect(
+      within(navigation)
+        .getByRole('button', { name: 'Advanced', exact: true })
+        .getAttribute('aria-expanded'),
+    ).toBe('false');
+    expect(
+      within(navigation).queryByRole('button', { name: 'Identity providers', exact: true }),
+    ).toBeNull();
+    expect(
+      within(navigation)
+        .getByRole('button', { name: 'Library', exact: true })
+        .getAttribute('aria-current'),
+    ).toBe('page');
+    expect(document.querySelectorAll('.preview-panel')).toHaveLength(0);
+  });
+
   it('provides the responsive Studio navigation and persistent light and dark themes', async () => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
     const user = userEvent.setup();
@@ -2089,7 +2176,7 @@ describe('GridStory Studio', () => {
     render(<App client={createTestClient()} />);
 
     await screen.findByLabelText('Headline');
-    await user.click(screen.getByRole('button', { name: 'Quality' }));
+    await user.click(screen.getByRole('button', { name: 'Page checks' }));
 
     const panel = await screen.findByRole('region', { name: 'Content quality report' });
     expect(panel.textContent).toContain('84');
@@ -2497,7 +2584,7 @@ describe('GridStory Studio', () => {
     render(<App client={createTestClient()} />);
 
     await screen.findByLabelText('Headline');
-    await user.click(screen.getByRole('button', { name: 'Identity' }));
+    await user.click(screen.getByRole('button', { name: 'Identity providers' }));
 
     const panel = await screen.findByRole('region', {
       name: 'Enterprise identity administration',
@@ -3045,7 +3132,7 @@ describe('GridStory Studio', () => {
     );
 
     await screen.findByLabelText('Headline');
-    await user.click(screen.getByRole('button', { name: 'Assets' }));
+    await user.click(screen.getByRole('button', { name: 'Library' }));
     expect(screen.getByRole('heading', { name: 'Asset library' })).toBeTruthy();
     expect(screen.getByText('Focal point 0.25, 0.75')).toBeTruthy();
     expect(screen.getByText('Verified')).toBeTruthy();
@@ -3097,7 +3184,7 @@ describe('GridStory Studio', () => {
     render(<App client={client} />);
 
     await screen.findByLabelText('Headline');
-    await user.click(screen.getByRole('button', { name: 'Assets' }));
+    await user.click(screen.getByRole('button', { name: 'Library' }));
     const bytes = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
     const file = new File([bytes], 'ten-bytes.bin', { type: 'application/octet-stream' });
     Object.defineProperty(file, 'arrayBuffer', { value: async () => bytes.buffer });

@@ -4,7 +4,7 @@ import { expect, type Page, type TestInfo, test } from '@playwright/test';
 const wcagTags = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 
 const studioManagementPanels = [
-  ['Identity', 'Enterprise identity administration'],
+  ['Identity providers', 'Enterprise identity administration'],
   ['Data governance', 'Data governance administration'],
   ['Migrations', 'CMS migration workbench'],
   ['Marketplace', 'Plugin marketplace workbench'],
@@ -20,8 +20,8 @@ const studioManagementPanels = [
   ['Search', 'Search and discovery'],
   ['Operations', 'Administrator operations'],
   ['Components', 'Component governance'],
-  ['Assets', 'Asset library'],
-  ['Quality', 'Content quality report'],
+  ['Library', 'Asset library'],
+  ['Page checks', 'Content quality report'],
 ] as const;
 
 async function openMobileStudioNavigation(page: Page): Promise<void> {
@@ -103,6 +103,127 @@ async function expectNoDetectableWcagViolations(
       .join('\n'),
   ).toEqual([]);
 }
+
+test('task groups preserve every destination, keyboard disclosure, compact access and mobile selection', async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Pages', exact: true })).toBeVisible();
+  await page.getByLabel('Title', { exact: true }).fill('Unsaved navigation check');
+  const navigation = page.getByRole('navigation', { name: 'Studio sections' });
+  const groups = [
+    ['Content', ['Pages', 'Workflows', 'Releases', 'Search']],
+    ['Media', ['Library']],
+    ['Design', ['Components']],
+    ['SEO & quality', ['Page checks']],
+    ['Insights', ['Targeting', 'Experiments']],
+    ['Apps', ['Marketplace']],
+    ['Tools', ['Migrations']],
+    [
+      'Advanced',
+      [
+        'Operations',
+        'Identity providers',
+        'Data governance',
+        'Federation',
+        'Fleet',
+        'Regions',
+        'AI gateway',
+        'Knowledge',
+      ],
+    ],
+  ] as const;
+  await expect(navigation.locator('.studio-navigation__item')).toHaveCount(19);
+  await expect(navigation.locator('.studio-navigation__group-toggle')).toHaveCount(8);
+  for (const [label, leaves] of groups) {
+    const toggle = navigation.getByRole('button', { name: label, exact: true });
+    const list = navigation.getByRole('list', { name: label, exact: true });
+    await expect(list.getByRole('button')).toHaveCount(leaves.length);
+    for (const leaf of leaves)
+      await expect(list.getByRole('button', { name: leaf, exact: true })).toBeVisible();
+    await expect(toggle).toHaveAttribute(
+      'aria-controls',
+      (await list.getAttribute('id')) as string,
+    );
+    await toggle.focus();
+    await toggle.press('Space');
+    await expect(toggle).toBeFocused();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await expect(list).toBeHidden();
+    await expect(toggle).not.toHaveAttribute('aria-current');
+    await expect(page.locator('.studio-workspace')).toBeVisible();
+    await expect(page.locator('.studio-navigation__item[aria-current="page"]')).toHaveCount(1);
+  }
+  await expect(page.getByLabel('Title', { exact: true })).toHaveValue('Unsaved navigation check');
+  const shellToggle = page.getByRole('button', { name: 'Toggle navigation' });
+  await shellToggle.click();
+  await expect(page.locator('.studio-navigation')).toHaveCSS('width', '86px');
+  await expect(page.locator('.studio-navigation__footer > div')).toBeHidden();
+  await expect(navigation.locator('.studio-navigation__group-toggle')).toHaveCount(0);
+  for (const [, leaves] of groups) {
+    for (const leaf of leaves) {
+      const button = navigation.getByRole('button', { name: leaf, exact: true });
+      await expect(button).toBeVisible();
+      await expect(button).toHaveAttribute('title', leaf);
+    }
+  }
+  await selectStudioPanel(page, 'Marketplace', 'Plugin marketplace workbench');
+  await shellToggle.click();
+  await expect(page.locator('.studio-navigation__footer > div')).toBeVisible();
+  await expect(page.locator('.studio-navigation__footer > div')).toHaveCSS('display', 'grid');
+  await expect(navigation.getByRole('button', { name: 'Content', exact: true })).toHaveAttribute(
+    'aria-expanded',
+    'false',
+  );
+  await page.getByRole('textbox', { name: 'Search Studio' }).fill('welcome');
+  await page.getByRole('textbox', { name: 'Search Studio' }).press('Enter');
+  await expect(page.getByRole('region', { name: 'Search and discovery' })).toBeVisible();
+  await expect(navigation.getByRole('button', { name: 'Content', exact: true })).toHaveAttribute(
+    'aria-expanded',
+    'true',
+  );
+  await selectStudioPages(page, 'Search and discovery');
+  await expect(page.getByLabel('Title', { exact: true })).toHaveValue('Unsaved navigation check');
+
+  // Compact-to-mobile must restore full group controls without losing a collapsed group.
+  await shellToggle.click();
+  // Native scrollbar space must not be defeated by a fixed body minimum (BUG-0419).
+  await page.addStyleTag({ content: 'html { scrollbar-gutter: stable; }' });
+  await page.setViewportSize({ width: 320, height: 844 });
+  await expect(page.locator('body')).toHaveCSS('min-width', '0px');
+  await openMobileStudioNavigation(page);
+  const advanced = navigation.getByRole('button', { name: 'Advanced', exact: true });
+  await expect(page.locator('.studio-navigation__footer > div')).toBeVisible();
+  await expect(page.locator('.studio-navigation__footer > div')).toHaveCSS('display', 'grid');
+  await expect(advanced).toHaveAttribute('aria-expanded', 'false');
+  await advanced.focus();
+  await advanced.press('Enter');
+  await expect(advanced).toHaveAttribute('aria-expanded', 'true');
+  await selectStudioPanel(page, 'Regions', 'Regional delivery and failover controls');
+  await expect(shellToggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('.preview-panel')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Switch to dark theme' }).click();
+  await openMobileStudioNavigation(page);
+  await expect(advanced).toHaveCSS('color', 'rgb(166, 172, 169)');
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const header = document.querySelector('.studio-header');
+        return (
+          header !== null && header.getBoundingClientRect().right <= document.body.clientWidth + 1
+        );
+      }),
+    )
+    .toBe(true);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1,
+      ),
+    )
+    .toBe(true);
+});
 
 test('Studio shell follows the reference navigation, card, theme, and mobile drawer system', async ({
   page,
@@ -613,7 +734,7 @@ test('critical authoring remains keyboard-operable and adapts at 200% zoom', asy
   await heroLayer.press('ArrowDown');
   await expect(page.getByText('Unsaved changes')).toBeVisible();
 
-  const identityButton = page.getByRole('button', { name: 'Identity', exact: true });
+  const identityButton = page.getByRole('button', { name: 'Identity providers', exact: true });
   await identityButton.focus();
   await identityButton.press('Enter');
   await expect(

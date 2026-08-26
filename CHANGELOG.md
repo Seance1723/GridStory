@@ -8,6 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Added task-oriented disclosure navigation for all 19 existing Studio destinations under Content, Media, Design, SEO & quality, Insights, Apps, Tools and Advanced; one finite typed metadata map supplies names/icons, with no placeholder screens or new dependency. Added metadata, dirty-state, keyboard, group-isolation, compact/mobile and all-destination browser regressions (CMS-001).
 - Added a source-backed CMS administration feasibility/gap analysis covering all 13 supplied reference categories, detailed submenu dispositions, the exact future homes of all 19 current Studio destinations, and a dependency-ordered CMS-001 through CMS-031 task queue with acceptance, scope, risk and optional-product decision gates (GOV-006).
 - Added proposed ADR 0027 for task-oriented administration that reuses current content, identity, design, asset, plugin and governance foundations; it distinguishes missing visitor menus/settings/SEO/lifecycle behavior from optional commerce, marketing/CRM and public-comment programs without authorizing their implementation (GOV-006).
 - Added one ordered Studio SCSS entry with purpose-owned foundation, feature, shell, CTA, typography, form, card/spacing, state/theme, responsive, and accessibility partials, compiled through the portable Dart Sass development dependency without a runtime styling framework (STUDIO-015, ADR 0026).
@@ -33,6 +34,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- Reused Studio's existing single-destination selection and on-demand feature loaders within the new groups. The former Assets, Quality and Identity leaves are now Library, Page checks and Identity providers; their panels/actions, current theme, global controls and header-only preview are unchanged. Documented the shipped navigation and kept URL/history and broader administration work separate (CMS-001, ADR 0027).
 - Updated the product blueprint with explicit administration gap closure and an executable phased queue; preserved all completed milestone history, existing application behavior/colors/preview, and separate beta/RC/GA no-go evidence. The current task is documentation only; no runtime feature, provider, dependency or data was changed (GOV-006).
 - Replaced the three-column Studio workspace and embedded preview controls with a two-column authoring workspace whose header-owned toggle opens, reports, closes, and revokes the existing secure application-only standalone preview while retaining live draft patches, node selection, and responsive override authoring in the component inspector (STUDIO-015).
 - Replaced character-level wrapping for ordinary Studio language with a global readable word policy, while retaining aggressive containment for code and technical identifiers and leaving application preview content untouched (STUDIO-014).
@@ -51,6 +53,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Corrected the compact-sidebar help-text hide rule's specificity and restored its grid layout on mobile; the narrow desktop rail no longer leaks explanatory text into the content area (BUG-0418, CMS-001).
+- Removed Studio's fixed body minimum so a 320px viewport can use its actual available width when native scrollbars reserve space; added a stable-gutter mobile regression (BUG-0419, CMS-001).
+- Verified CMS-001 through 37 Studio tests, the full repository gate, repeated final lint/format/build checks, and 21/21 Chromium/Firefox/WebKit scenarios across all 19 destinations, six widths, themes, keyboard, zoom/forced colors, accessibility and preview/published delivery. The real in-app desktop/mobile walkthrough found and verified both recorded visual fixes; no new backend/provider certification is claimed (CMS-001, BUG-0418, BUG-0419).
 - Corrected the design-system guide's obsolete inline-preview-toolbar instructions to identify the selected-component Responsive override selector and header-only standalone preview (BUG-0416, GOV-006, STUDIO-015).
 - Verified the documentation-only plan through a 13-category/19-destination/31-task dependency/link/history audit, preserving all 104 historical task statuses, and the complete repository type/test/build gate. Approved Windows child-process execution resolved the sandbox-only verification failures without application or test changes; no new browser, database-provider or deployment certification is claimed (BUG-0417, GOV-006).
 - Unified ordinary Studio text inputs, textareas, and native selects under one scoped visual/state contract; retained semantic specialized inputs; established shared card, heading, field, and section spacing; restored canonical danger-action contrast; and preserved reduced-motion/forced-color behavior across all routes and responsive widths (BUG-0404, BUG-0405, BUG-0409, BUG-0411, STUDIO-015).

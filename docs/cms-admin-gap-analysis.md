@@ -4,7 +4,7 @@
 - Task: GOV-006. Implementation baseline: `72fbc62`.
 - Input: user-supplied `CMS_Admin_Menu_Structure_Reference.md` (August 2026).
 - Input SHA-256: `fb558e9fa7e425c8f3028c845344d7066d8df5e2ce29db12b0891afb12e51fca`; the original attachment is unchanged and is not copied into the application.
-- Status: analysis complete; implementation recommendation, not an implemented feature set.
+- Status: GOV-006 analysis complete; the inventories below retain their planning baseline. CMS-001 navigation implementation is tracked separately in section 12; the rest is a recommendation, not an implemented feature set.
 - Queue: [TASKS.md](../TASKS.md), CMS-001 through CMS-031.
 - Decision: [proposed ADR 0027](adr/0027-cms-administration-information-architecture.md).
 
@@ -186,7 +186,7 @@ Header: explicit authorized scope selector, search/commands, contextual Save/Pub
 
 ## 8. Sequence, dependencies, and scope control
 
-The task ledger is authoritative for individual acceptance and file fences. All CMS implementation tasks start `[ ]` with owner unassigned. Each needs a scoped start/research pass; T2/T3 requires approval before application edits.
+The task ledger is authoritative for individual acceptance and file fences. All CMS implementation tasks were created `[ ]` with owner unassigned; their live status is in `TASKS.md`. Each needs a scoped start/research pass; T2/T3 requires approval before application edits.
 
 | Wave | Tasks | Why this order |
 |---|---|---|
@@ -212,7 +212,7 @@ No calendar estimate is asserted: scope varies materially between moving an exis
 
 ## 9. Recommended next action
 
-Start **CMS-001: reorganize only the 19 existing destinations** using the mapping above. It is a reversible T1 UI slice with no new backend, schema, provider or URL contract. It should retain current labels where useful (for example “Assets” as help text for “Media > Library”), styles and functions, and add explicit navigation regression evidence.
+The original first recommendation was **CMS-001: reorganize only the 19 existing destinations** using the mapping above. Its implementation checkpoint is below. The next task is **CMS-002: stable Studio locations, deep links and history-safe navigation**. Start with a scoped T2 implementation plan and approve hash versus path/history behavior, dirty-state handling and deployment compatibility before changing code; the proposed program does not supply that approval.
 
 After that, proceed through the queue by dependency. CMS-002 and other T2 tasks require their own implementation plan/approval. CMS-027 through CMS-030 are questions/discovery tasks, not authorization to build a model-hosting platform, store PII, send email, process payments or deploy services.
 
@@ -240,3 +240,14 @@ These are architectural inferences from the documented patterns plus the inspect
 - Not rerun: browser visual walkthroughs, PostgreSQL/provider conformance and production deployment. They are unnecessary to claim this documentation plan is complete, and this work does not claim fresh evidence for those surfaces.
 
 Handoff: GOV-006 completes analysis/planning only on `main`. All CMS tasks remain planned. The next implementation task is CMS-001, preserving all existing functionality and styling. The source attachment remains unchanged; the new decision remains proposed. No finding needed for the next task is intentionally left outside these documents.
+
+## 12. CMS-001 implementation checkpoint
+
+- Updated: 2026-08-26 by Codex. Status: implemented and verified; completion commit is tagged `[CMS-001]`. This section updates the historical planning handoff above, not the original baseline inventory.
+- All 19 destinations now have exactly one home in eight nonempty groups: Content, Media, Design, SEO & quality, Insights, Apps, Tools and Advanced. Assets is labeled Library, Quality is Page checks, and Identity is Identity providers; the existing panel content remains intact. No Home, Settings, People, visitor Navigation or optional-business placeholder has been added.
+- The finite typed [navigation metadata](../apps/studio/src/navigation.ts) owns labels, icons and grouping; [App.tsx](../apps/studio/src/App.tsx) retains feature state/actions. Native disclosure buttons and lists expose expansion state without menu-widget semantics. Group toggles do not select, fetch or save a page; existing single-destination selection/loaders and editor state are reused. Header search reveals Content when necessary.
+- Desktop compact mode exposes every named leaf icon and retains expanded-mode group preferences. Mobile restores the full labels/disclosures and closes the drawer after selection. The green/lime palette, shared SCSS control styles and header-only live preview are unchanged.
+- Manual verification found and corrected two existing edge cases: compact-footer text escaping the rail because of selector specificity (BUG-0418), and a fixed body minimum defeating a native scrollbar's available width at 320px (BUG-0419). Both have browser regressions.
+- No new framework, dependency, route, API, authorization, data model, provider or saved-content mutation is part of this slice. Scope/capability gaps and the beta/RC/GA no-go decisions remain unchanged.
+- Evidence: 37 Studio tests, the full `pnpm check` gate, repeated final lint/format/production/E2E builds, and `pnpm test:e2e` with 21/21 passing scenarios across Chromium, Firefox and WebKit. The all-destination sweep covers six widths, light/dark, readable text/control containment, keyboard, zoom/forced colors, accessibility, header-only preview and published delivery. Manual in-app clicks covered disclosures, compact Library selection, mobile Regions/drawer behavior, header search and theme switching; the native-scrollbar layout now fits 305px of usable space inside a 320px viewport. Documentation links and all other task statuses are preserved. Opt-in PostgreSQL, external-provider certification and deployment were not rerun or claimed.
+- Follow-up: CMS-002 only, after its scoped plan/approval. CMS-003 through CMS-031 retain their dependency and decision gates.
