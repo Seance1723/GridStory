@@ -91,7 +91,11 @@ The Studio sidebar groups all 19 existing destinations by task:
 
 Group headings expand or collapse their links using a click, Enter or Space; they do not select a page or reload its data. Exactly one destination is selected at a time. The header search shortcut opens Content when needed. Desktop compact mode exposes every destination as a named icon with a tooltip, while retaining group preferences for the expanded rail and mobile drawer. These preferences last for the current Studio session. Selecting a mobile destination closes the drawer.
 
-Only implemented destinations appear. Stable URLs/history, authorized context selection and the remaining CMS administration upgrades are separate queued tasks in [the CMS gap analysis](docs/cms-admin-gap-analysis.md); grouping existing screens does not add those capabilities.
+Only implemented destinations appear. Studio addresses use `#/<destination>` with optional paired `entry` and `type=page`, for example `#/pages?entry=<encoded-id>&type=page`. Copying the address, reloading, and Back/Forward restore the current screen and saved authorized page. A link does not grant access or change the client's tenant/site/environment/locale. The served path and outer query remain host-owned; no server rewrite or consuming-application route change is required.
+
+Changing screens preserves unsaved entry edits and the same-entry preview. Opening another entry (including from Search or browser history) asks before discarding unsaved changes. Cancellation or a failed target preserves the prior editor/address. Accepted entry replacement closes its old preview window; pending grants are revoked instead of connected. Save/publish keep the current location. Explicit missing, denied or wrong-type entries show an unavailable state and never silently select another page. Invalid addresses normalize to Pages with a generic notice.
+
+Studio stores no drafts, credentials, search terms or preview sessions in its location/history metadata. The native reload/exit warning is registered only while dirty and is best effort, not autosave or crash recovery. Unknown/manual/restored history slots use a conservative replacement fallback on cancellation and may leave a duplicate address; subsequent known navigation remains usable. Authorized context selection and non-page authoring remain separate queued tasks in [the CMS gap analysis](docs/cms-admin-gap-analysis.md).
 
 ### Studio styles and preview
 

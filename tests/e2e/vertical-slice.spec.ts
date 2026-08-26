@@ -8,6 +8,10 @@ test('edits, protects, governs, publishes, and delivers React content', async ({
 
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Pages' })).toBeVisible();
+  await page
+    .getByRole('complementary', { name: 'Content entries' })
+    .getByRole('button', { name: /Welcome to GridStory/ })
+    .click();
   await expect(page.getByRole('heading', { name: 'Welcome to GridStory' })).toBeVisible();
   const heroHeading = page.locator('.block-editor').first().getByLabel('Heading');
   await expect(page.locator('.preview-panel')).toHaveCount(0);

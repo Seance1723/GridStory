@@ -8,6 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Implemented the approved CMS-002 finite Studio fragment locations and native history adapter without new dependencies, server rewrites or application-site route changes. Added parser/history, direct-link, StrictMode, invalid/unavailable target, dirty guard, delayed response, write overlap and preview-lifetime regressions. Final repository gates pass with 430 tests (78 Studio; 17 existing opt-in skips), production/E2E builds and all 30 Chromium/Firefox/WebKit scenarios; isolated manual smoke and verification limits are recorded in TASKS and ADR 0028.
 - Recorded the proposed CMS-002 location/history contract in ADR 0028: finite hash destinations, page-entry context, guarded owned/unowned history, stale-read and preview-lifetime safeguards, exact Studio-only files, rollback and negative/three-browser acceptance. This is a documentation-only approval checkpoint, not shipped navigation behavior (CMS-002).
 - Verified the CMS-002 planning checkpoint with lint/format/ledger/whitespace checks, the unchanged Studio build, and read-only scope/link/history/pointer audits; all 136 task states are retained, CMS-002 remains planned, and runtime implementation/testing still awaits approval (CMS-002, BUG-0420).
 - Added task-oriented disclosure navigation for all 19 existing Studio destinations under Content, Media, Design, SEO & quality, Insights, Apps, Tools and Advanced; one finite typed metadata map supplies names/icons, with no placeholder screens or new dependency. Added metadata, dirty-state, keyboard, group-isolation, compact/mobile and all-destination browser regressions (CMS-001).
@@ -36,6 +37,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- Accepted ADR 0028 for CMS-002 after the user's explicit approval; documented page-only scoped links, unknown-history fallback and native exit-warning limits. Existing global SCSS, colors and all 19 screens/features are retained.
+- Recorded the existing full-schema Create page validation failure (BUG-0427) for CMS-004's already-planned schema-aware creation work; CMS-002 does not change creation defaults.
 - Linked CMS-002 to its scoped T2 proposal and logged the source-confirmed search-result dirty-guard bypass for the approved implementation to reproduce and repair; no runtime fix is claimed in this planning pass (BUG-0421, CMS-002).
 - Reused Studio's existing single-destination selection and on-demand feature loaders within the new groups. The former Assets, Quality and Identity leaves are now Library, Page checks and Identity providers; their panels/actions, current theme, global controls and header-only preview are unchanged. Documented the shipped navigation and kept URL/history and broader administration work separate (CMS-001, ADR 0027).
 - Updated the product blueprint with explicit administration gap closure and an executable phased queue; preserved all completed milestone history, existing application behavior/colors/preview, and separate beta/RC/GA no-go evidence. The current task is documentation only; no runtime feature, provider, dependency or data was changed (GOV-006).
@@ -56,6 +59,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Unified search-result and entry-list discard protection and Pages activation (BUG-0421); added stale-read checks, independent entry-write tracking and the component-migration shortcut guard (BUG-0423, BUG-0430, BUG-0431).
+- Corrected owned/unowned and interrupted history restoration (BUG-0424, BUG-0425). Preview transport stops before committing another entry, refuses mismatched patches and revokes late grants; revocation failures remain visible.
+- Corrected compilation/lint defects and new test preconditions without dropping assertions or globally relaxing checks (BUG-0422, BUG-0426, BUG-0428, BUG-0429; rationale in ADR 0028).
+- Resolved the overlapping-run WebKit verification timeout by running the final browser gate without competing repository tests: the unchanged all-destination/six-width sweep passes in 2.9 minutes within its five-minute deadline, and the complete 30-scenario gate passes (BUG-0432, CMS-002).
 - Corrected the administration queue's stale single-next-action pointer from completed CMS-001 to CMS-002 plan approval, consistent with the verified task state and gap-analysis handoff (BUG-0420, CMS-002).
 - Corrected the compact-sidebar help-text hide rule's specificity and restored its grid layout on mobile; the narrow desktop rail no longer leaks explanatory text into the content area (BUG-0418, CMS-001).
 - Removed Studio's fixed body minimum so a 320px viewport can use its actual available width when native scrollbars reserve space; added a stable-gutter mobile regression (BUG-0419, CMS-001).

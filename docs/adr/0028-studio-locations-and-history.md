@@ -1,6 +1,6 @@
 # ADR 0028: Stable Studio locations and guarded browser history
 
-- Status: Proposed — awaiting explicit implementation approval.
+- Status: Accepted for CMS-002 — user approved implementation on 2026-08-26 by replying `proceed to next` to the explicit plan-approval question.
 - Created: 2026-08-26T12:46:25+05:30 by Codex.
 - Task: CMS-002 (T2), dependent on completed CMS-001.
 - Source baseline: `92fa167`. This checkpoint changes documentation only.
@@ -116,10 +116,27 @@ No API, storage, package exports, dependency/lockfile, application consumer, hos
 
 Primary risks are address/view divergence, history loops, dirty-state loss, stale async commits, skip-link collisions and preview session races. The tests above are release blockers, not deferred cleanup. Browser shutdown/mobile termination cannot be made lossless by this slice; no guarantee of unsaved recovery is offered.
 
-Approval requested: accept the hash address contract, page-only context, guard/history fallback semantics, exact scope and verification boundary above. Until then CMS-002 remains planned and this ADR proposed; no application implementation is authorized by the proposal itself.
+Approval record: the user accepted this hash address contract, page-only context, guard/history fallback semantics, exact scope and verification boundary on 2026-08-26. CMS-002 implementation is completed and verified; the later CMS tasks remain separately gated.
+
+## Implementation verification decisions (2026-08-26)
+
+- The native skip anchor retains its existing accessible link semantics and target but intercepts the click to focus without replacing the routing fragment; one local Biome exception documents this intentional conflict with the generic anchor-action heuristic. No global accessibility rule is relaxed.
+- BUG-0428: the new successful-creation unit scenario injects a new content record, so it must also provide a valid workflow for that record instead of the old two-entry mock's `{}` fallback. No malformed production response is assumed or hidden.
+- BUG-0429: new browser fixtures create additional valid pages. Entry navigation is therefore scoped to the Content entries landmark (not a same-named relation picker), and the existing publishing scenario explicitly chooses its welcome fixture rather than assuming backend list order. Its edit/preview/workflow/publish/delivery assertions remain intact. The cold unavailable-link test first leaves the document: changing only its fragment is intentionally an in-app transition and must preserve the accepted editor on failure. These are corrected test preconditions, not weakened product expectations.
 
 ## Planning checkpoint verification
+
+This section records the historical pre-approval checkpoint; final implementation evidence follows it.
 
 At 2026-08-26T12:49:16+05:30, Codex observed passing `pnpm lint`, `pnpm format:check`, `node scripts/check-ledgers.mjs`, `git diff --check` and `pnpm --filter @gridstory/studio build`. Read-only checks confirm that only the five declared planning documents changed, all 136 task statuses remain unchanged, 11 local plan/ledger links resolve, the required proposal sections exist and BUG-0420's stale pointer is corrected. BUG-0421 remains open; its source evidence is not misrepresented as a passing runtime regression.
 
 No unit/integration/browser suite or external provider/deployment certification was rerun for this documentation checkpoint. All proposed runtime tests remain implementation work after approval. Handoff: `main`, documentation-only planning commit tagged `[CMS-002]`; the single next action is owner approval of this proposal, not the next CMS task.
+
+## Implementation completion evidence (2026-08-26)
+
+- The complete `pnpm check` checkpoint passed. After the final independent write counter and migration guard, repeated lint/format/type/unit-integration gates pass: 430 active tests, including 78 Studio tests, with 17 existing opt-in skips. The final `pnpm test:e2e` builds every production package/application (including React 18.3.1 SSR compatibility), rebuilds the browser fixtures and passes 10/10 scenarios in each of Chromium, Firefox and WebKit.
+- Coverage includes parser bounds/negative cases, owned/unowned and interrupted history, delayed/out-of-order requests, StrictMode cleanup, dirty entry/search navigation, unavailable/forbidden targets, independent write locking, guarded component-migration selection, late preview grants and mismatched patches. Browser checks retain every destination, six widths, both themes, keyboard, zoom/forced colors, WCAG and the edit/preview/save/publish/deliver journey. The generated Studio CSS hash is unchanged; no SCSS or dependency file changed.
+- BUG-0432 records an interim WebKit sweep timeout while repository tests competed for resources. The final browser-only run passes the identical sweep in 2.9 minutes under its unchanged five-minute deadline, and all 30 scenarios pass. This supports scheduling contention as an inference; it does not justify weakening assertions or claiming a proven browser defect.
+- Manual in-app smoke used isolated memory-backed services/synthetic content: copied Library links, reload, Back/Forward, mobile drawer selection, light/dark containment, connected header-only preview and closure on accepted entry replacement passed. The 390px viewport has 375px client/scroll widths with native scrollbars. Manual prompt cancellation was not reliably controlled and is not claimed; automated cancellation regressions pass in all three engines. Own tabs/services were closed and viewport reset; existing user services/data were untouched.
+- BUG-0421 through BUG-0426 and BUG-0428 through BUG-0432 are resolved. Pre-existing Create page defaults fail the full example schema (BUG-0427); failed creation retains the accepted entry/address, and successful creation history is covered by a valid simple-schema unit fixture. Schema-aware creation remains CMS-004, not an unapproved rewrite here.
+- All changes remain within the 16 used files of the approved fence; all 136 task IDs and other statuses/history are retained. No new trusted scope, authorization contract, provider, database migration or deployment is introduced. PostgreSQL/live-provider/production certification and lossless browser-shutdown recovery are not claimed. Completion is committed on `main` with `[CMS-002]`; next is CMS-003's separately scoped T2 plan/approval.

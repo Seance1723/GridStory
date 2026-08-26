@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, type Page, type TestInfo, test } from '@playwright/test';
+import { studioDestinations } from '../../apps/studio/src/navigation.js';
 
 const wcagTags = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 
@@ -55,6 +56,10 @@ async function selectStudioPanel(
   await expect(page.getByRole('region', { name: regionName })).toBeVisible();
   await expect(page.locator('.studio-navigation__item[aria-current="page"]')).toHaveCount(1);
   await expect(button).toHaveAttribute('aria-current', 'page');
+  const destination = Object.entries(studioDestinations).find(
+    ([, value]) => value.label === buttonName,
+  )?.[0];
+  expect(new URL(page.url()).hash.split('?')[0]).toBe(`#/${destination}`);
   await expect(page.locator('.studio-page > section')).toHaveCount(1);
   await expect(page.locator('.studio-workspace')).toHaveCount(0);
   if (previousRegionName && previousRegionName !== regionName) {
@@ -75,6 +80,7 @@ async function selectStudioPages(page: Page, previousRegionName?: string): Promi
   await expect(page.locator('.studio-workspace')).toBeVisible();
   await expect(page.locator('.studio-navigation__item[aria-current="page"]')).toHaveCount(1);
   await expect(button).toHaveAttribute('aria-current', 'page');
+  expect(new URL(page.url()).hash.split('?')[0]).toBe('#/pages');
   await expect(page.locator('.studio-page > section')).toHaveCount(0);
   if (previousRegionName) {
     await expect(page.getByRole('region', { name: previousRegionName })).toHaveCount(0);

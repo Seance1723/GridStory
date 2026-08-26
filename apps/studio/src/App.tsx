@@ -78,12 +78,6 @@ import type {
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AssetControl, RelationControl, RichTextControl } from './authoring-controls.js';
 import {
-  studioDestinations,
-  studioNavigationGroups,
-  type StudioDestination,
-  type StudioNavigationGroupId,
-} from './navigation.js';
-import {
   addNode,
   type CompositionResult,
   commitComposition,
@@ -101,6 +95,14 @@ import {
   updateNodePresentation,
   updateNodeProps,
 } from './composition-editor.js';
+import {
+  type StudioDestination,
+  type StudioNavigationGroupId,
+  studioDestinations,
+  studioNavigationGroups,
+} from './navigation.js';
+import { createStudioHistory, type StudioHistory } from './studio-history.js';
+import { parseStudioLocation, type StudioLocation } from './studio-location.js';
 
 const defaultClient = createGridStoryClient({
   baseUrl: import.meta.env.VITE_GRIDSTORY_API_URL ?? 'http://localhost:4000',
@@ -768,7 +770,40 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   const [assetUploading, setAssetUploading] = useState(false);
 
   const [dirty, setDirty] = useState(false);
-  const [busy, setBusy] = useState(true);
+  const [busyState, updateBusy] = useState(true);
+  const [pendingWrites, setPendingWrites] = useState(0);
+  const pendingWritesRef = useRef(0);
+  const busy = busyState || pendingWrites > 0;
+  const trackEntryMutation = async <T,>(operation: () => Promise<T>): Promise<T> => {
+    pendingWritesRef.current += 1;
+    setPendingWrites(pendingWritesRef.current);
+    try {
+      return await operation();
+    } finally {
+      pendingWritesRef.current -= 1;
+      setPendingWrites(pendingWritesRef.current);
+    }
+  };
+  const busyRef = useRef(true);
+  const setBusy = useCallback((value: boolean) => {
+    busyRef.current = value;
+    updateBusy(value);
+  }, []);
+  const [entryLoading, setEntryLoading] = useState(false);
+  const [bootstrapped, setBootstrapped] = useState(false);
+  const [entryUnavailable, setEntryUnavailable] = useState(false);
+  const entryReadRef = useRef<AbortController | null>(null);
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
+  const schemasRef = useRef(schemas);
+  schemasRef.current = schemas;
+  const initialLocationRef = useRef(parseStudioLocation(window.location.hash));
+  const acceptedLocationRef = useRef<StudioLocation>(initialLocationRef.current.location);
+  const studioHistoryRef = useRef<StudioHistory | null>(null);
+  const transitionRef = useRef<Parameters<typeof createStudioHistory>[1]>(async () => false);
+  const stopPreviewRef = useRef<() => Promise<void>>(async () => undefined);
+  const previewGenerationRef = useRef(0);
+  const mountedRef = useRef(true);
   const [studioTheme, setStudioTheme] = useState<StudioTheme>(initialStudioTheme);
   const [activeStudioDestination, setActiveStudioDestination] =
     useState<StudioDestination>('pages');
@@ -986,30 +1021,78 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   );
 
   const selectEntry = useCallback(
-    async (id: string, componentFieldName?: string) => {
+    async (id: string, componentFieldName?: string, signal?: AbortSignal) => {
+      entryReadRef.current?.abort();
+      const controller = new AbortController();
+      entryReadRef.current = controller;
+      const cancel = () => {
+        controller.abort();
+        if (entryReadRef.current === controller) {
+          entryReadRef.current = null;
+          setEntryLoading(false);
+          setBusy(false);
+        }
+      };
+      signal?.addEventListener('abort', cancel, { once: true });
+      if (signal?.aborted) {
+        cancel();
+        return null;
+      }
+      const current = () => !controller.signal.aborted && entryReadRef.current === controller;
+      setEntryLoading(true);
       setBusy(true);
       setNotice(null);
       try {
         const [entry, history, workflowState] = await Promise.all([
-          client.getContent(id, { perspective: 'draft' }),
-          client.listRevisions(id),
-          client.getContentWorkflow(id),
+          client.getContent(id, { perspective: 'draft', signal: controller.signal }),
+          client.listRevisions(id, controller.signal),
+          client.getContentWorkflow(id, controller.signal),
         ]);
+        if (!current()) return null;
+        if (
+          entry.id !== id ||
+          entry.contentType !== 'page' ||
+          !schemasRef.current.some((schema) => schema.id === 'page')
+        ) {
+          throw new Error('This page is unavailable in the current authorized context.');
+        }
+        if (selectedRef.current?.id !== entry.id) void stopPreviewRef.current();
+        selectedRef.current = entry;
         setSelected(entry);
         setDraft(asEditableContent(entry));
         setRevisions(history);
         setWorkflowInstance(workflowState);
         setWorkflowScheduleAt('');
         setQualityReport(null);
-        setCompositionHistory(createCompositionHistory(compositionFrom(entry, componentFieldName)));
+        const fieldName =
+          componentFieldName ??
+          schemasRef.current
+            .find((schema) => schema.id === entry.contentType)
+            ?.fields.find((field) => field.type === 'component-tree')?.name;
+        setCompositionHistory(createCompositionHistory(compositionFrom(entry, fieldName)));
         setDirty(false);
-      } catch (error) {
-        setNotice({ tone: 'error', message: messageFrom(error) });
+        setEntryUnavailable(false);
+        return entry;
+      } catch {
+        if (current()) {
+          setNotice({
+            tone: 'error',
+            message:
+              'This page could not be opened in the current authorized context. The previous entry, if any, is unchanged.',
+          });
+          if (!selectedRef.current) setEntryUnavailable(true);
+        }
+        return null;
       } finally {
-        setBusy(false);
+        signal?.removeEventListener('abort', cancel);
+        if (current()) {
+          entryReadRef.current = null;
+          setEntryLoading(false);
+          setBusy(false);
+        }
       }
     },
-    [client],
+    [client, setBusy],
   );
 
   const refreshList = useCallback(
@@ -1022,11 +1105,35 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
         const fieldName = schemas
           .find((schema) => schema.id === targetEntry?.contentType)
           ?.fields.find((field) => field.type === 'component-tree')?.name;
-        await selectEntry(target, fieldName);
+        const entry = await selectEntry(target, fieldName);
+        if (entry) {
+          const location: StudioLocation = {
+            destination: acceptedLocationRef.current.destination,
+            entryId: entry.id,
+            type: 'page',
+          };
+          acceptedLocationRef.current = location;
+          studioHistoryRef.current?.push(location);
+        }
       } else setBusy(false);
     },
-    [client, schemas, selectEntry, selected?.id],
+    [client, schemas, selectEntry, selected?.id, setBusy],
   );
+
+  useEffect(() => {
+    mountedRef.current = true;
+    const history = createStudioHistory(window, (location, context) =>
+      transitionRef.current(location, context),
+    );
+    studioHistoryRef.current = history;
+    history.replace(acceptedLocationRef.current);
+    return () => {
+      mountedRef.current = false;
+      history.dispose();
+      studioHistoryRef.current = null;
+      entryReadRef.current?.abort();
+    };
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -1054,35 +1161,53 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
           workflowList,
           releaseList,
         ]) => {
+          if (controller.signal.aborted) return;
           setEntries(entryList);
           setManifests(manifestList);
           setSchemas(schemaList);
+          schemasRef.current = schemaList;
           setDesignSystem(designSystemManifest);
           setAssets(assetList);
           setWorkflowDefinitions(workflowList);
           setReleases(releaseList);
           setActiveReleaseId(releaseList[0]?.id ?? null);
-          if (entryList[0]) {
+          const target = initialLocationRef.current.location.entryId ?? entryList[0]?.id;
+          let entry: ContentEntry | null = null;
+          if (target) {
             const fieldName = schemaList
               .find((schema) => schema.id === entryList[0]?.contentType)
               ?.fields.find((field) => field.type === 'component-tree')?.name;
-            await selectEntry(entryList[0].id, fieldName);
+            entry = await selectEntry(target, fieldName, controller.signal);
           } else setBusy(false);
+          if (controller.signal.aborted) return;
+          const location: StudioLocation = {
+            ...initialLocationRef.current.location,
+            ...(entry ? { entryId: entry.id, type: 'page' as const } : {}),
+          };
+          acceptedLocationRef.current = location;
+          studioHistoryRef.current?.replace(location);
+          setActiveStudioDestination(location.destination);
+          setBootstrapped(true);
+          if (initialLocationRef.current.invalid)
+            setNotice({
+              tone: 'info',
+              message: 'That Studio address was not recognized. Pages is shown instead.',
+            });
         },
       )
       .catch((error: unknown) => {
-        if ((error as { name?: string }).name !== 'AbortError') {
+        if (!controller.signal.aborted && (error as { name?: string }).name !== 'AbortError') {
           setNotice({ tone: 'error', message: messageFrom(error) });
           setFatalError(messageFrom(error));
           setBusy(false);
         }
       });
     return () => controller.abort();
-  }, [client, reloadToken, selectEntry]);
+  }, [client, reloadToken, selectEntry, setBusy]);
 
   useEffect(() => {
+    if (!dirty) return;
     const beforeUnload = (event: BeforeUnloadEvent) => {
-      if (!dirty) return;
       event.preventDefault();
     };
     window.addEventListener('beforeunload', beforeUnload);
@@ -1247,6 +1372,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   };
 
   const changeDraft = (updater: (current: EditableContent) => EditableContent) => {
+    if (entryReadRef.current || busyRef.current || pendingWritesRef.current > 0) return;
     setDraft((current) => (current ? updater(current) : current));
     setDirty(true);
     setQualityReport(null);
@@ -1262,148 +1388,159 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
     }));
   };
 
-  const createComment = async () => {
-    if (!selected || !commentBody.trim()) return;
-    try {
-      const thread = await client.createCommentThread(selected.id, {
-        target: {
-          ...(commentTargetField ? { field: commentTargetField } : {}),
-          ...(selectedCommentNodeId ? { nodeId: selectedCommentNodeId } : {}),
-        },
-        body: commentBody,
-        ...(commentAssignee ? { assigneeId: commentAssignee } : {}),
-        ...(commentDueAt ? { dueAt: new Date(commentDueAt).toISOString() } : {}),
-      });
-      replaceCollaborationThread(thread);
-      setCommentBody('');
-      setNotice({ tone: 'success', message: 'Comment thread created.' });
-    } catch (error) {
-      setNotice({ tone: 'error', message: messageFrom(error) });
-    }
-  };
+  const createComment = async () =>
+    trackEntryMutation(async () => {
+      if (!selected || !commentBody.trim()) return;
+      try {
+        const thread = await client.createCommentThread(selected.id, {
+          target: {
+            ...(commentTargetField ? { field: commentTargetField } : {}),
+            ...(selectedCommentNodeId ? { nodeId: selectedCommentNodeId } : {}),
+          },
+          body: commentBody,
+          ...(commentAssignee ? { assigneeId: commentAssignee } : {}),
+          ...(commentDueAt ? { dueAt: new Date(commentDueAt).toISOString() } : {}),
+        });
+        replaceCollaborationThread(thread);
+        setCommentBody('');
+        setNotice({ tone: 'success', message: 'Comment thread created.' });
+      } catch (error) {
+        setNotice({ tone: 'error', message: messageFrom(error) });
+      }
+    });
 
-  const replyToThread = async (threadId: string) => {
-    if (!selected || !replyBodies[threadId]?.trim()) return;
-    try {
-      const thread = await client.replyToComment(selected.id, threadId, replyBodies[threadId]);
-      replaceCollaborationThread(thread);
-      setReplyBodies((current) => ({ ...current, [threadId]: '' }));
-    } catch (error) {
-      setNotice({ tone: 'error', message: messageFrom(error) });
-    }
-  };
+  const replyToThread = async (threadId: string) =>
+    trackEntryMutation(async () => {
+      if (!selected || !replyBodies[threadId]?.trim()) return;
+      try {
+        const thread = await client.replyToComment(selected.id, threadId, replyBodies[threadId]);
+        replaceCollaborationThread(thread);
+        setReplyBodies((current) => ({ ...current, [threadId]: '' }));
+      } catch (error) {
+        setNotice({ tone: 'error', message: messageFrom(error) });
+      }
+    });
 
-  const setThreadResolved = async (threadId: string, resolved: boolean) => {
-    if (!selected) return;
-    try {
-      replaceCollaborationThread(
-        await client.updateCommentThread(selected.id, threadId, { resolved }),
-      );
-    } catch (error) {
-      setNotice({ tone: 'error', message: messageFrom(error) });
-    }
-  };
+  const setThreadResolved = async (threadId: string, resolved: boolean) =>
+    trackEntryMutation(async () => {
+      if (!selected) return;
+      try {
+        replaceCollaborationThread(
+          await client.updateCommentThread(selected.id, threadId, { resolved }),
+        );
+      } catch (error) {
+        setNotice({ tone: 'error', message: messageFrom(error) });
+      }
+    });
 
   const refreshCollaboration = async () => {
     if (!selected) return;
     setCollaboration(await client.getCollaboration(selected.id));
   };
 
-  const shareCollaborationValue = async () => {
-    if (!selected || !collaborationTargetField || selectedCollaborationValue === undefined) return;
-    try {
-      await client.submitCollaborationOperation(selected.id, {
-        branchId: collaborationBranchId,
-        target: {
-          field: collaborationTargetField,
-          ...(selectedCollaborationNodeId ? { nodeId: selectedCollaborationNodeId } : {}),
-        },
-        value: collaborationJsonValue(selectedCollaborationValue),
-      });
-      await refreshCollaboration();
-      setNotice({ tone: 'success', message: 'Current value shared with collaborators.' });
-    } catch (error) {
-      setNotice({ tone: 'error', message: messageFrom(error) });
-    }
-  };
+  const shareCollaborationValue = async () =>
+    trackEntryMutation(async () => {
+      if (!selected || !collaborationTargetField || selectedCollaborationValue === undefined)
+        return;
+      try {
+        await client.submitCollaborationOperation(selected.id, {
+          branchId: collaborationBranchId,
+          target: {
+            field: collaborationTargetField,
+            ...(selectedCollaborationNodeId ? { nodeId: selectedCollaborationNodeId } : {}),
+          },
+          value: collaborationJsonValue(selectedCollaborationValue),
+        });
+        await refreshCollaboration();
+        setNotice({ tone: 'success', message: 'Current value shared with collaborators.' });
+      } catch (error) {
+        setNotice({ tone: 'error', message: messageFrom(error) });
+      }
+    });
 
-  const createCollaborationBranch = async () => {
-    if (!selected || !collaborationBranchName.trim()) return;
-    try {
-      const created = await client.createCollaborationBranch(selected.id, {
-        name: collaborationBranchName,
-        parentBranchId: collaborationBranchId,
-      });
-      setCollaborationBranchId(created.id);
-      setCollaborationBranchName('');
-      await refreshCollaboration();
-      setNotice({ tone: 'success', message: `${created.name} branch created.` });
-    } catch (error) {
-      setNotice({ tone: 'error', message: messageFrom(error) });
-    }
-  };
+  const createCollaborationBranch = async () =>
+    trackEntryMutation(async () => {
+      if (!selected || !collaborationBranchName.trim()) return;
+      try {
+        const created = await client.createCollaborationBranch(selected.id, {
+          name: collaborationBranchName,
+          parentBranchId: collaborationBranchId,
+        });
+        setCollaborationBranchId(created.id);
+        setCollaborationBranchName('');
+        await refreshCollaboration();
+        setNotice({ tone: 'success', message: `${created.name} branch created.` });
+      } catch (error) {
+        setNotice({ tone: 'error', message: messageFrom(error) });
+      }
+    });
 
-  const createCollaborationSuggestion = async () => {
-    if (!selected || !collaborationTargetField || !collaborationSuggestionValue.trim()) return;
-    try {
-      await client.createCollaborationSuggestion(selected.id, {
-        branchId: collaborationBranchId,
-        target: {
-          field: collaborationTargetField,
-          ...(selectedCollaborationNodeId ? { nodeId: selectedCollaborationNodeId } : {}),
-        },
-        value: collaborationSuggestionValue,
-      });
-      setCollaborationSuggestionValue('');
-      await refreshCollaboration();
-      setNotice({ tone: 'success', message: 'Suggestion opened for review.' });
-    } catch (error) {
-      setNotice({ tone: 'error', message: messageFrom(error) });
-    }
-  };
+  const createCollaborationSuggestion = async () =>
+    trackEntryMutation(async () => {
+      if (!selected || !collaborationTargetField || !collaborationSuggestionValue.trim()) return;
+      try {
+        await client.createCollaborationSuggestion(selected.id, {
+          branchId: collaborationBranchId,
+          target: {
+            field: collaborationTargetField,
+            ...(selectedCollaborationNodeId ? { nodeId: selectedCollaborationNodeId } : {}),
+          },
+          value: collaborationSuggestionValue,
+        });
+        setCollaborationSuggestionValue('');
+        await refreshCollaboration();
+        setNotice({ tone: 'success', message: 'Suggestion opened for review.' });
+      } catch (error) {
+        setNotice({ tone: 'error', message: messageFrom(error) });
+      }
+    });
 
   const reviewCollaborationSuggestion = async (
     suggestionId: string,
     decision: 'accept' | 'reject',
-  ) => {
-    if (!selected) return;
-    try {
-      await client.reviewCollaborationSuggestion(selected.id, suggestionId, decision);
-      await refreshCollaboration();
-    } catch (error) {
-      setNotice({ tone: 'error', message: messageFrom(error) });
-    }
-  };
+  ) =>
+    trackEntryMutation(async () => {
+      if (!selected) return;
+      try {
+        await client.reviewCollaborationSuggestion(selected.id, suggestionId, decision);
+        await refreshCollaboration();
+      } catch (error) {
+        setNotice({ tone: 'error', message: messageFrom(error) });
+      }
+    });
 
-  const mergeCollaborationBranch = async () => {
-    if (!selected || collaborationBranchId === 'main') return;
-    try {
-      const merge = await client.mergeCollaborationBranch(selected.id, collaborationBranchId);
-      await refreshCollaboration();
-      setNotice({
-        tone: merge.status === 'merged' ? 'success' : 'info',
-        message:
-          merge.status === 'merged'
-            ? 'Branch merged into Main.'
-            : `${merge.conflictIds.length} conflict${merge.conflictIds.length === 1 ? '' : 's'} need resolution.`,
-      });
-    } catch (error) {
-      setNotice({ tone: 'error', message: messageFrom(error) });
-    }
-  };
+  const mergeCollaborationBranch = async () =>
+    trackEntryMutation(async () => {
+      if (!selected || collaborationBranchId === 'main') return;
+      try {
+        const merge = await client.mergeCollaborationBranch(selected.id, collaborationBranchId);
+        await refreshCollaboration();
+        setNotice({
+          tone: merge.status === 'merged' ? 'success' : 'info',
+          message:
+            merge.status === 'merged'
+              ? 'Branch merged into Main.'
+              : `${merge.conflictIds.length} conflict${merge.conflictIds.length === 1 ? '' : 's'} need resolution.`,
+        });
+      } catch (error) {
+        setNotice({ tone: 'error', message: messageFrom(error) });
+      }
+    });
 
-  const resolveCollaborationConflict = async (conflictId: string, operationId: string) => {
-    if (!selected) return;
-    try {
-      await client.resolveCollaborationConflict(selected.id, conflictId, { operationId });
-      await refreshCollaboration();
-      setNotice({ tone: 'success', message: 'Conflict resolved.' });
-    } catch (error) {
-      setNotice({ tone: 'error', message: messageFrom(error) });
-    }
-  };
+  const resolveCollaborationConflict = async (conflictId: string, operationId: string) =>
+    trackEntryMutation(async () => {
+      if (!selected) return;
+      try {
+        await client.resolveCollaborationConflict(selected.id, conflictId, { operationId });
+        await refreshCollaboration();
+        setNotice({ tone: 'success', message: 'Conflict resolved.' });
+      } catch (error) {
+        setNotice({ tone: 'error', message: messageFrom(error) });
+      }
+    });
 
   const commitBlocks = (nodes: ComponentNode[], selectedId = compositionHistory.selectedId) => {
+    if (entryReadRef.current || busyRef.current || pendingWritesRef.current > 0) return;
     if (!componentField) return;
     const nextHistory = commitComposition(compositionHistory, nodes, selectedId);
     if (nextHistory === compositionHistory) return;
@@ -1419,6 +1556,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   };
 
   const applyComposition = (result: CompositionResult, selectedId?: string) => {
+    if (entryReadRef.current || busyRef.current) return;
     if (!result.ok) {
       setNotice({ tone: 'error', message: result.error ?? 'Composition change was rejected.' });
       return;
@@ -1427,6 +1565,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   };
 
   const restoreComposition = (direction: 'undo' | 'redo') => {
+    if (entryReadRef.current || busyRef.current) return;
     if (!componentField) return;
     const restored =
       direction === 'undo'
@@ -1553,55 +1692,62 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   };
 
   const requestSelectEntry = (id: string) => {
-    if (dirty && !window.confirm('Discard the unsaved changes and open another content entry?')) {
-      return;
-    }
-    void selectEntry(id, componentField?.name);
+    void studioHistoryRef.current?.navigate({ destination: 'pages', entryId: id, type: 'page' });
   };
 
-  const createPage = async () => {
-    if (dirty && !window.confirm('Discard the unsaved changes and create a new page?')) return;
-    setBusy(true);
-    try {
-      const schema = schemas[0];
-      if (!schema) throw new Error('No content schemas are registered.');
-      const hero = manifests.find((manifest) => manifest.id === 'gridstory.hero') ?? manifests[0];
-      if (!hero) throw new Error('No components are registered for a new page.');
-      const suffix = Date.now().toString(36);
-      const data = Object.fromEntries(
-        schema.fields.map((field) => {
-          if (field.type === 'component-tree') return [field.name, [newNode(hero)]];
-          return [field.name, initialFieldValue(field, schema.titleField, suffix)];
-        }),
-      );
-      const entry = await client.createContent(schema.id, data);
-      await refreshList(entry.id);
-      setNotice({ tone: 'success', message: 'Draft page created.' });
-    } catch (error) {
-      setNotice({ tone: 'error', message: messageFrom(error) });
-      setBusy(false);
-    }
-  };
+  const confirmEntryChange = (id: string | undefined) =>
+    id === selectedRef.current?.id ||
+    !dirty ||
+    window.confirm('Discard the unsaved changes and open another content entry?');
 
-  const save = async (): Promise<ContentEntry | null> => {
-    if (!selected || !draft) return null;
-    setBusy(true);
-    try {
-      const updated = await client.saveDraft(selected.id, selected.draftRevisionId, draft);
-      setSelected(updated);
-      setEntries((current) => current.map((entry) => (entry.id === updated.id ? updated : entry)));
-      setRevisions(await client.listRevisions(updated.id));
-      setWorkflowInstance(await client.getContentWorkflow(updated.id));
-      setDirty(false);
-      setNotice({ tone: 'success', message: 'Draft saved as a new immutable revision.' });
-      return updated;
-    } catch (error) {
-      setNotice({ tone: 'error', message: messageFrom(error) });
-      return null;
-    } finally {
-      setBusy(false);
-    }
-  };
+  const createPage = async () =>
+    trackEntryMutation(async () => {
+      if (busyRef.current || entryReadRef.current) return;
+      if (dirty && !window.confirm('Discard the unsaved changes and create a new page?')) return;
+      setBusy(true);
+      try {
+        const schema = schemas[0];
+        if (!schema) throw new Error('No content schemas are registered.');
+        const hero = manifests.find((manifest) => manifest.id === 'gridstory.hero') ?? manifests[0];
+        if (!hero) throw new Error('No components are registered for a new page.');
+        const suffix = Date.now().toString(36);
+        const data = Object.fromEntries(
+          schema.fields.map((field) => {
+            if (field.type === 'component-tree') return [field.name, [newNode(hero)]];
+            return [field.name, initialFieldValue(field, schema.titleField, suffix)];
+          }),
+        );
+        const entry = await client.createContent(schema.id, data);
+        await refreshList(entry.id);
+        setNotice({ tone: 'success', message: 'Draft page created.' });
+      } catch (error) {
+        setNotice({ tone: 'error', message: messageFrom(error) });
+        setBusy(false);
+      }
+    });
+
+  const save = async (): Promise<ContentEntry | null> =>
+    trackEntryMutation(async () => {
+      if (!selected || !draft || busyRef.current || entryReadRef.current) return null;
+      setBusy(true);
+      try {
+        const updated = await client.saveDraft(selected.id, selected.draftRevisionId, draft);
+        setSelected(updated);
+        setEntries((current) =>
+          current.map((entry) => (entry.id === updated.id ? updated : entry)),
+        );
+        setRevisions(await client.listRevisions(updated.id));
+        setWorkflowInstance(await client.getContentWorkflow(updated.id));
+        setDirty(false);
+        setNotice({ tone: 'success', message: 'Draft saved as a new immutable revision.' });
+        return updated;
+      } catch (error) {
+        setNotice({ tone: 'error', message: messageFrom(error) });
+        return null;
+      } finally {
+        setBusy(false);
+      }
+    });
 
   const runQuality = async () => {
     if (!selected || !draft) return;
@@ -1623,129 +1769,134 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
     }
     await runQuality();
   };
-  const publish = async () => {
-    if (!selected || !draft) return;
-    let publishable = selected;
-    if (dirty) {
-      const saved = await save();
-      if (!saved) return;
-      publishable = saved;
-    }
-    setBusy(true);
-    try {
-      const result = await client.publish(publishable.id, publishable.draftRevisionId);
-      setSelected(result);
-      setEntries((current) => current.map((entry) => (entry.id === result.id ? result : entry)));
-      setWorkflowInstance(await client.getContentWorkflow(result.id));
-      setNotice({
-        tone: 'success',
-        message: 'Published revision is now available to React applications.',
-      });
-    } catch (error) {
-      if (
-        error instanceof GridStoryApiError &&
-        typeof error.details === 'object' &&
-        error.details !== null &&
-        'report' in error.details
-      ) {
-        setQualityReport((error.details as { report: ContentQualityReport }).report);
+  const publish = async () =>
+    trackEntryMutation(async () => {
+      if (!selected || !draft || busyRef.current || entryReadRef.current) return;
+      let publishable = selected;
+      if (dirty) {
+        const saved = await save();
+        if (!saved) return;
+        publishable = saved;
       }
-      setNotice({ tone: 'error', message: messageFrom(error) });
-    } finally {
-      setBusy(false);
-    }
-  };
+      setBusy(true);
+      try {
+        const result = await client.publish(publishable.id, publishable.draftRevisionId);
+        setSelected(result);
+        setEntries((current) => current.map((entry) => (entry.id === result.id ? result : entry)));
+        setWorkflowInstance(await client.getContentWorkflow(result.id));
+        setNotice({
+          tone: 'success',
+          message: 'Published revision is now available to React applications.',
+        });
+      } catch (error) {
+        if (
+          error instanceof GridStoryApiError &&
+          typeof error.details === 'object' &&
+          error.details !== null &&
+          'report' in error.details
+        ) {
+          setQualityReport((error.details as { report: ContentQualityReport }).report);
+        }
+        setNotice({ tone: 'error', message: messageFrom(error) });
+      } finally {
+        setBusy(false);
+      }
+    });
 
-  const runWorkflowTransition = async (transitionId: string) => {
-    if (!selected) return;
-    let entry = selected;
-    if (dirty) {
-      const saved = await save();
-      if (!saved) return;
-      entry = saved;
-    }
-    setBusy(true);
-    try {
-      const result = await client.requestWorkflowTransition(
-        entry.id,
-        transitionId,
-        activeSchema?.fields.map((field) => field.name) ?? [],
-      );
-      setWorkflowInstance(result);
-      setNotice({
-        tone: 'success',
-        message: result.pendingApproval
-          ? 'Approval request sent to the configured reviewer roles.'
-          : 'Workflow state updated.',
-      });
-    } catch (error) {
-      setNotice({ tone: 'error', message: messageFrom(error) });
-    } finally {
-      setBusy(false);
-    }
-  };
+  const runWorkflowTransition = async (transitionId: string) =>
+    trackEntryMutation(async () => {
+      if (!selected) return;
+      let entry = selected;
+      if (dirty) {
+        const saved = await save();
+        if (!saved) return;
+        entry = saved;
+      }
+      setBusy(true);
+      try {
+        const result = await client.requestWorkflowTransition(
+          entry.id,
+          transitionId,
+          activeSchema?.fields.map((field) => field.name) ?? [],
+        );
+        setWorkflowInstance(result);
+        setNotice({
+          tone: 'success',
+          message: result.pendingApproval
+            ? 'Approval request sent to the configured reviewer roles.'
+            : 'Workflow state updated.',
+        });
+      } catch (error) {
+        setNotice({ tone: 'error', message: messageFrom(error) });
+      } finally {
+        setBusy(false);
+      }
+    });
 
-  const decideWorkflow = async (decision: 'approved' | 'rejected') => {
-    if (!selected || !workflowInstance?.pendingApproval) return;
-    if (dirty) {
-      setNotice({ tone: 'error', message: 'Save or discard draft changes before reviewing.' });
-      return;
-    }
-    setBusy(true);
-    try {
-      const result = await client.decideWorkflowApproval(
-        selected.id,
-        workflowInstance.pendingApproval.id,
-        decision,
-      );
-      setWorkflowInstance(result);
-      setNotice({
-        tone: decision === 'approved' ? 'success' : 'info',
-        message: decision === 'approved' ? 'Approval recorded.' : 'Changes requested.',
-      });
-    } catch (error) {
-      setNotice({ tone: 'error', message: messageFrom(error) });
-    } finally {
-      setBusy(false);
-    }
-  };
+  const decideWorkflow = async (decision: 'approved' | 'rejected') =>
+    trackEntryMutation(async () => {
+      if (!selected || !workflowInstance?.pendingApproval) return;
+      if (dirty) {
+        setNotice({ tone: 'error', message: 'Save or discard draft changes before reviewing.' });
+        return;
+      }
+      setBusy(true);
+      try {
+        const result = await client.decideWorkflowApproval(
+          selected.id,
+          workflowInstance.pendingApproval.id,
+          decision,
+        );
+        setWorkflowInstance(result);
+        setNotice({
+          tone: decision === 'approved' ? 'success' : 'info',
+          message: decision === 'approved' ? 'Approval recorded.' : 'Changes requested.',
+        });
+      } catch (error) {
+        setNotice({ tone: 'error', message: messageFrom(error) });
+      } finally {
+        setBusy(false);
+      }
+    });
 
-  const scheduleWorkflowTransition = async (transitionId: string) => {
-    if (!selected || !workflowScheduleAt) return;
-    const instant = new Date(workflowScheduleAt);
-    if (!Number.isFinite(instant.getTime())) {
-      setNotice({ tone: 'error', message: 'Choose a valid schedule date and time.' });
-      return;
-    }
-    setBusy(true);
-    try {
-      const result = await client.scheduleWorkflowTransition(selected.id, {
-        transitionId,
-        runAt: instant.toISOString(),
-        timeZone: workflowTimeZone,
-      });
-      setWorkflowInstance(result);
-      setWorkflowScheduleAt('');
-      setNotice({ tone: 'success', message: 'Workflow transition scheduled.' });
-    } catch (error) {
-      setNotice({ tone: 'error', message: messageFrom(error) });
-    } finally {
-      setBusy(false);
-    }
-  };
+  const scheduleWorkflowTransition = async (transitionId: string) =>
+    trackEntryMutation(async () => {
+      if (!selected || !workflowScheduleAt) return;
+      const instant = new Date(workflowScheduleAt);
+      if (!Number.isFinite(instant.getTime())) {
+        setNotice({ tone: 'error', message: 'Choose a valid schedule date and time.' });
+        return;
+      }
+      setBusy(true);
+      try {
+        const result = await client.scheduleWorkflowTransition(selected.id, {
+          transitionId,
+          runAt: instant.toISOString(),
+          timeZone: workflowTimeZone,
+        });
+        setWorkflowInstance(result);
+        setWorkflowScheduleAt('');
+        setNotice({ tone: 'success', message: 'Workflow transition scheduled.' });
+      } catch (error) {
+        setNotice({ tone: 'error', message: messageFrom(error) });
+      } finally {
+        setBusy(false);
+      }
+    });
 
-  const cancelWorkflowSchedule = async (scheduleId: string) => {
-    if (!selected) return;
-    setBusy(true);
-    try {
-      setWorkflowInstance(await client.cancelWorkflowSchedule(selected.id, scheduleId));
-      setNotice({ tone: 'info', message: 'Workflow schedule cancelled.' });
-    } catch (error) {
-      setNotice({ tone: 'error', message: messageFrom(error) });
-    } finally {
-      setBusy(false);
-    }
-  };
+  const cancelWorkflowSchedule = async (scheduleId: string) =>
+    trackEntryMutation(async () => {
+      if (!selected) return;
+      setBusy(true);
+      try {
+        setWorkflowInstance(await client.cancelWorkflowSchedule(selected.id, scheduleId));
+        setNotice({ tone: 'info', message: 'Workflow schedule cancelled.' });
+      } catch (error) {
+        setNotice({ tone: 'error', message: messageFrom(error) });
+      } finally {
+        setBusy(false);
+      }
+    });
 
   const storeRelease = (release: Release) => {
     setReleases((current) => [
@@ -1864,40 +2015,45 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
     }
   };
 
-  const executeActiveRelease = async () => {
-    if (!activeRelease) return;
-    setBusy(true);
-    try {
-      storeRelease(await client.executeRelease(activeRelease.id));
-      setReleasePreview(null);
-      await refreshList(selected?.id);
-      setNotice({ tone: 'success', message: 'All release revisions were published atomically.' });
-    } catch (error) {
-      setNotice({ tone: 'error', message: messageFrom(error) });
-    } finally {
-      setBusy(false);
-    }
-  };
+  const executeActiveRelease = async () =>
+    trackEntryMutation(async () => {
+      if (!activeRelease) return;
+      setBusy(true);
+      try {
+        storeRelease(await client.executeRelease(activeRelease.id));
+        setReleasePreview(null);
+        await refreshList(selected?.id);
+        setNotice({ tone: 'success', message: 'All release revisions were published atomically.' });
+      } catch (error) {
+        setNotice({ tone: 'error', message: messageFrom(error) });
+      } finally {
+        setBusy(false);
+      }
+    });
 
-  const rollbackActiveRelease = async () => {
-    if (!activeRelease) return;
-    setBusy(true);
-    try {
-      storeRelease(
-        await client.rollbackRelease(activeRelease.id, 'Rollback requested from GridStory Studio.'),
-      );
-      setReleasePreview(null);
-      await refreshList(selected?.id);
-      setNotice({
-        tone: 'info',
-        message: 'Every release member was restored to its prior revision.',
-      });
-    } catch (error) {
-      setNotice({ tone: 'error', message: messageFrom(error) });
-    } finally {
-      setBusy(false);
-    }
-  };
+  const rollbackActiveRelease = async () =>
+    trackEntryMutation(async () => {
+      if (!activeRelease) return;
+      setBusy(true);
+      try {
+        storeRelease(
+          await client.rollbackRelease(
+            activeRelease.id,
+            'Rollback requested from GridStory Studio.',
+          ),
+        );
+        setReleasePreview(null);
+        await refreshList(selected?.id);
+        setNotice({
+          tone: 'info',
+          message: 'Every release member was restored to its prior revision.',
+        });
+      } catch (error) {
+        setNotice({ tone: 'error', message: messageFrom(error) });
+      } finally {
+        setBusy(false);
+      }
+    });
   const refreshWorkflowActionDeliveries = async () => {
     const deliveries = await client.listWorkflowActions();
     setWorkflowActionDeliveries(deliveries);
@@ -2803,27 +2959,30 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
       setKnowledgeBusy(false);
     }
   };
-  const executeKnowledgePlan = async (planId: string, digest: string) => {
-    if (!knowledge || !selected) return;
-    setKnowledgeBusy(true);
-    try {
-      await client.executeKnowledgeAgentPlan(planId, {
-        expectedVersion: knowledge.version,
-        digest,
-        idempotencyKey: crypto.randomUUID(),
-      });
-      await Promise.all([refreshKnowledge(), selectEntry(selected.id)]);
-      setNotice({
-        tone: 'success',
-        message: 'Approved plan applied to the saved draft through normal content validation.',
-      });
-    } catch (error) {
-      setNotice({ tone: 'error', message: messageFrom(error) });
-      await refreshKnowledge().catch(() => undefined);
-    } finally {
-      setKnowledgeBusy(false);
-    }
-  };
+  const executeKnowledgePlan = async (planId: string, digest: string) =>
+    trackEntryMutation(async () => {
+      if (!knowledge || !selected || busyRef.current || entryReadRef.current) return;
+      setBusy(true);
+      setKnowledgeBusy(true);
+      try {
+        await client.executeKnowledgeAgentPlan(planId, {
+          expectedVersion: knowledge.version,
+          digest,
+          idempotencyKey: crypto.randomUUID(),
+        });
+        await Promise.all([refreshKnowledge(), selectEntry(selected.id)]);
+        setNotice({
+          tone: 'success',
+          message: 'Approved plan applied to the saved draft through normal content validation.',
+        });
+      } catch (error) {
+        setNotice({ tone: 'error', message: messageFrom(error) });
+        await refreshKnowledge().catch(() => undefined);
+      } finally {
+        setKnowledgeBusy(false);
+        setBusy(false);
+      }
+    });
   const refreshFleet = async () => {
     setFleet(await client.getFleet());
   };
@@ -3114,23 +3273,28 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
       setNotice({ tone: 'error', message: messageFrom(error) });
     }
   };
-  const executeMigrationPlan = async (plan: MigrationPlanSummary) => {
-    if (!migrationPlanReviewed) {
-      setNotice({
-        tone: 'error',
-        message: 'Review the exact digest and effects before execution.',
-      });
-      return;
-    }
-    try {
-      await client.executeMigrationPlan(plan.id, plan.digest);
-      setMigrationPlanReviewed(false);
-      await Promise.all([refreshMigrations(), refreshList()]);
-      setNotice({ tone: 'success', message: 'Migration plan completed with a durable receipt.' });
-    } catch (error) {
-      setNotice({ tone: 'error', message: messageFrom(error) });
-    }
-  };
+  const executeMigrationPlan = async (plan: MigrationPlanSummary) =>
+    trackEntryMutation(async () => {
+      if (busyRef.current || entryReadRef.current) return;
+      if (!migrationPlanReviewed) {
+        setNotice({
+          tone: 'error',
+          message: 'Review the exact digest and effects before execution.',
+        });
+        return;
+      }
+      setBusy(true);
+      try {
+        await client.executeMigrationPlan(plan.id, plan.digest);
+        setMigrationPlanReviewed(false);
+        await Promise.all([refreshMigrations(), refreshList()]);
+        setNotice({ tone: 'success', message: 'Migration plan completed with a durable receipt.' });
+      } catch (error) {
+        setNotice({ tone: 'error', message: messageFrom(error) });
+      } finally {
+        setBusy(false);
+      }
+    });
   const validateMigrationCutover = async () => {
     if (!activeMigrationProjectId) return;
     try {
@@ -3665,38 +3829,37 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
     await inspectComponent(manifests[0]?.id);
   };
 
-  const migrateComponentEntry = async (
-    entryId: string,
-    componentId: string,
-    revisionId: string,
-  ) => {
-    if (dirty && selected?.id === entryId) {
-      setNotice({
-        tone: 'error',
-        message: 'Save or discard local edits before migrating this entry.',
-      });
-      return;
-    }
-    setBusy(true);
-    try {
-      const result = await client.migrateEntryComponent(entryId, componentId, revisionId);
-      await inspectComponent(componentId);
-      await refreshList(result.entry.id);
-      setNotice({
-        tone: 'success',
-        message: `Migrated ${result.migratedInstances} component instance${result.migratedInstances === 1 ? '' : 's'} to the current version.`,
-      });
-    } catch (error) {
-      setNotice({ tone: 'error', message: messageFrom(error) });
-    } finally {
-      setBusy(false);
-    }
-  };
+  const migrateComponentEntry = async (entryId: string, componentId: string, revisionId: string) =>
+    trackEntryMutation(async () => {
+      if (dirty && selected?.id === entryId) {
+        setNotice({
+          tone: 'error',
+          message: 'Save or discard local edits before migrating this entry.',
+        });
+        return;
+      }
+      if (!confirmEntryChange(entryId)) return;
+      setBusy(true);
+      try {
+        const result = await client.migrateEntryComponent(entryId, componentId, revisionId);
+        await inspectComponent(componentId);
+        await refreshList(result.entry.id);
+        setNotice({
+          tone: 'success',
+          message: `Migrated ${result.migratedInstances} component instance${result.migratedInstances === 1 ? '' : 's'} to the current version.`,
+        });
+      } catch (error) {
+        setNotice({ tone: 'error', message: messageFrom(error) });
+      } finally {
+        setBusy(false);
+      }
+    });
 
   const slugField = activeSchema?.fields.find((field) => field.type === 'slug');
   const previewSlug = String(draft?.[slugField?.name ?? 'slug'] ?? 'preview');
 
   const closeExternalPreview = useCallback(async () => {
+    previewGenerationRef.current += 1;
     previewControllerRef.current?.dispose();
     previewControllerRef.current = null;
     const grant = previewGrantRef.current;
@@ -3710,10 +3873,15 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
       try {
         await client.revokePreviewSession(grant.sessionId);
       } catch (error) {
-        setNotice({ tone: 'error', message: messageFrom(error) });
+        if (mountedRef.current)
+          setNotice({
+            tone: 'error',
+            message: `The preview window was closed, but session revocation failed: ${messageFrom(error)}`,
+          });
       }
     }
   }, [client]);
+  stopPreviewRef.current = closeExternalPreview;
 
   const connectPreviewTarget = useCallback((targetWindow: Window, grant: PreviewSessionGrant) => {
     previewControllerRef.current?.dispose();
@@ -3746,7 +3914,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   }, []);
 
   const startExternalPreview = async () => {
-    if (!selected || !draft) return;
+    if (!selected || !draft || entryReadRef.current) return;
     const popup = window.open(
       'about:blank',
       'gridstory-standalone-preview',
@@ -3756,7 +3924,10 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
       setNotice({ tone: 'error', message: 'The standalone preview popup was blocked.' });
       return;
     }
-    await closeExternalPreview();
+    void closeExternalPreview();
+    const generation = previewGenerationRef.current;
+    const entryId = selected.id;
+    previewPopupRef.current = popup;
     const route = previewSlug.startsWith('/') ? previewSlug : `/${previewSlug}`;
     try {
       const grant = await client.createPreviewSession({
@@ -3765,6 +3936,24 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
         mode: 'standalone',
         entryId: selected.id,
       });
+      if (
+        !mountedRef.current ||
+        generation !== previewGenerationRef.current ||
+        selectedRef.current?.id !== entryId ||
+        popup.closed
+      ) {
+        if (!popup.closed) popup.close();
+        try {
+          await client.revokePreviewSession(grant.sessionId);
+        } catch (error) {
+          if (mountedRef.current)
+            setNotice({
+              tone: 'error',
+              message: `The unused preview session could not be revoked: ${messageFrom(error)}`,
+            });
+        }
+        return;
+      }
       previewGrantRef.current = grant;
       setExternalPreview({ grant, entryId: selected.id, route, ready: false });
       previewPopupRef.current = popup;
@@ -3772,14 +3961,16 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
       connectPreviewTarget(popup, grant);
     } catch (error) {
       popup.close();
-      setNotice({ tone: 'error', message: messageFrom(error) });
+      if (mountedRef.current && generation === previewGenerationRef.current)
+        setNotice({ tone: 'error', message: messageFrom(error) });
     }
   };
 
   useEffect(() => {
     const controller = previewControllerRef.current;
     const sessionId = externalPreview?.grant.sessionId;
-    if (!controller || !sessionId || !selected || !draft) return;
+    if (!controller || !sessionId || !selected || !draft || externalPreview.entryId !== selected.id)
+      return;
     if (lastPreviewSlugRef.current !== previewSlug) {
       const route = previewSlug.startsWith('/') ? previewSlug : `/${previewSlug}`;
       lastPreviewSlugRef.current = previewSlug;
@@ -3794,7 +3985,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
       data: draft,
       revisionId: selected.draftRevisionId,
     });
-  }, [draft, externalPreview?.grant.sessionId, previewSlug, selected]);
+  }, [draft, externalPreview?.grant.sessionId, externalPreview?.entryId, previewSlug, selected]);
 
   useEffect(() => {
     if (externalPreview && externalPreview.entryId !== selected?.id) {
@@ -3812,6 +4003,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
 
   useEffect(
     () => () => {
+      previewGenerationRef.current += 1;
       previewControllerRef.current?.dispose();
       const grant = previewGrantRef.current;
       if (grant) void client.revokePreviewSession(grant.sessionId).catch(() => undefined);
@@ -3821,25 +4013,56 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
     [client],
   );
 
-  const selectNavigationItem = (
-    destination: StudioDestination,
-    loaded: boolean,
-    ensureLoaded?: () => void,
-  ) => {
+  const activateDestination = (destination: StudioDestination) => {
     setActiveStudioDestination(destination);
     const group = studioNavigationGroups.find(({ destinations }) =>
       destinations.some((id) => id === destination),
     );
     if (group) setExpandedNavigationGroups((current) => new Set(current).add(group.id));
-    if (!loaded) ensureLoaded?.();
     setMobileNavigationOpen(false);
     if (destination === 'pages') {
       requestAnimationFrame(() => document.getElementById('studio-editor')?.focus());
     }
   };
 
+  transitionRef.current = async (requested, { signal, invalid }) => {
+    if (!bootstrapped || signal.aborted) return false;
+    const entryId = invalid
+      ? selectedRef.current?.id
+      : (requested.entryId ?? selectedRef.current?.id ?? entries[0]?.id);
+    const changingEntry = entryId !== selectedRef.current?.id;
+    if (changingEntry) {
+      if (pendingWritesRef.current > 0 || (busyRef.current && !entryReadRef.current)) {
+        setNotice({
+          tone: 'info',
+          message: 'Wait for the current operation to finish before opening another page.',
+        });
+        return false;
+      }
+      if (!confirmEntryChange(entryId)) return false;
+      if (entryId && !(await selectEntry(entryId, undefined, signal))) return false;
+    }
+    if (signal.aborted) return false;
+    const location: StudioLocation = {
+      destination: requested.destination,
+      ...(entryId ? { entryId, type: 'page' as const } : {}),
+    };
+    acceptedLocationRef.current = location;
+    activateDestination(location.destination);
+    if (invalid)
+      setNotice({
+        tone: 'info',
+        message: 'That Studio address was not recognized. Pages is shown instead.',
+      });
+    return location;
+  };
+
+  const selectNavigationItem = (destination: StudioDestination) => {
+    void studioHistoryRef.current?.navigate({ ...acceptedLocationRef.current, destination });
+  };
+
   const selectSearchDestination = () => {
-    selectNavigationItem('search', searchPanelOpen, () => void toggleSearchPanel());
+    selectNavigationItem('search');
   };
 
   const navigationActions: Record<
@@ -3904,6 +4127,19 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
     assets: { loaded: assetLibraryOpen, ensureLoaded: () => setAssetLibraryOpen(true) },
   };
 
+  const navigationActionsRef = useRef(navigationActions);
+  navigationActionsRef.current = navigationActions;
+  useEffect(() => {
+    if (!bootstrapped) return;
+    const group = studioNavigationGroups.find(({ destinations }) =>
+      destinations.some((id) => id === activeStudioDestination),
+    );
+    if (group) setExpandedNavigationGroups((current) => new Set(current).add(group.id));
+    const action = navigationActionsRef.current[activeStudioDestination];
+    if (activeStudioDestination === 'quality' && !selected?.id) return;
+    if (!action.loaded) action.ensureLoaded?.();
+  }, [activeStudioDestination, bootstrapped, selected?.id]);
+
   const compactNavigation = navigationCondensed && !mobileViewport;
   const toggleNavigationGroup = (id: StudioNavigationGroupId) => {
     setExpandedNavigationGroups((current) => {
@@ -3927,7 +4163,18 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
       className={`studio-shell${navigationCondensed ? ' studio-shell--navigation-condensed' : ''}`}
       data-theme={studioTheme}
     >
-      <a className="skip-link" href="#studio-editor" tabIndex={0}>
+      {/* biome-ignore lint/a11y/useValidAnchor: Native skip-link semantics are retained; focus must not overwrite the Studio fragment route (ADR 0028). */}
+      <a
+        className="skip-link"
+        href="#studio-editor"
+        tabIndex={0}
+        onClick={(event) => {
+          event.preventDefault();
+          (
+            document.getElementById('studio-editor') ?? document.getElementById('studio-content')
+          )?.focus();
+        }}
+      >
         Skip to page editor
       </a>
       {mobileNavigationOpen ? (
@@ -4000,10 +4247,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                             data-destination={destination}
                             aria-label={item.label}
                             aria-current={active ? 'page' : undefined}
-                            disabled={action.disabled}
-                            onClick={() =>
-                              selectNavigationItem(destination, action.loaded, action.ensureLoaded)
-                            }
+                            disabled={!bootstrapped || action.disabled}
+                            onClick={() => selectNavigationItem(destination)}
                             title={item.label}
                           >
                             <span className="studio-navigation__icon">
@@ -4094,7 +4339,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               onClick={() =>
                 void (externalPreview ? closeExternalPreview() : startExternalPreview())
               }
-              disabled={!externalPreview && (!selected || !draft)}
+              disabled={!externalPreview && (!selected || !draft || entryLoading)}
             >
               <svg aria-hidden="true" viewBox="0 0 24 24">
                 {externalPreview ? (
@@ -4143,7 +4388,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
             </span>
           </div>
         </header>
-        <div className="studio-page">
+        <div className="studio-page" id="studio-content" tabIndex={-1}>
           {activeStudioDestination !== 'pages' && notice ? (
             <div className={`notice notice--${notice.tone}`} role="status">
               {notice.message}
@@ -4857,7 +5102,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                       <button
                         type="button"
                         className="button button--secondary button--compact search-result-button"
-                        onClick={() => void selectEntry(hit.entry.id)}
+                        onClick={() => requestSelectEntry(hit.entry.id)}
                       >
                         {entryTitle(hit.entry, schemas)}
                       </button>
@@ -7427,6 +7672,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                     type="button"
                     className="icon-button"
                     onClick={() => void createPage()}
+                    disabled={busy || entryLoading}
                     aria-label="Create page"
                   >
                     +
@@ -7462,6 +7708,12 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                     Loading GridStory…
                   </div>
                 ) : null}
+                {entryUnavailable && !draft ? (
+                  <p className="empty-copy" role="alert">
+                    The requested page is unavailable. Choose another page from the list or check
+                    your access.
+                  </p>
+                ) : null}
                 {fatalError && !draft ? (
                   <div className="loading-state" role="alert">
                     <p>GridStory could not load: {fatalError}</p>
@@ -7475,7 +7727,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   </div>
                 ) : null}
                 {draft && selected ? (
-                  <>
+                  <div inert={entryLoading || busy} style={{ display: 'contents' }}>
                     <section className="document-heading">
                       <div>
                         <span className="kicker">Page entry</span>
@@ -8567,7 +8819,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                         ))}
                       </ol>
                     </section>
-                  </>
+                  </div>
                 ) : null}
               </main>
             </div>

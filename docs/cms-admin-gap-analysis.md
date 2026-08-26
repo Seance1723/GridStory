@@ -212,7 +212,7 @@ No calendar estimate is asserted: scope varies materially between moving an exis
 
 ## 9. Recommended next action
 
-The original first recommendation was **CMS-001: reorganize only the 19 existing destinations** using the mapping above. Its implementation checkpoint is below. The next task is **CMS-002: stable Studio locations, deep links and history-safe navigation**. Start with a scoped T2 implementation plan and approve hash versus path/history behavior, dirty-state handling and deployment compatibility before changing code; the proposed program does not supply that approval.
+The original first recommendation was **CMS-001: reorganize only the 19 existing destinations** using the mapping above. CMS-001 and **CMS-002: stable Studio locations, deep links and history-safe navigation** are now implemented and verified; their checkpoints are below. The next action is a scoped T2 plan and approval for **CMS-003: authorized Studio capabilities and safe scope selection**. The broader proposed program does not approve a new capability/scope contract or its implementation.
 
 After that, proceed through the queue by dependency. CMS-002 and other T2 tasks require their own implementation plan/approval. CMS-027 through CMS-030 are questions/discovery tasks, not authorization to build a model-hosting platform, store PII, send email, process payments or deploy services.
 
@@ -254,7 +254,18 @@ Handoff: GOV-006 completes analysis/planning only on `main`. All CMS tasks remai
 
 ## 13. CMS-002 planning checkpoint
 
+Implementation update (2026-08-26): the user approved ADR 0028 in response to its explicit approval question. CMS-002 progressed through `[~]` to verified `[x]`; section 14 records completion. The planning evidence below remains historical.
+
 - Updated: 2026-08-26T12:46:25+05:30 by Codex. The scoped [Studio locations/history proposal](adr/0028-studio-locations-and-history.md) is ready for approval; CMS-002 is not implemented and remains `[ ]`.
 - Recommended contract: finite hash destinations with optional page entry/type context, native history without a router dependency or server rewrite, one guarded entry-transition path, stale-read protection and entry-bound preview cleanup. Same-entry destination changes preserve drafts. Invalid/unavailable targets and cancelled owned/unowned history have explicit behavior.
 - Source review logged BUG-0421: search-result entry clicks bypass the existing dirty confirmation. Its runtime regression and fix are part of the proposed implementation, not this documentation pass. BUG-0420 corrects the stale queue summary that still named completed CMS-001.
 - This checkpoint does not change application behavior, authorize CMS-003 scope/permissions or CMS-004 non-page authoring, add deployment claims, or turn the broader proposed program into approval. The next action is owner approval of ADR 0028.
+
+## 14. CMS-002 implementation checkpoint
+
+- Updated: 2026-08-26 by Codex. Status: implemented and verified; completion commit is tagged `[CMS-002]`. The finite native location/history contract supports all 19 existing destinations and optional authorized page entry context, with no router dependency, server rewrite, trusted URL scope or published-application route change.
+- Direct links/reload, invalid and unavailable targets, owned/unowned Back/Forward, dirty cancellation, stale reads, entry-bound writes and preview replacement have explicit guarded behavior and regressions. Same-entry destination changes preserve drafts/preview, and skip focus preserves the route. Current colors, shared SCSS, grouped navigation and every existing feature remain intact.
+- Evidence: complete repository checkpoint followed by final lint/format/type/unit-integration gates (430 active tests, including 78 Studio; 17 existing opt-in skips), production/E2E builds and 30/30 Chromium/Firefox/WebKit scenarios. These retain all 19 destinations at six widths, light/dark, text/control containment, keyboard, zoom/forced colors, WCAG and preview/publishing delivery. The isolated final WebKit sweep passed its unchanged deadline after the overlapping-run timeout logged as BUG-0432.
+- Isolated manual smoke verified copied links, reload, Back/Forward, mobile drawer/containment, theme switching and connected-preview closure on accepted entry replacement. Automated tests supply native-cancellation evidence; the manual smoke does not claim it. Own test tabs/services were closed, viewport reset and user data/services preserved. PostgreSQL, external-provider and deployment certification were not rerun or claimed.
+- BUG-0421 through BUG-0426 and BUG-0428 through BUG-0432 are resolved. BUG-0427 remains open for CMS-004: existing Create page defaults fail the full example schema, while preserving current editor/address on rejection. Successful creation location behavior is verified with a valid unit fixture; schema-aware defaults are not silently added to this slice.
+- Follow-up: prepare and obtain approval for CMS-003's minimized authenticated capabilities/context contract and safe scope switching. All later tasks retain their dependencies and decision gates; existing beta/RC/GA no-go boundaries are unchanged.

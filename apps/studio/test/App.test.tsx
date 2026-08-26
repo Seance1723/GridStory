@@ -24,11 +24,13 @@ import {
   type RegionalDocument,
   type Release,
 } from '@gridstory/client';
+import * as previewClient from '@gridstory/client/preview';
 import { exampleDesignSystem } from '@gridstory/example-kit/design-system';
 import { componentManifests } from '@gridstory/example-kit/manifests';
 import type { ContentSchemaDefinition } from '@gridstory/schema';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { StrictMode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/App.js';
 
@@ -1970,12 +1972,299 @@ function createTestClient(
 
 afterEach(() => {
   cleanup();
+  window.history.replaceState(null, '', '/');
   window.localStorage.clear();
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: initialWindowWidth });
   vi.restoreAllMocks();
 });
 
 describe('GridStory Studio', () => {
+  it('confirms before a component migration can replace a different dirty entry', async () => {
+    const user = userEvent.setup();
+    const client = createTestClient();
+    const migration = await client.getComponentMigration('gridstory.hero');
+    vi.spyOn(client, 'getComponentMigration').mockResolvedValue({
+      ...migration,
+      component: { ...migration.component, version: 2 },
+      usage: {
+        ...migration.usage,
+        locations: [
+          {
+            entryId: 'two',
+            revisionId: 'two-revision-1',
+            perspective: 'draft',
+            version: 1,
+            field: 'sections',
+            nodeId: 'two-hero-a',
+          },
+        ],
+      },
+    });
+    const migrate = vi
+      .spyOn(client, 'migrateEntryComponent')
+      .mockResolvedValue({ entry: entries[1] as ContentEntry, migratedInstances: 1 });
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    render(<App client={client} />);
+    fireEvent.change(await screen.findByLabelText('Headline'), {
+      target: { value: 'Keep this draft' },
+    });
+    await user.click(screen.getByRole('button', { name: 'Components' }));
+    await user.click(await screen.findByRole('button', { name: 'Migrate two from v1' }));
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(migrate).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Pages' }));
+    expect((screen.getByLabelText('Headline') as HTMLInputElement).value).toBe('Keep this draft');
+  });
+
+  it('blocks entry replacement while a collaboration mutation is in flight', async () => {
+    const user = userEvent.setup();
+    const client = createTestClient();
+    const branch = await client.createCollaborationBranch('one', {
+      name: 'Pending branch',
+      parentBranchId: 'main',
+    });
+    let resolve!: (value: typeof branch) => void;
+    vi.spyOn(client, 'createCollaborationBranch').mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          resolve = done;
+        }),
+    );
+    render(<App client={client} />);
+    await screen.findByLabelText('Headline');
+    await user.type(screen.getByLabelText('New branch from current'), 'Pending branch');
+    await user.click(screen.getByRole('button', { name: 'Create branch' }));
+    await user.click(screen.getByRole('button', { name: 'Workflows' }));
+    await screen.findByRole('region', { name: 'Workflow action designer' });
+    await user.click(screen.getByRole('button', { name: 'Pages' }));
+    await user.click(screen.getByRole('button', { name: /Second page/ }));
+    await screen.findByText(/Wait for the current operation/);
+    expect((screen.getByLabelText('Headline') as HTMLInputElement).value).toBe('First page');
+    expect(window.location.hash).toBe('#/pages?entry=one&type=page');
+    resolve(branch);
+    await screen.findByText('Pending branch branch created.');
+  });
+
+  it('adds a location only after successful page creation, without pushing failed writes', async () => {
+    const user = userEvent.setup();
+    const client = createTestClient();
+    render(<App client={client} />);
+    await screen.findByLabelText('Headline');
+    const length = window.history.length;
+    const create = vi
+      .spyOn(client, 'createContent')
+      .mockRejectedValueOnce(new Error('Creation rejected'));
+    await user.click(screen.getByRole('button', { name: 'Create page' }));
+    await screen.findByText('Creation rejected');
+    expect(window.history.length).toBe(length);
+    expect(window.location.hash).toBe('#/pages?entry=one&type=page');
+    const created = entry('created', 'New page', 'new-page');
+    create.mockResolvedValueOnce(created);
+    vi.spyOn(client, 'getContent').mockResolvedValueOnce(created);
+    const workflow = await client.getContentWorkflow('one');
+    vi.spyOn(client, 'getContentWorkflow').mockResolvedValueOnce({
+      ...workflow,
+      entryId: created.id,
+    });
+    vi.spyOn(client, 'listContent').mockResolvedValueOnce([...entries, created]);
+    await user.click(screen.getByRole('button', { name: 'Create page' }));
+    await screen.findByText('Draft page created.');
+    expect((screen.getByLabelText('Headline') as HTMLInputElement).value).toBe('New page');
+    expect(window.location.hash).toBe('#/pages?entry=created&type=page');
+    expect(window.history.length).toBe(length + 1);
+  });
+
+  it('registers the document-exit warning only while dirty and cleans it up on unmount', async () => {
+    const add = vi.spyOn(window, 'addEventListener');
+    const remove = vi.spyOn(window, 'removeEventListener');
+    const view = render(<App client={createTestClient()} />);
+    await screen.findByLabelText('Headline');
+    expect(add.mock.calls.filter(([type]) => type === 'beforeunload')).toHaveLength(0);
+    fireEvent.change(screen.getByLabelText('Headline'), { target: { value: 'Unsaved' } });
+    expect(add.mock.calls.filter(([type]) => type === 'beforeunload')).toHaveLength(1);
+    const event = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+    view.unmount();
+    expect(remove.mock.calls.filter(([type]) => type === 'beforeunload')).toHaveLength(1);
+  });
+
+  it('restores a direct authorized entry outside the loaded list and its destination in StrictMode', async () => {
+    window.history.replaceState(
+      { host: 'keep' },
+      '',
+      '/studio/?host=1#/quality?entry=two&type=page',
+    );
+    const client = createTestClient();
+    vi.spyOn(client, 'listContent').mockResolvedValue([entries[0] as ContentEntry]);
+    const read = vi.spyOn(client, 'getContent');
+    render(
+      <StrictMode>
+        <App client={client} />
+      </StrictMode>,
+    );
+    await screen.findByRole('region', { name: 'Content quality report' });
+    expect(read).toHaveBeenCalledWith('two', expect.objectContaining({ perspective: 'draft' }));
+    expect(window.location.hash).toBe('#/quality?entry=two&type=page');
+    expect(window.history.state.host).toBe('keep');
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('link', { name: 'Skip to page editor' }));
+    expect(document.activeElement?.id).toBe('studio-content');
+    expect(window.location.hash).toBe('#/quality?entry=two&type=page');
+    await user.click(screen.getByRole('button', { name: 'Pages' }));
+    expect(((await screen.findByLabelText('Headline')) as HTMLInputElement).value).toBe(
+      'Second page',
+    );
+    await user.click(screen.getByRole('link', { name: 'Skip to page editor' }));
+    expect(document.activeElement?.id).toBe('studio-editor');
+    expect(window.location.hash).toBe('#/pages?entry=two&type=page');
+  });
+
+  it.each(['missing', 'forbidden', 'wrong-type'])(
+    'does not substitute the first entry for a %s direct target',
+    async (failure) => {
+      window.history.replaceState(null, '', '/#/pages?entry=two&type=page');
+      const client = createTestClient();
+      const read = vi.spyOn(client, 'getContent');
+      if (failure === 'wrong-type')
+        read.mockResolvedValue({ ...(entries[1] as ContentEntry), contentType: 'article' });
+      else read.mockRejectedValue(new Error(failure));
+      render(<App client={client} />);
+      await screen.findByText(/The requested page is unavailable/);
+      expect(screen.queryByLabelText('Headline')).toBeNull();
+      expect(window.location.hash).toBe('#/pages?entry=two&type=page');
+      expect(
+        (screen.getByRole('button', { name: 'Publish', exact: true }) as HTMLButtonElement)
+          .disabled,
+      ).toBe(true);
+      expect(
+        (
+          screen.getByRole('button', {
+            name: 'Open live preview in new window',
+          }) as HTMLButtonElement
+        ).disabled,
+      ).toBe(true);
+    },
+  );
+
+  it('normalizes malformed addresses without rendering input and handles an empty page list', async () => {
+    window.history.replaceState(null, '', '/#/unknown?token=do-not-reflect');
+    render(<App client={createTestClient({ entries: [] })} />);
+    await screen.findByText('No pages yet. Create the first one.');
+    expect(window.location.hash).toBe('#/pages');
+    expect(document.body.textContent).not.toContain('do-not-reflect');
+    expect(screen.getByText(/That Studio address was not recognized/)).toBeTruthy();
+  });
+
+  it('restores cancelled owned history, then accepts Back and Forward without losing stack entries', async () => {
+    const user = userEvent.setup();
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    render(<App client={createTestClient()} />);
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: /Second page/ }));
+    await waitFor(() => expect(window.location.hash).toBe('#/pages?entry=two&type=page'));
+    fireEvent.change(screen.getByLabelText('Headline'), { target: { value: 'Unsaved second' } });
+    window.history.back();
+    await waitFor(() => expect(confirm).toHaveBeenCalledOnce());
+    await waitFor(() => expect(window.location.hash).toBe('#/pages?entry=two&type=page'));
+    expect((screen.getByLabelText('Headline') as HTMLInputElement).value).toBe('Unsaved second');
+    confirm.mockReturnValue(true);
+    window.history.back();
+    await waitFor(() =>
+      expect((screen.getByLabelText('Headline') as HTMLInputElement).value).toBe('First page'),
+    );
+    window.history.forward();
+    await waitFor(() =>
+      expect((screen.getByLabelText('Headline') as HTMLInputElement).value).toBe('Second page'),
+    );
+    expect(confirm).toHaveBeenCalledTimes(2);
+  });
+
+  it('unlocks the accepted editor when a pending entry read is superseded by reselection', async () => {
+    const user = userEvent.setup();
+    const client = createTestClient();
+    render(<App client={client} />);
+    await screen.findByLabelText('Headline');
+    let resolve!: (entry: ContentEntry) => void;
+    vi.spyOn(client, 'getContent').mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          resolve = done;
+        }),
+    );
+    await user.click(screen.getByRole('button', { name: /Second page/ }));
+    expect(screen.getByLabelText('Headline').closest('[inert]')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: /First page/ }));
+    fireEvent.change(screen.getByLabelText('Headline'), {
+      target: { value: 'Keep editing first' },
+    });
+    expect((screen.getByLabelText('Headline') as HTMLInputElement).value).toBe(
+      'Keep editing first',
+    );
+    resolve(entries[1] as ContentEntry);
+    await waitFor(() => expect(window.location.hash).toBe('#/pages?entry=one&type=page'));
+    expect((screen.getByLabelText('Headline') as HTMLInputElement).value).toBe(
+      'Keep editing first',
+    );
+  });
+
+  it('ignores an out-of-order entry response and preserves new edits, notice and busy state', async () => {
+    const user = userEvent.setup();
+    const third = entry('three', 'Third page', 'third');
+    const client = createTestClient({ entries: [...entries, third] });
+    render(<App client={client} />);
+    await screen.findByLabelText('Headline');
+    let resolve!: (entry: ContentEntry) => void;
+    const read = vi.spyOn(client, 'getContent').mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          resolve = done;
+        }),
+    );
+    await user.click(screen.getByRole('button', { name: /Second page/ }));
+    const signal = read.mock.calls[0]?.[1]?.signal;
+    await user.click(screen.getByRole('button', { name: /Third page/ }));
+    await waitFor(() =>
+      expect((screen.getByLabelText('Headline') as HTMLInputElement).value).toBe('Third page'),
+    );
+    expect(signal?.aborted).toBe(true);
+    fireEvent.change(screen.getByLabelText('Headline'), {
+      target: { value: 'Newest unsaved edit' },
+    });
+    resolve(entries[1] as ContentEntry);
+    await waitFor(() => expect(window.location.hash).toBe('#/pages?entry=three&type=page'));
+    expect((screen.getByLabelText('Headline') as HTMLInputElement).value).toBe(
+      'Newest unsaved edit',
+    );
+    expect((screen.getByRole('button', { name: 'Save draft' }) as HTMLButtonElement).disabled).toBe(
+      false,
+    );
+  });
+
+  it('rejects entry changes during a save and does not add history for its result', async () => {
+    const user = userEvent.setup();
+    const client = createTestClient();
+    render(<App client={client} />);
+    await screen.findByLabelText('Headline');
+    let resolve!: (entry: ContentEntry) => void;
+    vi.spyOn(client, 'saveDraft').mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          resolve = done;
+        }),
+    );
+    fireEvent.change(screen.getByLabelText('Headline'), { target: { value: 'Saving first' } });
+    const length = window.history.length;
+    await user.click(screen.getByRole('button', { name: 'Save draft' }));
+    await user.click(screen.getByRole('button', { name: /Second page/ }));
+    await screen.findByText(/Wait for the current operation/);
+    expect(window.location.hash).toBe('#/pages?entry=one&type=page');
+    resolve(entry('one', 'Saving first', 'first'));
+    await screen.findByText('Draft saved as a new immutable revision.');
+    expect(window.history.length).toBe(length);
+    expect((screen.getByLabelText('Headline') as HTMLInputElement).value).toBe('Saving first');
+  });
+
   it('discloses navigation groups without selecting, loading or losing dirty editor state', async () => {
     const user = userEvent.setup();
     const client = createTestClient();
@@ -2169,6 +2458,33 @@ describe('GridStory Studio', () => {
 
     expect(confirm).toHaveBeenCalledOnce();
     expect((screen.getByLabelText('Headline') as HTMLInputElement).value).toBe('Edited first page');
+  });
+
+  it('guards search-result entry changes and opens Pages only after acceptance (BUG-0421)', async () => {
+    const user = userEvent.setup();
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    render(<App client={createTestClient()} />);
+    fireEvent.change(await screen.findByLabelText('Headline'), {
+      target: { value: 'Unsaved first page' },
+    });
+    await user.click(screen.getByRole('button', { name: 'Search' }));
+    const panel = await screen.findByRole('region', { name: 'Search and discovery' });
+    const result = await within(panel).findByRole('button', { name: 'Second page' });
+    const address = window.location.href;
+    await user.click(result);
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(window.location.href).toBe(address);
+    await user.click(screen.getByRole('button', { name: 'Pages' }));
+    expect((screen.getByLabelText('Headline') as HTMLInputElement).value).toBe(
+      'Unsaved first page',
+    );
+    await user.click(screen.getByRole('button', { name: 'Search' }));
+    confirm.mockReturnValue(true);
+    await user.click(await screen.findByRole('button', { name: 'Second page', exact: true }));
+    await waitFor(() =>
+      expect((screen.getByLabelText('Headline') as HTMLInputElement).value).toBe('Second page'),
+    );
+    expect(screen.getByRole('button', { name: 'Pages' }).getAttribute('aria-current')).toBe('page');
   });
 
   it('runs candidate quality checks and links findings to responsible fields', async () => {
@@ -2888,6 +3204,88 @@ describe('GridStory Studio', () => {
         .getByRole('button', { name: 'Open live preview in new window' })
         .getAttribute('aria-pressed'),
     ).toBe('false');
+  });
+
+  it('never connects a late preview grant after entry replacement and reports failed revocation', async () => {
+    const user = userEvent.setup();
+    const client = createTestClient();
+    const grant = await client.createPreviewSession({
+      previewUrl: 'http://localhost:5174/',
+      mode: 'standalone',
+      entryId: 'one',
+    });
+    let resolve!: (value: typeof grant) => void;
+    vi.spyOn(client, 'createPreviewSession').mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          resolve = done;
+        }),
+    );
+    const revoke = vi
+      .spyOn(client, 'revokePreviewSession')
+      .mockRejectedValue(new Error('Revocation unavailable'));
+    const popup = {
+      closed: false,
+      close: vi.fn(),
+      location: { replace: vi.fn() },
+      postMessage: vi.fn(),
+    } as unknown as Window;
+    vi.spyOn(window, 'open').mockReturnValue(popup);
+    render(<App client={client} />);
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Open live preview in new window' }));
+    await user.click(screen.getByRole('button', { name: /Second page/ }));
+    await waitFor(() =>
+      expect((screen.getByLabelText('Headline') as HTMLInputElement).value).toBe('Second page'),
+    );
+    expect(popup.close).toHaveBeenCalled();
+    resolve(grant);
+    await waitFor(() => expect(revoke).toHaveBeenCalledWith(grant.sessionId));
+    await screen.findByText(/unused preview session could not be revoked/);
+    expect(popup.location.replace).not.toHaveBeenCalled();
+    expect(popup.postMessage).not.toHaveBeenCalled();
+    expect(window.location.href).not.toContain(grant.sessionId);
+    expect(JSON.stringify(window.history.state)).not.toContain(grant.token);
+  });
+
+  it('preserves same-entry preview and disposes before another entry can be patched', async () => {
+    const user = userEvent.setup();
+    const patch = vi.spyOn(previewClient.GridStoryPreviewController.prototype, 'patch');
+    const dispose = vi.spyOn(previewClient.GridStoryPreviewController.prototype, 'dispose');
+    const client = createTestClient();
+    const popup = {
+      closed: false,
+      close: vi.fn(),
+      location: { replace: vi.fn() },
+      postMessage: vi.fn(),
+    } as unknown as Window;
+    vi.spyOn(window, 'open').mockReturnValue(popup);
+    const revoke = vi.spyOn(client, 'revokePreviewSession');
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    render(<App client={client} />);
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Open live preview in new window' }));
+    await waitFor(() => expect(patch).toHaveBeenCalled());
+    fireEvent.change(screen.getByLabelText('Headline'), {
+      target: { value: 'Secret unsaved headline' },
+    });
+    await user.click(screen.getByRole('button', { name: 'Search' }));
+    const panel = await screen.findByRole('region', { name: 'Search and discovery' });
+    await user.click(await within(panel).findByRole('button', { name: 'Second page' }));
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(dispose).not.toHaveBeenCalled();
+    expect(popup.close).not.toHaveBeenCalled();
+    expect(window.location.hash).toBe('#/search?entry=one&type=page');
+    expect(JSON.stringify(window.history.state)).not.toContain('Secret unsaved headline');
+    confirm.mockReturnValue(true);
+    await user.click(within(panel).getByRole('button', { name: 'Second page' }));
+    await waitFor(() =>
+      expect((screen.getByLabelText('Headline') as HTMLInputElement).value).toBe('Second page'),
+    );
+    expect(dispose).toHaveBeenCalled();
+    expect(popup.close).toHaveBeenCalled();
+    expect(revoke).toHaveBeenCalledWith('preview-session-1');
+    expect(patch.mock.calls.every(([payload]) => payload.entryId === 'one')).toBe(true);
   });
   it('edits nested compositions through layers, slots, keyboard movement, and history', async () => {
     const user = userEvent.setup();
