@@ -27,13 +27,12 @@ The React renderer applies presentation in a deterministic order:
 
 If the application's design-system version differs from the node's pinned version, the renderer uses the stored component and props without applying bindings. The application can therefore coordinate upgrades through normal schema/component migration policy.
 
-Breakpoint selection is explicit rather than derived from browser globals. This keeps SSR and hydration deterministic. Applications may select the breakpoint from their own responsive context; Studio exposes it in the live preview toolbar.
+Breakpoint selection is explicit rather than derived from browser globals. This keeps SSR and hydration deterministic. Applications may select the breakpoint from their own responsive context; Studio exposes authoring selection through the selected-component inspector's **Responsive override** selector. The header preview button opens application-only preview in a separate window; there is no inline preview toolbar.
 
 ## Studio controls
 
-The selected-component inspector offers only variants for that component. Token choices must satisfy the prop's primitive type plus enum, numeric range, and string-length constraints. Editors can capture or clear a prop override for the current preview breakpoint.
+The selected-component inspector offers only variants for that component. Token choices must satisfy the prop's primitive type plus enum, numeric range, and string-length constraints. Editors can capture or clear a prop override for the selected authoring breakpoint.
 
 Linked symbols expose only their approved override fields. Their governed props and slots resolve from the versioned design system. Templates are inserted as one undoable command; insertion is rejected atomically if any root acceptance or cardinality rule fails.
 
 Presentation changes remain unsaved draft state until the editor chooses Save draft. They participate in the same immutable revision, validation, audit, undo/redo, publish, and delivery boundaries as other structured content.
-

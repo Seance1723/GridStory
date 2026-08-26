@@ -4,6 +4,8 @@
 **Document type:** Product architecture and delivery blueprint  
 **Working product description:** A self-hostable, cloud-optional, React-native content operating system that can be added to an existing React application without taking over its renderer, router, hosting platform, database, or design system.
 
+**Administration gap-analysis update:** 26 August 2026, GOV-006. The feature catalog below is the product vision, not a checklist of shipped behavior. The [CMS administration gap analysis](docs/cms-admin-gap-analysis.md) compares the supplied cross-platform menu reference with source at `72fbc62`, maps all 13 categories and all 19 current Studio destinations, and identifies concrete missing product surfaces. The [current task queue](TASKS.md#current-administration-upgrade-queue--2026-08-26) contains CMS-001 through CMS-031; [ADR 0027](docs/adr/0027-cms-administration-information-architecture.md) is proposed pending per-slice implementation approval. Existing release-readiness no-go decisions are unchanged.
+
 ---
 
 ## 1. Executive decision
@@ -433,6 +435,25 @@ Priority codes: **P0** = required for a credible v1 GA, **P1** = next competitiv
 
 ---
 
+### 5.21 CMS administration and visitor-site management gap closure
+
+This addition makes previously implicit administration jobs explicit. It does not replace the earlier catalog or claim the referenced features are already delivered.
+
+- **P0** Task-oriented, permission-aware administration with stable destination identity, deep links/history, dirty-state guards and exactly one current leaf/page. Retain all current advanced tools and global SCSS/accessibility contracts (CMS-001 through CMS-003).
+- **P0** Generic registered-type authoring, entry list/filter/sort/pagination, factual dashboard summaries and clear schema/taxonomy inspection. Code-owned definitions must not be presented as mutable runtime models (CMS-004 through CMS-010).
+- **P0** Visitor navigation as named, ordered, bounded hierarchical link content: header/footer assignments, stable IDs, scoped entry references, safe external links, locale behavior, immutable draft/published state, future-release validation and published-only app-owned rendering (CMS-011). This is separate from the Studio sidebar.
+- **P0** Explicitly scoped revisioned site settings for branding, canonical origin, timezone, home/listing/privacy references and editorial defaults, with enforced singleton identity and public-field allowlists. Operational settings, secrets, DNS/TLS and topology provisioning remain distinct (CMS-010, CMS-012).
+- **P0** Complete SEO data-to-output workflow, durable redirect management and published sitemap/robots/feed helpers. Existing quality checks and configured redirects are foundations, not complete delivery (CMS-013 through CMS-015).
+- **P0** Focused people/access, installed-extension lifecycle, bounded analytics, logical archive utilities, health/help and private editorial inbox surfaces, reusing current services and honest provider boundaries (CMS-016 through CMS-022).
+- **P0** Defined unpublish/archive/trash/restore semantics before bulk operations; reviewed model/taxonomy proposals and governed versioned design overrides without source execution (CMS-023 through CMS-026).
+- **P1 / decision-gated** Live model/term activation requires a separate source-of-truth, generated-types, migration and multi-process coherence decision; source-reviewed proposals remain the default (CMS-027).
+- **Optional / decision-gated** Commerce, finance/booking/subscription integrations, outbound marketing, forms/CRM/search-provider connectors, public comments/reviews and visitor memberships require explicit product/provider choices. Existing content models, CTAs, targeting and editorial/workforce identity are not those business systems (CMS-028 through CMS-030).
+- **Excluded from this upgrade** Raw theme/plugin/file editors, arbitrary custom-code injection, native checkout/accounting/CRM engines, browser-triggered production restore or automatic core updates. Use reviewed application code, provider adapters and operator runbooks.
+
+Target navigation and exact existing-to-new placement are in the [gap-analysis menu map](docs/cms-admin-gap-analysis.md#6-proposed-information-architecture). New leaves appear only when shipped/configured/permitted; a familiar label must never front a nonfunctional feature.
+
+---
+
 ## 6. Reference architecture
 
 ### 6.1 System shape
@@ -674,6 +695,20 @@ Each fixture runs install, type-check, build, SSR/SSG render, preview handshake,
 ## 8. Implementation roadmap
 
 Assumption: 10–14 dedicated people (7–9 engineers, 1 product designer, 1 product manager, 1 QA/SDET, and fractional security/DevOps/docs), with workstreams running in parallel. A smaller team should reduce scope, not compress quality gates.
+
+### Current executable administration plan — August 2026
+
+The original phases and staffing estimates below remain historical product-planning context. Completed milestone tasks prove their recorded bounded slices, not every aspirational catalog bullet. The source-backed administration queue now supplies missing acceptance-level work without resetting that history:
+
+1. **Preserve/reorganize → addressable navigation → authorized context:** CMS-001 through CMS-003. Existing screens are stabilized before new ones depend on their location/scope behavior.
+2. **Expose content and existing foundations:** CMS-004 through CMS-010. Explicit type selection precedes lists, dashboard and content-linked configuration.
+3. **Website essentials:** CMS-011 through CMS-015. Menus and site settings precede canonical SEO/discovery output; redirects precede feed validation.
+4. **Focused administration:** CMS-016 through CMS-022. Reuse current identity/plugins/analytics/portability/workflow services instead of rebuilding them.
+5. **Governed depth:** CMS-023 through CMS-026. Retirement semantics precede bulk writes; model/design proposals stay versioned and reviewed.
+6. **Optional decisions:** CMS-027 through CMS-030. Owner/provider and data-boundary choices must happen before implementation tasks are created for these programs.
+7. **Acceptance:** CMS-031 verifies every shipped leaf and all original capability paths; optional programs and external release-readiness gates are not falsely marked complete.
+
+Each task lists tier, dependencies, module fence, acceptance and exclusions in `TASKS.md`. T2/T3 requires a scoped implementation plan and approval. Start with **CMS-001** only when implementation resumes; do not start the entire program or introduce empty placeholder menus. No new completion dates or staffing commitments are inferred from the original roadmap.
 
 ### Phase 0 — Product RFCs and risk prototypes (Weeks 1–4)
 

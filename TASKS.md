@@ -1,6 +1,6 @@
 # GridStory implementation task list
 
-**Last updated:** 2026-08-25
+**Last updated:** 2026-08-26
 **Source plan:** `REACT_CMS_RESEARCH_AND_IMPLEMENTATION_PLAN.md`
 
 ## Working agreement
@@ -11,8 +11,169 @@
 - Every completed or materially changed task must have a matching `CHANGELOG.md` entry.
 - Every bug found during verification must be entered in `BUGS.md` before it is fixed or deferred.
 
+## Current administration upgrade queue — 2026-08-26
+
+The [CMS admin gap analysis](docs/cms-admin-gap-analysis.md) maps the supplied reference to current source and every existing destination. [ADR 0027](docs/adr/0027-cms-administration-information-architecture.md) is **proposed**, not implementation approval. The original milestones below remain permanent bounded-delivery history, not a claim that every feature-catalog bullet shipped. Existing beta/RC/GA no-go criteria in `docs/release-readiness.md` are unchanged.
+
+Queue conventions: created 2026-08-26 by Codex; owner unassigned until started; all items below are planned, not implemented. Every scope includes this task ledger, `CHANGELOG.md`, `BUGS.md`, relevant documentation and tests for the named module. Future files inside a named directory must be enumerated at task start. Each task inherits the gap analysis's common definition of done, including global SCSS, no feature removal, single-destination navigation, tenant/preview boundaries, full verification and a completion commit. T2/T3 work requires its own approved plan before implementation; amend/split a task before broadening it.
+
+### A. Navigation and authorized context
+
+- [ ] **CMS-001** Reorganize the 19 existing Studio destinations into task-oriented groups.
+  - Tier: T1. Depends: GOV-006. Scope: `apps/studio/src/App.tsx`, a finite `apps/studio/src/navigation.ts`, existing `apps/studio/src/styles/` shell/responsive partials, Studio navigation tests and `tests/e2e/accessibility.spec.ts`.
+  - Acceptance: preserve a one-to-one canonical home for all 19 existing destinations per the gap-analysis mapping; exactly one leaf is active and one page is visible after every sequential selection; parent disclosure does not select a page; preserve existing actions, loaded/editor state, responsive drawer, SCSS colors/control styles and header preview. Render no unimplemented leaves.
+  - Excludes: new domain screens, URL routing, permission changes, backend changes, new dependencies and broad component refactoring. Rollback: revert this presentation-only slice.
+- [ ] **CMS-002** Add stable Studio locations, deep links and history-safe navigation.
+  - Tier: T2. Depends: CMS-001. Scope: Studio navigation/location modules, `App.tsx`, Studio unit/browser tests, and hosting documentation/config only if the approved route strategy requires it.
+  - Acceptance: approved URLs identify the active destination and optional entry/type; reload, direct links, back/forward and invalid locations have deterministic results; cancelled dirty-state navigation preserves both URL and editor data; no tokens/draft values enter URLs; one destination and preview lifecycle invariants remain intact.
+  - Excludes: a router dependency without necessity evidence, application-site routing changes, and data mutation. Decide hash versus path/history deployment compatibility before code; rollback preserves existing entry IDs and content.
+- [ ] **CMS-003** Expose authorized Studio capabilities and safe scope selection.
+  - Tier: T2. Depends: CMS-002. Scope: `packages/schema/src/context.ts`, core authorization/scope registry, API request-context/server/identity routes, client context methods, Studio context controls and relevant tests.
+  - Acceptance: a minimized authenticated projection exposes only permitted context choices/actions; menu visibility and deep-link denial reflect effective permissions without replacing server checks; site/environment/locale switches confirm dirty state, abort stale reads, revoke preview and clear prior-scope data; cross-tenant and revoked-session tests fail closed; configuration unavailable to a user is not enumerated.
+  - Excludes: a new authorization engine, editable topology provisioning, role-name guesses, secrets, or trusting URL scope. Any additional permission or contract is reviewed before implementation.
+
+### B. Expose existing content and configuration foundations
+
+- [ ] **CMS-004** Make entry authoring work for explicitly selected registered content types.
+  - Tier: T2. Depends: CMS-003. Scope: Studio `App.tsx`, authoring/composition controls, client query calls, `packages/example-kit` model fixtures, tests and generated fixtures only if required by the approved example schema.
+  - Acceptance: a registered page and a non-component-tree article/collection can independently list/create/edit/save/revise/publish using their correct schema; creation never depends on schema-array order or a Hero for nonvisual content; relations can find permitted target types; invalid defaults produce actionable field validation; pages retain all composition, workflow and preview behavior.
+  - Excludes: hot model creation, new storage engines, hard-coded WordPress post semantics, and delete/archive behavior.
+- [ ] **CMS-005** Add useful content lists, filters, sorting, pagination and saved local views.
+  - Tier: T1. Depends: CMS-004. Scope: Studio content-list modules, existing client query integration, Studio/browser tests and list styles.
+  - Acceptance: existing query contracts drive type/status/search/sort and cursor pagination without claiming first-page totals are complete; selection is stable; local saved views are versioned and scoped without draft data or credentials; empty/loading/error states and keyboard/mobile tables work; unsupported filters are not displayed.
+  - Excludes: server-persisted preferences, bulk mutation and new query operators; escalate to a separately planned T2 slice if the needed filter lacks an existing contract.
+- [ ] **CMS-006** Add a factual editorial Home dashboard.
+  - Tier: T2. Depends: CMS-003, CMS-005. Scope: Studio Home module, existing content/workflow/release/operations projections; bounded schema/core/API/client summary additions only where current permitted reads cannot supply a truthful widget.
+  - Acceptance: authorized recent work, review/release links and content-state summaries have real provenance and explicit bounds; unavailable/error widgets remain isolated; quick create uses CMS-004; no hidden operator data is loaded for authors; no fabricated counts/charts or misleading truncated totals.
+  - Excludes: a configurable dashboard framework, new analytics collection and cross-tenant portfolio metrics.
+- [ ] **CMS-007** Consolidate Media library, upload and asset-detail workflows.
+  - Tier: T1. Depends: CMS-003. Scope: Studio asset panel/modules and authoring controls, shared SCSS and existing asset API/client integration tests.
+  - Acceptance: Library, Upload action, metadata/revisions/renditions/usage details reuse current asset services; any search/filter accurately states its loaded result boundary; verified/quarantined/unavailable-provider states stay visible; asset picks and signed private delivery remain safe at all widths.
+  - Excludes: a new DAM, folders/storage migration, asset deletion, provider installation, arbitrary rendition configuration and production scanner certification.
+- [ ] **CMS-008** Expose the existing governed design catalog.
+  - Tier: T1. Depends: CMS-003. Scope: Studio Design modules, existing component/design manifest client calls, shared styles, Studio tests and `docs/design-system.md`.
+  - Acceptance: Components retains impact/migration tools; tokens/variants, templates/symbols show their immutable version and code ownership; selecting an approved pattern uses existing validated editor insertion; unsupported changes are clearly read-only; site colors and Studio theme remain independent.
+  - Excludes: theme installation, raw source editing, global token mutation and a new renderer.
+- [ ] **CMS-009** Add schema and taxonomy inspection using canonical contracts.
+  - Tier: T1. Depends: CMS-004. Scope: Studio schema/taxonomy views, existing schema-lifecycle/taxonomy/client reads, tests and model/search guides.
+  - Acceptance: registered types/fields/routes, taxonomy trees/term IDs and available drift/impact metadata are inspectable; hierarchical categories and flat tags are correctly labeled; no screen implies terms or runtime models are editable when they remain code-owned.
+  - Excludes: mutable taxonomy storage, live schema activation, source editing and new schema field kinds.
+- [ ] **CMS-010** Add a safe configuration inventory before editable settings.
+  - Tier: T2. Depends: CMS-003. Scope: schema/core/API minimized configuration projection, client methods, Studio Settings views, config/security tests and docs.
+  - Acceptance: active locales/environments, route/model ownership and media-policy/provider availability show actual effective configuration; no environment-variable dump, credential, private endpoint or unauthorized topology leaks; each setting is marked code-owned, operator-owned or editor-owned.
+  - Excludes: DNS/TLS/domain provisioning, editing process environment, object-store/scanner setup, topology mutation and secret storage in Studio.
+
+### C. Website-management gaps
+
+- [ ] **CMS-011** Add versioned visitor navigation menus end to end.
+  - Tier: T2. Depends: CMS-004, CMS-009. Scope: reserved canonical menu content definition/validation in schema/example-kit, core content/reference/release integration, API/client menu projection, Studio menu editor and Vite consumer/example tests.
+  - Acceptance: named header/footer menus support ordered bounded parent/child links, labels, scoped entry targets and validated external URLs; invalid cycles/depth/schemes and unpublished targets fail validation; draft/save/preview/publish/localization and concurrent updates reuse existing revisions; public resolution is published-only and route-aware; a same-release new page/menu pair is validated against future state; application rendering remains unstyled by Studio.
+  - Excludes: admin-menu configuration, automatic inclusion of all pages, arbitrary HTML/JS, a second revision store and host-router takeover. Approve representation and release rollback before code.
+- [ ] **CMS-012** Add revisioned public site settings and safe editorial defaults.
+  - Tier: T2. Depends: CMS-004, CMS-010. Scope: canonical settings/singleton contract, scoped content/repository enforcement as required, API/client public allowlist, Studio settings UI, application consumer example, portability/release tests.
+  - Acceptance: title/tagline/branding, canonical base URL, display timezone, home/listing/privacy references and approved writing/list defaults have validation and exact-scope singleton identity; concurrent creation cannot duplicate the singleton; drafts do not change public output; publish/version/history/export work; referenced defaults are validated; no existing entry/schema is silently rewritten; host app explicitly opts in.
+  - Excludes: DNS registration, SSL, legal compliance claims, server security settings and mutable locale topology. Confirm storage/cardinality and rollback in the implementation ADR.
+- [ ] **CMS-013** Complete structured SEO metadata and application output.
+  - Tier: T2. Depends: CMS-004, CMS-012. Scope: schema/example-kit SEO definitions, quality policies/service, API/client projections if needed, Studio metadata controls, React/server-safe helpers and example consumer tests.
+  - Acceptance: title/description/canonical/robots/Open Graph/social asset/hreflang and allowlisted structured-data mappings validate and render from the published locale; draft metadata stays private; malformed URLs and unsafe script serialization are rejected/escaped; generated metadata appears in real application output, not only Studio inputs; no ranking guarantee is made.
+  - Excludes: arbitrary schema.org JSON execution, external SEO providers, a crawler and claiming new framework certification.
+- [ ] **CMS-014** Add durable redirect administration and slug-change impact review.
+  - Tier: T2. Depends: CMS-009, CMS-012. Scope: routing schema/core/repository, API/client routes, Studio redirect UI, archive/audit/release integration and SQLite/PostgreSQL tests.
+  - Acceptance: authorized scoped create/edit/disable of versioned redirects reuses normalization/loop checks; code-owned versus editor-owned precedence is explicit; route collisions and cross-scope writes fail; published slug changes offer a reviewed redirect rather than silently changing live routes; history, restart persistence, export and rollback are tested.
+  - Excludes: unchecked route-pattern editing, open external redirects, deployment routing changes and irreversible automatic URL rewrites.
+- [ ] **CMS-015** Add published-only sitemaps, robots and content feeds.
+  - Tier: T2. Depends: CMS-011, CMS-013, CMS-014. Scope: framework-neutral published-query helpers/contracts, explicit API/server entry points as approved, Studio status/config view, Vite example integration and output/security tests.
+  - Acceptance: bounded paginated sitemap/index, robots and RSS/Atom output use validated canonical origin, locale/route and publication state; no drafts/private assets/tokens enter public output; noindex/redirect/retirement exclusions are tested; XML escapes safely; empty/large sets and caching/invalidation behave deterministically; robots is documented as discovery guidance, never authorization.
+  - Excludes: Search Console OAuth, external crawling, SEO traffic claims and automatic host deployment.
+
+### D. Focused administration over existing services
+
+- [ ] **CMS-016** Add focused People directory and access-administration screens.
+  - Tier: T2. Depends: CMS-003. Scope: existing identity/authorization API/client projection, Studio People and Identity modules, security/negative tests and identity docs.
+  - Acceptance: permitted users/groups/mappings/sessions are navigable without entering provider setup; provider-owned account changes remain clearly distinct from local role mappings/session actions; least-privilege and self-lockout safeguards are explicit; privileged mutations retain current step-up/audit/revocation behavior.
+  - Excludes: password authentication/reset, unapproved invitations/email, workforce-to-customer identity reuse and external IdP provisioning.
+- [ ] **CMS-017** Add My profile and safe local Studio preferences.
+  - Tier: T1. Depends: CMS-016. Scope: Studio profile/preferences modules, existing current-user reads, styles/tests and docs.
+  - Acceptance: authenticated profile information is read-only where IdP-owned; local theme/density/display-timezone preferences are versioned and actor/context scoped; unavailable translations are not offered; logout/scope changes do not leak prior-user preferences or content; preferences store no credentials, private profile data or drafts.
+  - Excludes: server-persisted preference contracts, account recovery, changing IdP attributes and notification delivery.
+- [ ] **CMS-018** Add installed-extension lifecycle and grant management.
+  - Tier: T2. Depends: CMS-003. Scope: Studio Apps modules, existing plugin/marketplace client methods, plugin API tests, shared styles and plugin docs.
+  - Acceptance: installed records display exact version, trust, capabilities, grants, lifecycle and runtime availability; authorized enable/disable/revoke/uninstall-preview/uninstall follow existing backend transitions and confirmation/audit requirements; absent runtime fails closed; Marketplace remains reachable and installation never auto-enables code.
+  - Excludes: downloading/hosting binaries, provisioning sandboxes, Studio extension loading, new provider integrations and code editors.
+- [ ] **CMS-019** Give content analytics a dedicated honest reporting surface.
+  - Tier: T1. Depends: CMS-003. Scope: Studio Insights/Operations modules, existing analytics-report client contract, UI/browser tests and analytics docs.
+  - Acceptance: real content/component counters, interaction names, adapter-delivery states and release annotations move into a dedicated view without removing Operations information; bounds/truncation/no-history and consent limitations are visible; no fabricated date trends, distinct users, conversions or revenue.
+  - Excludes: a warehouse, new analytics providers, raw events, attribution/funnels and extra permissions without a separate T2 plan.
+- [ ] **CMS-020** Add guarded logical import/export utilities to Studio.
+  - Tier: T2. Depends: CMS-003, CMS-004. Scope: Studio Tools/archive UI, existing portability API/client services, file-handling/negative tests and portability docs.
+  - Acceptance: authorized export downloads the actual checksummed archive; import validates format/scope and shows existing dry-run/conflict results before explicit execution; retries/stale candidates/failures are safe and visible; secrets are not displayed; new menu/settings/redirect records are covered when their tasks ship; Migrations remains distinct.
+  - Excludes: production imports during development, database restore, source-system writes, silent replace policy and inventing asynchronous progress where no job exists.
+- [ ] **CMS-021** Add Site health, version guidance and contextual Help.
+  - Tier: T1. Depends: CMS-003, CMS-010. Scope: Studio Tools/Help views, existing authorized health/operations/fleet/readiness reads and operator documentation.
+  - Acceptance: actual dependency/index/job/version status is separated from historical release evidence; unavailable checks say unknown; Help links resolve and explain ownership; backup/restore/update steps link to approved runbooks; no “healthy” or “up to date” inference from missing evidence.
+  - Excludes: browser-triggered self-update/restore, new diagnostics endpoints without a T2 amendment, remote scans and changing release-readiness decisions.
+- [ ] **CMS-022** Add a private editorial review and collaboration inbox.
+  - Tier: T2. Depends: CMS-003, CMS-004, CMS-006. Scope: collaboration/workflow bounded query projections, API/client routes if needed, Studio inbox and entry links, permission/scale tests.
+  - Acceptance: authorized assignments, open editorial threads and due review/schedule links resolve to the right entry/context; loading, pagination/truncation and stale access are explicit; existing per-entry comments/branches/suggestions/presence remain unchanged; no cross-tenant comments or public reader endpoint is exposed.
+  - Excludes: public moderation, notification delivery, CRM and unbounded all-entry polling.
+
+### E. Governed content and design depth
+
+- [ ] **CMS-023** Add safe unpublish, archive, trash and restore lifecycle.
+  - Tier: T2 repository implementation; any real production retirement/deletion is separately T3. Depends: CMS-004, CMS-011, CMS-014, CMS-015. Scope: schema/core content/repositories, authorization/outbox/search/release/route/reference integration, API/client, Studio controls, archive/recovery and SQLite/PostgreSQL tests.
+  - Acceptance: explicit approved lifecycle semantics preserve immutable history; unpublish removes public delivery and discovery; archive/trash/restore define reference/menu/redirect/release behavior with impact checks and optimistic revisions; restore cannot violate route uniqueness; audit, events, cache invalidation and cross-adapter recovery are tested. No hard deletion is included.
+  - Excludes: governance-erasure shortcuts, retention/legal-hold bypass, production actions and destructive migration without a separately approved rollback/backup plan.
+- [ ] **CMS-024** Add bounded bulk content actions with exact-result reporting.
+  - Tier: T2. Depends: CMS-005, CMS-023. Scope: existing job/authorization/content boundaries, new bounded batch contract as approved, API/client, Studio selection/progress and tests.
+  - Acceptance: explicitly supported bulk metadata/publish/unpublish/archive operations show exact target scope, impact and confirmation; each result records success/conflict/denial with idempotent retry and bounded concurrency; permission, workflow and quality gates are not bypassed; multi-entry atomic publication uses Releases; hidden/unloaded entries are not silently selected.
+  - Excludes: unbounded synchronous loops, hard delete, implicit atomicity and a generic automation platform.
+- [ ] **CMS-025** Add reviewed model and taxonomy change proposals, not hot activation.
+  - Tier: T2. Depends: CMS-009. Scope: Studio canonical model/taxonomy candidate editor, schema-lifecycle client/API planning path, deterministic IR export and tests/docs.
+  - Acceptance: users can propose compatible field/term changes with stable IDs, canonical validation, exact diff/impact and data-migration warnings; export round-trips through the IR; deployed source remains unchanged until normal code review/deployment; destructive candidates are flagged and cannot masquerade as activated models.
+  - Excludes: runtime schema/term mutation, generated source execution, data-backfill execution, shared schema authority changes and new field kinds. CMS-027 owns those decisions.
+- [ ] **CMS-026** Add governed versioned appearance overrides.
+  - Tier: T2. Depends: CMS-008, CMS-012. Scope: design-system/settings contracts and resolution, authorized API/client, Studio approved override controls, React/example rendering and deterministic snapshot tests.
+  - Acceptance: only explicitly permitted token/brand/variant overrides can be drafted, previewed, versioned and published; already published pages pinned to old versions remain deterministic; incompatible tokens fail validation; cross-site state and Studio theme are unaffected; exact rollback is demonstrated.
+  - Excludes: mutating code-owned manifests in place, arbitrary CSS/JS, theme installers and a new rendering system. Decide how pages opt into a new override version before code.
+
+### F. Optional product decisions — not automatic implementation
+
+- [ ] **CMS-027** Decide whether live model/taxonomy activation is needed.
+  - Tier: T2 architectural discovery only. Depends: CMS-025. Scope: analysis/ADR/task documents and, only after separate approval, a disposable synthetic-data experiment.
+  - Acceptance: compare continuing source-reviewed proposals against a runtime model registry; address tenant ownership, stable IDs, generated types, multi-process/worker refresh, invalid data/backfills, indexes, release compatibility and rollback; obtain owner choice; add small implementation tasks only for an approved design or record deferral.
+  - Excludes: executing migrations, introducing a second schema authority or treating the current deployment-record API as hot activation.
+- [ ] **CMS-028** Define optional commerce integration requirements and ownership.
+  - Tier: T2 discovery only; payments/PII implementation is separately risk-tiered, potentially T3. Depends: GOV-006. Scope: commerce feasibility/ADR/task documents; no provider/account writes.
+  - Acceptance: owner chooses catalog-only versus transactional commerce and provider/source of truth; identify products, inventory, orders, customers, discounts, shipping, taxes, payments, subscriptions/bookings if required, webhook/consent/security needs and evidence; either defer or create separately approved adapter slices. A product collection is not checkout.
+  - Excludes: building a native commerce/accounting engine, installing integrations, collecting credentials, processing transactions and exposing an empty Commerce menu.
+- [ ] **CMS-029** Define optional marketing, forms, CRM and SEO-provider integrations.
+  - Tier: T2 discovery only; later personal-data operations separately T3 where applicable. Depends: GOV-006. Scope: product/provider comparison, data-flow/threat/retention analysis and ADR/task documents.
+  - Acceptance: distinguish existing targeting/experiments/CTA/releases from email/social/ads/campaigns, forms/submissions, contacts/segments, search analytics and Search Console; prioritize actual use cases; identify consent/anti-abuse/retention/provider credentials and source of truth; owner approves or defers each vertical integration before tasks/code.
+  - Excludes: sending messages, storing leads, external OAuth setup, raw analytics, CRM duplication and promising all providers.
+- [ ] **CMS-030** Decide public comments, reviews and visitor memberships separately from workforce identity.
+  - Tier: T2 discovery only; PII/production implementation separately risk-tiered. Depends: GOV-006. Scope: requirements, moderation/identity/abuse/data-flow analysis, ADR and task documents.
+  - Acceptance: owner confirms whether reader comments/reviews or gated content are needed; choose external integration versus scoped native domain; define moderation/spam/rate limits, consent/retention/deletion, public author identity and entitlement enforcement; keep editorial comments and IdP workforce users private; add implementation slices only after approval or record deferral.
+  - Excludes: reusing editorial comment routes publicly, authorizing visitors as editors, implementing subscriptions/payments and adding inert Discussion switches.
+
+### G. Acceptance and handoff
+
+- [ ] **CMS-031** Verify the shipped administration upgrade against the complete gap matrix.
+  - Tier: T1 verification/docs, with new defects assigned their own scoped tasks. Depends: CMS-001 through CMS-026; CMS-027 through CMS-030 are optional decisions and do not block core acceptance.
+  - Scope: Studio/API/client/browser tests, example integration tests, coverage matrix, docs and ledgers; application fixes require logged bugs and amended/new scoped tasks before edits.
+  - Acceptance: every shipped destination/submenu has an authorized path, direct-link/history check, empty/loading/error/forbidden state, working controls and six-width/three-engine visual/accessibility evidence; all original 19 capabilities remain reachable; collection, menu, settings, SEO, asset, people, plugin and archive journeys demonstrate actual outcomes; draft/publication/tenant boundaries hold; unsupported optional integrations remain honestly unavailable; full repository and applicable database/recovery/browser checks pass.
+  - Excludes: declaring optional programs complete, clearing external beta/RC/GA gates, silent feature removal and approving production rollout.
+
+**Single next implementation action:** CMS-001. GOV-006 completes this analysis/queue update only. Start one task at a time, confirm its exact scope, verify, and commit before proceeding.
+
 ## Milestone 0 — Governance and repository foundation
 
+- [x] **GOV-006** Audit the CMS admin-menu reference against implemented capabilities and upgrade the delivery plan.
+  - Owner/start: Codex, 2026-08-26. Tier: T1 documentation/research only; the proposed implementation program contains separately approval-gated T2 changes.
+  - Ask: assess feasibility, distinguish existing UI from backend foundations and missing capabilities, map all reference categories and existing destinations, and queue small dependency-ordered tasks without implementing application changes.
+  - Scope fence: `TASKS.md`, `CHANGELOG.md`, `BUGS.md`, `REACT_CMS_RESEARCH_AND_IMPLEMENTATION_PLAN.md`, `docs/cms-admin-gap-analysis.md`, `docs/adr/0027-cms-administration-information-architecture.md`, and `docs/design-system.md` (correct the verified preview-control documentation drift, BUG-0416).
+  - Acceptance: all 13 reference categories and WordPress submenu jobs have an explicit disposition; all 19 current Studio destinations retain a proposed home; each queued task has tier, dependencies, scope, exclusions, and observable acceptance; architectural recommendations remain proposed; existing completion history and release no-go evidence remain unchanged; documentation/ledger checks and the complete repository gate pass.
+  - Rollback: revert this documentation-only commit; no application, schema, dependency, stored data, deployment, or external service is changed.
+  - Delivered/verified: completed the 13-category and detailed submenu analysis, all 19 existing destination mappings, proposed ADR 0027, blueprint additions and 31 planned tasks (26 core slices, four optional decisions, one acceptance audit). The read-only Node documentation audit verified 10 local links/anchors, an acyclic dependency graph, all required task fields and unchanged statuses for all 104 historical tasks. The preview-guide regression check passes. `node scripts/check-ledgers.mjs`, `pnpm format:check`, `git diff --check` and the approved `pnpm check` pass, including policy/security/tenant/readiness gates, eight generated specs, strict types, all workspace tests (33 Studio tests), React 18.3.1 SSR and production builds. BUG-0416 and BUG-0417 are resolved. Browser/PostgreSQL/deployment suites were not rerun for documentation-only changes; prior results are not represented as fresh UI evidence. Single next action: CMS-001; no application task has started.
 - [x] **GOV-001** Add the research-backed product and architecture plan to the repository.
 - [x] **GOV-002** Establish the permanent task-list workflow and stable task IDs.
 - [x] **GOV-003** Establish a Keep a Changelog-compatible changelog.

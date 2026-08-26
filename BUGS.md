@@ -1,6 +1,6 @@
 # GridStory bug ledger
 
-**Last updated:** 2026-08-25
+**Last updated:** 2026-08-26
 
 Every defect discovered during automated or manual verification is recorded here before it is fixed or deferred. Bug records are permanent project history.
 
@@ -20,6 +20,8 @@ Every defect discovered during automated or manual verification is recorded here
 
 | ID | Found | Resolved | Severity | Area | Summary | Resolution and verification | Linked task/change |
 |---|---|---|---|---|---|---|---|---|
+| BUG-0417 | 2026-08-26 | 2026-08-26 | Low | GOV-006 verification environment | Restricted Windows execution denied pnpm's worker and the read-only documentation audit's Git subprocess with `spawn EPERM`. | Reran through approved child-process execution without changing application code or tests. The full `pnpm check` and 13-category/19-destination/31-task/history/link audit pass; this is an execution-boundary issue, not a product regression. | GOV-006, FND-002; Fixed/verification |
+| BUG-0416 | 2026-08-26 | 2026-08-26 | Low | Design-system authoring documentation | STUDIO-015 moved responsive authoring to the inspector but the guide retained the removed inline-preview toolbar instructions. | Updated only the guide to identify the Responsive override selector and header-only standalone preview. A source/guide comparison and text regression assertion reject the old toolbar claim and accept the current instructions; documentation audit and full repository gate pass. | GOV-006, STUDIO-015; Fixed |
 | BUG-0415 | 2026-08-25 | 2026-08-25 | Low | STUDIO-015 SCSS source hygiene | Five mechanically split SCSS files retained one extra blank line at EOF. | Removed only the trailing blank lines; the repeated staged whitespace audit passes cleanly. | STUDIO-015, FND-002; Fixed |
 | BUG-0414 | 2026-08-25 | 2026-08-25 | Low | Complete repository Studio test orchestration | One unrelated experiment lifecycle case reported its established timeout with an anomalous roughly 26-minute measured duration. | The identical isolated case passed in 5.45 seconds without a timeout/assertion change; the repeated complete gate passed all 385 active tests and every build. | STUDIO-015, TEST-001; Resolved |
 | BUG-0413 | 2026-08-25 | 2026-08-25 | Low | STUDIO-015 delivery formatting | Four changed TS/TSX files needed mechanical formatter layout. | Applied Biome's exact output; the 317-file format check and complete delivery gate pass. | STUDIO-015, FND-002; Fixed |

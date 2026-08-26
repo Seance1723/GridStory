@@ -8,6 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Added a source-backed CMS administration feasibility/gap analysis covering all 13 supplied reference categories, detailed submenu dispositions, the exact future homes of all 19 current Studio destinations, and a dependency-ordered CMS-001 through CMS-031 task queue with acceptance, scope, risk and optional-product decision gates (GOV-006).
+- Added proposed ADR 0027 for task-oriented administration that reuses current content, identity, design, asset, plugin and governance foundations; it distinguishes missing visitor menus/settings/SEO/lifecycle behavior from optional commerce, marketing/CRM and public-comment programs without authorizing their implementation (GOV-006).
 - Added one ordered Studio SCSS entry with purpose-owned foundation, feature, shell, CTA, typography, form, card/spacing, state/theme, responsive, and accessibility partials, compiled through the portable Dart Sass development dependency without a runtime styling framework (STUDIO-015, ADR 0026).
 - Added a rendered-word fragmentation regression and a 1280px checkpoint to the existing all-destination, cross-browser Studio containment sweep so near-zero prose tracks cannot be hidden as nominally contained content (STUDIO-014, BUG-0400).
 - Added an accessible Live page preview pop-out icon that reuses the secure standalone session to open only the synchronized application draft in a new window while retaining every existing preview control (STUDIO-012).
@@ -31,6 +33,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- Updated the product blueprint with explicit administration gap closure and an executable phased queue; preserved all completed milestone history, existing application behavior/colors/preview, and separate beta/RC/GA no-go evidence. The current task is documentation only; no runtime feature, provider, dependency or data was changed (GOV-006).
 - Replaced the three-column Studio workspace and embedded preview controls with a two-column authoring workspace whose header-owned toggle opens, reports, closes, and revokes the existing secure application-only standalone preview while retaining live draft patches, node selection, and responsive override authoring in the component inspector (STUDIO-015).
 - Replaced character-level wrapping for ordinary Studio language with a global readable word policy, while retaining aggressive containment for code and technical identifiers and leaving application preview content untouched (STUDIO-014).
 - Normalized existing Studio search, workflow, collaboration, comment, heading, form, select, fieldset, editor, and preview presentation so actions remain visually consistent and all long content wraps or scrolls within its owning surface without changing any feature, label, state, API, or application preview content (STUDIO-010).
@@ -48,6 +51,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Corrected the design-system guide's obsolete inline-preview-toolbar instructions to identify the selected-component Responsive override selector and header-only standalone preview (BUG-0416, GOV-006, STUDIO-015).
+- Verified the documentation-only plan through a 13-category/19-destination/31-task dependency/link/history audit, preserving all 104 historical task statuses, and the complete repository type/test/build gate. Approved Windows child-process execution resolved the sandbox-only verification failures without application or test changes; no new browser, database-provider or deployment certification is claimed (BUG-0417, GOV-006).
 - Unified ordinary Studio text inputs, textareas, and native selects under one scoped visual/state contract; retained semantic specialized inputs; established shared card, heading, field, and section spacing; restored canonical danger-action contrast; and preserved reduced-motion/forced-color behavior across all routes and responsive widths (BUG-0404, BUG-0405, BUG-0409, BUG-0411, STUDIO-015).
 - Corrected the Sass install/build sandbox path, SCSS EOF hygiene, and cross-engine regression fixtures for pnpm store selection, Windows child processes, rendered labels, fractional computed styles, persisted preview content, and formatter layout without weakening their assertions (BUG-0406 through BUG-0408, BUG-0410, BUG-0412, BUG-0413, BUG-0415, STUDIO-015).
 - Verified the modular Studio and header-only preview through 33/33 focused tests, the complete 385-test repository/build gate, and 18/18 Chromium/Firefox/WebKit scenarios across every destination, six responsive widths, dark mode, WCAG, keyboard, 200% zoom, forced colors, live preview synchronization, and published delivery; the isolated unchanged experiment rerun plus repeated complete gate resolved the one orchestration anomaly (BUG-0414, STUDIO-015).
