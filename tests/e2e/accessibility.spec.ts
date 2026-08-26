@@ -50,7 +50,7 @@ async function selectStudioPanel(
   if ((await button.getAttribute('aria-current')) !== 'page') {
     await openMobileStudioNavigation(page);
     await expect(button).toBeVisible();
-    await button.scrollIntoViewIfNeeded();
+    // Native clicks already scroll and check actionability; a separate scroll can stall WebKit.
     await button.click();
   }
   await expect(page.getByRole('region', { name: regionName })).toBeVisible();
@@ -74,7 +74,6 @@ async function selectStudioPages(page: Page, previousRegionName?: string): Promi
   if ((await button.getAttribute('aria-current')) !== 'page') {
     await openMobileStudioNavigation(page);
     await expect(button).toBeVisible();
-    await button.scrollIntoViewIfNeeded();
     await button.click();
   }
   await expect(page.locator('.studio-workspace')).toBeVisible();
