@@ -12,11 +12,13 @@ An explicit unavailable page is not replaced with the first page. Check that the
 
 Unsaved entry changes are guarded for entry-list, Search and browser-history navigation. Same-entry screen changes do not discard them. Wait for an in-flight save or content operation to finish before opening another entry. A pending read may be superseded; its late response must not overwrite the newer selection. Preview windows close on accepted entry replacement; a reported revocation failure means the window/transport stopped but backend revocation was not confirmed.
 
+Pages navigation normally focuses the editor for keyboard access. Its delayed callback now yields if you have already chosen an input or another control, and is cancelled on superseding navigation/unmount. Typing after selecting an entry must remain in that field and show Unsaved changes; a missing dirty indicator is not evidence that the edit was saved. The BUG-0441 regression covers this timing boundary without changing history or autosave semantics.
+
 Known Back/Forward cancellation returns to the accepted stack entry. Manually typed fragments or restored history without trusted metadata cannot provide an exact stack distance: cancellation replaces that current unknown slot, which may leave a duplicate address. Reload restores saved content only; the browser's dirty warning is best effort, especially on mobile. No drafts are persisted automatically. Reverting CMS-002 requires no data migration, but its fragment bookmarks cease restoring selections on older Studio versions.
 
 ## Studio capability discovery or catalog configuration fails
 
-CMS-032 adds `GET /api/v1/studio/context` and the client methods only. The existing Studio still uses its original bootstrap; permission-aware screens and visible context selection arrive in CMS-033/034. Do not expect a selector merely from configuring the API catalog.
+CMS-032 adds `GET /api/v1/studio/context` and the client methods, plus the bounded navigation-focus repair described above. The existing Studio still uses its original bootstrap; permission-aware screens and visible context selection arrive in CMS-033/034. Do not expect a selector merely from configuring the API catalog.
 
 The new endpoint requires the current production workforce session plus organization/tenant routing headers and the complete selected scope. A 401 means the session is absent/invalid/revoked; preview grants alone are not accepted. A generic 403 means the requested configured scope is unavailable, without disclosing hidden topology. Invalid scope syntax or any query parameters return 400. A valid scope may have zero permitted screens; do not infer admin from successful authentication. Client `invalid_studio_context` means an unsupported/malformed or wrong-scope response, not permission to fall back to legacy identity data.
 

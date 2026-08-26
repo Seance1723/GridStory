@@ -800,6 +800,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   const initialLocationRef = useRef(parseStudioLocation(window.location.hash));
   const acceptedLocationRef = useRef<StudioLocation>(initialLocationRef.current.location);
   const studioHistoryRef = useRef<StudioHistory | null>(null);
+  const destinationFocusRef = useRef<number | null>(null);
   const transitionRef = useRef<Parameters<typeof createStudioHistory>[1]>(async () => false);
   const stopPreviewRef = useRef<() => Promise<void>>(async () => undefined);
   const previewGenerationRef = useRef(0);
@@ -1132,6 +1133,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
       history.dispose();
       studioHistoryRef.current = null;
       entryReadRef.current?.abort();
+      if (destinationFocusRef.current !== null) cancelAnimationFrame(destinationFocusRef.current);
+      destinationFocusRef.current = null;
     };
   }, []);
 
@@ -4014,6 +4017,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   );
 
   const activateDestination = (destination: StudioDestination) => {
+    if (destinationFocusRef.current !== null) cancelAnimationFrame(destinationFocusRef.current);
+    destinationFocusRef.current = null;
     setActiveStudioDestination(destination);
     const group = studioNavigationGroups.find(({ destinations }) =>
       destinations.some((id) => id === destination),
@@ -4021,7 +4026,23 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
     if (group) setExpandedNavigationGroups((current) => new Set(current).add(group.id));
     setMobileNavigationOpen(false);
     if (destination === 'pages') {
-      requestAnimationFrame(() => document.getElementById('studio-editor')?.focus());
+      const origin = document.activeElement;
+      const entryId = selectedRef.current?.id;
+      destinationFocusRef.current = requestAnimationFrame(() => {
+        destinationFocusRef.current = null;
+        const editor = document.getElementById('studio-editor');
+        const active = document.activeElement;
+        if (
+          !mountedRef.current ||
+          acceptedLocationRef.current.destination !== 'pages' ||
+          selectedRef.current?.id !== entryId ||
+          !editor ||
+          editor.contains(active)
+        )
+          return;
+        // A user's newer focus choice owns subsequent typing, not this deferred navigation.
+        if (active === origin || (!origin?.isConnected && active === document.body)) editor.focus();
+      });
     }
   };
 

@@ -28,7 +28,7 @@ import * as previewClient from '@gridstory/client/preview';
 import { exampleDesignSystem } from '@gridstory/example-kit/design-system';
 import { componentManifests } from '@gridstory/example-kit/manifests';
 import type { ContentSchemaDefinition } from '@gridstory/schema';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { StrictMode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -1979,6 +1979,89 @@ afterEach(() => {
 });
 
 describe('GridStory Studio', () => {
+  it.each(['navigation', 'search'] as const)(
+    'respects the %s focus owner when deferred Pages navigation completes (BUG-0441)',
+    async (owner) => {
+      const frames: FrameRequestCallback[] = [];
+      vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+        frames.push(callback);
+        return frames.length;
+      });
+      const user = userEvent.setup();
+      render(<App client={createTestClient()} />);
+      await screen.findByLabelText('Headline');
+      await user.click(screen.getByRole('button', { name: 'Library', exact: true }));
+      const pages = screen.getByRole('button', { name: 'Pages', exact: true });
+      pages.focus();
+      await user.keyboard('{Enter}');
+      await screen.findByLabelText('Headline');
+      const search = screen.getByLabelText('Search Studio');
+      if (owner === 'search') await user.click(search);
+      expect(frames.length).toBeGreaterThan(0);
+      act(() => {
+        for (const frame of frames.splice(0)) frame(performance.now());
+      });
+      expect(document.activeElement).toBe(
+        owner === 'search' ? search : document.getElementById('studio-editor'),
+      );
+    },
+  );
+
+  it('cancels deferred editor focus on superseding navigation and unmount (BUG-0441)', async () => {
+    const frames = new Map<number, FrameRequestCallback>();
+    let nextFrame = 0;
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      frames.set(++nextFrame, callback);
+      return nextFrame;
+    });
+    const cancel = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation((id) => {
+      frames.delete(id);
+    });
+    const user = userEvent.setup();
+    const view = render(<App client={createTestClient()} />);
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: /Second page/ }));
+    await waitFor(() => expect(window.location.hash).toBe('#/pages?entry=two&type=page'));
+    expect(frames.size).toBe(1);
+    await user.click(screen.getByRole('button', { name: 'Library', exact: true }));
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(frames.size).toBe(0);
+    await user.click(screen.getByRole('button', { name: 'Pages', exact: true }));
+    expect(frames.size).toBe(1);
+    view.unmount();
+    expect(cancel).toHaveBeenCalledTimes(2);
+    expect(frames.size).toBe(0);
+  });
+
+  it('keeps an editor field focused when delayed navigation focus runs before typing (BUG-0441)', async () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    const user = userEvent.setup();
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    render(<App client={createTestClient()} />);
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: /Second page/ }));
+    await waitFor(() => expect(window.location.hash).toBe('#/pages?entry=two&type=page'));
+    const headline = screen.getByLabelText('Headline') as HTMLInputElement;
+    await user.click(headline);
+    headline.select();
+    expect(frames.length).toBeGreaterThan(0);
+    act(() => {
+      for (const frame of frames.splice(0)) frame(performance.now());
+    });
+    expect(document.activeElement).toBe(headline);
+    await user.keyboard('Unsaved second navigation draft');
+    expect(headline.value).toBe('Unsaved second navigation draft');
+    expect(screen.getByText('Unsaved changes')).toBeTruthy();
+    window.history.back();
+    await waitFor(() => expect(confirm).toHaveBeenCalledOnce());
+    await waitFor(() => expect(window.location.hash).toBe('#/pages?entry=two&type=page'));
+    expect(headline.value).toBe('Unsaved second navigation draft');
+  });
+
   it('confirms before a component migration can replace a different dirty entry', async () => {
     const user = userEvent.setup();
     const client = createTestClient();

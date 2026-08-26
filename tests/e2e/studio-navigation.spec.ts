@@ -19,7 +19,7 @@ async function createPage(request: APIRequestContext, title: string) {
     },
   });
   expect(response.ok()).toBe(true);
-  return response.json() as Promise<{ id: string }>;
+  return response.json() as Promise<{ id: string; data: { title: string; slug: string } }>;
 }
 
 const address = (destination: string, id: string) =>
@@ -69,6 +69,8 @@ test('entry and history guards preserve drafts and preview until accepted replac
   const popup = await popupPromise;
   await expect(popup.locator('[data-gridstory-node]').first()).toBeVisible();
   await title.fill('Private unsaved navigation draft');
+  await expect(title).toHaveValue('Private unsaved navigation draft');
+  await expect(page.getByText('Unsaved changes', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Library', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Asset library' })).toBeVisible();
   expect(popup.isClosed()).toBe(false);
@@ -77,7 +79,10 @@ test('entry and history guards preserve drafts and preview until accepted replac
   page.once('dialog', (dialog) => dialog.dismiss());
   await page
     .getByRole('complementary', { name: 'Content entries' })
-    .getByRole('button', { name: /Navigation guarded second/ })
+    .getByRole('button', {
+      name: `${second.data.title} /${second.data.slug} draft`,
+      exact: true,
+    })
     .click();
   await expect(title).toHaveValue('Private unsaved navigation draft');
   expect(new URL(page.url()).hash).toBe(address('pages', first.id));
@@ -85,11 +90,16 @@ test('entry and history guards preserve drafts and preview until accepted replac
   page.once('dialog', (dialog) => dialog.accept());
   await page
     .getByRole('complementary', { name: 'Content entries' })
-    .getByRole('button', { name: /Navigation guarded second/ })
+    .getByRole('button', {
+      name: `${second.data.title} /${second.data.slug} draft`,
+      exact: true,
+    })
     .click();
   await expect(title).toHaveValue('Navigation guarded second');
   await expect.poll(() => popup.isClosed()).toBe(true);
   await title.fill('Unsaved second navigation draft');
+  await expect(title).toHaveValue('Unsaved second navigation draft');
+  await expect(page.getByText('Unsaved changes', { exact: true })).toBeVisible();
   page.once('dialog', (dialog) => dialog.dismiss());
   await page.goBack();
   await expect(page).toHaveURL(new RegExp(`${second.id}&type=page$`));
@@ -140,7 +150,10 @@ test('manual fragments, unavailable entries and denied destinations remain truth
   ).toBeDisabled();
   await page
     .getByRole('complementary', { name: 'Content entries' })
-    .getByRole('button', { name: /Navigation recovery/ })
+    .getByRole('button', {
+      name: `${entry.data.title} /${entry.data.slug} draft`,
+      exact: true,
+    })
     .click();
   await expect(title).toHaveValue('Navigation recovery');
   await page.route('**/api/v1/identity', (route) =>
