@@ -6,8 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Security
+
+- Confirmed and recorded BUG-0433: the production request hook exempts any preview-token prefix from session authentication even on unrelated management routes, allowing development-admin fallback. An isolated read-only memory-backed API check reproduced HTTP 200 with that principal. AUTH-001 proposes exact credential-purpose dispatch and fail-closed production context before CMS-003; the flaw is still open and no fix, live exploitation or deployment is claimed.
+
 ### Added
 
+- Added the AUTH-001 security prerequisite and proposed ADR 0029 after CMS-003 research reproduced a production authentication bypass in isolated memory-backed API injection. CMS-003 is explicitly blocked pending verified remediation; the approved CMS-002 runtime is unchanged. This checkpoint only records the plan and evidence, not a shipped fix.
+- Verified the AUTH-001 planning checkpoint (Codex, 2026-08-26T16:06:58+05:30): lint/format/ledgers, the unchanged API build, whitespace and five-file/137-task/13-link documentation audits pass. The read-only missing-session control returns 401 while invalid-preview-prefixed context/schema requests return 200. Full runtime/browser and external certification remain required future implementation evidence, not results of this planning change.
 - Implemented the approved CMS-002 finite Studio fragment locations and native history adapter without new dependencies, server rewrites or application-site route changes. Added parser/history, direct-link, StrictMode, invalid/unavailable target, dirty guard, delayed response, write overlap and preview-lifetime regressions. Final repository gates pass with 430 tests (78 Studio; 17 existing opt-in skips), production/E2E builds and all 30 Chromium/Firefox/WebKit scenarios; isolated manual smoke and verification limits are recorded in TASKS and ADR 0028.
 - Recorded the proposed CMS-002 location/history contract in ADR 0028: finite hash destinations, page-entry context, guarded owned/unowned history, stale-read and preview-lifetime safeguards, exact Studio-only files, rollback and negative/three-browser acceptance. This is a documentation-only approval checkpoint, not shipped navigation behavior (CMS-002).
 - Verified the CMS-002 planning checkpoint with lint/format/ledger/whitespace checks, the unchanged Studio build, and read-only scope/link/history/pointer audits; all 136 task states are retained, CMS-002 remains planned, and runtime implementation/testing still awaits approval (CMS-002, BUG-0420).

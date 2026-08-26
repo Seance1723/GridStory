@@ -212,7 +212,7 @@ No calendar estimate is asserted: scope varies materially between moving an exis
 
 ## 9. Recommended next action
 
-The original first recommendation was **CMS-001: reorganize only the 19 existing destinations** using the mapping above. CMS-001 and **CMS-002: stable Studio locations, deep links and history-safe navigation** are now implemented and verified; their checkpoints are below. The next action is a scoped T2 plan and approval for **CMS-003: authorized Studio capabilities and safe scope selection**. The broader proposed program does not approve a new capability/scope contract or its implementation.
+The original first recommendation was **CMS-001: reorganize only the 19 existing destinations** using the mapping above. CMS-001 and **CMS-002: stable Studio locations, deep links and history-safe navigation** are now implemented and verified; their checkpoints are below. CMS-003 inspection subsequently confirmed the critical production-authentication defect BUG-0433. The next action is approval and verified implementation of **AUTH-001** in [ADR 0029](adr/0029-production-preview-authentication-boundary.md), followed by CMS-003's separately approved capability/context plan. The broader program does not approve either contract automatically.
 
 After that, proceed through the queue by dependency. CMS-002 and other T2 tasks require their own implementation plan/approval. CMS-027 through CMS-030 are questions/discovery tasks, not authorization to build a model-hosting platform, store PII, send email, process payments or deploy services.
 
@@ -269,3 +269,39 @@ Implementation update (2026-08-26): the user approved ADR 0028 in response to it
 - Isolated manual smoke verified copied links, reload, Back/Forward, mobile drawer/containment, theme switching and connected-preview closure on accepted entry replacement. Automated tests supply native-cancellation evidence; the manual smoke does not claim it. Own test tabs/services were closed, viewport reset and user data/services preserved. PostgreSQL, external-provider and deployment certification were not rerun or claimed.
 - BUG-0421 through BUG-0426 and BUG-0428 through BUG-0432 are resolved. BUG-0427 remains open for CMS-004: existing Create page defaults fail the full example schema, while preserving current editor/address on rejection. Successful creation location behavior is verified with a valid unit fixture; schema-aware defaults are not silently added to this slice.
 - Follow-up: prepare and obtain approval for CMS-003's minimized authenticated capabilities/context contract and safe scope switching. All later tasks retain their dependencies and decision gates; existing beta/RC/GA no-go boundaries are unchanged.
+
+## 15. CMS-003 research and security prerequisite
+
+- Updated: 2026-08-26T16:03:30+05:30 by Codex, baseline `1de8211`. This is a planning-only checkpoint. CMS-003 is now blocked on AUTH-001; no source or permission change has been made. The existing Create page validation BUG-0427 remains CMS-004 work.
+- Confirmed BUG-0433: the production request hook treats an unverified preview-token prefix as a route-independent authentication exemption, and unbound request context falls back to development admin. Isolated in-memory, seed-free API injection reproduced HTTP 200 on private context with that identity. No real server, credential, content or deployment was touched. [ADR 0029](adr/0029-production-preview-authentication-boundary.md) freezes the small prerequisite fix and its exact approval/verification boundary; this takes precedence over adding new capability endpoints.
+
+### Retained CMS-003 inward findings
+
+| Existing seam | Reuse | Gap to resolve after AUTH-001 |
+|---|---|---|
+| `packages/core/src/authorization.ts` | Existing deny-by-default action/resource decisions and scoped assignments/grants. | Do not infer permissions from browser role names or a generic `canEdit` flag; projection must match each route's actual resource/type checks. |
+| `packages/core/src/scope-registry.ts` | Full organization/tenant/workspace/site/environment/locale hierarchy and active parent/locale validation. | It is not currently wired into API context discovery; no trusted selectable-topology contract exists. Approve a bounded code-owned catalog and missing-configuration behavior before implementation; never enumerate raw topology to a user. |
+| `GET /api/v1/context` and client `getRequestContext` | Existing authenticated request context, after AUTH-001 fixes its outer boundary. | It returns the whole principal and requires a platform-level content-read decision; not a minimized capability projection, and not a general entry point for content-type-limited or operations-only users. Preserve compatibility or explicitly approve its replacement. |
+| Enterprise identity hook and `requireIdentityAdmin` | Tenant-bound session revalidation, plus the existing distinct identity administration gate. | Identity gate currently uses server-side admin/identity-admin roles. A new projection must reuse the same gate server-side, not invent a frontend role mapping or silently replace the policy. |
+| `packages/client/src/index.ts` | Fixed complete-scope headers, production cookies, development-mode opt-in and AbortSignals. | Client scope is immutable with no cloning/switch API. Scope switching must preserve trusted identity/transport, never accept tenant authority from a URL, and distinguish abortable reads from writes that may already have committed. |
+| `apps/studio/src/App.tsx` | CMS-002 entry/history/preview guards, one selected destination and existing feature loaders. | Startup unconditionally loads content/schema/components/design/workflows, and entry selection additionally requires history/workflow reads. Permission-aware bootstrap must isolate optional reads so one denial does not prevent another authorized screen. |
+| Finite navigation and shared SCSS | All 19 stable destination IDs, task groups and consistent controls. | Filter only by verified server capabilities; denied deep links must not show cached privileged output. Context replacement must clear every panel/draft/undo/search/selection/preview generation, not just change the client prop. Retain all features for authorized users and preserve the theme. |
+
+The future scope UI needs a reviewed rule for organization/tenant/workspace anchoring, site/environment/locale choices, empty/denied configuration, dirty/mutation guards, authorization revalidation and reload/history behavior. Those choices are not approved by this inventory. In particular, type-restricted grants must not be advertised as usable on a route that omits the type from its authorization resource; surface the actual limitation or approve a separately tested correction.
+
+### Retained outward findings
+
+| Primary source | Useful shape / failure mode | What GridStory deliberately does not infer or copy |
+|---|---|---|
+| [Sanity roles](https://www.sanity.io/docs/user-guides/roles) | Resource-specific and additive grants; a role can edit content yet lack ancillary Studio feature permissions. | No role-name shortcut, SaaS billing model, GROQ policy engine or assumption that document read permits all bootstrap reads. |
+| [Sanity multi-tenancy](https://www.sanity.io/docs/developer-guides/multi-tenancy-implementation) | Studio workspaces can represent different content contexts; member permissions determine actual access. | Workspace visibility is not authorization; do not copy provider project/dataset infrastructure. |
+| [Contentful environment access](https://www.contentful.com/developers/docs/tutorials/general/managing-access-to-environments/) | Selected-environment access can coexist with content restrictions; management rights can be much broader. Its documented environment-list API exposes names even for inaccessible environments. | GridStory's requirement is stricter: do not enumerate unauthorized context choices. No environment aliases, provisioning or implicit broad management grants. |
+| [OWASP authorization guidance](https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html) | Deny by default and validate each request; UI filtering cannot enforce access. | No new generic authorization engine. Reuse and repair the existing backend boundary. |
+
+Four sources were sufficient for the current architectural shapes. The synthesis above is a proposal input, not a claim of feature equivalence. Further capability design pauses until the confirmed authentication prerequisite is closed.
+
+### Current handoff
+
+The task ledger retains all 136 existing IDs and adds AUTH-001 before CMS-003. Historical completed tasks remain unchanged. Approve AUTH-001's T2 plan, implement and verify it in a separate commit, then resume CMS-003's plan/approval. This checkpoint does not close the security bug or alter historical release-readiness artifacts; it adds a current release blocker that must be resolved before treating the affected build as safe for untrusted access.
+
+Planning verification (Codex, 2026-08-26T16:06:58+05:30): lint/format/ledger checks, the unchanged API build and whitespace audit pass. The documentation audit confirms the five-file fence, 137 tasks with only the described prerequisite/status changes, and 13 resolving local links. Repeated isolated production API controls confirm BUG-0433; full runtime/browser/provider/deployment verification belongs to the approved fix and is not claimed here.
