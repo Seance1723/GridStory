@@ -6,7 +6,7 @@
     "standard": "OWASP Application Security Verification Standard",
     "standardVersion": "5.0.0",
     "targetLevel": "L2-oriented",
-    "reviewedAt": "2026-08-24",
+    "reviewedAt": "2026-08-26",
     "source": "https://github.com/OWASP/ASVS/tree/v5.0.0/5.0",
     "statement": "This is a project-specific selection and applicability record, not an ASVS certification or a claim that every ASVS L2 requirement has been independently verified.",
     "statusDefinitions": {
@@ -438,14 +438,16 @@
         "packages/core/src/enterprise-identity-service.ts",
         "apps/api/src/identity-adapters.ts",
         "apps/api/src/identity-routes.ts",
+        "apps/api/src/request-context.ts",
         "docs/identity-and-access.md"
       ],
       "verification": [
         "packages/core/test/enterprise-identity-service.test.ts",
         "apps/api/test/identity-adapters.test.ts",
-        "apps/api/test/identity-server.test.ts"
+        "apps/api/test/identity-server.test.ts",
+        "apps/api/test/request-context.test.ts"
       ],
-      "taskIds": ["M6-002"]
+      "taskIds": ["M6-002", "AUTH-001"]
     },
     {
       "id": "GS-SEC-014",

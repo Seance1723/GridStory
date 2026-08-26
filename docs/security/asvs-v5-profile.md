@@ -56,6 +56,10 @@ The machine profile contains 35 stable `GS-SEC-###` requirements:
 
 Evidence paths point to repository code, tests, or documentation. Operational verification names are intentional future evidence and are linked to tasks. `pnpm security:check` rejects verified requirements without local evidence, malformed or duplicate IDs, unknown threat references, missing chapter coverage, invalid ASVS references, and unresolved partial/planned/conditional controls without stable task ownership.
 
+## AUTH-001 authentication-boundary evidence
+
+`GS-SEC-013` and `THREAT-0002/0003` include resolved-route/method credential dispatch and fail-closed per-request production context. Production API regressions cover invalid, valid, expired and revoked preview credentials on management routes, encoded/sibling paths, activation/revocation method confusion, verified workforce identity, standalone preview validation and anonymous published-only delivery. The independent request-context tests cover unmarked/production denial, anonymous public context and development-mode isolation. Evidence is in `apps/api/test/identity-server.test.ts` and `apps/api/test/request-context.test.ts`; full gate results and limits are recorded in [ADR 0029](../adr/0029-production-preview-authentication-boundary.md). This is repository-boundary evidence, not live IdP, TLS/proxy, PostgreSQL or deployment certification; no unrelated ASVS status is upgraded.
+
 ## M5-002 evidence update
 
 The profile treats `GS-SEC-024` credential/cache containment as verified and extends `GS-SEC-015` evidence with tenant-bound OIDC role assignments, tenant-bound service grants, canonical scope serialization, hostile-adapter checks, and cross-scope queue/repository tests. Production identity/session and trusted-proxy requirements remain conditional or planned under M6-002 and are an explicit M5-008 beta blocker.

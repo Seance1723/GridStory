@@ -13,6 +13,8 @@ Keep in-process preview for local component editing and introduce an external pr
 
 Preview endpoints use private, no-store responses. Tokens are single-purpose, expire quickly, bind tenant/site/environment, and are never accepted by public delivery routes.
 
+AUTH-001 clarifies the production dispatch boundary in [ADR 0029](0029-production-preview-authentication-boundary.md): only matched GET preview-content, POST session-messages and DELETE session-self-revocation routes accept preview credentials, and each still runs the existing grant verifier. Token prefixes cannot exempt other routes or methods from workforce authentication. Grant creation remains a management operation; unbound production management context fails closed instead of synthesizing development identity. Public delivery never uses a preview grant as authority or reads its draft scope.
+
 ## Consequences
 
 - Applications retain router, rendering, CSP, and styling ownership.

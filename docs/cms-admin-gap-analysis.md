@@ -212,7 +212,7 @@ No calendar estimate is asserted: scope varies materially between moving an exis
 
 ## 9. Recommended next action
 
-The original first recommendation was **CMS-001: reorganize only the 19 existing destinations** using the mapping above. CMS-001 and **CMS-002: stable Studio locations, deep links and history-safe navigation** are now implemented and verified; their checkpoints are below. CMS-003 inspection subsequently confirmed the critical production-authentication defect BUG-0433. The next action is approval and verified implementation of **AUTH-001** in [ADR 0029](adr/0029-production-preview-authentication-boundary.md), followed by CMS-003's separately approved capability/context plan. The broader program does not approve either contract automatically.
+The original first recommendation was **CMS-001: reorganize only the 19 existing destinations** using the mapping above. CMS-001 and **CMS-002: stable Studio locations, deep links and history-safe navigation** are implemented and verified. CMS-003 inspection then exposed BUG-0433; the separately approved **AUTH-001** fix is now implemented and verified in [ADR 0029](adr/0029-production-preview-authentication-boundary.md). The next action is **CMS-003's scoped capability/context and safe scope-switching plan and approval**. The broader program does not approve that contract automatically.
 
 After that, proceed through the queue by dependency. CMS-002 and other T2 tasks require their own implementation plan/approval. CMS-027 through CMS-030 are questions/discovery tasks, not authorization to build a model-hosting platform, store PII, send email, process payments or deploy services.
 
@@ -303,5 +303,13 @@ Four sources were sufficient for the current architectural shapes. The synthesis
 ### Current handoff
 
 The task ledger retains all 136 existing IDs and adds AUTH-001 before CMS-003. Historical completed tasks remain unchanged. Approve AUTH-001's T2 plan, implement and verify it in a separate commit, then resume CMS-003's plan/approval. This checkpoint does not close the security bug or alter historical release-readiness artifacts; it adds a current release blocker that must be resolved before treating the affected build as safe for untrusted access.
+
+## 16. AUTH-001 verified security prerequisite
+
+- Completed: Codex, 2026-08-26T16:30:37+05:30, after explicit approval. Sections above retain the historical planning evidence; this checkpoint supersedes the AUTH-001 block, not the broader program's decision gates.
+- Only two API runtime files changed: resolved-route/method credential dispatch and fail-closed production private context. Preview grants cannot authorize management endpoints or synthesize development admin. The same classifier's activation/revocation method confusion is also closed. No Studio feature, styling, core/client contract, dependency or migration changed.
+- Baseline failures now return 401; 27 focused cases, security/model checks, the complete 439-active-test repository gate (17 existing opt-in skips), production builds, all 30 Chromium/Firefox/WebKit scenarios and the isolated manual save/review/publish/deliver flow pass. Fresh independent investigation/review supplied additional boundary evidence. Exact commands, popup-inspection limitation and external verification exclusions are in ADR 0029; no deployment is claimed.
+- BUG-0433/0434 and verification defects BUG-0436/0437/0438 are resolved. Existing workforce-bearer preview revocation BUG-0435 remains a separate CMS-003 contract input (cookie revocation works); full-schema Create page defaults BUG-0427 remains CMS-004. All 137 task IDs and historical completed states are retained.
+- Handoff: commit AUTH-001 separately on `main`, then prepare CMS-003's minimized authorized capability/context and safe scope-switching proposal. Do not implement it until that T2 contract is approved.
 
 Planning verification (Codex, 2026-08-26T16:06:58+05:30): lint/format/ledger checks, the unchanged API build and whitespace audit pass. The documentation audit confirms the five-file fence, 137 tasks with only the described prerequisite/status changes, and 13 resolving local links. Repeated isolated production API controls confirm BUG-0433; full runtime/browser/provider/deployment verification belongs to the approved fix and is not claimed here.

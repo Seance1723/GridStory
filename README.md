@@ -74,6 +74,8 @@ The first start creates `.gridstory/gridstory.db`, initializes the schema, and i
 
 Optional environment settings are documented in `.env.example`. The applications also have safe local defaults, so copying the file is not required for the first run.
 
+Production preview credentials are single-purpose: only the matched draft-read, message and self-revocation routes accept them through the preview verifier. They cannot authorize management endpoints or create grants. Unbound production management requests fail closed; local authoring fallback requires explicit development mode. See [the authentication boundary](docs/adr/0029-production-preview-authentication-boundary.md) for its verification and deployment limits.
+
 ### Studio navigation
 
 The Studio sidebar groups all 19 existing destinations by task:

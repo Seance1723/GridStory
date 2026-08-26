@@ -25,7 +25,11 @@ Management, identity, GraphQL, and SCIM responses remain `Cache-Control: private
 - private requests require a backend-verified `gridstory_session` cookie or an explicit `gss_` bearer session;
 - organization/tenant headers or federation callback query values are routing hints only—the selected tenant repository and opaque token hash must also match;
 - exact configured CORS origins may send credentials; the cookie is `HttpOnly`, `SameSite=Lax`, and `Secure` by default;
-- public health/readiness and published delivery remain anonymous, while preview-token requests continue through the separate origin-bound preview boundary.
+- public health/readiness and published delivery remain anonymous; federation, activation and SCIM handlers retain their own credential validation;
+- a preview prefix is never management authentication: only the matched `GET /api/v1/preview/content/:id`, `POST /api/v1/preview/sessions/:id/messages`, and `DELETE /api/v1/preview/sessions/:id` handlers may dispatch to the separate origin-bound preview verifier. Creating grants, context/schema reads, GraphQL, other methods (including HEAD), and sibling paths still require a workforce session;
+- an unbound private request fails closed. Development identity fallback requires an explicit per-request development mode, never absence of a verified identity.
+
+Preview self-revocation verifies the matching grant; management revocation retains the supported workforce-cookie transport and complete-scope check. Existing workforce-bearer preview revocation has a separate dispatch limitation tracked as BUG-0435/CMS-003. A workforce cookie accompanying a preview-prefixed management request supplies only its own verified permissions, never preview-derived authority. See [ADR 0029](adr/0029-production-preview-authentication-boundary.md).
 
 Studio must set `VITE_GRIDSTORY_IDENTITY_MODE=production` so the universal client includes cookies and stops emitting its development actor header.
 

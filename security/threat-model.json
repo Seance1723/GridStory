@@ -3,8 +3,8 @@
   "model": {
     "id": "GRIDSTORY-TM-001",
     "title": "GridStory control plane and delivery threat model",
-    "version": "1.9.0",
-    "reviewedAt": "2026-08-24",
+    "version": "1.9.1",
+    "reviewedAt": "2026-08-26",
     "owners": ["GridStory security owner", "GridStory architecture owner"],
     "methodology": "OWASP four-question threat modeling with STRIDE categorization",
     "scope": [
@@ -874,9 +874,9 @@
     },
     {
       "id": "THREAT-0002",
-      "title": "Development identity headers accepted in production",
+      "title": "Development identity exposed in production",
       "stride": ["Spoofing", "Elevation of Privilege"],
-      "scenario": "A public deployment trusts caller-controlled actor, role, or tenant headers and grants administrative access.",
+      "scenario": "A public deployment trusts caller-controlled identity headers or exempts a management route based on a credential prefix or method-blind path, then fabricates development-admin identity for an unbound request.",
       "actors": ["ACTOR-008"],
       "assets": ["ASSET-003", "ASSET-004"],
       "boundaries": ["BOUNDARY-001", "BOUNDARY-002"],
@@ -888,10 +888,13 @@
       "mitigations": [
         "Keep development header identity explicit and reject actor, role, and principal-type headers in production mode.",
         "Verify backend-held opaque sessions or tenant-bound directory credentials before protected production requests.",
+        "Match preview and public credential dispatch to the resolved handler and method; never treat a preview prefix as management authentication.",
+        "Reject unbound production private context; allow legacy development identity only with an explicit per-request development mode.",
         "Use maintained OIDC/SAML/WebAuthn adapters with one-time durable protocol state; retain trusted-proxy and TLS conformance as deployment evidence."
       ],
       "verification": [
         "apps/api/test/identity-server.test.ts",
+        "apps/api/test/request-context.test.ts",
         "apps/api/test/identity-adapters.test.ts",
         "packages/core/test/enterprise-identity-service.test.ts",
         "docs/identity-and-access.md"
@@ -913,11 +916,13 @@
       "mitigations": [
         "Use short-lived HMAC grants bound to audience, full scope, origin, route, mode, and optional entry.",
         "Check origin/source, expiry, revocation, monotonically increasing sequence, and nonce uniqueness.",
+        "Accept preview credentials only at the exact draft-read, message and self-revocation route/method pairs; require workforce authentication elsewhere.",
         "Never place grants in published URLs or caches."
       ],
       "verification": [
         "packages/core/test/preview-service.test.ts",
         "apps/api/test/preview.test.ts",
+        "apps/api/test/identity-server.test.ts",
         "docs/troubleshooting.md"
       ]
     },

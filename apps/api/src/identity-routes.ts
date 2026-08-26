@@ -19,7 +19,7 @@ import {
 import type { AuthenticationResponseJSON, RegistrationResponseJSON } from '@simplewebauthn/server';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { FederationAdapter, WebAuthnAdapter } from './identity-adapters.js';
-import { bindRequestIdentity, requestContext } from './request-context.js';
+import { bindRequestIdentity, bindRequestIdentityMode, requestContext } from './request-context.js';
 
 const SCIM_USER_SCHEMA = 'urn:ietf:params:scim:schemas:core:2.0:User';
 const SCIM_GROUP_SCHEMA = 'urn:ietf:params:scim:schemas:core:2.0:Group';
@@ -97,16 +97,26 @@ function requireIdentityAdmin(request: FastifyRequest): void {
 }
 
 function isPublicPath(request: FastifyRequest): boolean {
-  const path = request.url.split('?')[0] ?? request.url;
-  const previewToken = bearer(request)?.startsWith('gsp_');
+  // Use the router's selected handler, not a separately parsed raw URL or token prefix.
+  const path = request.routeOptions.url;
+  if (!path) return false;
   return (
     path === '/health' ||
     path === '/ready' ||
     path.startsWith('/api/v1/delivery/') ||
     path.startsWith('/api/v1/identity/federation/') ||
-    path === '/api/v1/identity/break-glass/activate' ||
-    path.startsWith('/api/v1/scim/v2/') ||
-    previewToken === true
+    (request.method === 'POST' && path === '/api/v1/identity/break-glass/activate') ||
+    path.startsWith('/api/v1/scim/v2/')
+  );
+}
+
+function isPreviewCredentialRequest(request: FastifyRequest): boolean {
+  if (!bearer(request)?.startsWith('gsp_')) return false;
+  const path = request.routeOptions.url;
+  return (
+    (request.method === 'GET' && path === '/api/v1/preview/content/:id') ||
+    (request.method === 'POST' && path === '/api/v1/preview/sessions/:id/messages') ||
+    (request.method === 'DELETE' && path === '/api/v1/preview/sessions/:id')
   );
 }
 
@@ -268,6 +278,7 @@ export async function registerIdentityRoutes(
   options: IdentityRouteOptions,
 ): Promise<void> {
   server.addHook('onRequest', async (request) => {
+    bindRequestIdentityMode(request, options.mode);
     if (options.mode === 'development') return;
     if (FORBIDDEN_DEVELOPMENT_HEADERS.some((name) => header(request, name))) {
       throw new GridStoryError(
@@ -276,7 +287,7 @@ export async function registerIdentityRoutes(
         401,
       );
     }
-    if (isPublicPath(request)) return;
+    if (isPublicPath(request) || isPreviewCredentialRequest(request)) return;
     const requestScope = scope(request, true);
     const token = sessionToken(request, options.cookieName);
     if (!token)

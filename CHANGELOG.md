@@ -8,6 +8,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Security
 
+- Completed AUTH-001 (Codex, 2026-08-26T16:30:37+05:30): closed preview-prefix management escalation BUG-0433 and activation/revocation method confusion BUG-0434. The original 200/400 triggers now return 401. Security/model checks, 27 focused tests, the full 439-test repository gate (17 existing opt-in skips), all 30 Chromium/Firefox/WebKit scenarios, isolated manual publishing and independent candidate review pass. Restored normal production assets, updated all ledgers and unblocked CMS-003 planning; no push, deployment or external identity certification is included. Completion commit is tagged `[AUTH-001]`; detailed commands, scope and limits are in ADR 0029.
+
+- Implemented AUTH-001's matched-route/method preview credential dispatch and independent fail-closed production request context in the existing API edge. Focused regressions now reject the original preview-prefix escalation and activation/revocation method confusion; scoped preview/session verifiers and development authoring remain intact. Updated authentication/preview guidance and THREAT-0002/0003 / GS-SEC-013 evidence without upgrading unrelated controls or claiming deployment certification; final browser evidence is tracked in ADR 0029.
+
+- Logged the same-classifier method-confusion sibling BUG-0434 for AUTH-001: unauthenticated DELETE on the raw break-glass activation path reaches a private handler. The fix must use the matched route and method, with an independent production-context denial fallback.
+- Accepted AUTH-001/ADR 0029 for implementation after explicit user approval; started the failing production-boundary regression and independent read-only security investigation. BUG-0433 remains open until focused/full verification passes; no deployment is authorized.
 - Confirmed and recorded BUG-0433: the production request hook exempts any preview-token prefix from session authentication even on unrelated management routes, allowing development-admin fallback. An isolated read-only memory-backed API check reproduced HTTP 200 with that principal. AUTH-001 proposes exact credential-purpose dispatch and fail-closed production context before CMS-003; the flaw is still open and no fix, live exploitation or deployment is claimed.
 
 ### Added
@@ -43,6 +49,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- Recorded the existing workforce-bearer preview revocation incompatibility as BUG-0435 for CMS-003's context/preview contract review; AUTH-001 preserves the currently supported cookie-based management revocation without adding bearer formats.
 - Accepted ADR 0028 for CMS-002 after the user's explicit approval; documented page-only scoped links, unknown-history fallback and native exit-warning limits. Existing global SCSS, colors and all 19 screens/features are retained.
 - Recorded the existing full-schema Create page validation failure (BUG-0427) for CMS-004's already-planned schema-aware creation work; CMS-002 does not change creation defaults.
 - Linked CMS-002 to its scoped T2 proposal and logged the source-confirmed search-result dirty-guard bypass for the approved implementation to reproduce and repair; no runtime fix is claimed in this planning pass (BUG-0421, CMS-002).
@@ -64,6 +71,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Recorded the accepted M6-005 evidence-bound marketplace decision: operator-scoped publisher verification, signed compatibility/support metadata, injected non-executing artifact review, separate human approval, and approved-only handoff to the existing disabled plugin installation lifecycle.
 
 ### Fixed
+
+- Aligned the existing resolved-bug ledger delimiter with its eight-column header; the before/after column-count regression passes and historical records remain intact (AUTH-001, BUG-0438).
+
+- Corrected new AUTH-001 test preconditions (BUG-0436): retain GraphQL's data/errors authentication envelope, credential-specific errors, a valid forbidden-write candidate and valid JSON DELETE requests. Captured the initialized fixture in async helpers to eliminate four non-null assertion lint warnings (BUG-0437); all 27 focused cases and repeated lint pass with assertions intact.
 
 - Unified search-result and entry-list discard protection and Pages activation (BUG-0421); added stale-read checks, independent entry-write tracking and the component-migration shortcut guard (BUG-0423, BUG-0430, BUG-0431).
 - Corrected owned/unowned and interrupted history restoration (BUG-0424, BUG-0425). Preview transport stops before committing another entry, refuses mismatched patches and revokes late grants; revocation failures remain visible.

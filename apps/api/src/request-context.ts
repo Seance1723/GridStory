@@ -36,6 +36,14 @@ export function requestReauthenticationTime(request: FastifyRequest): string {
 }
 
 const boundIdentities = new WeakMap<FastifyRequest, BoundRequestIdentity>();
+const identityModes = new WeakMap<FastifyRequest, 'development' | 'production'>();
+
+export function bindRequestIdentityMode(
+  request: FastifyRequest,
+  mode: 'development' | 'production',
+): void {
+  identityModes.set(request, mode);
+}
 
 export function bindRequestIdentity(request: FastifyRequest, identity: BoundRequestIdentity): void {
   boundIdentities.set(request, identity);
@@ -50,13 +58,17 @@ function principal(request: FastifyRequest, publicRequest: boolean): Principal {
   const authenticated = boundIdentities.get(request);
   if (authenticated) return authenticated.principal;
   const actorId = header(request, 'x-gridstory-actor');
-  if (publicRequest && !actorId) {
+  const development = identityModes.get(request) === 'development';
+  if (publicRequest && (!development || !actorId)) {
     return {
       id: 'anonymous',
       type: 'anonymous',
       roles: ['anonymous'],
       authenticationMethod: 'anonymous',
     };
+  }
+  if (!development) {
+    throw new GridStoryError('An authenticated session is required.', 'invalid_session', 401);
   }
   const principalType = header(request, 'x-gridstory-principal-type');
   const type: PrincipalType = principalType === 'service-account' ? 'service-account' : 'user';

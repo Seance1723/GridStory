@@ -31,7 +31,7 @@ Publisher public keys are integrity trust configuration; private publisher keys 
 
 ## Identity, sessions, and authorization
 
-- `GS-SEC-013`: production authentication SHALL replace development identity headers and verify every documented user/service path consistently, including issuer namespace, signature, audience, time, nonce/replay semantics, and required authentication strength.
+- `GS-SEC-013`: production authentication SHALL replace development identity headers and verify every documented user/service path consistently, including issuer namespace, signature, audience, time, nonce/replay semantics, and required authentication strength. Credential-purpose dispatch SHALL match the resolved route and method; an unverified token prefix SHALL NOT exempt management requests. Unbound production management context SHALL fail closed, with development fallback limited to explicit development mode.
 - `GS-SEC-014`: production sessions SHALL use backend verification, at least 128 bits of CSPRNG entropy, documented idle/absolute lifetimes, rotation, logout, expiry, account-disable, and administrative revocation.
 - `GS-SEC-015`: every non-public operation SHALL authorize both the action and object against complete organization, tenant, workspace, site, environment, and locale scope. No role/grant match means deny.
 - Service-account grants SHALL be least privilege, tenant scoped, expiring where practical, hashed at rest, revocable, and attributable in audit/security events.
@@ -64,6 +64,7 @@ M6-002 adds a production-selectable API identity boundary and a framework-neutra
 
 - `GS-SEC-016`: every self-contained grant SHALL use a fixed approved MAC/signature algorithm, trusted purpose-specific key, verification before claim use, explicit audience/purpose, exact relevant scope, bounded lifetime, and constant-time comparison.
 - Preview grants SHALL be short lived, origin/route/mode/scope bound, revocable, and replay checked. Preview applications SHALL not load published delivery while an authenticated draft session is active.
+- Preview credentials SHALL be accepted only by the exact draft-read, message-acceptance and self-revocation method/route pairs in [ADR 0029](../adr/0029-production-preview-authentication-boundary.md), and SHALL NOT authorize management reads, writes, GraphQL or new grants. Public activation exceptions SHALL NOT admit private revocation methods.
 - Private asset grants SHALL be short lived, scope/asset/revision bound, and recheck immutable security verdict and storage scope when read.
 - `GS-SEC-024`: draft/private responses SHALL be private, no-store. Public cache tags/keys SHALL include complete scope and exact revision/perspective semantics; invalidation SHALL never be derived from caller-only scope.
 - Published caches SHALL never contain credentials, preview data, draft content, private assets, audit data, job payloads, or administrator responses.
