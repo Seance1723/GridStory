@@ -20,6 +20,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Proposed CMS-006 / ADR 0032 (Codex, 2026-08-29; baseline `519235f`) on the shared content/configuration branch: one strict private/no-store editorial overview with independently authorized and error-isolated bounded content, eligible-review, release and operator-attention widgets; a top-level Home destination; and quick create delegated to CMS-004. Existing repositories/actions remain authoritative; no runtime/test edit, new permission, storage schema, aggregate, analytics, notification/task model, configurable widget framework, dependency, cross-tenant metric, merge, push or deployment is approved. Explicit T2 approval is pending after the planning commit.
+
 - Added CMS-004 registered-type authoring: the default example now registers an independently routed non-component Article schema/workflow and seeded entry; Studio adds an authorized Collections destination, type-aware locations/loading/history, canonical preflight creation, declared-target relations, and schema-gated composition/preview without changing storage or permission meanings.
 - Completed CMS-034 and aggregate CMS-003 (Codex, 2026-08-28): added dependent permitted-tuple Site/Environment/Locale controls, committed-context visibility, serialized candidate validation, complete management-write settlement, dirty-form confirmation, strict old-preview cleanup, keyed private-lifetime replacement and scope-free history reset. Focused API/client/Studio checks, `pnpm security:check`, full `pnpm check` (639 tests; 17 existing optional skips), all 51 Chromium/Firefox/WebKit scenarios and isolated manual dirty/mobile smoke pass. Completion commit `feat(studio): complete guarded scope switching [CMS-034]`; SHA in delivery handoff. No merge, push or deployment.
 - Completed CMS-033 (Codex, 2026-08-26T19:08:19+05:30): capability-first private Studio startup, finite guards for 132 existing SDK methods, permission-filtered navigation and 218 explicit operation-control declarations. Operations-only, no-access, read-only, type-limited and knowledge-only regressions pass without denied private loaders or invented metadata. Full `pnpm check` passes 626 tests (243 Studio; 17 existing optional skips), security checks, strict types and production builds; all 42 Chromium/Firefox/WebKit scenarios and isolated manual editing/save/reload/mobile/theme smoke pass. Commit `feat(studio): enforce capability-aware sessions [CMS-033]`; SHA in delivery handoff. CMS-034 is next; no push/deployment.
@@ -128,6 +130,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Recorded the accepted M6-005 evidence-bound marketplace decision: operator-scoped publisher verification, signed compatibility/support metadata, injected non-executing artifact review, separate human approval, and approved-only handoff to the existing disabled plugin installation lifecycle.
 
 ### Fixed
+
+- Resolved BUG-0488 during CMS-006 planning: the task ledger's stale `Single next action` now names the verified CMS-005 baseline and CMS-006's required ADR 0032 planning/approval gate instead of instructing already-completed CMS-004/CMS-005 work.
 
 - Made entry-discard and migration guards observe dirty state synchronously so an immediate WebKit fragment change cannot outrun React's render and replace a just-edited controlled draft (BUG-0487).
 

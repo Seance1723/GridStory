@@ -1,6 +1,6 @@
 # GridStory bug ledger
 
-**Last updated:** 2026-08-28
+**Last updated:** 2026-08-29
 
 Every defect discovered during automated or manual verification is recorded here before it is fixed or deferred. Bug records are permanent project history.
 
@@ -21,6 +21,7 @@ Every defect discovered during automated or manual verification is recorded here
 
 | ID | Found | Resolved | Severity | Area | Summary | Resolution and verification | Linked task/change |
 |---|---|---|---|---|---|---|---|
+| BUG-0488 | 2026-08-29 | 2026-08-29 | Low | Existing task handoff ledger | The retained `Single next action` still instructed committing CMS-004 and beginning CMS-005 even though both had dedicated verified commits. | Updated only the current handoff to the verified `519235f` baseline and CMS-006's ADR 0032 planning/approval gate, retaining every completed task record. Ledger, formatting, link, fence and whitespace checks verify the correction. | CMS-006 planning; Unreleased/Fixed |
 | BUG-0487 | 2026-08-28 | 2026-08-28 | High | Existing immediate dirty-navigation guard | WebKit could dispatch a field edit and a manual fragment change before React rerendered the closure that owned `dirty`; the navigation then replaced the controlled draft without confirmation. | Mirror dirty state synchronously in a ref at edit/read/save settlement and use it for every entry-replacement/migration guard. The exact previously failing WebKit sequence passes without a wait, timeout or assertion change; the final complete 57-scenario three-engine matrix passes. | CMS-005 verification; CMS-002; Unreleased/Fixed |
 | BUG-0486 | 2026-08-28 | 2026-08-28 | Medium | CMS-005 Firefox 1280px containment | Firefox retained a nonzero 321px rectangle for the text input inside the closed local-saved-views disclosure, placing its unpainted box beyond the 303px content sidebar during containment inspection. | Explicitly remove every non-summary saved-view child from layout while the native details element is closed, and improve retained diagnostics with exact control/boundary rectangles. The isolated Firefox six-width sweep passes without assertion tolerance or width changes. | CMS-005; Unreleased/Fixed |
 | BUG-0485 | 2026-08-28 | 2026-08-28 | Medium | Existing browser fixtures after bounded lists | Three existing browser scenarios assumed their entry was always present on the unbounded first sidebar page, and their button names included status that is now a separate table cell. | Use the public list search to expose each intended target and address entry buttons by their exact title/slug name. All dirty/history/preview/unavailable/publication assertions remain; the four affected focused Chromium scenarios pass. | CMS-005; Unreleased/Fixed |
