@@ -69,6 +69,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- Completed CI-003 by isolating the abnormal Studio timeout to Windows idle sleep rather than application, cleanup or worker-order behavior (BUG-0461/0462). The historical failure window has a 56.894-second clock correction/68.570-second low-power interval, and an unchanged control has a 4,355.007-second correction against Vitest's 4,355.594-second reported case duration. Fourteen focused AI controls, async-leak detection, the post-wake exact pair and full `pnpm check` pass (626 active tests / 17 existing optional skips; Studio 243/243 plus production builds). Retain the prior following assertion as explicitly non-reproducing. No source, test, timeout, retry, dependency or workflow change is justified.
+
+- Started CI-003 / BUG-0461 diagnosis on the unchanged Studio App suite (Codex, 2026-08-28T18:43:49+05:30; baseline `e110d22`). Stress the original experiment/AI sequence and inspect cleanup/order boundaries before declaring any implementation file; retain the 15-second deadline and every assertion, and keep a non-reproducing observation explicitly unresolved.
+
 - Logged BUG-0461 / queued CI-003 after CI-001's first full gate found an experiment lifecycle timeout followed by a missing AI proposal in unchanged Studio unit tests (Codex, 2026-08-26T20:17:53+05:30). Run focused and unchanged full-suite controls; do not attribute these failures to the browser-only correction, hide them, or change existing deadlines without a proven cause.
 
 - Recorded BUG-0460 before correcting CI-001's new regression fixture: suppressing native resize propagation interferes with browser automation, and a page-world getter cannot reliably observe isolated-world reads. The fixture must preserve native events and restore the actual width observation before the test-only correction can be verified across engines.
