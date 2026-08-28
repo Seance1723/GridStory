@@ -72,6 +72,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- Proposed CMS-004 / ADR 0031 (Codex, 2026-08-28T21:38:37+05:30; baseline `9bdd891`) on the single `codex/content-configuration-foundations` branch for CMS-004 through CMS-010. The documentation-only T2 plan reuses canonical validation and existing type-keyed CRUD/workflow/history/preview, adds a truthful non-component article fixture and Collections path, and requires separate page/article/relation/capability/three-engine evidence. The exact old creation candidate deterministically reproduces BUG-0427's required Hero heading/body failures. No runtime/test file, dependency, schema format, permission meaning, data, merge, push or deployment changed; explicit approval is pending.
+
 - Studio scope replacement now commits only after candidate authorization and confirmed old-preview cleanup; cancellation, validation failure, cleanup failure or an active mapped management write keeps the prior scope. Successful replacement clears old entries/drafts/notices and rejects stale requests, callbacks and late grants without placing scope, credentials or drafts in history/browser storage (CMS-034).
 - Started approved CMS-034 (Codex, 2026-08-28T20:19:05+05:30; baseline `b2cfd7d`): first reproduce and repair BUG-0435's preview DELETE credential dispatch, then add guarded permitted-tuple Studio switching with explicit dirty/write/preview/stale-lifetime boundaries. Reuse ADR 0030's exact T2 fence and shared SCSS; no tenant/workspace switch, new permission, dependency, migration, feature removal, palette change or deployment.
 
