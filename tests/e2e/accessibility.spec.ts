@@ -92,6 +92,27 @@ async function selectStudioPages(page: Page, previousRegionName?: string): Promi
   }
 }
 
+async function selectStudioCollections(page: Page): Promise<void> {
+  const button = page
+    .getByRole('navigation', { name: 'Studio sections' })
+    .getByRole('button', { name: 'Collections', exact: true });
+  if ((await button.getAttribute('aria-current')) !== 'page') {
+    await openMobileStudioNavigation(page);
+    await expect(button).toBeVisible();
+    await button.click();
+  }
+  await expect(page.getByRole('heading', { name: 'Articles', exact: true })).toBeVisible();
+  await expect(page.locator('.studio-workspace')).toBeVisible();
+  await expect(page.locator('.studio-navigation__item[aria-current="page"]')).toHaveCount(1);
+  await expect(button).toHaveAttribute('aria-current', 'page');
+  expect(new URL(page.url()).hash.split('?')[0]).toBe('#/collections');
+  await expect(page.locator('.studio-page > section')).toHaveCount(0);
+  await expect(page.getByText('Composition', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Open live preview in new window' })).toHaveCount(
+    0,
+  );
+}
+
 async function expectNoDetectableWcagViolations(
   page: Page,
   testInfo: TestInfo,
@@ -178,10 +199,12 @@ test('task groups preserve every destination, keyboard disclosure, compact acces
   test.setTimeout(60_000);
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Pages', exact: true })).toBeVisible();
-  await page.getByLabel('Title', { exact: true }).fill('Unsaved navigation check');
+  const title = page.getByLabel('Title', { exact: true });
+  await expect(title.locator('xpath=ancestor::*[@inert]')).toHaveCount(0);
+  await title.fill('Unsaved navigation check');
   const navigation = page.getByRole('navigation', { name: 'Studio sections' });
   const groups = [
-    ['Content', ['Pages', 'Workflows', 'Releases', 'Search']],
+    ['Content', ['Pages', 'Collections', 'Workflows', 'Releases', 'Search']],
     ['Media', ['Library']],
     ['Design', ['Components']],
     ['SEO & quality', ['Page checks']],
@@ -202,7 +225,7 @@ test('task groups preserve every destination, keyboard disclosure, compact acces
       ],
     ],
   ] as const;
-  await expect(navigation.locator('.studio-navigation__item')).toHaveCount(19);
+  await expect(navigation.locator('.studio-navigation__item')).toHaveCount(20);
   await expect(navigation.locator('.studio-navigation__group-toggle')).toHaveCount(8);
   for (const [label, leaves] of groups) {
     const toggle = navigation.getByRole('button', { name: label, exact: true });
@@ -223,7 +246,7 @@ test('task groups preserve every destination, keyboard disclosure, compact acces
     await expect(page.locator('.studio-workspace')).toBeVisible();
     await expect(page.locator('.studio-navigation__item[aria-current="page"]')).toHaveCount(1);
   }
-  await expect(page.getByLabel('Title', { exact: true })).toHaveValue('Unsaved navigation check');
+  await expect(title).toHaveValue('Unsaved navigation check');
   const shellToggle = page.getByRole('button', { name: 'Toggle navigation' });
   await shellToggle.click();
   await expect(page.locator('.studio-navigation')).toHaveCSS('width', '86px');
@@ -420,6 +443,9 @@ test('Studio critical authoring states have no detectable WCAG 2.2 A/AA violatio
   await expect(page.locator('.studio-page > section')).toHaveCount(0);
   await expect(page.locator('.studio-workspace')).toBeVisible();
   await expectNoDetectableWcagViolations(page, testInfo, 'studio-default');
+  await selectStudioCollections(page);
+  await expectNoDetectableWcagViolations(page, testInfo, 'studio-collections');
+  await selectStudioPages(page);
 
   let previousRegionName: string | undefined;
   for (const [buttonName, regionName] of studioManagementPanels) {
@@ -513,6 +539,8 @@ test('Studio critical authoring states have no detectable WCAG 2.2 A/AA violatio
   await expectNoDetectableWcagViolations(page, testInfo, 'studio-ai-gateway-dark');
   await selectStudioPages(page, 'Governed AI gateway workbench');
   await expectNoDetectableWcagViolations(page, testInfo, 'studio-pages-dark');
+  await selectStudioCollections(page);
+  await expectNoDetectableWcagViolations(page, testInfo, 'studio-collections-dark');
   await page.getByRole('button', { name: 'Switch to light theme' }).click();
 });
 
@@ -758,6 +786,8 @@ test('every Studio surface contains readable text and controls at each responsiv
       ).toBeLessThanOrEqual(2);
     }
     await expectCurrentLayoutContained(`${viewport.width}px Pages`);
+    await selectStudioCollections(page);
+    await expectCurrentLayoutContained(`${viewport.width}px Collections`);
 
     let previousRegionName: string | undefined;
     for (const [buttonName, regionName] of studioManagementPanels) {
@@ -796,6 +826,8 @@ test('every Studio surface contains readable text and controls at each responsiv
   }
   await selectStudioPages(page, previousDarkRegionName);
   await expectCurrentLayoutContained('320px dark Pages return');
+  await selectStudioCollections(page);
+  await expectCurrentLayoutContained('320px dark Collections');
 });
 
 test('critical authoring remains keyboard-operable and adapts at 200% zoom', async ({
@@ -806,7 +838,7 @@ test('critical authoring remains keyboard-operable and adapts at 200% zoom', asy
 
   // Start keyboard traversal inside the document rather than browser chrome.
   await page.locator('body').press('Tab');
-  const skipLink = page.getByRole('link', { name: 'Skip to page editor' });
+  const skipLink = page.getByRole('link', { name: 'Skip to content editor' });
   await expect(skipLink).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.locator('#studio-editor')).toBeFocused();

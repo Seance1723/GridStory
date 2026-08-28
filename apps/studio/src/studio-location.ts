@@ -1,6 +1,6 @@
 import { type StudioDestination, studioDestinations } from './navigation.js';
 
-export type StudioLocation = { destination: StudioDestination; entryId?: string; type?: 'page' };
+export type StudioLocation = { destination: StudioDestination; entryId?: string; type?: string };
 export type ParsedStudioLocation = { location: StudioLocation; invalid: boolean };
 
 const fallback = (): ParsedStudioLocation => ({
@@ -24,18 +24,25 @@ export function parseStudioLocation(hash: string): ParsedStudioLocation {
     const destination = match[1] as StudioDestination;
     if (keys.length === 0) return { location: { destination }, invalid: false };
     const entryId = params.get('entry');
+    const contentType = params.get('type');
     if (
-      keys.length !== 2 ||
-      !entryId ||
-      entryId.length > 256 ||
-      [...entryId].some((character) => {
-        const code = character.charCodeAt(0);
-        return code < 32 || (code >= 127 && code <= 159);
-      }) ||
-      params.get('type') !== 'page'
+      !contentType ||
+      !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(contentType) ||
+      (entryId !== null &&
+        (!entryId ||
+          entryId.length > 256 ||
+          [...entryId].some((character) => {
+            const code = character.charCodeAt(0);
+            return code < 32 || (code >= 127 && code <= 159);
+          }))) ||
+      (entryId !== null && keys.length !== 2) ||
+      (entryId === null && keys.length !== 1)
     )
       return fallback();
-    return { location: { destination, entryId, type: 'page' }, invalid: false };
+    return {
+      location: { destination, ...(entryId ? { entryId } : {}), type: contentType },
+      invalid: false,
+    };
   } catch {
     return fallback();
   }
@@ -43,7 +50,9 @@ export function parseStudioLocation(hash: string): ParsedStudioLocation {
 
 export function formatStudioLocation(location: StudioLocation): string {
   const query = location.entryId
-    ? `?${new URLSearchParams({ entry: location.entryId, type: 'page' })}`
-    : '';
+    ? `?${new URLSearchParams({ entry: location.entryId, type: location.type ?? 'page' })}`
+    : location.type
+      ? `?${new URLSearchParams({ type: location.type })}`
+      : '';
   return `#/${location.destination}${query}`;
 }

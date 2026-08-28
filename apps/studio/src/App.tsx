@@ -77,6 +77,7 @@ import type {
 } from '@gridstory/schema';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AssetControl, RelationControl, RichTextControl } from './authoring-controls.js';
+import { candidateIssueMessage, createContentCandidate } from './content-authoring.js';
 import {
   addNode,
   type CompositionResult,
@@ -806,21 +807,6 @@ function SchemaFieldControl({
   );
 }
 
-function initialFieldValue(field: FieldDefinition, titleField: string, suffix: string): unknown {
-  if (field.type === 'component-tree') return undefined;
-  if (field.type === 'slug') return `untitled-${suffix}`;
-  if (field.name === titleField) return 'Untitled page';
-  if (field.type === 'number') return field.minimum ?? 0;
-  if (field.type === 'boolean') return false;
-  if (field.type === 'enum') return field.values[0] ?? '';
-  if (field.type === 'rich-text') return { version: 1, blocks: [] };
-  if (field.type === 'asset') return undefined;
-  if (field.type === 'array' || (field.type === 'relation' && field.multiple)) return [];
-  if (field.type === 'taxonomy' && field.multiple) return [];
-  if (field.type === 'object') return {};
-  return '';
-}
-
 export interface AppProps {
   client?: GridStoryClient;
 }
@@ -876,6 +862,7 @@ function AuthorizedStudio({
   const navigation = permittedNavigation(capabilities);
   const firstDestination = navigation[0]?.destinations[0];
   const [entries, setEntries] = useState<ContentEntry[]>([]);
+  const [relationEntries, setRelationEntries] = useState<ContentEntry[]>([]);
   const [selected, setSelected] = useState<ContentEntry | null>(null);
   const [draft, setDraft] = useState<EditableContent | null>(null);
   const [revisions, setRevisions] = useState<ContentRevision[]>([]);
@@ -921,6 +908,11 @@ function AuthorizedStudio({
     !window.location.hash || window.location.hash === '#' || initialLocationRef.current.invalid,
   );
   const acceptedLocationRef = useRef<StudioLocation>(initialLocationRef.current.location);
+  const [activeContentType, setActiveContentType] = useState(
+    initialLocationRef.current.location.type ?? 'page',
+  );
+  const activeContentTypeRef = useRef(activeContentType);
+  activeContentTypeRef.current = activeContentType;
   const studioHistoryRef = useRef<StudioHistory | null>(null);
   const destinationFocusRef = useRef<number | null>(null);
   const transitionRef = useRef<Parameters<typeof createStudioHistory>[1]>(async () => false);
@@ -1149,7 +1141,12 @@ function AuthorizedStudio({
   );
 
   const selectEntry = useCallback(
-    async (id: string, componentFieldName?: string, signal?: AbortSignal) => {
+    async (
+      id: string,
+      componentFieldName?: string,
+      signal?: AbortSignal,
+      expectedContentType = activeContentTypeRef.current,
+    ) => {
       if (!can('content.read', 'schema.read')) return null;
       entryReadRef.current?.abort();
       const controller = new AbortController();
@@ -1184,12 +1181,17 @@ function AuthorizedStudio({
         if (!current()) return null;
         if (
           entry.id !== id ||
-          entry.contentType !== 'page' ||
-          !schemasRef.current.some((schema) => schema.id === 'page')
+          entry.contentType !== expectedContentType ||
+          !schemasRef.current.some((schema) => schema.id === expectedContentType)
         ) {
-          throw new Error('This page is unavailable in the current authorized context.');
+          throw new Error('This entry is unavailable in the current authorized context.');
         }
         if (selectedRef.current?.id !== entry.id) void stopPreviewRef.current();
+        // Release the completed read synchronously before the new controlled fields are exposed.
+        // Otherwise a browser can render the new draft while changeDraft still rejects input.
+        entryReadRef.current = null;
+        setEntryLoading(false);
+        setBusy(false);
         selectedRef.current = entry;
         setSelected(entry);
         setDraft(asEditableContent(entry));
@@ -1208,10 +1210,13 @@ function AuthorizedStudio({
         return entry;
       } catch {
         if (current()) {
+          const contentLabel =
+            schemasRef.current
+              .find((schema) => schema.id === expectedContentType)
+              ?.name.toLowerCase() ?? (expectedContentType === 'page' ? 'page' : 'entry');
           setNotice({
             tone: 'error',
-            message:
-              'This page could not be opened in the current authorized context. The previous entry, if any, is unchanged.',
+            message: `This ${contentLabel} could not be opened in the current authorized context. The previous ${contentLabel}, if any, is unchanged.`,
           });
           if (!selectedRef.current) setEntryUnavailable(true);
         }
@@ -1229,8 +1234,10 @@ function AuthorizedStudio({
   );
 
   const refreshList = useCallback(
-    async (preferredId?: string) => {
-      const result = await client.listContent({ contentType: 'page', perspective: 'draft' });
+    async (preferredId?: string, contentType = activeContentTypeRef.current) => {
+      const result = await client.listContent({ contentType, perspective: 'draft' });
+      activeContentTypeRef.current = contentType;
+      setActiveContentType(contentType);
       setEntries(result);
       const target = preferredId ?? selected?.id ?? result[0]?.id;
       if (target) {
@@ -1238,12 +1245,12 @@ function AuthorizedStudio({
         const fieldName = schemas
           .find((schema) => schema.id === targetEntry?.contentType)
           ?.fields.find((field) => field.type === 'component-tree')?.name;
-        const entry = await selectEntry(target, fieldName);
+        const entry = await selectEntry(target, fieldName, undefined, contentType);
         if (entry) {
           const location: StudioLocation = {
             destination: acceptedLocationRef.current.destination,
             entryId: entry.id,
-            type: 'page',
+            type: contentType,
           };
           acceptedLocationRef.current = location;
           studioHistoryRef.current?.push(location);
@@ -1278,9 +1285,14 @@ function AuthorizedStudio({
     setNotice(
       reloadToken > 0 ? { tone: 'info', message: 'Retrying the GridStory connection…' } : null,
     );
+    const destination = defaultLocationRef.current
+      ? (firstDestination ?? 'pages')
+      : initialLocationRef.current.location.destination;
+    const requestedType =
+      destination === 'pages' ? 'page' : initialLocationRef.current.location.type;
     Promise.all([
-      can('pages.list')
-        ? client.listContent({ contentType: 'page', signal: controller.signal })
+      requestedType && (requestedType === 'page' ? can('pages.list') : can('content.read'))
+        ? client.listContent({ contentType: requestedType, signal: controller.signal })
         : Promise.resolve([]),
       can('component.read') ? client.getComponentManifests(controller.signal) : Promise.resolve([]),
       can('schema.read') ? client.getSchemas(controller.signal) : Promise.resolve([]),
@@ -1300,7 +1312,6 @@ function AuthorizedStudio({
           releaseList,
         ]) => {
           if (controller.signal.aborted) return;
-          setEntries(entryList);
           setManifests(manifestList);
           setSchemas(schemaList);
           schemasRef.current = schemaList;
@@ -1309,18 +1320,40 @@ function AuthorizedStudio({
           setWorkflowDefinitions(workflowList);
           setReleases(releaseList);
           setActiveReleaseId(releaseList[0]?.id ?? null);
+          const contentType =
+            destination === 'pages'
+              ? 'page'
+              : destination === 'collections'
+                ? (schemaList.find(
+                    (schema) =>
+                      schema.id !== 'page' &&
+                      (requestedType === undefined || schema.id === requestedType),
+                  )?.id ?? schemaList.find((schema) => schema.id !== 'page')?.id)
+                : (schemaList.find((schema) => schema.id === requestedType)?.id ?? 'page');
+          let contentEntries =
+            contentType && requestedType === contentType
+              ? entryList
+              : contentType && (contentType === 'page' ? can('pages.list') : can('content.read'))
+                ? await client.listContent({ contentType, signal: controller.signal })
+                : [];
+          if (!contentType) contentEntries = [];
+          activeContentTypeRef.current = contentType ?? 'page';
+          setActiveContentType(contentType ?? 'page');
+          setEntries(contentEntries);
           const target = resetEntryContext
             ? undefined
-            : (initialLocationRef.current.location.entryId ?? entryList[0]?.id);
+            : (initialLocationRef.current.location.entryId ?? contentEntries[0]?.id);
           let entry: ContentEntry | null = null;
-          const destination = defaultLocationRef.current
-            ? (firstDestination ?? 'pages')
-            : initialLocationRef.current.location.destination;
-          if (target && capabilities.screens[destination] && can('content.read', 'schema.read')) {
+          if (
+            contentType &&
+            target &&
+            capabilities.screens[destination] &&
+            can('content.read', 'schema.read')
+          ) {
             const fieldName = schemaList
-              .find((schema) => schema.id === entryList[0]?.contentType)
+              .find((schema) => schema.id === contentType)
               ?.fields.find((field) => field.type === 'component-tree')?.name;
-            entry = await selectEntry(target, fieldName, controller.signal);
+            entry = await selectEntry(target, fieldName, controller.signal, contentType);
           } else setBusy(false);
           if (controller.signal.aborted) return;
           const location: StudioLocation = resetEntryContext
@@ -1328,7 +1361,10 @@ function AuthorizedStudio({
             : {
                 ...initialLocationRef.current.location,
                 destination,
-                ...(entry ? { entryId: entry.id, type: 'page' as const } : {}),
+                ...(entry ? { entryId: entry.id, type: entry.contentType } : {}),
+                ...(!entry && destination === 'collections' && contentType
+                  ? { type: contentType }
+                  : {}),
               };
           acceptedLocationRef.current = location;
           studioHistoryRef.current?.replace(location);
@@ -1399,8 +1435,23 @@ function AuthorizedStudio({
     [assets],
   );
   const activeSchema = useMemo(
-    () => schemas.find((schema) => schema.id === selected?.contentType) ?? schemas[0],
-    [schemas, selected?.contentType],
+    () => schemas.find((schema) => schema.id === (selected?.contentType ?? activeContentType)),
+    [activeContentType, schemas, selected?.contentType],
+  );
+  const activeContentLabel =
+    activeSchema?.name ?? (activeContentType === 'page' ? 'Page' : 'Entry');
+  const activeContentNoun = activeContentLabel.toLowerCase();
+  const collectionSchemas = useMemo(
+    () => schemas.filter((schema) => schema.id !== 'page'),
+    [schemas],
+  );
+  const authoringEntries = useMemo(
+    () =>
+      [...entries, ...relationEntries].filter(
+        (entry, index, values) =>
+          values.findIndex((candidate) => candidate.id === entry.id) === index,
+      ),
+    [entries, relationEntries],
   );
   const activeRelease = releases.find((release) => release.id === activeReleaseId) ?? releases[0];
   const activeWorkflow = workflowDefinitions.find(
@@ -1449,6 +1500,42 @@ function AuthorizedStudio({
     : collaborationTargetField
       ? draft?.[collaborationTargetField]
       : undefined;
+
+  useEffect(() => {
+    if (!bootstrapped || !activeSchema) {
+      setRelationEntries([]);
+      return;
+    }
+    const targets = [
+      ...new Set(
+        activeSchema.fields.flatMap((field) => (field.type === 'relation' ? field.targets : [])),
+      ),
+    ].filter((contentType) => contentType !== activeContentType);
+    if (targets.length === 0) {
+      setRelationEntries([]);
+      return;
+    }
+    const controller = new AbortController();
+    Promise.all(
+      targets.map((contentType) =>
+        contentType === 'page'
+          ? can('pages.list')
+            ? client.listContent({ contentType, signal: controller.signal })
+            : Promise.resolve([])
+          : can('content.read')
+            ? client.listContent({ contentType, signal: controller.signal })
+            : Promise.resolve([]),
+      ),
+    )
+      .then((results) => {
+        if (!controller.signal.aborted) setRelationEntries(results.flat());
+      })
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted && (error as { name?: string }).name !== 'AbortError')
+          setRelationEntries([]);
+      });
+    return () => controller.abort();
+  }, [activeContentType, activeSchema, bootstrapped, can, client]);
 
   useEffect(() => {
     if (!selectedEntryId || !can('collaboration.read')) {
@@ -1533,7 +1620,6 @@ function AuthorizedStudio({
 
   const changeDraft = (updater: (current: EditableContent) => EditableContent) => {
     if (!can('content.draft.update')) return;
-    if (entryReadRef.current || busyRef.current || pendingWritesRef.current > 0) return;
     setDraft((current) => (current ? updater(current) : current));
     setDirty(true);
     setQualityReport(null);
@@ -1857,8 +1943,12 @@ function AuthorizedStudio({
     );
   };
 
-  const requestSelectEntry = (id: string) => {
-    void studioHistoryRef.current?.navigate({ destination: 'pages', entryId: id, type: 'page' });
+  const requestSelectEntry = (id: string, contentType = activeContentType) => {
+    void studioHistoryRef.current?.navigate({
+      destination: contentType === 'page' ? 'pages' : 'collections',
+      entryId: id,
+      type: contentType,
+    });
   };
 
   const confirmEntryChange = (id: string | undefined) =>
@@ -1866,26 +1956,32 @@ function AuthorizedStudio({
     !dirty ||
     window.confirm('Discard the unsaved changes and open another content entry?');
 
-  const createPage = async () =>
+  const createEntry = async () =>
     trackEntryMutation(async () => {
       if (busyRef.current || entryReadRef.current) return;
-      if (dirty && !window.confirm('Discard the unsaved changes and create a new page?')) return;
+      const schema = activeSchema;
+      if (!schema) {
+        setNotice({ tone: 'error', message: 'No content schema is selected.' });
+        return;
+      }
+      if (
+        dirty &&
+        !window.confirm(
+          `Discard the unsaved changes and create a new ${schema.name.toLowerCase()}?`,
+        )
+      )
+        return;
       setBusy(true);
       try {
-        const schema = schemas[0];
-        if (!schema) throw new Error('No content schemas are registered.');
-        const hero = manifests.find((manifest) => manifest.id === 'gridstory.hero') ?? manifests[0];
-        if (!hero) throw new Error('No components are registered for a new page.');
         const suffix = Date.now().toString(36);
-        const data = Object.fromEntries(
-          schema.fields.map((field) => {
-            if (field.type === 'component-tree') return [field.name, [newNode(hero)]];
-            return [field.name, initialFieldValue(field, schema.titleField, suffix)];
-          }),
-        );
-        const entry = await client.createContent(schema.id, data);
-        await refreshList(entry.id);
-        setNotice({ tone: 'success', message: 'Draft page created.' });
+        const candidate = createContentCandidate({ schema, manifests, suffix });
+        if (!candidate.valid)
+          throw new Error(
+            `A valid ${schema.name} draft cannot be created automatically. ${candidateIssueMessage(candidate.issues)}`,
+          );
+        const entry = await client.createContent(schema.id, candidate.data);
+        await refreshList(entry.id, schema.id);
+        setNotice({ tone: 'success', message: `Draft ${schema.name.toLowerCase()} created.` });
       } catch (error) {
         setNotice({ tone: 'error', message: messageFrom(error) });
         setBusy(false);
@@ -4308,25 +4404,74 @@ function AuthorizedStudio({
       activateDestination(destination);
       return location;
     }
+    if (
+      destination !== 'pages' &&
+      destination !== 'collections' &&
+      requested.entryId === undefined &&
+      !selectedRef.current
+    ) {
+      const location = { destination };
+      acceptedLocationRef.current = location;
+      activateDestination(destination);
+      if (invalid)
+        setNotice({
+          tone: 'info',
+          message: `That Studio address was not recognized. ${studioDestinations[destination].label} is shown instead.`,
+        });
+      return location;
+    }
+    const requestedType =
+      destination === 'pages'
+        ? 'page'
+        : destination === 'collections'
+          ? ((requested.type && requested.type !== 'page' ? requested.type : undefined) ??
+            (activeContentTypeRef.current === 'page'
+              ? collectionSchemas[0]?.id
+              : activeContentTypeRef.current))
+          : (requested.type ?? selectedRef.current?.contentType ?? activeContentTypeRef.current);
+    if (!requestedType || !schemasRef.current.some((schema) => schema.id === requestedType)) {
+      setNotice({ tone: 'error', message: 'That registered content type is unavailable.' });
+      return false;
+    }
+    const changingType = requestedType !== activeContentTypeRef.current;
+    let scopedEntries = entries;
+    if (changingType) {
+      if (pendingWritesRef.current > 0 || (busyRef.current && !entryReadRef.current)) {
+        setNotice({
+          tone: 'info',
+          message: 'Wait for the current operation to finish before changing content type.',
+        });
+        return false;
+      }
+      if (!confirmEntryChange(undefined)) return false;
+      await stopPreviewRef.current();
+      scopedEntries = await client.listContent({ contentType: requestedType, signal });
+      if (signal.aborted) return false;
+      activeContentTypeRef.current = requestedType;
+      setActiveContentType(requestedType);
+      setEntries(scopedEntries);
+    }
     const entryId = invalid
       ? selectedRef.current?.id
-      : (requested.entryId ?? selectedRef.current?.id ?? entries[0]?.id);
-    const changingEntry = entryId !== selectedRef.current?.id;
+      : ((requested.type === requestedType ? requested.entryId : undefined) ??
+        (changingType ? scopedEntries[0]?.id : (selectedRef.current?.id ?? scopedEntries[0]?.id)));
+    const changingEntry = changingType || entryId !== selectedRef.current?.id;
     if (changingEntry && can('content.read', 'schema.read')) {
       if (pendingWritesRef.current > 0 || (busyRef.current && !entryReadRef.current)) {
         setNotice({
           tone: 'info',
-          message: 'Wait for the current operation to finish before opening another page.',
+          message: 'Wait for the current operation to finish before opening another entry.',
         });
         return false;
       }
       if (!confirmEntryChange(entryId)) return false;
-      if (entryId && !(await selectEntry(entryId, undefined, signal))) return false;
+      if (entryId && !(await selectEntry(entryId, undefined, signal, requestedType))) return false;
     }
     if (signal.aborted) return false;
     const location: StudioLocation = {
       destination,
-      ...(entryId ? { entryId, type: 'page' as const } : {}),
+      ...(entryId ? { entryId, type: requestedType } : {}),
+      ...(!entryId && destination === 'collections' ? { type: requestedType } : {}),
     };
     acceptedLocationRef.current = location;
     activateDestination(location.destination);
@@ -4339,7 +4484,18 @@ function AuthorizedStudio({
   };
 
   const selectNavigationItem = (destination: StudioDestination) => {
-    void studioHistoryRef.current?.navigate({ ...acceptedLocationRef.current, destination });
+    const location: StudioLocation =
+      destination === 'pages'
+        ? { destination }
+        : destination === 'collections'
+          ? {
+              destination,
+              ...(activeContentTypeRef.current === 'page'
+                ? {}
+                : { type: activeContentTypeRef.current }),
+            }
+          : { ...acceptedLocationRef.current, destination };
+    void studioHistoryRef.current?.navigate(location);
   };
 
   const selectSearchDestination = () => {
@@ -4351,6 +4507,7 @@ function AuthorizedStudio({
     { loaded: boolean; ensureLoaded?: () => void | Promise<void>; disabled?: boolean }
   > = {
     pages: { loaded: true },
+    collections: { loaded: true },
     workflows: { loaded: workflowDesignerOpen, ensureLoaded: () => toggleWorkflowDesigner() },
     releases: { loaded: releasePanelOpen, ensureLoaded: () => setReleasePanelOpen(true) },
     search: { loaded: searchPanelOpen, ensureLoaded: () => toggleSearchPanel() },
@@ -4442,6 +4599,7 @@ function AuthorizedStudio({
   const visibleDestination = capabilities.screens[activeStudioDestination]
     ? activeStudioDestination
     : null;
+  const authoringVisible = visibleDestination === 'pages' || visibleDestination === 'collections';
   const toggleNavigationGroup = (id: StudioNavigationGroupId) => {
     setExpandedNavigationGroups((current) => {
       const next = new Set(current);
@@ -4476,7 +4634,7 @@ function AuthorizedStudio({
           )?.focus();
         }}
       >
-        Skip to page editor
+        Skip to content editor
       </a>
       {mobileNavigationOpen ? (
         <button
@@ -4635,36 +4793,38 @@ function AuthorizedStudio({
               <span aria-hidden="true" />
               {dirty ? 'Unsaved changes' : 'Saved'}
             </span>
-            <button
-              data-required-operations="preview.manage"
-              type="button"
-              className={`studio-icon-button preview-popout-button${externalPreview ? ' is-active' : ''}`}
-              aria-label={
-                externalPreview ? 'Close live preview window' : 'Open live preview in new window'
-              }
-              aria-pressed={Boolean(externalPreview)}
-              title={
-                externalPreview
-                  ? `Close live preview window · ${externalPreview.ready ? 'connected' : 'connecting'}`
-                  : 'Open live preview in new window'
-              }
-              onClick={() =>
-                void (externalPreview ? closeExternalPreview() : beginExternalPreview())
-              }
-              disabled={
-                scopeTransitioning ||
-                !can('preview.manage') ||
-                (!externalPreview && (!selected || !draft || entryLoading))
-              }
-            >
-              <svg aria-hidden="true" viewBox="0 0 24 24">
-                {externalPreview ? (
-                  <path d="M6 6l12 12M18 6 6 18" />
-                ) : (
-                  <path d="M14 4h6v6M10 14 20 4M20 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h5" />
-                )}
-              </svg>
-            </button>
+            {componentField ? (
+              <button
+                data-required-operations="preview.manage"
+                type="button"
+                className={`studio-icon-button preview-popout-button${externalPreview ? ' is-active' : ''}`}
+                aria-label={
+                  externalPreview ? 'Close live preview window' : 'Open live preview in new window'
+                }
+                aria-pressed={Boolean(externalPreview)}
+                title={
+                  externalPreview
+                    ? `Close live preview window · ${externalPreview.ready ? 'connected' : 'connecting'}`
+                    : 'Open live preview in new window'
+                }
+                onClick={() =>
+                  void (externalPreview ? closeExternalPreview() : beginExternalPreview())
+                }
+                disabled={
+                  scopeTransitioning ||
+                  !can('preview.manage') ||
+                  (!externalPreview && (!selected || !draft || entryLoading))
+                }
+              >
+                <svg aria-hidden="true" viewBox="0 0 24 24">
+                  {externalPreview ? (
+                    <path d="M6 6l12 12M18 6 6 18" />
+                  ) : (
+                    <path d="M14 4h6v6M10 14 20 4M20 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h5" />
+                  )}
+                </svg>
+              </button>
+            ) : null}
             <button
               type="button"
               className="studio-icon-button studio-theme-toggle"
@@ -4712,12 +4872,7 @@ function AuthorizedStudio({
           tabIndex={-1}
           inert={scopeTransitioning}
           onChangeCapture={(event) => {
-            if (
-              !visibleDestination ||
-              visibleDestination === 'pages' ||
-              visibleDestination === 'search'
-            )
-              return;
+            if (!visibleDestination || authoringVisible || visibleDestination === 'search') return;
             const target = event.target;
             if (
               target instanceof HTMLInputElement ||
@@ -4727,7 +4882,7 @@ function AuthorizedStudio({
               setFeatureDraftDirty(true);
           }}
         >
-          {visibleDestination !== 'pages' && !bootstrapped ? (
+          {!authoringVisible && !bootstrapped ? (
             <div className="loading-state" role={fatalError ? 'alert' : 'status'}>
               <p>
                 {fatalError ? 'Studio data could not be loaded.' : 'Loading permitted Studio data…'}
@@ -4744,7 +4899,7 @@ function AuthorizedStudio({
             </div>
           ) : null}
           {visibleDestination &&
-          visibleDestination !== 'pages' &&
+          !authoringVisible &&
           bootstrapped &&
           !navigationActions[visibleDestination].loaded ? (
             <div className="loading-state" role={notice?.tone === 'error' ? 'alert' : 'status'}>
@@ -4790,7 +4945,7 @@ function AuthorizedStudio({
               ) : null}
             </section>
           ) : null}
-          {visibleDestination && visibleDestination !== 'pages' && notice ? (
+          {visibleDestination && !authoringVisible && notice ? (
             <div className={`notice notice--${notice.tone}`} role="status">
               {notice.message}
             </div>
@@ -5562,7 +5717,7 @@ function AuthorizedStudio({
                         disabled={!can('content.read', 'schema.read')}
                         type="button"
                         className="button button--secondary button--compact search-result-button"
-                        onClick={() => requestSelectEntry(hit.entry.id)}
+                        onClick={() => requestSelectEntry(hit.entry.id, hit.entry.contentType)}
                       >
                         {entryTitle(hit.entry, schemas)}
                       </button>
@@ -8408,25 +8563,61 @@ function AuthorizedStudio({
               )}
             </section>
           ) : null}{' '}
-          {visibleDestination === 'pages' ? (
+          {authoringVisible ? (
             <div className="studio-workspace" aria-busy={busy}>
               <aside className="content-sidebar" aria-label="Content entries">
                 <div className="sidebar-heading">
                   <div>
                     <span className="kicker">Content</span>
-                    <h1>Pages</h1>
+                    <h1>
+                      {activeSchema
+                        ? activeSchema.id === 'page'
+                          ? 'Pages'
+                          : `${activeSchema.name}s`
+                        : studioDestinations[visibleDestination].label}
+                    </h1>
                   </div>
                   <button
-                    data-required-operations="pages.create"
+                    data-required-operations={
+                      activeContentType === 'page' ? 'pages.create' : 'content.create'
+                    }
                     type="button"
                     className="icon-button"
-                    onClick={() => void createPage()}
-                    disabled={!can('pages.create') || !activeSchema || busy || entryLoading}
-                    aria-label="Create page"
+                    onClick={() => void createEntry()}
+                    disabled={
+                      !(activeContentType === 'page'
+                        ? can('pages.create')
+                        : can('content.create')) ||
+                      !activeSchema ||
+                      busy ||
+                      entryLoading
+                    }
+                    aria-label={`Create ${activeContentNoun}`}
                   >
                     +
                   </button>
                 </div>
+                {visibleDestination === 'collections' ? (
+                  <label className="gs-field collection-type-picker">
+                    <span>Content type</span>
+                    <select
+                      value={activeContentType}
+                      disabled={busy || entryLoading || collectionSchemas.length === 0}
+                      onChange={(event) =>
+                        void studioHistoryRef.current?.navigate({
+                          destination: 'collections',
+                          type: event.target.value,
+                        })
+                      }
+                    >
+                      {collectionSchemas.map((schema) => (
+                        <option key={schema.id} value={schema.id}>
+                          {schema.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
                 <nav>
                   {entries.map((entry) => (
                     <button
@@ -8435,7 +8626,7 @@ function AuthorizedStudio({
                       type="button"
                       className={`entry-card ${selected?.id === entry.id ? 'entry-card--active' : ''}`}
                       key={entry.id}
-                      onClick={() => requestSelectEntry(entry.id)}
+                      onClick={() => requestSelectEntry(entry.id, entry.contentType)}
                     >
                       <span className="entry-card__title">{entryTitle(entry, schemas)}</span>
                       <span className="entry-card__meta">/{entrySlug(entry, schemas)}</span>
@@ -8445,9 +8636,9 @@ function AuthorizedStudio({
                 </nav>
                 {entries.length === 0 && !busy ? (
                   <p className="empty-copy">
-                    {can('pages.create')
-                      ? 'No pages yet. Create the first one.'
-                      : 'No pages are available.'}
+                    {(activeContentType === 'page' ? can('pages.create') : can('content.create'))
+                      ? `No ${activeSchema?.collection ?? 'entries'} yet. Create the first one.`
+                      : `No ${activeSchema?.collection ?? 'entries'} are available.`}
                   </p>
                 ) : null}
               </aside>
@@ -8455,13 +8646,13 @@ function AuthorizedStudio({
               <main className="editor-panel" id="studio-editor" tabIndex={-1}>
                 {!can('content.read', 'schema.read') ? (
                   <p className="empty-copy" role="status">
-                    Page editing is unavailable with your current access. Listing permission does
-                    not grant access to entry details or schemas.
+                    {activeContentLabel} editing is unavailable with your current access. Listing
+                    permission does not grant access to entry details or schemas.
                   </p>
                 ) : null}
                 {draft && !can('content.draft.update') ? (
                   <p className="notice notice--info" role="status">
-                    Read-only page. You do not have permission to edit this draft.
+                    Read-only {activeContentNoun}. You do not have permission to edit this draft.
                   </p>
                 ) : null}
                 {notice ? (
@@ -8476,8 +8667,8 @@ function AuthorizedStudio({
                 ) : null}
                 {entryUnavailable && !draft ? (
                   <p className="empty-copy" role="alert">
-                    The requested page is unavailable. Choose another page from the list or check
-                    your access.
+                    The requested {activeContentNoun} is unavailable. Choose another{' '}
+                    {activeContentNoun} from the list or check your access.
                   </p>
                 ) : null}
                 {fatalError && !draft ? (
@@ -8499,9 +8690,12 @@ function AuthorizedStudio({
                   <div inert={entryLoading || busy} style={{ display: 'contents' }}>
                     <section className="document-heading">
                       <div>
-                        <span className="kicker">Page entry</span>
+                        <span className="kicker">{activeSchema?.name ?? 'Content'} entry</span>
                         <h2>
-                          {String(draft[activeSchema?.titleField ?? 'title'] || 'Untitled page')}
+                          {String(
+                            draft[activeSchema?.titleField ?? 'title'] ||
+                              `Untitled ${activeSchema?.name.toLowerCase() ?? 'entry'}`,
+                          )}
                         </h2>
                       </div>
                       <span className={`status status--${selected.status}`}>{selected.status}</span>
@@ -8510,7 +8704,10 @@ function AuthorizedStudio({
                       disabled={!can('content.draft.update')}
                       style={{ display: 'contents' }}
                     >
-                      <section className="document-fields" aria-label="Page fields">
+                      <section
+                        className="document-fields"
+                        aria-label={`${activeSchema?.name ?? 'Content'} fields`}
+                      >
                         {activeSchema?.fields.map((field) => {
                           if (field.type === 'component-tree') return null;
                           return (
@@ -8518,7 +8715,7 @@ function AuthorizedStudio({
                               key={field.id}
                               definition={field}
                               value={draft[field.name]}
-                              entries={entries}
+                              entries={authoringEntries}
                               assets={assetChoices}
                               onChange={(value) =>
                                 changeDraft((current) => ({ ...current, [field.name]: value }))
@@ -9095,7 +9292,7 @@ function AuthorizedStudio({
                       </section>
                     ) : null}
 
-                    {can('component.read') ? (
+                    {can('component.read') && componentField ? (
                       <fieldset
                         disabled={!can('content.draft.update')}
                         style={{ display: 'contents' }}

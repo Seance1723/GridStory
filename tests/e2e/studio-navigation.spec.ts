@@ -42,7 +42,7 @@ test('deep links restore authorized entry context, reload, skip focus and mobile
   await expect(shared.getByRole('region', { name: 'Asset library' })).toBeVisible();
   await shared.reload();
   await expect(shared.getByRole('region', { name: 'Asset library' })).toBeVisible();
-  await shared.getByRole('link', { name: 'Skip to page editor' }).focus();
+  await shared.getByRole('link', { name: 'Skip to content editor' }).focus();
   await shared.keyboard.press('Enter');
   await expect(shared.locator('#studio-content')).toBeFocused();
   expect(shared.url()).toBe(copied);
@@ -97,6 +97,7 @@ test('entry and history guards preserve drafts and preview until accepted replac
     .click();
   await expect(title).toHaveValue('Navigation guarded second');
   await expect.poll(() => popup.isClosed()).toBe(true);
+  await expect(title.locator('xpath=ancestor::*[@inert]')).toHaveCount(0);
   await title.fill('Unsaved second navigation draft');
   await expect(title).toHaveValue('Unsaved second navigation draft');
   await expect(page.getByText('Unsaved changes', { exact: true })).toBeVisible();

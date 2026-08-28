@@ -28,6 +28,7 @@ export type StudioScopeSelection = z.infer<typeof studioScopeSelectionSchema>;
 
 export const studioDestinations = [
   'pages',
+  'collections',
   'workflows',
   'releases',
   'search',
@@ -54,6 +55,7 @@ export type StudioDestinationId = (typeof studioDestinations)[number];
 export const studioOperations = [
   'pages.list',
   'pages.create',
+  'content.create',
   'content.read',
   'content.draft.update',
   'content.publish',

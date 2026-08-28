@@ -56,7 +56,11 @@ describe('workflow API', () => {
     });
     expect(definitions.statusCode).toBe(200);
     expect(definitions.headers['cache-control']).toBe('private, no-store');
-    expect(definitions.json()).toHaveLength(1);
+    const defaultDefinitions = definitions.json();
+    expect(defaultDefinitions).toHaveLength(2);
+    expect(defaultDefinitions.map((definition: { id: string }) => definition.id)).toEqual(
+      expect.arrayContaining(['page-editorial', 'article-editorial']),
+    );
     const invalidDefinition = await server.inject({
       method: 'PUT',
       url: '/api/v1/workflows/page-editorial',
@@ -65,7 +69,11 @@ describe('workflow API', () => {
     });
     expect(invalidDefinition.statusCode).toBe(400);
     expect(invalidDefinition.json().error.code).toBe('invalid_workflow_definition');
-    const currentDefinition = definitions.json()[0];
+    const currentDefinition = defaultDefinitions.find(
+      (definition: { id: string }) => definition.id === 'page-editorial',
+    );
+    expect(currentDefinition).toBeDefined();
+    if (!currentDefinition) throw new Error('Expected the page editorial workflow fixture.');
     const updatedDefinition = await server.inject({
       method: 'PUT',
       url: '/api/v1/workflows/page-editorial',

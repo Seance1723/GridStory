@@ -78,11 +78,11 @@ Production preview credentials are single-purpose: only the matched draft-read, 
 
 ### Studio navigation
 
-The Studio sidebar groups all 19 existing destinations by task:
+The Studio sidebar groups all 20 existing destinations by task:
 
 | Group | Destinations |
 |---|---|
-| Content | Pages, Workflows, Releases, Search |
+| Content | Pages, Collections, Workflows, Releases, Search |
 | Media | Library (the existing Asset library) |
 | Design | Components |
 | SEO & quality | Page checks |
@@ -93,11 +93,13 @@ The Studio sidebar groups all 19 existing destinations by task:
 
 Group headings expand or collapse their links using a click, Enter or Space; they do not select a page or reload its data. Exactly one destination is selected at a time. The header search shortcut opens Content when needed. Desktop compact mode exposes every destination as a named icon with a tooltip, while retaining group preferences for the expanded rail and mobile drawer. These preferences last for the current Studio session. Selecting a mobile destination closes the drawer.
 
-Only implemented destinations appear. Studio addresses use `#/<destination>` with optional paired `entry` and `type=page`, for example `#/pages?entry=<encoded-id>&type=page`. Copying the address, reloading, and Back/Forward restore the current screen and saved authorized page. A link does not grant access or change the client's tenant/site/environment/locale. The served path and outer query remain host-owned; no server rewrite or consuming-application route change is required.
+Only implemented destinations appear. Studio addresses use `#/<destination>` with optional paired `entry` and a bounded registered `type`, for example `#/pages?entry=<encoded-id>&type=page` or `#/collections?entry=<encoded-id>&type=article`. Copying the address, reloading, and Back/Forward restore the current screen and saved authorized entry. A link does not grant access or change the client's tenant/site/environment/locale. The served path and outer query remain host-owned; no server rewrite or consuming-application route change is required.
 
 Changing screens preserves unsaved entry edits and the same-entry preview. Opening another entry (including from Search or browser history) asks before discarding unsaved changes. Cancellation or a failed target preserves the prior editor/address. Accepted entry replacement closes its old preview window; pending grants are revoked instead of connected. Save/publish keep the current location. Explicit missing, denied or wrong-type entries show an unavailable state and never silently select another page. Invalid addresses normalize to Pages with a generic notice.
 
-Studio stores no drafts, credentials, search terms or preview sessions in its location/history metadata. The native reload/exit warning is registered only while dirty and is best effort, not autosave or crash recovery. Unknown/manual/restored history slots use a conservative replacement fallback on cancellation and may leave a duplicate address; subsequent known navigation remains usable. Authorized context selection and non-page authoring remain separate queued tasks in [the CMS gap analysis](docs/cms-admin-gap-analysis.md).
+Studio stores no drafts, credentials, search terms or preview sessions in its location/history metadata. The native reload/exit warning is registered only while dirty and is best effort, not autosave or crash recovery. Unknown/manual/restored history slots use a conservative replacement fallback on cancellation and may leave a duplicate address; subsequent known navigation remains usable.
+
+Pages remains the routed component-content shortcut. Collections exposes registered non-page schemas one type at a time; the default example includes an Article with headline, slug, summary, rich text, page relations, taxonomy and featured state. Creation derives a minimum candidate from the selected canonical schema and registered component manifests, validates it before transport, and reports field paths when a safe valid candidate cannot be generated. Relation choices load only declared target content types. Composition and standalone application preview appear only for schemas with a component-tree field, while nonvisual entries retain field editing, immutable revisions, configured workflow and publication.
 
 ### Authorized Studio context API
 
@@ -107,7 +109,7 @@ Trusted API composition may provide `studioTopology`, or operators may set `GRID
 
 The universal client exposes `getStudioContext({ signal? })` and `withStudioScope({ siteId, environmentId, locale })`. A clone preserves the identity transport and organization/tenant/workspace, leaving the original unchanged. Always validate a candidate using its new context call before using it; cloning itself does not authorize anything. Unsupported/malformed or wrong-scope responses fail closed. Operation booleans represent policy preconditions, not entry existence, workflow readiness, provider availability or an authorization credential. Typed page list/create checks remain separate from untyped entry and preview checks.
 
-Studio consumes that context before mounting private screens. Navigation and existing operation controls use the server's finite capability flags, without role-name guesses or a legacy-context fallback. Read-only fields remain visible; unavailable optional history/workflow/design/asset/collaboration reads are not requested. Page-list-only grants do not imply entry/schema access. All 19 destinations remain for fully authorized users, with the same colors and shared styles.
+Studio consumes that context before mounting private screens. Navigation and existing operation controls use the server's finite capability flags, without role-name guesses or a legacy-context fallback. Read-only fields remain visible; unavailable optional history/workflow/design/asset/collaboration reads are not requested. Page-list-only grants do not imply entry/schema access. All 20 destinations remain for fully authorized users, with the same colors and shared styles. Collections requires the existing generic content-read and schema-read decisions; its generic create control uses the existing content-create decision, while Pages retains its page-specific list/create flags.
 
 When the server returns more than one permitted complete tuple, the header stages Site, Environment and Locale as a dependent finite selection and shows the committed context separately. Apply confirms unsaved entry or feature-form work, remains disabled while any mapped management write is active, validates a fresh scoped client and commits only after the old preview session is closed and revoked. Cancellation, offline/denied validation or cleanup failure keeps the old authorized context. A successful switch clears old entries/drafts/notices, replaces entry history with the scope-free current destination and rejects callbacks, reads or late preview grants from the old lifetime. Organization, tenant and workspace never change in this control; the selected scope is not stored in the URL, history state or browser storage.
 

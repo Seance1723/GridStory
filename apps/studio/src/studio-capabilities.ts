@@ -4,8 +4,8 @@ import type { StudioCapabilities, StudioOperation } from '@gridstory/schema';
 // A finite UI adapter, not an authorization policy. The API still authorizes each request.
 // Unknown SDK methods fail closed; adding a feature requires an explicit operation mapping.
 export const studioMethodOperations = {
-  listContent: ['pages.list'],
-  createContent: ['pages.create'],
+  listContent: ['content.read'],
+  createContent: ['content.create'],
   getContent: ['content.read'],
   saveDraft: ['content.draft.update'],
   publish: ['content.publish'],
@@ -138,6 +138,18 @@ export const studioMethodOperations = {
   checkFleetMember: ['fleet.check'],
 } as const satisfies Partial<Record<keyof GridStoryClient, readonly StudioOperation[]>>;
 
+export function studioClientOperations(
+  method: string,
+  args: readonly unknown[],
+): readonly StudioOperation[] | undefined {
+  if (method === 'listContent') {
+    const contentType = (args[0] as { contentType?: unknown } | undefined)?.contentType;
+    return contentType === 'page' ? ['pages.list'] : ['content.read'];
+  }
+  if (method === 'createContent') return args[0] === 'page' ? ['pages.create'] : ['content.create'];
+  return studioMethodOperations[method as keyof typeof studioMethodOperations];
+}
+
 export function permits(
   capabilities: StudioCapabilities,
   ...operations: StudioOperation[]
@@ -164,7 +176,7 @@ export function guardStudioClient(
       const guarded = async (...args: unknown[]) => {
         const lease = authority();
         if (!lease) throw staleStudioRequest();
-        const operations = studioMethodOperations[property as keyof typeof studioMethodOperations];
+        const operations = studioClientOperations(property, args);
         if (!operations || !permits(lease.capabilities, ...operations)) {
           throw new GridStoryApiError('This operation is not available with your current access.', {
             status: 403,

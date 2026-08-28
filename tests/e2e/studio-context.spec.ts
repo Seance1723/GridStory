@@ -117,7 +117,8 @@ test('real viewer context gates every permitted screen and operation without den
     }
     await leaf.click();
     await expect(leaf).toHaveAttribute('aria-current', 'page');
-    if (destination === 'pages') await expect(page.locator('.studio-workspace')).toBeVisible();
+    if (destination === 'pages' || destination === 'collections')
+      await expect(page.locator('.studio-workspace')).toBeVisible();
     else await expect(page.locator('.studio-page > section')).toBeVisible();
     const controls = await page.locator('[data-required-operations]').evaluateAll((elements) =>
       elements.map((element) => ({

@@ -2,7 +2,11 @@ import { readFileSync } from 'node:fs';
 import { createGridStoryClient, GridStoryApiError } from '@gridstory/client';
 import { type StudioCapabilities, studioDestinations, studioOperations } from '@gridstory/schema';
 import { describe, expect, it, vi } from 'vitest';
-import { guardStudioClient, studioMethodOperations } from '../src/studio-capabilities.js';
+import {
+  guardStudioClient,
+  studioClientOperations,
+  studioMethodOperations,
+} from '../src/studio-capabilities.js';
 
 function capabilities(allowed: boolean): StudioCapabilities {
   return {
@@ -56,6 +60,17 @@ describe('finite Studio invocation guard', () => {
       'marketplace.read',
       'plugin.manage',
     ]);
+  });
+
+  it('keeps page-specific and generic collection list/create checks distinct', () => {
+    expect(studioClientOperations('listContent', [{ contentType: 'page' }])).toEqual([
+      'pages.list',
+    ]);
+    expect(studioClientOperations('createContent', ['page', {}])).toEqual(['pages.create']);
+    expect(studioClientOperations('listContent', [{ contentType: 'article' }])).toEqual([
+      'content.read',
+    ]);
+    expect(studioClientOperations('createContent', ['article', {}])).toEqual(['content.create']);
   });
 
   it('does not expose legacy context or raw scoped transport through the feature adapter', async () => {

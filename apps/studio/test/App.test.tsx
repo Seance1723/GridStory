@@ -106,6 +106,43 @@ function entry(id: string, headline: string, path: string): ContentEntry {
 }
 
 const entries = [entry('one', 'First page', 'first'), entry('two', 'Second page', 'second')];
+const articleSchema: ContentSchemaDefinition = {
+  id: 'article',
+  version: 1,
+  name: 'Article',
+  collection: 'articles',
+  titleField: 'headline',
+  fields: [
+    {
+      id: 'article.headline',
+      name: 'headline',
+      label: 'Article headline',
+      type: 'text',
+      required: true,
+    },
+    { id: 'article.slug', name: 'slug', label: 'Article slug', type: 'slug', required: true },
+    { id: 'article.body', name: 'body', label: 'Article body', type: 'rich-text', required: true },
+    {
+      id: 'article.related-pages',
+      name: 'relatedPages',
+      label: 'Related pages',
+      type: 'relation',
+      targets: ['page'],
+      multiple: true,
+      maximum: 3,
+    },
+  ],
+};
+const articleEntry: ContentEntry = {
+  ...entry('article-one', 'Ignored page label', 'ignored'),
+  contentType: 'article',
+  data: {
+    headline: 'First article',
+    slug: 'first-article',
+    body: { version: 1, blocks: [] },
+    relatedPages: [],
+  },
+};
 const componentTreeField = schema.fields.find((field) => field.type === 'component-tree');
 if (!componentTreeField) throw new Error('Test schema must include a component tree.');
 
@@ -161,11 +198,13 @@ function createTestClient(
   options: {
     context?: StudioContext;
     schema?: ContentSchemaDefinition;
+    schemas?: ContentSchemaDefinition[];
     entries?: ContentEntry[];
     assets?: AssetRecord[];
   } = {},
 ) {
   const testSchema = options.schema ?? schema;
+  const testSchemas = options.schemas ?? [testSchema];
   const testEntries = options.entries ?? entries;
   const testAssets = options.assets ?? [];
   const threads: Array<Record<string, unknown>> = [];
@@ -622,8 +661,8 @@ function createTestClient(
         environmentId: 'development',
         locale: 'en',
         entryId: candidate.id,
-        contentType: 'page',
-        workflowId: 'page-editorial',
+        contentType: candidate.contentType,
+        workflowId: `${candidate.contentType}-editorial`,
         workflowVersion: 1,
         stateId: 'draft',
         revisionId: candidate.draftRevisionId,
@@ -669,10 +708,23 @@ function createTestClient(
             },
       );
     }
-    if (url.pathname === '/api/v1/schemas') return json([testSchema]);
+    if (url.pathname === '/api/v1/schemas') return json(testSchemas);
     if (url.pathname === '/api/v1/components') return json(componentManifests);
     if (url.pathname === '/api/v1/design-system') return json(exampleDesignSystem);
-    if (url.pathname === '/api/v1/workflows') return json([workflowDefinition]);
+    if (url.pathname === '/api/v1/workflows')
+      return json([
+        workflowDefinition,
+        ...(testSchemas.some((candidate) => candidate.id === 'article')
+          ? [
+              {
+                ...workflowDefinition,
+                id: 'article-editorial',
+                name: 'Article editorial review',
+                contentType: 'article',
+              },
+            ]
+          : []),
+      ]);
     if (url.pathname === '/api/v1/workflows/page-editorial' && init?.method === 'PUT') {
       const body = JSON.parse(String(init.body));
       workflowDefinition = { ...workflowDefinition, ...body, id: 'page-editorial', updatedAt: now };
@@ -911,7 +963,14 @@ function createTestClient(
     if (/^\/api\/v1\/content\/[^/]+\/related$/.test(url.pathname)) {
       return json([{ entry: testEntries[1], score: 1, reasons: ['same content type'] }]);
     }
-    if (url.pathname === '/api/v1/content') return json(testEntries);
+    if (url.pathname === '/api/v1/content') {
+      const contentType = url.searchParams.get('contentType');
+      return json(
+        contentType
+          ? testEntries.filter((candidate) => candidate.contentType === contentType)
+          : testEntries,
+      );
+    }
     if (url.pathname === '/api/v1/operations/summary') {
       return json({
         generatedAt: now,
@@ -2518,6 +2577,57 @@ describe('GridStory Studio', () => {
     expect(window.history.length).toBe(length + 1);
   });
 
+  it('authors an explicitly selected non-component collection with declared page relations', async () => {
+    const user = userEvent.setup();
+    const client = createTestClient({
+      schemas: [schema, articleSchema],
+      entries: [...entries, articleEntry],
+    });
+    render(<App client={client} />);
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Collections', exact: true }));
+    await screen.findByRole('heading', { name: 'Articles', exact: true });
+    expect((screen.getByLabelText('Content type') as HTMLSelectElement).value).toBe('article');
+    expect((screen.getByLabelText('Article headline') as HTMLInputElement).value).toBe(
+      'First article',
+    );
+    expect(screen.queryByText('Composition')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Open live preview in new window' })).toBeNull();
+    const relation = await screen.findByRole('region', { name: 'Related pages' });
+    expect(within(relation).getByRole('button', { name: /Second page/ })).toBeTruthy();
+    expect(window.location.hash).toBe('#/collections?entry=article-one&type=article');
+
+    const created: ContentEntry = {
+      ...articleEntry,
+      id: 'article-created',
+      draftRevisionId: 'article-created-revision-1',
+      data: {
+        headline: 'Untitled Article',
+        slug: 'untitled-test',
+        body: { version: 1, blocks: [] },
+      },
+    };
+    const create = vi.spyOn(client, 'createContent').mockResolvedValueOnce(created);
+    vi.spyOn(client, 'listContent').mockResolvedValueOnce([articleEntry, created]);
+    vi.spyOn(client, 'getContent').mockResolvedValueOnce(created);
+    const workflow = await client.getContentWorkflow(articleEntry.id);
+    vi.spyOn(client, 'getContentWorkflow').mockResolvedValueOnce({
+      ...workflow,
+      entryId: created.id,
+      revisionId: created.draftRevisionId,
+    });
+    await user.click(screen.getByRole('button', { name: 'Create article' }));
+    await screen.findByText('Draft article created.');
+    expect(create).toHaveBeenCalledOnce();
+    expect(create.mock.calls[0]?.[0]).toBe('article');
+    expect(create.mock.calls[0]?.[1]).toMatchObject({
+      headline: 'Untitled Article',
+      body: { version: 1, blocks: [] },
+    });
+    expect(create.mock.calls[0]?.[1]).not.toHaveProperty('blocks');
+    expect(window.location.hash).toBe('#/collections?entry=article-created&type=article');
+  });
+
   it('registers the document-exit warning only while dirty and cleans it up on unmount', async () => {
     const add = vi.spyOn(window, 'addEventListener');
     const remove = vi.spyOn(window, 'removeEventListener');
@@ -2552,14 +2662,14 @@ describe('GridStory Studio', () => {
     expect(window.location.hash).toBe('#/quality?entry=two&type=page');
     expect(window.history.state.host).toBe('keep');
     const user = userEvent.setup();
-    await user.click(screen.getByRole('link', { name: 'Skip to page editor' }));
+    await user.click(screen.getByRole('link', { name: 'Skip to content editor' }));
     expect(document.activeElement?.id).toBe('studio-content');
     expect(window.location.hash).toBe('#/quality?entry=two&type=page');
     await user.click(screen.getByRole('button', { name: 'Pages' }));
     expect(((await screen.findByLabelText('Headline')) as HTMLInputElement).value).toBe(
       'Second page',
     );
-    await user.click(screen.getByRole('link', { name: 'Skip to page editor' }));
+    await user.click(screen.getByRole('link', { name: 'Skip to content editor' }));
     expect(document.activeElement?.id).toBe('studio-editor');
     expect(window.location.hash).toBe('#/pages?entry=two&type=page');
   });
@@ -2650,6 +2760,20 @@ describe('GridStory Studio', () => {
     expect((screen.getByLabelText('Headline') as HTMLInputElement).value).toBe(
       'Keep editing first',
     );
+  });
+
+  it('settles a successful entry read before exposing its controlled fields for editing', async () => {
+    const user = userEvent.setup();
+    render(<App client={createTestClient()} />);
+    await screen.findByLabelText('Headline');
+
+    await user.click(screen.getByRole('button', { name: /Second page/ }));
+    const headline = await screen.findByLabelText('Headline');
+    expect((headline as HTMLInputElement).value).toBe('Second page');
+    expect(headline.closest('[inert]')).toBeNull();
+    fireEvent.change(headline, { target: { value: 'Immediate accepted-entry edit' } });
+    expect((headline as HTMLInputElement).value).toBe('Immediate accepted-entry edit');
+    expect(screen.getByText('Unsaved changes', { exact: true })).toBeTruthy();
   });
 
   it('ignores an out-of-order entry response and preserves new edits, notice and busy state', async () => {
@@ -2770,7 +2894,7 @@ describe('GridStory Studio', () => {
       within(navigation).queryByRole('button', { name: 'Identity providers', exact: true }),
     ).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Toggle navigation' }));
-    expect(within(navigation).getAllByRole('button')).toHaveLength(19);
+    expect(within(navigation).getAllByRole('button')).toHaveLength(20);
     expect(
       within(navigation)
         .getByRole('button', { name: 'Identity providers', exact: true })
@@ -2876,7 +3000,7 @@ describe('GridStory Studio', () => {
     render(<App client={createTestClient()} />);
 
     expect(
-      (await screen.findByRole('link', { name: 'Skip to page editor' })).getAttribute('href'),
+      (await screen.findByRole('link', { name: 'Skip to content editor' })).getAttribute('href'),
     ).toBe('#studio-editor');
     expect(document.querySelector('main')?.id).toBe('studio-editor');
     expect(((await screen.findByLabelText('Headline')) as HTMLInputElement).value).toBe(

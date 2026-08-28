@@ -16,6 +16,16 @@ export interface PageContent {
   blocks: ComponentNode[];
 }
 
+export interface ArticleContent {
+  headline: string;
+  slug: string;
+  summary?: string;
+  body: RichTextDocument;
+  relatedPages?: ContentReference[];
+  topics?: string[];
+  featured?: boolean;
+}
+
 export interface GridstoryHeroProps {
   eyebrow?: string;
   heading: string;
@@ -51,6 +61,7 @@ export interface GridstoryStackSlots {
 
 export interface ContentByType {
   page: PageContent;
+  article: ArticleContent;
 }
 
 export interface ComponentPropsById {

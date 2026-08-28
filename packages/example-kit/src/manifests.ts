@@ -86,6 +86,86 @@ export const pageSchema = defineContentSchema({
   ],
 });
 
+export const articleSchema = defineContentSchema({
+  id: 'article',
+  version: 1,
+  name: 'Article',
+  description: 'A routed editorial article without application composition.',
+  collection: 'articles',
+  titleField: 'headline',
+  localization: { localizedFields: ['headline', 'slug', 'summary', 'body'] },
+  route: { pattern: '/articles/:slug', slugField: 'slug' },
+  taxonomies: [
+    {
+      id: 'article-topics',
+      name: 'Article topics',
+      hierarchical: false,
+      terms: [
+        { id: 'product-news', slug: 'product-news', label: 'Product news' },
+        { id: 'engineering-notes', slug: 'engineering-notes', label: 'Engineering notes' },
+      ],
+    },
+  ],
+  fields: [
+    {
+      id: 'article.headline',
+      name: 'headline',
+      label: 'Headline',
+      type: 'text',
+      required: true,
+      minLength: 1,
+      maxLength: 160,
+    },
+    {
+      id: 'article.slug',
+      name: 'slug',
+      label: 'Slug',
+      type: 'slug',
+      required: true,
+      pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$',
+    },
+    {
+      id: 'article.summary',
+      name: 'summary',
+      label: 'Summary',
+      type: 'text',
+      required: false,
+      maxLength: 280,
+    },
+    {
+      id: 'article.body',
+      name: 'body',
+      label: 'Article body',
+      type: 'rich-text',
+      required: true,
+      allowedBlocks: ['paragraph', 'heading', 'list', 'quote', 'code', 'embed', 'table'],
+    },
+    {
+      id: 'article.related-pages',
+      name: 'relatedPages',
+      label: 'Related pages',
+      type: 'relation',
+      targets: ['page'],
+      multiple: true,
+      maximum: 3,
+    },
+    {
+      id: 'article.topics',
+      name: 'topics',
+      label: 'Topics',
+      type: 'taxonomy',
+      taxonomy: 'article-topics',
+      multiple: true,
+    },
+    {
+      id: 'article.featured',
+      name: 'featured',
+      label: 'Featured article',
+      type: 'boolean',
+    },
+  ],
+});
+
 export const componentManifests = [
   {
     id: 'gridstory.hero',
@@ -261,6 +341,7 @@ export const componentManifests = [
 ] satisfies ComponentManifest[];
 
 export type PageContent = ContentDataOf<typeof pageSchema>;
+export type ArticleContent = ContentDataOf<typeof articleSchema>;
 
 export const welcomePage: PageContent = {
   title: 'Welcome to GridStory',
@@ -315,4 +396,29 @@ export const welcomePage: PageContent = {
       },
     },
   ],
+};
+
+export const welcomeArticle: ArticleContent = {
+  headline: 'Introducing registered collections',
+  slug: 'registered-collections',
+  summary: 'One content engine can author routed pages and structured editorial collections.',
+  body: {
+    version: 1,
+    blocks: [
+      {
+        id: 'article-intro',
+        type: 'paragraph',
+        content: [
+          {
+            type: 'text',
+            text: 'This article uses its own registered fields and workflow without acquiring page composition or preview controls.',
+            marks: [],
+          },
+        ],
+      },
+    ],
+  },
+  relatedPages: [],
+  topics: ['product-news'],
+  featured: true,
 };

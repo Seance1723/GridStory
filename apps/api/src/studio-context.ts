@@ -30,6 +30,7 @@ const checks: Record<
 > = {
   'pages.list': ['content.read', { kind: 'content', contentType: 'page' }],
   'pages.create': ['content.create', { kind: 'content', contentType: 'page' }],
+  'content.create': ['content.create', { kind: 'content' }],
   'quality.read': ['content.read', { kind: 'content' }],
   'quality.assess': ['content.draft.update', { kind: 'content' }],
   'preview.manage': ['content.read', { kind: 'content' }],
@@ -129,6 +130,7 @@ export function studioCapabilities(
     operations,
     screens: {
       pages: operations['pages.list'],
+      collections: operations['content.read'] && operations['schema.read'],
       workflows: operations['workflow.read'],
       releases: operations['release.read'],
       search: operations['search.read'],

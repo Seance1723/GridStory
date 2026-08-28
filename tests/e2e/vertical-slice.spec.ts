@@ -110,3 +110,42 @@ test('edits, protects, governs, publishes, and delivers React content', async ({
     page.getByRole('heading', { name: 'Published from the browser walkthrough' }),
   ).toBeVisible();
 });
+
+test('creates and revises a registered article without page-only composition or preview', async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Pages', exact: true })).toBeVisible();
+  await page
+    .getByRole('navigation', { name: 'Studio sections' })
+    .getByRole('button', { name: 'Collections', exact: true })
+    .click();
+
+  await expect(page.getByRole('heading', { name: 'Articles', exact: true })).toBeVisible();
+  await expect(page.getByLabel('Content type')).toHaveValue('article');
+  await expect(page.getByLabel('Headline', { exact: true })).toBeVisible();
+  await expect(page.getByText('Composition', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Open live preview in new window' })).toHaveCount(
+    0,
+  );
+
+  const relations = page.getByRole('region', { name: 'Related pages' });
+  const relationOptions = relations.locator('.button--option-card');
+  await expect(relationOptions.first()).toBeVisible();
+  await expect(relationOptions.first()).toContainText('page');
+
+  await page.getByRole('button', { name: 'Create article' }).click();
+  await expect(page.getByText('Draft article created.')).toBeVisible();
+  await expect(page).toHaveURL(/#\/collections\?entry=[^&]+&type=article$/);
+  await page.getByLabel('Headline', { exact: true }).fill('Browser-authored article');
+  await relationOptions.first().click();
+  await expect(relations.getByText('1 selected / 3')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Save draft' }).click();
+  await expect(page.getByText('Draft saved as a new immutable revision.')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Browser-authored article' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Immutable revisions' })).toBeVisible();
+  await expect(page.getByText('Revision 2')).toBeVisible();
+});

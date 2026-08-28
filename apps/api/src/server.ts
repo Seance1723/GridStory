@@ -134,7 +134,13 @@ import {
   WorkflowService,
 } from '@gridstory/core';
 import { exampleDesignSystem } from '@gridstory/example-kit/design-system';
-import { componentManifests, pageSchema, welcomePage } from '@gridstory/example-kit/manifests';
+import {
+  articleSchema,
+  componentManifests,
+  pageSchema,
+  welcomeArticle,
+  welcomePage,
+} from '@gridstory/example-kit/manifests';
 import {
   assetRenditionPresetSchema,
   type CollaborationOperation,
@@ -205,6 +211,7 @@ export interface BuildServerOptions {
   databaseUrl?: string;
   allowedOrigins?: string[];
   contentSchemas?: ContentSchemaDefinition[];
+  workflowDefinitions?: Array<{ id: string; definition: WorkflowDefinitionInput }>;
   seed?: boolean;
   logger?: boolean;
   redirects?: RedirectDefinition[];
@@ -515,7 +522,8 @@ export async function buildServer({
   databasePath = '.gridstory/gridstory.db',
   databaseUrl,
   allowedOrigins = ['http://localhost:5173', 'http://localhost:5174'],
-  contentSchemas = [pageSchema],
+  contentSchemas = [pageSchema, articleSchema],
+  workflowDefinitions = defaultWorkflowDefinitions,
   seed = true,
   logger = false,
   redirects = [],
@@ -694,7 +702,7 @@ export async function buildServer({
   const workflows = new WorkflowService({
     repository: resolvedWorkflowRepository,
     jobRepository: repository,
-    defaultDefinitions: defaultWorkflowDefinitions,
+    defaultDefinitions: workflowDefinitions,
   });
   const quality = new ContentQualityService({
     repository,
@@ -2559,6 +2567,14 @@ export async function buildServer({
       id: created.id,
       expectedRevisionId: created.draftRevisionId,
       actor: seedReviewer,
+    });
+  }
+  if (seed && (await service.list({ scope: seedScope, contentType: 'article' })).length === 0) {
+    await service.create({
+      scope: seedScope,
+      contentType: 'article',
+      data: welcomeArticle,
+      actor: { id: 'gridstory-seed' },
     });
   }
   if (seed) await lifecycle.initialize(seedScope, { id: 'gridstory-schema-bootstrap' });

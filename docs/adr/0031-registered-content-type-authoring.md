@@ -1,6 +1,6 @@
 # ADR 0031: Registered content-type authoring
 
-- Status: Proposed; explicit T2 approval required before implementation.
+- Status: Implemented and verified on 2026-08-28 after acceptance at 2026-08-28T21:51:08+05:30.
 - Created: 2026-08-28T21:38:37+05:30 by Codex.
 - Task: CMS-004. Defect input: BUG-0427.
 - Baseline: `9bdd891` on `codex/content-configuration-foundations`.
@@ -109,8 +109,16 @@ No runtime schema/taxonomy editing, field-kind/default IR expansion, saved views
 
 ## Approval gate
 
-This is a T2 proposal. After the planning checkpoint is verified and committed, wait for explicit user approval before changing any runtime or test file. Approval starts CMS-004 only; CMS-005 through CMS-010 retain their own task boundaries and T2 gates where applicable.
+This T2 proposal was explicitly approved by the user with `proceed` on 2026-08-28T21:51:08+05:30 after the separate planning commit. Approval starts CMS-004 only; CMS-005 through CMS-010 retain their own task boundaries and T2 gates where applicable.
 
 ## Planning verification
 
 Codex, 2026-08-28: the read-only Node reproduction executed the exact current `createPage` candidate rules against the built example schema/manifests and canonical validator; it returned only the expected missing required Hero heading/body issues and made no request. `pnpm lint`, `pnpm format:check`, `node scripts/check-ledgers.mjs`, `git diff --check` and a five-file local Markdown-link audit pass. The fence contains only `TASKS.md`, `CHANGELOG.md`, `BUGS.md`, `docs/cms-admin-gap-analysis.md` and this ADR. No unit, integration, browser, provider, database or deployment result is claimed for this documentation-only plan; the fully verified `9bdd891` runtime baseline remains unchanged.
+
+## Implementation verification
+
+Codex, 2026-08-28: the default API now registers explicit Page and Article schemas/workflows and seeds each independently. Studio exposes an authorized Collections route, carries bounded registered type through loading/history, derives and canonically validates initial candidates, loads declared relation targets, and renders composition/standalone preview only for component-tree schemas. Page behavior remains intact; Article field editing, relation selection, immutable revision, workflow, publication and delivery are covered across focused Studio/API tests and the real-browser vertical slices.
+
+The final `pnpm check` passes lint, format, boundaries, ledgers, security, tenant scope, readiness self-tests, generated schema/interoperability checks, strict types, React 18.3.1 SSR, production builds and 646 active tests with 17 existing optional skips. The exact candidate then passes **54/54** browser scenarios: 18 Chromium, 18 Firefox and 18 WebKit, each on fresh memory-backed services. Coverage includes all 20 destinations, one-current-item semantics, page/article switching and creation, declared page relations, page preview/publish/delivery, article revision behavior without preview/composition, WCAG scans, light/dark, keyboard/200% zoom and 1440/1280/1024/768/390/320px containment.
+
+BUG-0427 and verification defects BUG-0469–BUG-0476 are resolved with their failing evidence retained in `BUGS.md`. No database/provider conformance, production deployment, merge, push or release-readiness upgrade is claimed. Rollback remains the single CMS-004 implementation commit; no persisted schema format changed.

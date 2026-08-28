@@ -22,4 +22,14 @@ export const defaultPageQualityPolicies: ContentQualityPolicy[] = [
 export const defaultWorkflowDefinitions: Array<{
   id: string;
   definition: WorkflowDefinitionInput;
-}> = [{ id: 'page-editorial', definition: defaultEditorialWorkflow() }];
+}> = [
+  { id: 'page-editorial', definition: defaultEditorialWorkflow() },
+  {
+    id: 'article-editorial',
+    definition: {
+      ...defaultEditorialWorkflow(),
+      name: 'Article editorial review',
+      contentType: 'article',
+    },
+  },
+];
