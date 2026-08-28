@@ -1,4 +1,4 @@
-import { type APIRequestContext, expect, test } from '@playwright/test';
+import { type APIRequestContext, expect, type Page, test } from '@playwright/test';
 
 const api = 'http://127.0.0.1:44000/api/v1';
 const headers = {
@@ -24,6 +24,11 @@ async function createPage(request: APIRequestContext, title: string) {
 
 const address = (destination: string, id: string) =>
   `#/${destination}?${new URLSearchParams({ entry: id, type: 'page' })}`;
+
+async function filterPageList(page: Page, title: string) {
+  await page.getByLabel('Search title or slug').fill(title);
+  await page.getByRole('button', { name: 'Apply list view' }).click();
+}
 
 test('deep links restore authorized entry context, reload, skip focus and mobile navigation', async ({
   page,
@@ -76,11 +81,12 @@ test('entry and history guards preserve drafts and preview until accepted replac
   expect(popup.isClosed()).toBe(false);
   await page.getByRole('button', { name: 'Pages', exact: true }).click();
   await expect(title).toHaveValue('Private unsaved navigation draft');
+  await filterPageList(page, String(second.data.title));
   page.once('dialog', (dialog) => dialog.dismiss());
   await page
     .getByRole('complementary', { name: 'Content entries' })
     .getByRole('button', {
-      name: `${second.data.title} /${second.data.slug} draft`,
+      name: `${second.data.title} /${second.data.slug}`,
       exact: true,
     })
     .click();
@@ -91,7 +97,7 @@ test('entry and history guards preserve drafts and preview until accepted replac
   await page
     .getByRole('complementary', { name: 'Content entries' })
     .getByRole('button', {
-      name: `${second.data.title} /${second.data.slug} draft`,
+      name: `${second.data.title} /${second.data.slug}`,
       exact: true,
     })
     .click();
@@ -149,10 +155,11 @@ test('manual fragments, unavailable entries and denied destinations remain truth
   await expect(
     page.getByRole('button', { name: 'Open live preview in new window' }),
   ).toBeDisabled();
+  await filterPageList(page, String(entry.data.title));
   await page
     .getByRole('complementary', { name: 'Content entries' })
     .getByRole('button', {
-      name: `${entry.data.title} /${entry.data.slug} draft`,
+      name: `${entry.data.title} /${entry.data.slug}`,
       exact: true,
     })
     .click();

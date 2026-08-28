@@ -66,8 +66,14 @@ describe('finite Studio invocation guard', () => {
     expect(studioClientOperations('listContent', [{ contentType: 'page' }])).toEqual([
       'pages.list',
     ]);
+    expect(studioClientOperations('queryContent', [{ contentType: 'page' }])).toEqual([
+      'pages.list',
+    ]);
     expect(studioClientOperations('createContent', ['page', {}])).toEqual(['pages.create']);
     expect(studioClientOperations('listContent', [{ contentType: 'article' }])).toEqual([
+      'content.read',
+    ]);
+    expect(studioClientOperations('queryContent', [{ contentType: 'article' }])).toEqual([
       'content.read',
     ]);
     expect(studioClientOperations('createContent', ['article', {}])).toEqual(['content.create']);

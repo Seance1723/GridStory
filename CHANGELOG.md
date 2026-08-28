@@ -73,6 +73,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- Completed CMS-005 (Codex, 2026-08-29): replaced Studio's unbounded primary entry list with the existing registered-type content query, approved search/status/sort controls, exact loaded/total bounds and ten-row signed-cursor pagination. Added stable selection, isolated loading/empty/error recovery, semantic keyboard/mobile tables and versioned verified-scope/type browser-local saved views that never persist draft content, credentials, principals or authorization. Final `pnpm check` passes 653 active tests with 17 existing optional skips and production builds; all 57 Chromium/Firefox/WebKit scenarios pass. BUG-0477–BUG-0487 are resolved; no new query operator, server preference, bulk mutation, dependency, migration, permission meaning, palette change, merge, push or deployment is included.
+
+- Started CMS-005 (Codex, 2026-08-28T23:15:02+05:30; baseline `c100b42`) on the shared content/configuration branch. Studio content lists now begin moving from unbounded legacy list reads to the existing signed-cursor query contract, with supported type/status/title-or-slug/sort controls, exact result bounds, stable selection and versioned verified-scope local views. No new query operator, server preference, bulk mutation, dependency, migration, palette change, merge, push or deployment is included.
+
 - Completed CMS-004 (Codex, 2026-08-28): Pages and registered non-component Articles now independently list, create, edit, save, revise, follow configured workflows, publish and deliver through the existing framework-neutral engine. Declared relation targets load independently; component composition and standalone application preview remain schema-gated. Canonical generation, capability/session/history boundaries and existing colors/shared styles are retained; no dependency, migration, permission meaning, merge, push or deployment is included.
 - Accepted ADR 0031 and started CMS-004 (Codex, 2026-08-28T21:51:08+05:30; baseline `24c5325`) after the user's explicit `proceed`. Implement registered page/article authoring, schema-aware validated creation, declared relation candidates and type-gated composition/preview inside the approved fence on `codex/content-configuration-foundations`; later CMS-005 through CMS-010 tasks, dependencies, migrations, merge, push and deployment remain out of scope.
 
@@ -124,6 +128,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Recorded the accepted M6-005 evidence-bound marketplace decision: operator-scoped publisher verification, signed compatibility/support metadata, injected non-executing artifact review, separate human approval, and approved-only handoff to the existing disabled plugin installation lifecycle.
 
 ### Fixed
+
+- Made entry-discard and migration guards observe dirty state synchronously so an immediate WebKit fragment change cannot outrun React's render and replace a just-edited controlled draft (BUG-0487).
+
+- Removed collapsed saved-view controls from Firefox layout so its unpainted input rectangle cannot escape the content sidebar, retaining the native disclosure and all six width assertions (BUG-0486).
+
+- Updated retained browser fixtures for bounded first-page lists and explicitly classified the existing content-query POST as read-only without permitting any other non-GET viewer request (BUG-0484, BUG-0485).
+
+- Replaced CMS-005's generic list/pagination wrappers with semantic elements, kept keyboard focus on real row actions and removed a compile-only fixture assertion (BUG-0483).
+
+- Replaced the README's stale pre-CMS-004 delivery-status counts with the committed CMS-004 evidence while keeping CMS-005 explicitly in progress (BUG-0482).
+
+- Isolated CMS-005's multi-engine browser records by Playwright project so the intentionally shared memory server cannot contaminate later exact-count assertions (BUG-0481).
+
+- Limited CMS-005's schema-dependent list controls to the authoring sidebar after the first conditional edit crossed the unrelated Search JSX boundary (BUG-0480).
+
+- Defined the previously unstyled shared text-button and danger variants after the CMS-005 visual gate exposed native browser-default actions, and corrected the corresponding exact browser locator (BUG-0478, BUG-0479).
+
+- Mapped the existing `queryContent` SDK read through Studio's fail-closed capability adapter, retaining page-specific `pages.list` and generic registered-type `content.read` boundaries (BUG-0477, CMS-005).
 
 - Resolved BUG-0427 and BUG-0476 in CMS-004: canonical schema-aware initial candidates replace invalid hard-coded Hero defaults, and successful entry/focus settlement no longer drops immediate controlled-field edits. Invalid candidates remain local with actionable field paths; stale-read, inert, capability and write boundaries remain. Focused regressions and the final 54-scenario three-engine matrix pass.
 - Recorded BUG-0476's failing-before Firefox/WebKit evidence: a visible controlled field could lose an immediate edit while entry-read and unchanged-focus state were settling. The resolved entry below supersedes this diagnostic checkpoint.

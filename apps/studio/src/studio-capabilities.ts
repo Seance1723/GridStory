@@ -5,6 +5,7 @@ import type { StudioCapabilities, StudioOperation } from '@gridstory/schema';
 // Unknown SDK methods fail closed; adding a feature requires an explicit operation mapping.
 export const studioMethodOperations = {
   listContent: ['content.read'],
+  queryContent: ['content.read'],
   createContent: ['content.create'],
   getContent: ['content.read'],
   saveDraft: ['content.draft.update'],
@@ -142,7 +143,7 @@ export function studioClientOperations(
   method: string,
   args: readonly unknown[],
 ): readonly StudioOperation[] | undefined {
-  if (method === 'listContent') {
+  if (method === 'listContent' || method === 'queryContent') {
     const contentType = (args[0] as { contentType?: unknown } | undefined)?.contentType;
     return contentType === 'page' ? ['pages.list'] : ['content.read'];
   }

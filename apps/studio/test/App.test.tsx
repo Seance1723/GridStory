@@ -28,6 +28,8 @@ import * as previewClient from '@gridstory/client/preview';
 import { exampleDesignSystem } from '@gridstory/example-kit/design-system';
 import { componentManifests } from '@gridstory/example-kit/manifests';
 import {
+  type ContentFilter,
+  type ContentQuery,
   type ContentSchemaDefinition,
   type StudioContext,
   type StudioOperation,
@@ -201,12 +203,14 @@ function createTestClient(
     schemas?: ContentSchemaDefinition[];
     entries?: ContentEntry[];
     assets?: AssetRecord[];
+    queryFailsAfter?: number;
   } = {},
 ) {
   const testSchema = options.schema ?? schema;
   const testSchemas = options.schemas ?? [testSchema];
   const testEntries = options.entries ?? entries;
   const testAssets = options.assets ?? [];
+  let contentQueryCount = 0;
   const threads: Array<Record<string, unknown>> = [];
   const presence = [{ actorId: 'local-admin', displayName: 'Studio editor', lastSeenAt: now }];
   const operations: Array<Record<string, unknown>> = [];
@@ -962,6 +966,59 @@ function createTestClient(
     if (/^\/api\/v1\/content\/[^/]+\/backlinks$/.test(url.pathname)) return json([]);
     if (/^\/api\/v1\/content\/[^/]+\/related$/.test(url.pathname)) {
       return json([{ entry: testEntries[1], score: 1, reasons: ['same content type'] }]);
+    }
+    if (url.pathname === '/api/v1/content/query' && init?.method === 'POST') {
+      contentQueryCount += 1;
+      if (options.queryFailsAfter !== undefined && contentQueryCount > options.queryFailsAfter)
+        return json({ error: { message: 'Content list unavailable.' } }, 503);
+      const query = JSON.parse(String(init.body)) as ContentQuery;
+      const valueAt = (candidate: ContentEntry, path: string): unknown =>
+        path
+          .split('.')
+          .reduce<unknown>(
+            (value, segment) =>
+              value && typeof value === 'object'
+                ? (value as Record<string, unknown>)[segment]
+                : undefined,
+            candidate,
+          );
+      const matches = (candidate: ContentEntry, filter: ContentFilter): boolean => {
+        if ('and' in filter) return filter.and.every((nested) => matches(candidate, nested));
+        if ('or' in filter) return filter.or.some((nested) => matches(candidate, nested));
+        if ('not' in filter) return !matches(candidate, filter.not);
+        const value = valueAt(candidate, filter.path);
+        if (filter.operator === 'eq') return value === filter.value;
+        if (filter.operator === 'contains')
+          return String(value ?? '')
+            .toLocaleLowerCase()
+            .includes(String(filter.value ?? '').toLocaleLowerCase());
+        return true;
+      };
+      const sort = query.sort?.[0];
+      const filtered = testEntries
+        .filter((candidate) => !query.contentType || candidate.contentType === query.contentType)
+        .filter((candidate) => !query.filter || matches(candidate, query.filter))
+        .sort((left, right) => {
+          if (!sort) return 0;
+          const comparison = String(valueAt(left, sort.path) ?? '').localeCompare(
+            String(valueAt(right, sort.path) ?? ''),
+          );
+          return sort.direction === 'desc' ? -comparison : comparison;
+        });
+      const offset = Number(query.after ?? 0);
+      const page = filtered.slice(offset, offset + (query.first ?? 20));
+      const edges = page.map((node, index) => ({ cursor: String(offset + index + 1), node }));
+      return json({
+        edges,
+        nodes: page,
+        pageInfo: {
+          startCursor: edges[0]?.cursor ?? null,
+          endCursor: edges.at(-1)?.cursor ?? null,
+          hasNextPage: offset + page.length < filtered.length,
+          hasPreviousPage: offset > 0,
+        },
+        totalCount: filtered.length,
+      });
     }
     if (url.pathname === '/api/v1/content') {
       const contentType = url.searchParams.get('contentType');
@@ -3866,6 +3923,76 @@ describe('GridStory Studio', () => {
     expect(revoke).toHaveBeenCalledWith('preview-session-1');
     expect(patch.mock.calls.every(([payload]) => payload.entryId === 'one')).toBe(true);
   });
+
+  it('queries supported list controls while keeping an open editor selection stable', async () => {
+    const user = userEvent.setup();
+    render(<App client={createTestClient()} />);
+
+    const headline = await screen.findByLabelText('Headline');
+    expect(headline).toHaveProperty('value', 'First page');
+    const results = screen.getByRole('region', { name: 'Content results' });
+    expect(within(results).getByRole('button', { name: /First page/ })).toBeTruthy();
+    await user.type(screen.getByLabelText('Search title or slug'), 'Second');
+    await user.selectOptions(screen.getByLabelText('Status'), 'draft');
+    await user.selectOptions(screen.getByLabelText('Sort'), 'title-desc');
+    await user.click(screen.getByRole('button', { name: 'Apply list view' }));
+
+    await waitFor(() =>
+      expect(within(results).queryByRole('button', { name: /First page/ })).toBeNull(),
+    );
+    expect(within(results).getByRole('button', { name: /Second page/ })).toBeTruthy();
+    expect(headline).toHaveProperty('value', 'First page');
+    expect(screen.getByText('Showing 1 of 1')).toBeTruthy();
+
+    await user.click(screen.getByText('Local saved views (0)'));
+    await user.type(screen.getByLabelText('View name'), 'Draft seconds');
+    await user.click(screen.getByRole('button', { name: 'Save view' }));
+    expect(await screen.findByRole('button', { name: 'Draft seconds' })).toBeTruthy();
+    const persisted = window.localStorage.getItem('gridstory-content-list-views.v1') ?? '';
+    expect(persisted).toContain('Draft seconds');
+    expect(persisted).not.toContain('First hero');
+    expect(persisted).not.toMatch(/gsp_|bearer|credential/i);
+  });
+
+  it('paginates exact query results without replacing a selection outside the loaded page', async () => {
+    const user = userEvent.setup();
+    const manyEntries = Array.from({ length: 12 }, (_, index) =>
+      entry(
+        `page-${String(index + 1).padStart(2, '0')}`,
+        `Page ${String(index + 1).padStart(2, '0')}`,
+        `page-${index + 1}`,
+      ),
+    );
+    render(<App client={createTestClient({ entries: manyEntries })} />);
+
+    const headline = await screen.findByLabelText('Headline');
+    expect(headline).toHaveProperty('value', 'Page 01');
+    expect(screen.getByText('Showing 10 of 12')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await screen.findByText('Showing 2 of 12');
+    expect(headline).toHaveProperty('value', 'Page 01');
+    expect(screen.getByRole('button', { name: /Page 11/ })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Page 01/ })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Previous' }));
+    await screen.findByText('Showing 10 of 12');
+    expect(screen.getByRole('button', { name: /Page 01/ }).getAttribute('aria-current')).toBe(
+      'true',
+    );
+  });
+
+  it('keeps prior list results and offers retry when a list query fails', async () => {
+    const user = userEvent.setup();
+    render(<App client={createTestClient({ queryFailsAfter: 1 })} />);
+
+    await screen.findByLabelText('Headline');
+    await user.type(screen.getByLabelText('Search title or slug'), 'Second');
+    await user.click(screen.getByRole('button', { name: 'Apply list view' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('Content list unavailable.');
+    expect(screen.getByRole('button', { name: /First page/ })).toBeTruthy();
+    expect(within(alert).getByRole('button', { name: 'Retry list' })).toBeTruthy();
+  });
+
   it('edits nested compositions through layers, slots, keyboard movement, and history', async () => {
     const user = userEvent.setup();
     render(<App client={createTestClient()} />);

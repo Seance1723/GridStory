@@ -619,7 +619,7 @@ test('every Studio surface contains readable text and controls at each responsiv
               rectangle.right > boundaryRectangle.right + 1
             ) {
               issues.push(
-                `${surfaceName}: ${control.tagName.toLowerCase()} ${control.getAttribute('aria-label') ?? control.textContent?.trim() ?? control.getAttribute('type') ?? ''} escapes ${boundary.className}`,
+                `${surfaceName}: ${control.tagName.toLowerCase()} ${control.getAttribute('aria-label') ?? control.getAttribute('name') ?? control.getAttribute('type') ?? (control instanceof HTMLInputElement ? control.value : control.textContent?.trim()) ?? ''} ${rectangle.left.toFixed(2)}..${rectangle.right.toFixed(2)} escapes ${boundary.className} ${boundaryRectangle.left.toFixed(2)}..${boundaryRectangle.right.toFixed(2)}`,
               );
             }
           }

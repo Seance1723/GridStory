@@ -15,6 +15,7 @@ import {
   type ComponentManifest,
   type ComponentMigrationPlanResponse,
   type ComponentVisualRegressionPlan,
+  type ContentConnection,
   type ContentEntry,
   type ContentFederationDocument,
   type ContentQualityReport,
@@ -79,6 +80,16 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import { AssetControl, RelationControl, RichTextControl } from './authoring-controls.js';
 import { candidateIssueMessage, createContentCandidate } from './content-authoring.js';
 import {
+  buildContentListQuery,
+  contentListScopeKey,
+  type ContentListViewState,
+  defaultContentListView,
+  loadContentListViews,
+  removeContentListView,
+  type SavedContentListView,
+  saveContentListView,
+} from './content-list.js';
+import {
   addNode,
   type CompositionResult,
   commitComposition,
@@ -139,6 +150,7 @@ type ComponentGovernanceState = {
 
 const studioReadMethods = new Set<string>([
   'listContent',
+  'queryContent',
   'getContent',
   'listRevisions',
   'getContentQuality',
@@ -875,6 +887,8 @@ function AuthorizedStudio({
   const [assetUploading, setAssetUploading] = useState(false);
 
   const [dirty, setDirty] = useState(false);
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
   const [busyState, updateBusy] = useState(true);
   const [pendingWrites, setPendingWrites] = useState(0);
   const pendingWritesRef = useRef(0);
@@ -913,6 +927,21 @@ function AuthorizedStudio({
   );
   const activeContentTypeRef = useRef(activeContentType);
   activeContentTypeRef.current = activeContentType;
+  const [contentListView, setContentListView] =
+    useState<ContentListViewState>(defaultContentListView);
+  const contentListViewRef = useRef(contentListView);
+  contentListViewRef.current = contentListView;
+  const [contentConnection, setContentConnection] = useState<ContentConnection | null>(null);
+  const [contentListLoading, setContentListLoading] = useState(false);
+  const [contentListError, setContentListError] = useState<string | null>(null);
+  const [contentPageCursors, setContentPageCursors] = useState<Array<string | undefined>>([
+    undefined,
+  ]);
+  const [contentPageIndex, setContentPageIndex] = useState(0);
+  const contentListRequestRef = useRef<AbortController | null>(null);
+  const [savedContentViews, setSavedContentViews] = useState<SavedContentListView[]>([]);
+  const [savedContentViewName, setSavedContentViewName] = useState('');
+  const savedContentScopeKey = useMemo(() => contentListScopeKey(context.scope), [context.scope]);
   const studioHistoryRef = useRef<StudioHistory | null>(null);
   const destinationFocusRef = useRef<number | null>(null);
   const transitionRef = useRef<Parameters<typeof createStudioHistory>[1]>(async () => false);
@@ -1205,6 +1234,7 @@ function AuthorizedStudio({
             .find((schema) => schema.id === entry.contentType)
             ?.fields.find((field) => field.type === 'component-tree')?.name;
         setCompositionHistory(createCompositionHistory(compositionFrom(entry, fieldName)));
+        dirtyRef.current = false;
         setDirty(false);
         setEntryUnavailable(false);
         return entry;
@@ -1233,9 +1263,60 @@ function AuthorizedStudio({
     [client, can, setBusy],
   );
 
+  const loadContentPage = useCallback(
+    async (input: {
+      contentType: string;
+      schema: ContentSchemaDefinition;
+      view: ContentListViewState;
+      after?: string;
+      signal?: AbortSignal;
+    }): Promise<ContentConnection | null> => {
+      contentListRequestRef.current?.abort();
+      const controller = new AbortController();
+      contentListRequestRef.current = controller;
+      const cancel = () => controller.abort();
+      input.signal?.addEventListener('abort', cancel, { once: true });
+      setContentListLoading(true);
+      setContentListError(null);
+      try {
+        const result = await client.queryContent(
+          buildContentListQuery({
+            contentType: input.contentType,
+            schema: input.schema,
+            view: input.view,
+            ...(input.after ? { after: input.after } : {}),
+          }),
+          controller.signal,
+        );
+        if (controller.signal.aborted || contentListRequestRef.current !== controller) return null;
+        setEntries(result.nodes);
+        setContentConnection(result);
+        return result;
+      } catch (error) {
+        if (!controller.signal.aborted) setContentListError(messageFrom(error));
+        return null;
+      } finally {
+        input.signal?.removeEventListener('abort', cancel);
+        if (contentListRequestRef.current === controller) {
+          contentListRequestRef.current = null;
+          setContentListLoading(false);
+        }
+      }
+    },
+    [client],
+  );
+
   const refreshList = useCallback(
     async (preferredId?: string, contentType = activeContentTypeRef.current) => {
-      const result = await client.listContent({ contentType, perspective: 'draft' });
+      const schema = schemasRef.current.find((candidate) => candidate.id === contentType);
+      if (!schema) return;
+      const view = defaultContentListView;
+      setContentListView(view);
+      setContentPageCursors([undefined]);
+      setContentPageIndex(0);
+      const connection = await loadContentPage({ contentType, schema, view });
+      if (!connection) return;
+      const result = connection.nodes;
       activeContentTypeRef.current = contentType;
       setActiveContentType(contentType);
       setEntries(result);
@@ -1257,7 +1338,7 @@ function AuthorizedStudio({
         }
       } else setBusy(false);
     },
-    [client, schemas, selectEntry, selected?.id, setBusy],
+    [loadContentPage, schemas, selectEntry, selected?.id, setBusy],
   );
 
   useEffect(() => {
@@ -1272,6 +1353,7 @@ function AuthorizedStudio({
       history.dispose();
       studioHistoryRef.current = null;
       entryReadRef.current?.abort();
+      contentListRequestRef.current?.abort();
       if (destinationFocusRef.current !== null) cancelAnimationFrame(destinationFocusRef.current);
       destinationFocusRef.current = null;
     };
@@ -1292,8 +1374,16 @@ function AuthorizedStudio({
       destination === 'pages' ? 'page' : initialLocationRef.current.location.type;
     Promise.all([
       requestedType && (requestedType === 'page' ? can('pages.list') : can('content.read'))
-        ? client.listContent({ contentType: requestedType, signal: controller.signal })
-        : Promise.resolve([]),
+        ? client.queryContent(
+            {
+              contentType: requestedType,
+              perspective: 'draft',
+              first: 10,
+              sort: [{ path: 'updatedAt', direction: 'desc' }],
+            },
+            controller.signal,
+          )
+        : Promise.resolve(null),
       can('component.read') ? client.getComponentManifests(controller.signal) : Promise.resolve([]),
       can('schema.read') ? client.getSchemas(controller.signal) : Promise.resolve([]),
       can('component.read') ? client.getDesignSystem(controller.signal) : Promise.resolve(null),
@@ -1303,7 +1393,7 @@ function AuthorizedStudio({
     ])
       .then(
         async ([
-          entryList,
+          entryConnection,
           manifestList,
           schemaList,
           designSystemManifest,
@@ -1330,16 +1420,31 @@ function AuthorizedStudio({
                       (requestedType === undefined || schema.id === requestedType),
                   )?.id ?? schemaList.find((schema) => schema.id !== 'page')?.id)
                 : (schemaList.find((schema) => schema.id === requestedType)?.id ?? 'page');
-          let contentEntries =
-            contentType && requestedType === contentType
-              ? entryList
-              : contentType && (contentType === 'page' ? can('pages.list') : can('content.read'))
-                ? await client.listContent({ contentType, signal: controller.signal })
-                : [];
-          if (!contentType) contentEntries = [];
+          let initialConnection =
+            contentType && requestedType === contentType ? entryConnection : null;
+          if (
+            !initialConnection &&
+            contentType &&
+            (contentType === 'page' ? can('pages.list') : can('content.read'))
+          ) {
+            initialConnection = await client.queryContent(
+              {
+                contentType,
+                perspective: 'draft',
+                first: 10,
+                sort: [{ path: 'updatedAt', direction: 'desc' }],
+              },
+              controller.signal,
+            );
+          }
+          const contentEntries = initialConnection?.nodes ?? [];
           activeContentTypeRef.current = contentType ?? 'page';
           setActiveContentType(contentType ?? 'page');
           setEntries(contentEntries);
+          setContentConnection(initialConnection);
+          setContentListView(defaultContentListView);
+          setContentPageCursors([undefined]);
+          setContentPageIndex(0);
           const target = resetEntryContext
             ? undefined
             : (initialLocationRef.current.location.entryId ?? contentEntries[0]?.id);
@@ -1438,6 +1543,10 @@ function AuthorizedStudio({
     () => schemas.find((schema) => schema.id === (selected?.contentType ?? activeContentType)),
     [activeContentType, schemas, selected?.contentType],
   );
+  const activeListSchema = useMemo(
+    () => schemas.find((schema) => schema.id === activeContentType),
+    [activeContentType, schemas],
+  );
   const activeContentLabel =
     activeSchema?.name ?? (activeContentType === 'page' ? 'Page' : 'Entry');
   const activeContentNoun = activeContentLabel.toLowerCase();
@@ -1445,6 +1554,79 @@ function AuthorizedStudio({
     () => schemas.filter((schema) => schema.id !== 'page'),
     [schemas],
   );
+
+  useEffect(() => {
+    try {
+      setSavedContentViews(
+        loadContentListViews(window.localStorage, savedContentScopeKey, activeContentType),
+      );
+    } catch {
+      setSavedContentViews([]);
+    }
+  }, [activeContentType, savedContentScopeKey]);
+
+  const applyContentListView = async (view = contentListView) => {
+    if (!activeListSchema) return;
+    const result = await loadContentPage({
+      contentType: activeContentType,
+      schema: activeListSchema,
+      view,
+    });
+    if (!result) return;
+    setContentListView(view);
+    setContentPageCursors([undefined]);
+    setContentPageIndex(0);
+  };
+
+  const openContentListPage = async (index: number, after?: string) => {
+    if (!activeListSchema) return;
+    const result = await loadContentPage({
+      contentType: activeContentType,
+      schema: activeListSchema,
+      view: contentListView,
+      ...(after ? { after } : {}),
+    });
+    if (!result) return;
+    setContentPageIndex(index);
+    setContentPageCursors((current) => {
+      const next = current.slice(0, index + 1);
+      next[index] = after;
+      if (result.pageInfo.hasNextPage && result.pageInfo.endCursor)
+        next[index + 1] = result.pageInfo.endCursor;
+      return next;
+    });
+  };
+
+  const saveCurrentContentView = () => {
+    const name = savedContentViewName.trim();
+    if (!name) return;
+    try {
+      setSavedContentViews(
+        saveContentListView(window.localStorage, savedContentScopeKey, {
+          name,
+          contentType: activeContentType,
+          ...contentListView,
+        }),
+      );
+      setSavedContentViewName('');
+      setNotice({ tone: 'success', message: `Saved local view “${name}”.` });
+    } catch {
+      setNotice({ tone: 'error', message: 'This browser could not save the local content view.' });
+    }
+  };
+
+  const deleteContentView = (id: string) => {
+    try {
+      setSavedContentViews(
+        removeContentListView(window.localStorage, savedContentScopeKey, id, activeContentType),
+      );
+    } catch {
+      setNotice({
+        tone: 'error',
+        message: 'This browser could not remove the local content view.',
+      });
+    }
+  };
   const authoringEntries = useMemo(
     () =>
       [...entries, ...relationEntries].filter(
@@ -1621,6 +1803,7 @@ function AuthorizedStudio({
   const changeDraft = (updater: (current: EditableContent) => EditableContent) => {
     if (!can('content.draft.update')) return;
     setDraft((current) => (current ? updater(current) : current));
+    dirtyRef.current = true;
     setDirty(true);
     setQualityReport(null);
     setNotice(null);
@@ -1953,7 +2136,7 @@ function AuthorizedStudio({
 
   const confirmEntryChange = (id: string | undefined) =>
     id === selectedRef.current?.id ||
-    !dirty ||
+    !dirtyRef.current ||
     window.confirm('Discard the unsaved changes and open another content entry?');
 
   const createEntry = async () =>
@@ -2000,6 +2183,7 @@ function AuthorizedStudio({
         );
         if (can('content.history.read')) setRevisions(await client.listRevisions(updated.id));
         if (can('workflow.read')) setWorkflowInstance(await client.getContentWorkflow(updated.id));
+        dirtyRef.current = false;
         setDirty(false);
         setNotice({ tone: 'success', message: 'Draft saved as a new immutable revision.' });
         return updated;
@@ -4101,7 +4285,7 @@ function AuthorizedStudio({
 
   const migrateComponentEntry = async (entryId: string, componentId: string, revisionId: string) =>
     trackEntryMutation(async () => {
-      if (dirty && selected?.id === entryId) {
+      if (dirtyRef.current && selected?.id === entryId) {
         setNotice({
           tone: 'error',
           message: 'Save or discard local edits before migrating this entry.',
@@ -4445,11 +4629,23 @@ function AuthorizedStudio({
       }
       if (!confirmEntryChange(undefined)) return false;
       await stopPreviewRef.current();
-      scopedEntries = await client.listContent({ contentType: requestedType, signal });
+      const requestedSchema = schemasRef.current.find((schema) => schema.id === requestedType);
+      if (!requestedSchema) return false;
+      const nextView = defaultContentListView;
+      const connection = await loadContentPage({
+        contentType: requestedType,
+        schema: requestedSchema,
+        view: nextView,
+        signal,
+      });
+      if (!connection) return false;
+      scopedEntries = connection.nodes;
       if (signal.aborted) return false;
       activeContentTypeRef.current = requestedType;
       setActiveContentType(requestedType);
-      setEntries(scopedEntries);
+      setContentListView(nextView);
+      setContentPageCursors([undefined]);
+      setContentPageIndex(0);
     }
     const entryId = invalid
       ? selectedRef.current?.id
@@ -8618,28 +8814,220 @@ function AuthorizedStudio({
                     </select>
                   </label>
                 ) : null}
-                <nav>
-                  {entries.map((entry) => (
-                    <button
-                      data-required-operations="content.read schema.read"
-                      disabled={!can('content.read', 'schema.read')}
-                      type="button"
-                      className={`entry-card ${selected?.id === entry.id ? 'entry-card--active' : ''}`}
-                      key={entry.id}
-                      onClick={() => requestSelectEntry(entry.id, entry.contentType)}
+                {activeListSchema ? (
+                  <>
+                    <form
+                      className="content-list-controls"
+                      aria-label={`${activeContentLabel} list controls`}
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        void applyContentListView();
+                      }}
                     >
-                      <span className="entry-card__title">{entryTitle(entry, schemas)}</span>
-                      <span className="entry-card__meta">/{entrySlug(entry, schemas)}</span>
-                      <span className={`status status--${entry.status}`}>{entry.status}</span>
-                    </button>
-                  ))}
-                </nav>
-                {entries.length === 0 && !busy ? (
-                  <p className="empty-copy">
-                    {(activeContentType === 'page' ? can('pages.create') : can('content.create'))
-                      ? `No ${activeSchema?.collection ?? 'entries'} yet. Create the first one.`
-                      : `No ${activeSchema?.collection ?? 'entries'} are available.`}
+                      <label className="gs-field content-list-search">
+                        <span>Search title or slug</span>
+                        <input
+                          type="search"
+                          value={contentListView.search}
+                          onChange={(event) =>
+                            setContentListView((current) => ({
+                              ...current,
+                              search: event.target.value,
+                            }))
+                          }
+                        />
+                      </label>
+                      <div className="content-list-filter-row">
+                        <label className="gs-field">
+                          <span>Status</span>
+                          <select
+                            value={contentListView.status}
+                            onChange={(event) =>
+                              setContentListView((current) => ({
+                                ...current,
+                                status: event.target.value as ContentListViewState['status'],
+                              }))
+                            }
+                          >
+                            <option value="all">Any status</option>
+                            <option value="draft">Draft</option>
+                            <option value="changed">Changed</option>
+                            <option value="published">Published</option>
+                          </select>
+                        </label>
+                        <label className="gs-field">
+                          <span>Sort</span>
+                          <select
+                            value={contentListView.sort}
+                            onChange={(event) =>
+                              setContentListView((current) => ({
+                                ...current,
+                                sort: event.target.value as ContentListViewState['sort'],
+                              }))
+                            }
+                          >
+                            <option value="updated-desc">Recently updated</option>
+                            <option value="updated-asc">Oldest updated</option>
+                            <option value="title-asc">Title A–Z</option>
+                            <option value="title-desc">Title Z–A</option>
+                          </select>
+                        </label>
+                      </div>
+                      <button
+                        className="button button--secondary button--compact"
+                        type="submit"
+                        disabled={contentListLoading || !activeListSchema}
+                      >
+                        Apply list view
+                      </button>
+                    </form>
+                    <details className="content-saved-views">
+                      <summary>Local saved views ({savedContentViews.length})</summary>
+                      <div className="content-saved-view-create">
+                        <label className="gs-field">
+                          <span>View name</span>
+                          <input
+                            value={savedContentViewName}
+                            maxLength={80}
+                            onChange={(event) => setSavedContentViewName(event.target.value)}
+                          />
+                        </label>
+                        <button
+                          className="button button--secondary button--compact"
+                          type="button"
+                          disabled={!savedContentViewName.trim()}
+                          onClick={saveCurrentContentView}
+                        >
+                          Save view
+                        </button>
+                      </div>
+                      {savedContentViews.length ? (
+                        <ul>
+                          {savedContentViews.map((view) => (
+                            <li key={view.id}>
+                              <button
+                                className="text-button"
+                                type="button"
+                                onClick={() => void applyContentListView(view)}
+                              >
+                                {view.name}
+                              </button>
+                              <button
+                                className="text-button text-button--danger"
+                                type="button"
+                                aria-label={`Delete ${view.name} view`}
+                                onClick={() => deleteContentView(view.id)}
+                              >
+                                Delete
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="empty-copy">
+                          No views saved in this browser and site context.
+                        </p>
+                      )}
+                    </details>
+                  </>
+                ) : null}
+                {contentListLoading ? (
+                  <p className="content-list-state" role="status">
+                    Loading {activeSchema?.collection ?? 'entries'}…
                   </p>
+                ) : null}
+                {contentListError ? (
+                  <div className="content-list-state notice notice--error" role="alert">
+                    <p>{contentListError}</p>
+                    <button
+                      type="button"
+                      className="button button--secondary button--compact"
+                      onClick={() => void applyContentListView()}
+                    >
+                      Retry list
+                    </button>
+                  </div>
+                ) : null}
+                <section className="content-list-table-scroll" aria-label="Content results">
+                  <table className="content-list-table">
+                    <thead>
+                      <tr>
+                        <th scope="col">Entry</th>
+                        <th scope="col">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {entries.map((entry) => (
+                        <tr
+                          className={selected?.id === entry.id ? 'entry-card--active' : ''}
+                          key={entry.id}
+                        >
+                          <td>
+                            <button
+                              data-required-operations="content.read schema.read"
+                              disabled={!can('content.read', 'schema.read')}
+                              type="button"
+                              className="entry-card"
+                              aria-current={selected?.id === entry.id ? 'true' : undefined}
+                              onClick={() => requestSelectEntry(entry.id, entry.contentType)}
+                            >
+                              <span className="entry-card__title">
+                                {entryTitle(entry, schemas)}
+                              </span>
+                              <span className="entry-card__meta">/{entrySlug(entry, schemas)}</span>
+                            </button>
+                          </td>
+                          <td>
+                            <span className={`status status--${entry.status}`}>{entry.status}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </section>
+                {entries.length === 0 && !contentListLoading && !contentListError ? (
+                  <p className="empty-copy">
+                    {contentListView.search || contentListView.status !== 'all'
+                      ? 'No entries match this list view.'
+                      : (activeContentType === 'page' ? can('pages.create') : can('content.create'))
+                        ? `No ${activeSchema?.collection ?? 'entries'} yet. Create the first one.`
+                        : `No ${activeSchema?.collection ?? 'entries'} are available.`}
+                  </p>
+                ) : null}
+                {contentConnection ? (
+                  <nav className="content-list-pagination" aria-label="Content list pagination">
+                    <span>
+                      Showing {contentConnection.nodes.length} of {contentConnection.totalCount}
+                    </span>
+                    <div>
+                      <button
+                        type="button"
+                        className="button button--secondary button--compact"
+                        disabled={contentListLoading || contentPageIndex === 0}
+                        onClick={() =>
+                          void openContentListPage(
+                            contentPageIndex - 1,
+                            contentPageCursors[contentPageIndex - 1],
+                          )
+                        }
+                      >
+                        Previous
+                      </button>
+                      <button
+                        type="button"
+                        className="button button--secondary button--compact"
+                        disabled={contentListLoading || !contentConnection.pageInfo.hasNextPage}
+                        onClick={() =>
+                          void openContentListPage(
+                            contentPageIndex + 1,
+                            contentConnection.pageInfo.endCursor ?? undefined,
+                          )
+                        }
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </nav>
                 ) : null}
               </aside>
 

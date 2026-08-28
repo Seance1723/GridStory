@@ -229,6 +229,15 @@
   color: #fdba74;
 }
 
+.studio-shell.studio-shell[data-theme="dark"] .content-list-table tr:hover td,
+.studio-shell.studio-shell[data-theme="dark"] .content-list-table tr.entry-card--active td {
+  background: var(--studio-primary-soft);
+}
+
+.studio-shell.studio-shell[data-theme="dark"] .content-list-table tr.entry-card--active td {
+  border-color: var(--studio-primary);
+}
+
 .studio-shell.studio-shell[data-theme="dark"]
   :where(
     [role="note"],

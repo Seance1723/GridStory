@@ -135,9 +135,17 @@ test('real viewer context gates every permitted screen and operation without den
         expect(control.disabled, `${destination}: ${control.operations.join(', ')}`).toBe(true);
     }
   }
-  expect(requests.filter(({ method }) => method !== 'GET')).toEqual([
+  const readOnlyPosts = requests.filter(({ method }) => method !== 'GET');
+  expect(readOnlyPosts.filter(({ path }) => path === '/api/v1/search')).toEqual([
     { method: 'POST', path: '/api/v1/search' },
   ]);
+  expect(readOnlyPosts.some(({ path }) => path === '/api/v1/content/query')).toBe(true);
+  expect(
+    readOnlyPosts.every(
+      ({ method, path }) =>
+        method === 'POST' && (path === '/api/v1/content/query' || path === '/api/v1/search'),
+    ),
+  ).toBe(true);
   expect(failed).toEqual([]);
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByRole('button', { name: 'Toggle navigation' })).toBeVisible();
