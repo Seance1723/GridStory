@@ -72,6 +72,7 @@ import type {
   PropDefinition,
   SignedPluginManifest,
   StudioOperation,
+  StudioScopeSelection,
   WorkflowActionDefinition,
 } from '@gridstory/schema';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -102,14 +103,22 @@ import {
   studioNavigationGroups,
 } from './navigation.js';
 import { createStudioHistory, type StudioHistory } from './studio-history.js';
+import { StudioContextControls } from './studio-context-controls.js';
 import { parseStudioLocation, type StudioLocation } from './studio-location.js';
-import { permits } from './studio-capabilities.js';
+import { permits, studioMethodOperations } from './studio-capabilities.js';
 import { StudioSession, type StudioSessionView } from './studio-session.js';
 
 const defaultClient = createGridStoryClient({
   baseUrl: import.meta.env.VITE_GRIDSTORY_API_URL ?? 'http://localhost:4000',
   tenantId: import.meta.env.VITE_GRIDSTORY_TENANT ?? 'default',
   actorId: import.meta.env.VITE_GRIDSTORY_ACTOR_ID ?? 'studio-local-admin',
+  scope: {
+    organizationId: import.meta.env.VITE_GRIDSTORY_ORGANIZATION ?? 'local',
+    workspaceId: import.meta.env.VITE_GRIDSTORY_WORKSPACE ?? 'default',
+    siteId: import.meta.env.VITE_GRIDSTORY_SITE ?? 'default',
+    environmentId: import.meta.env.VITE_GRIDSTORY_ENVIRONMENT ?? 'development',
+    locale: import.meta.env.VITE_GRIDSTORY_LOCALE ?? 'en',
+  },
   developmentIdentityHeaders: import.meta.env.VITE_GRIDSTORY_IDENTITY_MODE !== 'production',
 });
 
@@ -126,6 +135,82 @@ type ComponentGovernanceState = {
   migration: ComponentMigrationPlanResponse;
   visual: ComponentVisualRegressionPlan;
 };
+
+const studioReadMethods = new Set<string>([
+  'listContent',
+  'getContent',
+  'listRevisions',
+  'getContentQuality',
+  'getSchemas',
+  'getComponentManifests',
+  'getDesignSystem',
+  'getComponentMigration',
+  'getComponentVisualRegression',
+  'listAssets',
+  'getAssetUsage',
+  'getCollaboration',
+  'listWorkflows',
+  'getContentWorkflow',
+  'listWorkflowActions',
+  'listReleases',
+  'previewRelease',
+  'search',
+  'listTaxonomies',
+  'getSearchIndexStatus',
+  'listBacklinks',
+  'listRelatedContent',
+  'getOperationsDashboard',
+  'getAnalyticsReport',
+  'getIdentity',
+  'getGovernance',
+  'getMigrations',
+  'getMarketplace',
+  'getPersonalization',
+  'previewPersonalization',
+  'getExperiments',
+  'getAiGateway',
+  'getAiAuthoring',
+  'semanticAiSearch',
+  'getRegionalTopology',
+  'getContentFederation',
+  'exploreKnowledgeGraph',
+  'listKnowledgeRecommendations',
+  'getKnowledgeAgent',
+  'getFleet',
+  // Preview has its own grant-settlement and strict cleanup barrier.
+  'createPreviewSession',
+  'revokePreviewSession',
+]);
+
+function trackStudioManagementMutations(
+  client: GridStoryClient,
+  update: (delta: 1 | -1) => void,
+): GridStoryClient {
+  const methods = new Map<string, unknown>();
+  return new Proxy(client, {
+    get(target, property) {
+      if (typeof property !== 'string') return Reflect.get(target, property);
+      if (methods.has(property)) return methods.get(property);
+      const value = Reflect.get(target, property);
+      if (
+        typeof value !== 'function' ||
+        studioReadMethods.has(property) ||
+        !(property in studioMethodOperations)
+      )
+        return value;
+      const tracked = async (...args: unknown[]) => {
+        update(1);
+        try {
+          return await Reflect.apply(value, target, args);
+        } finally {
+          update(-1);
+        }
+      };
+      methods.set(property, tracked);
+      return tracked;
+    },
+  });
+}
 
 const defaultPersonalizationPreview = JSON.stringify(
   {
@@ -765,11 +850,24 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
 }
 
 function AuthorizedStudio({
-  client,
+  client: authorizedClient,
   context,
   active,
+  resetEntryContext,
+  transitioning: scopeTransitioning,
+  transitionScope,
   cleanupClient,
 }: StudioSessionView): ReactNode {
+  const [pendingManagementMutations, setPendingManagementMutations] = useState(0);
+  const pendingManagementMutationsRef = useRef(0);
+  const updatePendingManagementMutations = useCallback((delta: 1 | -1) => {
+    pendingManagementMutationsRef.current += delta;
+    setPendingManagementMutations(pendingManagementMutationsRef.current);
+  }, []);
+  const client = useMemo(
+    () => trackStudioManagementMutations(authorizedClient, updatePendingManagementMutations),
+    [authorizedClient, updatePendingManagementMutations],
+  );
   const capabilities = context.capabilities;
   const can = useCallback(
     (...operations: StudioOperation[]) => active && permits(capabilities, ...operations),
@@ -793,7 +891,8 @@ function AuthorizedStudio({
   const [busyState, updateBusy] = useState(true);
   const [pendingWrites, setPendingWrites] = useState(0);
   const pendingWritesRef = useRef(0);
-  const busy = busyState || pendingWrites > 0;
+  const busy =
+    busyState || pendingWrites > 0 || pendingManagementMutations > 0 || scopeTransitioning;
   const trackEntryMutation = async <T,>(operation: () => Promise<T>): Promise<T> => {
     pendingWritesRef.current += 1;
     setPendingWrites(pendingWritesRef.current);
@@ -840,6 +939,7 @@ function AuthorizedStudio({
     () => typeof window !== 'undefined' && window.innerWidth <= 900,
   );
   const [notice, setNotice] = useState<Notice>(null);
+  const [featureDraftDirty, setFeatureDraftDirty] = useState(false);
   const [qualityReport, setQualityReport] = useState<ContentQualityReport | null>(null);
   const [fatalError, setFatalError] = useState<string | null>(null);
   const [responsiveBreakpoint, setResponsiveBreakpoint] = useState('desktop');
@@ -847,6 +947,7 @@ function AuthorizedStudio({
   const previewControllerRef = useRef<GridStoryPreviewController | null>(null);
   const previewGrantRef = useRef<PreviewSessionGrant | null>(null);
   const previewPopupRef = useRef<Window | null>(null);
+  const previewStartRef = useRef<Promise<void> | null>(null);
   const lastPreviewSlugRef = useRef<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
   const [featurePending, setFeaturePending] = useState(false);
@@ -1208,7 +1309,9 @@ function AuthorizedStudio({
           setWorkflowDefinitions(workflowList);
           setReleases(releaseList);
           setActiveReleaseId(releaseList[0]?.id ?? null);
-          const target = initialLocationRef.current.location.entryId ?? entryList[0]?.id;
+          const target = resetEntryContext
+            ? undefined
+            : (initialLocationRef.current.location.entryId ?? entryList[0]?.id);
           let entry: ContentEntry | null = null;
           const destination = defaultLocationRef.current
             ? (firstDestination ?? 'pages')
@@ -1220,11 +1323,13 @@ function AuthorizedStudio({
             entry = await selectEntry(target, fieldName, controller.signal);
           } else setBusy(false);
           if (controller.signal.aborted) return;
-          const location: StudioLocation = {
-            ...initialLocationRef.current.location,
-            destination,
-            ...(entry ? { entryId: entry.id, type: 'page' as const } : {}),
-          };
+          const location: StudioLocation = resetEntryContext
+            ? { destination }
+            : {
+                ...initialLocationRef.current.location,
+                destination,
+                ...(entry ? { entryId: entry.id, type: 'page' as const } : {}),
+              };
           acceptedLocationRef.current = location;
           studioHistoryRef.current?.replace(location);
           setActiveStudioDestination(location.destination);
@@ -1251,19 +1356,20 @@ function AuthorizedStudio({
     capabilities,
     client,
     firstDestination,
+    resetEntryContext,
     reloadToken,
     selectEntry,
     setBusy,
   ]);
 
   useEffect(() => {
-    if (!dirty) return;
+    if (!dirty && !featureDraftDirty && !personalizationConfigurationDirty) return;
     const beforeUnload = (event: BeforeUnloadEvent) => {
       event.preventDefault();
     };
     window.addEventListener('beforeunload', beforeUnload);
     return () => window.removeEventListener('beforeunload', beforeUnload);
-  }, [dirty]);
+  }, [dirty, featureDraftDirty, personalizationConfigurationDirty]);
 
   const manifestById = useMemo(
     () => new Map(manifests.map((manifest) => [manifest.id, manifest])),
@@ -3926,29 +4032,38 @@ function AuthorizedStudio({
   const slugField = activeSchema?.fields.find((field) => field.type === 'slug');
   const previewSlug = String(draft?.[slugField?.name ?? 'slug'] ?? 'preview');
 
-  const closeExternalPreview = useCallback(async () => {
-    previewGenerationRef.current += 1;
-    previewControllerRef.current?.dispose();
-    previewControllerRef.current = null;
-    const grant = previewGrantRef.current;
-    previewGrantRef.current = null;
-    lastPreviewSlugRef.current = null;
-    const popup = previewPopupRef.current;
-    previewPopupRef.current = null;
-    if (popup && !popup.closed) popup.close();
-    setExternalPreview(null);
-    if (grant) {
-      try {
+  const cleanupExternalPreview = useCallback(
+    async (waitForPendingGrant = true) => {
+      previewGenerationRef.current += 1;
+      previewControllerRef.current?.dispose();
+      previewControllerRef.current = null;
+      lastPreviewSlugRef.current = null;
+      const popup = previewPopupRef.current;
+      previewPopupRef.current = null;
+      if (popup && !popup.closed) popup.close();
+      setExternalPreview(null);
+      const pending = previewStartRef.current;
+      if (waitForPendingGrant && pending) await pending;
+      const grant = previewGrantRef.current;
+      if (grant) {
         await cleanupClient.revokePreviewSession(grant.sessionId);
-      } catch (error) {
-        if (mountedRef.current)
-          setNotice({
-            tone: 'error',
-            message: `The preview window was closed, but session revocation failed: ${messageFrom(error)}`,
-          });
+        if (previewGrantRef.current?.sessionId === grant.sessionId) previewGrantRef.current = null;
       }
+    },
+    [cleanupClient],
+  );
+
+  const closeExternalPreview = useCallback(async () => {
+    try {
+      await cleanupExternalPreview();
+    } catch (error) {
+      if (mountedRef.current)
+        setNotice({
+          tone: 'error',
+          message: `The unused preview session could not be revoked after the preview window closed: ${messageFrom(error)}`,
+        });
     }
-  }, [cleanupClient]);
+  }, [cleanupExternalPreview]);
   stopPreviewRef.current = closeExternalPreview;
 
   const connectPreviewTarget = useCallback((targetWindow: Window, grant: PreviewSessionGrant) => {
@@ -3993,7 +4108,14 @@ function AuthorizedStudio({
       setNotice({ tone: 'error', message: 'The standalone preview popup was blocked.' });
       return;
     }
-    void closeExternalPreview();
+    try {
+      await cleanupExternalPreview(false);
+    } catch (error) {
+      popup.close();
+      if (mountedRef.current)
+        setNotice({ tone: 'error', message: `Preview cleanup failed: ${messageFrom(error)}` });
+      return;
+    }
     const generation = previewGenerationRef.current;
     const entryId = selected.id;
     previewPopupRef.current = popup;
@@ -4012,8 +4134,11 @@ function AuthorizedStudio({
         popup.closed
       ) {
         if (!popup.closed) popup.close();
+        previewGrantRef.current = grant;
         try {
           await cleanupClient.revokePreviewSession(grant.sessionId);
+          if (previewGrantRef.current?.sessionId === grant.sessionId)
+            previewGrantRef.current = null;
         } catch (error) {
           if (mountedRef.current)
             setNotice({
@@ -4033,6 +4158,14 @@ function AuthorizedStudio({
       if (mountedRef.current && generation === previewGenerationRef.current)
         setNotice({ tone: 'error', message: messageFrom(error) });
     }
+  };
+
+  const beginExternalPreview = () => {
+    const pending = startExternalPreview();
+    previewStartRef.current = pending;
+    void pending.finally(() => {
+      if (previewStartRef.current === pending) previewStartRef.current = null;
+    });
   };
 
   useEffect(() => {
@@ -4085,6 +4218,54 @@ function AuthorizedStudio({
   useEffect(() => {
     if (!active) void closeExternalPreview();
   }, [active, closeExternalPreview]);
+
+  const managementActivity =
+    busyRef.current ||
+    pendingWritesRef.current > 0 ||
+    pendingManagementMutationsRef.current > 0 ||
+    assetUploading ||
+    featurePending ||
+    searchBusy ||
+    federationBusy ||
+    regionalBusy ||
+    aiBusy ||
+    knowledgeBusy ||
+    fleetBusy;
+  const switchStudioContext = async (selection: StudioScopeSelection) => {
+    if (scopeTransitioning) return;
+    if (managementActivity) {
+      setNotice({
+        tone: 'info',
+        message: 'Wait for the current Studio operation to finish before switching context.',
+      });
+      return;
+    }
+    if (
+      (dirty || featureDraftDirty || personalizationConfigurationDirty) &&
+      !window.confirm(
+        'Discard unsaved entry and management-form changes before switching Studio context?',
+      )
+    )
+      return;
+    try {
+      await transitionScope(selection, {
+        cleanup: () => cleanupExternalPreview(true),
+        beforeCommit: () => {
+          const destination = capabilities.screens[activeStudioDestination]
+            ? activeStudioDestination
+            : (firstDestination ?? 'pages');
+          acceptedLocationRef.current = { destination };
+          studioHistoryRef.current?.reset({ destination });
+        },
+      });
+    } catch (error) {
+      if ((error as { name?: string }).name === 'AbortError') return;
+      setNotice({
+        tone: 'error',
+        message: `Studio context was not changed: ${messageFrom(error)}`,
+      });
+    }
+  };
 
   const activateDestination = (destination: StudioDestination) => {
     if (destinationFocusRef.current !== null) cancelAnimationFrame(destinationFocusRef.current);
@@ -4443,6 +4624,12 @@ function AuthorizedStudio({
               </>
             ) : null}
           </div>
+          <StudioContextControls
+            context={context}
+            disabled={managementActivity}
+            transitioning={scopeTransitioning}
+            onCommit={switchStudioContext}
+          />
           <div className="header-actions">
             <span className={`save-state ${dirty ? 'save-state--dirty' : ''}`}>
               <span aria-hidden="true" />
@@ -4462,9 +4649,10 @@ function AuthorizedStudio({
                   : 'Open live preview in new window'
               }
               onClick={() =>
-                void (externalPreview ? closeExternalPreview() : startExternalPreview())
+                void (externalPreview ? closeExternalPreview() : beginExternalPreview())
               }
               disabled={
+                scopeTransitioning ||
                 !can('preview.manage') ||
                 (!externalPreview && (!selected || !draft || entryLoading))
               }
@@ -4518,7 +4706,27 @@ function AuthorizedStudio({
             </span>
           </div>
         </header>
-        <div className="studio-page" id="studio-content" tabIndex={-1}>
+        <div
+          className="studio-page"
+          id="studio-content"
+          tabIndex={-1}
+          inert={scopeTransitioning}
+          onChangeCapture={(event) => {
+            if (
+              !visibleDestination ||
+              visibleDestination === 'pages' ||
+              visibleDestination === 'search'
+            )
+              return;
+            const target = event.target;
+            if (
+              target instanceof HTMLInputElement ||
+              target instanceof HTMLTextAreaElement ||
+              target instanceof HTMLSelectElement
+            )
+              setFeatureDraftDirty(true);
+          }}
+        >
           {visibleDestination !== 'pages' && !bootstrapped ? (
             <div className="loading-state" role={fatalError ? 'alert' : 'status'}>
               <p>
@@ -5384,7 +5592,8 @@ function AuthorizedStudio({
                 </div>
                 <div>
                   <strong>Backlinks to selected entry</strong>
-                  <ul>
+                  {/* biome-ignore lint/a11y/noNoninteractiveTabindex: Safari keyboard users need a focus target when this bounded text list scrolls. */}
+                  <ul aria-label="Backlinks to selected entry" tabIndex={0}>
                     {backlinks.map((backlink) => (
                       <li key={backlink.source.id}>{entryTitle(backlink.source, schemas)}</li>
                     ))}
@@ -5393,7 +5602,8 @@ function AuthorizedStudio({
                 </div>
                 <div>
                   <strong>Related content</strong>
-                  <ul>
+                  {/* biome-ignore lint/a11y/noNoninteractiveTabindex: Safari keyboard users need a focus target when this bounded text list scrolls. */}
+                  <ul aria-label="Related content" tabIndex={0}>
                     {relatedContent.map((related) => (
                       <li key={related.entry.id}>
                         {entryTitle(related.entry, schemas)} · {related.reasons.join(', ')}

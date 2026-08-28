@@ -36,6 +36,56 @@ function fixture() {
   vi.spyOn(client, 'listAssets').mockResolvedValue([]);
   return { client, read };
 }
+function scopedContext(siteId = 'default'): StudioContext {
+  const scope = {
+    ...context().scope,
+    siteId,
+    environmentId: siteId === 'campaign' ? 'preview' : 'development',
+    locale: siteId === 'campaign' ? 'fr' : 'en',
+  };
+  return {
+    ...context(),
+    scope,
+    selection: {
+      mode: 'configured',
+      choices: [
+        {
+          scope: context().scope,
+          labels: { site: 'Default', environment: 'Development', locale: 'English' },
+        },
+        {
+          scope: { ...context().scope, siteId: 'campaign', environmentId: 'preview', locale: 'fr' },
+          labels: { site: 'Campaign', environment: 'Preview', locale: 'French' },
+        },
+      ],
+    },
+  };
+}
+function scopedFixture(
+  alternate: () => Promise<StudioContext> = async () => scopedContext('campaign'),
+) {
+  const requests: Array<{ url: string; headers: Headers }> = [];
+  const client = createGridStoryClient({
+    baseUrl: 'http://unit.test',
+    tenantId: 'default',
+    developmentIdentityHeaders: true,
+    fetch: async (input, init) => {
+      const headers = new Headers(init?.headers);
+      requests.push({ url: String(input), headers });
+      if (String(input).endsWith('/api/v1/studio/context')) {
+        const value =
+          headers.get('x-gridstory-site') === 'campaign' ? await alternate() : scopedContext();
+        return Response.json(value);
+      }
+      if (String(input).endsWith('/api/v1/assets')) return Response.json([]);
+      return Response.json(
+        { error: { code: 'not_found', message: 'Not found.' } },
+        { status: 404 },
+      );
+    },
+  });
+  return { client, requests };
+}
 function Probe({ client, active }: StudioSessionView) {
   const [draft, setDraft] = useState('saved');
   return (
@@ -63,6 +113,107 @@ afterEach(() => {
 });
 
 describe('Studio session lifetime', () => {
+  it('validates an allowed complete tuple, cleans the old lifetime, and invalidates old callbacks', async () => {
+    const { client, requests } = scopedFixture();
+    const cleanupLifetime = vi.fn(async () => undefined);
+    const beforeCommit = vi.fn();
+    let captured: StudioSessionView | undefined;
+    render(
+      <StudioSession client={client}>
+        {(view) => {
+          captured = view;
+          return <Probe {...view} />;
+        }}
+      </StudioSession>,
+    );
+    fireEvent.change(await screen.findByRole('textbox'), { target: { value: 'old scope draft' } });
+    const oldClient = captured?.client;
+    await act(async () =>
+      captured?.transitionScope(
+        { siteId: 'campaign', environmentId: 'preview', locale: 'fr' },
+        { cleanup: cleanupLifetime, beforeCommit },
+      ),
+    );
+    await waitFor(() => expect(captured?.context.scope.siteId).toBe('campaign'));
+    expect(screen.getByRole('textbox')).toHaveProperty('value', 'saved');
+    expect(cleanupLifetime).toHaveBeenCalledOnce();
+    expect(beforeCommit).toHaveBeenCalledOnce();
+    expect(
+      requests.some(
+        ({ url, headers }) =>
+          url.endsWith('/api/v1/studio/context') &&
+          headers.get('x-gridstory-site') === 'campaign' &&
+          headers.get('x-gridstory-environment') === 'preview' &&
+          headers.get('x-gridstory-locale') === 'fr',
+      ),
+    ).toBe(true);
+    await expect(oldClient?.listAssets()).rejects.toMatchObject({ name: 'AbortError' });
+  });
+
+  it('keeps the old authorized lifetime when candidate validation or cleanup fails', async () => {
+    const denial = new GridStoryApiError('Denied candidate.', { status: 403 });
+    for (const failure of ['candidate', 'cleanup'] as const) {
+      const { client } = scopedFixture(async () => {
+        if (failure === 'candidate') throw denial;
+        return scopedContext('campaign');
+      });
+      const cleanupLifetime = vi.fn(async () => {
+        if (failure === 'cleanup') throw new Error('Preview cleanup unavailable.');
+      });
+      let captured: StudioSessionView | undefined;
+      const rendered = render(
+        <StudioSession client={client}>
+          {(view) => {
+            captured = view;
+            return <Probe {...view} />;
+          }}
+        </StudioSession>,
+      );
+      fireEvent.change(await screen.findByRole('textbox'), {
+        target: { value: `${failure} draft` },
+      });
+      await expect(
+        captured?.transitionScope(
+          { siteId: 'campaign', environmentId: 'preview', locale: 'fr' },
+          { cleanup: cleanupLifetime },
+        ),
+      ).rejects.toThrow(
+        failure === 'candidate' ? 'Denied candidate.' : 'Preview cleanup unavailable.',
+      );
+      expect(captured?.context.scope.siteId).toBe('default');
+      expect(screen.getByRole('textbox')).toHaveProperty('value', `${failure} draft`);
+      expect(cleanupLifetime).toHaveBeenCalledTimes(failure === 'candidate' ? 0 : 1);
+      rendered.unmount();
+    }
+  });
+
+  it('serializes candidate validation and rejects a concurrent switch', async () => {
+    const candidate = Promise.withResolvers<StudioContext>();
+    const { client } = scopedFixture(() => candidate.promise);
+    let captured: StudioSessionView | undefined;
+    render(
+      <StudioSession client={client}>
+        {(view) => {
+          captured = view;
+          return <Probe {...view} />;
+        }}
+      </StudioSession>,
+    );
+    await screen.findByRole('textbox');
+    const first = captured?.transitionScope(
+      { siteId: 'campaign', environmentId: 'preview', locale: 'fr' },
+      { cleanup: async () => undefined },
+    );
+    await expect(
+      captured?.transitionScope(
+        { siteId: 'campaign', environmentId: 'preview', locale: 'fr' },
+        { cleanup: async () => undefined },
+      ),
+    ).rejects.toThrow('already pending');
+    candidate.resolve(scopedContext('campaign'));
+    await act(async () => first);
+  });
+
   it('does not mount private consumers until context has been validated', async () => {
     const { client, read } = fixture();
     let resolve!: (value: StudioContext) => void;

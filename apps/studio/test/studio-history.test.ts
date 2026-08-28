@@ -83,6 +83,16 @@ describe('native Studio history', () => {
     expect(window.location.hash).toBe('#/assets');
   });
 
+  it('resets the current address without storing scope or a previous entry', async () => {
+    adapter = createStudioHistory(window, async (location) => location);
+    adapter.replace({ destination: 'pages', entryId: 'old-entry', type: 'page' });
+    await adapter.navigate({ destination: 'search', entryId: 'old-entry', type: 'page' });
+    adapter.reset({ destination: 'search' });
+    expect(window.location.hash).toBe('#/search');
+    expect(JSON.stringify(window.history.state)).not.toContain('old-entry');
+    expect(JSON.stringify(window.history.state)).not.toMatch(/site|environment|locale|token/i);
+  });
+
   it('restores the accepted address when an internal rejection supersedes a pending traversal', async () => {
     const request = vi.fn(async (location) => location);
     adapter = createStudioHistory(window, request);

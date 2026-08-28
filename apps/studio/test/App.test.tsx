@@ -637,26 +637,38 @@ function createTestClient(
   );
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
-    if (url.pathname === '/api/v1/studio/context')
-      return json(
-        options.context ?? {
-          version: 1,
-          scope: {
-            organizationId: 'local',
-            tenantId: 'default',
-            workspaceId: 'default',
-            siteId: 'default',
-            environmentId: 'development',
-            locale: 'en',
-          },
-          principalId: 'local-admin',
-          capabilities: {
-            screens: Object.fromEntries(studioScreens.map((screen) => [screen, true])),
-            operations: Object.fromEntries(studioOperations.map((operation) => [operation, true])),
-          },
-          selection: { mode: 'current-only', choices: [] },
-        },
+    if (url.pathname === '/api/v1/studio/context') {
+      const requestedHeaders = new Headers(init?.headers);
+      const requestedChoice = options.context?.selection.choices.find(
+        ({ scope }) =>
+          scope.siteId === requestedHeaders.get('x-gridstory-site') &&
+          scope.environmentId === requestedHeaders.get('x-gridstory-environment') &&
+          scope.locale === requestedHeaders.get('x-gridstory-locale'),
       );
+      return json(
+        options.context
+          ? { ...options.context, ...(requestedChoice ? { scope: requestedChoice.scope } : {}) }
+          : {
+              version: 1,
+              scope: {
+                organizationId: 'local',
+                tenantId: 'default',
+                workspaceId: 'default',
+                siteId: 'default',
+                environmentId: 'development',
+                locale: 'en',
+              },
+              principalId: 'local-admin',
+              capabilities: {
+                screens: Object.fromEntries(studioScreens.map((screen) => [screen, true])),
+                operations: Object.fromEntries(
+                  studioOperations.map((operation) => [operation, true]),
+                ),
+              },
+              selection: { mode: 'current-only', choices: [] },
+            },
+      );
+    }
     if (url.pathname === '/api/v1/schemas') return json([testSchema]);
     if (url.pathname === '/api/v1/components') return json(componentManifests);
     if (url.pathname === '/api/v1/design-system') return json(exampleDesignSystem);
@@ -2032,6 +2044,181 @@ describe('GridStory Studio', () => {
       selection: { mode: 'current-only', choices: [] },
     };
   }
+
+  function selectableContext(): StudioContext {
+    const value = restrictedContext([...studioOperations], [...studioScreens]);
+    value.principalId = 'context-editor';
+    value.selection = {
+      mode: 'configured',
+      choices: [
+        {
+          scope: value.scope,
+          labels: { site: 'Default site', environment: 'Development', locale: 'English' },
+        },
+        {
+          scope: {
+            ...value.scope,
+            siteId: 'campaign',
+            environmentId: 'preview',
+            locale: 'fr',
+          },
+          labels: { site: 'Campaign site', environment: 'Preview', locale: 'French' },
+        },
+      ],
+    };
+    return value;
+  }
+
+  it('cancels or commits a complete scope switch with dirty-state, preview, and history guards', async () => {
+    const user = userEvent.setup();
+    const client = createTestClient({ context: selectableContext() });
+    const revoke = vi.spyOn(client, 'revokePreviewSession');
+    const popup = {
+      closed: false,
+      close: vi.fn(),
+      location: { replace: vi.fn() },
+      postMessage: vi.fn(),
+    } as unknown as Window;
+    vi.spyOn(window, 'open').mockReturnValue(popup);
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    render(<App client={client} />);
+    const headline = await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Open live preview in new window' }));
+    await screen.findByRole('button', { name: 'Close live preview window' });
+    fireEvent.change(headline, { target: { value: 'Old-scope private draft' } });
+    fireEvent.change(screen.getByLabelText('Site'), { target: { value: 'campaign' } });
+    expect(screen.getByLabelText('Environment')).toHaveProperty('value', 'preview');
+    expect(screen.getByLabelText('Locale')).toHaveProperty('value', 'fr');
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(headline).toHaveProperty('value', 'Old-scope private draft');
+    expect(popup.close).not.toHaveBeenCalled();
+    expect(revoke).not.toHaveBeenCalled();
+    expect(screen.getByTitle('Committed Studio context').textContent).toContain('Default site');
+
+    confirm.mockReturnValue(true);
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+    await waitFor(() =>
+      expect(screen.getByTitle('Committed Studio context').textContent).toContain('Campaign site'),
+    );
+    expect(popup.close).toHaveBeenCalled();
+    expect(revoke).toHaveBeenCalledWith('preview-session-1');
+    expect(document.body.textContent).not.toContain('Old-scope private draft');
+    expect(window.location.hash).toBe('#/pages');
+    expect(JSON.stringify(window.history.state)).not.toMatch(/campaign|preview-session|gsp_/i);
+  });
+
+  it('prompts for a representative management draft and keeps the old context on cancel', async () => {
+    const user = userEvent.setup();
+    const client = createTestClient({ context: selectableContext() });
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    render(<App client={client} />);
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Targeting' }));
+    const panel = await screen.findByRole('region', {
+      name: 'Personalization targeting workbench',
+    });
+    fireEvent.change(within(panel).getByLabelText('Targeting configuration JSON'), {
+      target: { value: '{"changed":true}' },
+    });
+    fireEvent.change(screen.getByLabelText('Site'), { target: { value: 'campaign' } });
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(screen.getByTitle('Committed Studio context').textContent).toContain('Default site');
+    expect(within(panel).getByLabelText('Targeting configuration JSON')).toHaveProperty(
+      'value',
+      '{"changed":true}',
+    );
+  });
+
+  it('keeps the old context when preview cleanup fails and succeeds only after cleanup retry', async () => {
+    const user = userEvent.setup();
+    const client = createTestClient({ context: selectableContext() });
+    const revoke = vi
+      .spyOn(client, 'revokePreviewSession')
+      .mockRejectedValueOnce(new Error('Revocation service unavailable'));
+    const popup = {
+      closed: false,
+      close: vi.fn(),
+      location: { replace: vi.fn() },
+      postMessage: vi.fn(),
+    } as unknown as Window;
+    vi.spyOn(window, 'open').mockReturnValue(popup);
+    render(<App client={client} />);
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Open live preview in new window' }));
+    await screen.findByRole('button', { name: 'Close live preview window' });
+    fireEvent.change(screen.getByLabelText('Site'), { target: { value: 'campaign' } });
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+    await screen.findByText(/Studio context was not changed.*Revocation service unavailable/);
+    expect(screen.getByTitle('Committed Studio context').textContent).toContain('Default site');
+    expect(window.location.hash).toContain('entry=one');
+    expect(popup.close).toHaveBeenCalled();
+
+    revoke.mockResolvedValue(undefined);
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+    await waitFor(() =>
+      expect(screen.getByTitle('Committed Studio context').textContent).toContain('Campaign site'),
+    );
+    expect(revoke).toHaveBeenCalledTimes(2);
+    expect(window.location.hash).toBe('#/pages');
+  });
+
+  it('disables context switching for the full lifetime of an active management write', async () => {
+    const user = userEvent.setup();
+    const client = createTestClient({ context: selectableContext() });
+    const snapshot = await client.getPersonalization();
+    const update = Promise.withResolvers<PersonalizationSnapshot>();
+    vi.spyOn(client, 'replacePersonalizationDraft').mockReturnValueOnce(update.promise);
+    const clone = vi.spyOn(client, 'withStudioScope');
+    render(<App client={client} />);
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Targeting' }));
+    const panel = await screen.findByRole('region', {
+      name: 'Personalization targeting workbench',
+    });
+    await user.click(within(panel).getByRole('button', { name: 'Save targeting draft' }));
+    await waitFor(() => expect(screen.getByLabelText('Site')).toHaveProperty('disabled', true));
+    expect(screen.getByRole('button', { name: 'Apply' })).toHaveProperty('disabled', true);
+    expect(clone).not.toHaveBeenCalled();
+    update.resolve(snapshot);
+    await waitFor(() => expect(screen.getByLabelText('Site')).toHaveProperty('disabled', false));
+  });
+
+  it('waits for and revokes a late preview grant before committing the new scope', async () => {
+    const user = userEvent.setup();
+    const client = createTestClient({ context: selectableContext() });
+    const grant = await client.createPreviewSession({
+      previewUrl: 'http://localhost:5174/',
+      mode: 'standalone',
+      entryId: 'one',
+    });
+    const pendingGrant = Promise.withResolvers<typeof grant>();
+    vi.spyOn(client, 'createPreviewSession').mockReturnValueOnce(pendingGrant.promise);
+    const revoke = vi.spyOn(client, 'revokePreviewSession');
+    const popup = {
+      closed: false,
+      close: vi.fn(),
+      location: { replace: vi.fn() },
+      postMessage: vi.fn(),
+    } as unknown as Window;
+    vi.spyOn(window, 'open').mockReturnValue(popup);
+    render(<App client={client} />);
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Open live preview in new window' }));
+    fireEvent.change(screen.getByLabelText('Site'), { target: { value: 'campaign' } });
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+    expect(screen.getByTitle('Committed Studio context').textContent).toContain('Default site');
+    expect(screen.getByRole('button', { name: 'Switching…' })).toHaveProperty('disabled', true);
+    pendingGrant.resolve(grant);
+    await waitFor(() =>
+      expect(screen.getByTitle('Committed Studio context').textContent).toContain('Campaign site'),
+    );
+    expect(revoke).toHaveBeenCalledWith(grant.sessionId);
+    expect(popup.close).toHaveBeenCalled();
+    expect(popup.location.replace).not.toHaveBeenCalled();
+    expect(popup.postMessage).not.toHaveBeenCalled();
+  });
 
   it('loads context first and supports an operations-only account without content or authoring calls', async () => {
     const client = createTestClient({

@@ -305,7 +305,21 @@ test('Studio shell follows the reference navigation, card, theme, and mobile dra
   const activePage = page.getByRole('button', { name: 'Pages', exact: true });
   await expect(navigation).toHaveCSS('width', '270px');
   await expect(navigation).toHaveCSS('background-color', 'rgb(255, 255, 255)');
-  await expect(header).toHaveCSS('height', '70px');
+  await expect(header).toHaveCSS('min-height', '70px');
+  await expect
+    .poll(async () => {
+      const [headerBox, contextBox] = await Promise.all([
+        header.boundingBox(),
+        header.locator('.studio-context-controls').boundingBox(),
+      ]);
+      return Boolean(
+        headerBox &&
+          contextBox &&
+          contextBox.y >= headerBox.y - 1 &&
+          contextBox.y + contextBox.height <= headerBox.y + headerBox.height + 1,
+      );
+    })
+    .toBe(true);
   await expect(page.locator('.studio-page')).toHaveCSS('background-color', 'rgb(245, 245, 245)');
   await expect(activePage).toHaveCSS('background-color', 'rgb(22, 90, 80)');
   await expect(activePage.locator('.studio-navigation__icon')).toHaveCSS(

@@ -20,6 +20,37 @@ afterEach(() => {
 });
 
 describe('browser preview transport', () => {
+  it('keeps scope-checked management revocation separate from preview self-revocation', async () => {
+    const requests: RequestInit[] = [];
+    const client = createGridStoryClient({
+      baseUrl: 'http://gridstory.test',
+      tenantId: 'tenant',
+      scope: {
+        organizationId: 'organization',
+        workspaceId: 'workspace',
+        siteId: 'site',
+        environmentId: 'preview',
+        locale: 'fr',
+      },
+      fetch: async (_input, init) => {
+        requests.push(init ?? {});
+        return new Response(null, { status: 204 });
+      },
+    });
+    await client.revokePreviewSession('managed-session');
+    await client.revokePreviewSession('self-session', 'gsp_preview-token');
+    const managed = new Headers(requests[0]?.headers);
+    expect(requests[0]?.credentials).toBe('include');
+    expect(managed.get('authorization')).toBeNull();
+    expect(managed.get('x-gridstory-tenant')).toBe('tenant');
+    expect(managed.get('x-gridstory-site')).toBe('site');
+    expect(managed.get('x-gridstory-environment')).toBe('preview');
+    expect(managed.get('x-gridstory-locale')).toBe('fr');
+    const self = new Headers(requests[1]?.headers);
+    expect(self.get('authorization')).toBe('Bearer gsp_preview-token');
+    expect(self.get('x-gridstory-tenant')).toBeNull();
+  });
+
   it('bootstraps an exact-origin target and flushes the latest route and patch after readiness', () => {
     vi.useFakeTimers();
     const postMessage = vi.fn();

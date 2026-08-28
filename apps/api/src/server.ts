@@ -1353,7 +1353,7 @@ export async function buildServer({
     '/api/v1/preview/sessions/:id',
     async (request, reply) => {
       const token = request.headers.authorization?.replace(/^Bearer\s+/i, '');
-      if (token) {
+      if (token?.startsWith('gsp_')) {
         const claims = previews.authenticate(token, request.headers.origin);
         if (claims.sessionId !== request.params.id) {
           throw new GridStoryError('Preview session does not match.', 'preview_scope_denied', 403);

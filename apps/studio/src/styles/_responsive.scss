@@ -36,6 +36,19 @@
 }
 
 @media (max-width: 1500px) {
+  .studio-header {
+    gap: 8px 12px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    height: auto;
+  }
+
+  .studio-context-controls {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-self: stretch;
+    max-width: none;
+  }
+
   .studio-workspace {
     grid-template-columns: minmax(14rem, 0.55fr) minmax(27rem, 1.15fr);
   }
@@ -177,6 +190,24 @@
   .studio-header__leading,
   .header-actions {
     gap: 4px;
+  }
+
+  .studio-context-controls__layout {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .studio-context-controls__fields {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .studio-context-controls__apply,
+  .studio-context-controls__notice {
+    grid-column: 1 / -1;
+  }
+
+  .studio-context-controls__apply {
+    width: 100%;
   }
 
   .header-actions .button--secondary,
