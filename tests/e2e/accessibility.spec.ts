@@ -23,6 +23,7 @@ const studioManagementPanels = [
   ['Schemas & taxonomies', 'Schema and taxonomy catalog'],
   ['Components', 'Governed design catalog'],
   ['Library', 'Asset library'],
+  ['Configuration', 'Configuration inventory'],
   ['Page checks', 'Content quality report'],
 ] as const;
 
@@ -234,6 +235,7 @@ test('task groups preserve every destination, keyboard disclosure, compact acces
     ['SEO & quality', ['Page checks']],
     ['Insights', ['Targeting', 'Experiments']],
     ['Apps', ['Marketplace']],
+    ['Settings', ['Configuration']],
     ['Tools', ['Migrations']],
     [
       'Advanced',
@@ -249,11 +251,11 @@ test('task groups preserve every destination, keyboard disclosure, compact acces
       ],
     ],
   ] as const;
-  await expect(navigation.locator('.studio-navigation__item')).toHaveCount(22);
+  await expect(navigation.locator('.studio-navigation__item')).toHaveCount(23);
   await expect(
     navigation.getByRole('list', { name: 'Home' }).getByRole('button', { name: 'Home' }),
   ).toBeVisible();
-  await expect(navigation.locator('.studio-navigation__group-toggle')).toHaveCount(8);
+  await expect(navigation.locator('.studio-navigation__group-toggle')).toHaveCount(9);
   for (const [label, leaves] of groups) {
     const toggle = navigation.getByRole('button', { name: label, exact: true });
     const list = navigation.getByRole('list', { name: label, exact: true });

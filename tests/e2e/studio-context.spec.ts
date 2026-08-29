@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import type { StudioContext, StudioOperation } from '@gridstory/schema';
+import type { ConfigurationInventory, StudioContext, StudioOperation } from '@gridstory/schema';
 
 test('switches only an allowed complete context after discard and preview cleanup', async ({
   page,
@@ -167,6 +167,103 @@ test('real delivery-only identity gets no private Studio screens or loaders', as
   await expect(page.locator('[data-destination]')).toHaveCount(0);
   await expect(page.locator('.studio-workspace')).toHaveCount(0);
   expect(paths).toEqual(['/api/v1/studio/context']);
+});
+
+test('configuration sections and links follow each independent read permission', async ({
+  page,
+}) => {
+  const localeProfile = {
+    name: 'locale metadata',
+    operation: 'locales.read' as const,
+    section: 'localesAndEnvironments' as const,
+    linkedScreen: null,
+    expectedHeading: 'Sites, environments, and locales',
+  };
+  const profiles = [
+    localeProfile,
+    {
+      name: 'schema',
+      operation: 'schema.read' as const,
+      section: 'modelsAndRoutes' as const,
+      linkedScreen: 'schemas' as const,
+      expectedHeading: 'Models and public routes',
+    },
+    {
+      name: 'asset',
+      operation: 'asset.read' as const,
+      section: 'mediaPolicyAndProviders' as const,
+      linkedScreen: 'assets' as const,
+      expectedHeading: 'Policy and provider availability',
+    },
+  ];
+  let activeProfile: (typeof profiles)[number] = localeProfile;
+  let configurationMethods: string[] = [];
+
+  await page.route('**/api/v1/studio/context', async (route) => {
+    const response = await route.fetch();
+    const value = (await response.json()) as StudioContext;
+    const operations = Object.fromEntries(
+      Object.keys(value.capabilities.operations).map((operation) => [operation, false]),
+    ) as StudioContext['capabilities']['operations'];
+    const screens = Object.fromEntries(
+      Object.keys(value.capabilities.screens).map((destination) => [destination, false]),
+    ) as StudioContext['capabilities']['screens'];
+    operations['settings.read'] = true;
+    operations[activeProfile.operation] = true;
+    screens.settings = true;
+    if (activeProfile.linkedScreen) screens[activeProfile.linkedScreen] = true;
+    await route.fulfill({
+      response,
+      json: { ...value, capabilities: { screens, operations } } satisfies StudioContext,
+    });
+  });
+  await page.route('**/api/v1/configuration/inventory', async (route) => {
+    configurationMethods.push(route.request().method());
+    const response = await route.fetch();
+    const value = (await response.json()) as ConfigurationInventory;
+    const unavailable = {
+      availability: 'unavailable' as const,
+      reason: 'not-authorized' as const,
+    };
+    await route.fulfill({
+      response,
+      json: {
+        ...value,
+        sections: {
+          localesAndEnvironments:
+            activeProfile.section === 'localesAndEnvironments'
+              ? value.sections.localesAndEnvironments
+              : unavailable,
+          modelsAndRoutes:
+            activeProfile.section === 'modelsAndRoutes'
+              ? value.sections.modelsAndRoutes
+              : unavailable,
+          mediaPolicyAndProviders:
+            activeProfile.section === 'mediaPolicyAndProviders'
+              ? value.sections.mediaPolicyAndProviders
+              : unavailable,
+        },
+      } satisfies ConfigurationInventory,
+    });
+  });
+
+  for (const [index, profile] of profiles.entries()) {
+    activeProfile = profile;
+    configurationMethods = [];
+    if (index === 0) await page.goto('/#/settings');
+    else await page.reload();
+    const inventory = page.getByRole('region', { name: 'Configuration inventory' });
+    await expect(inventory.getByRole('heading', { name: profile.expectedHeading })).toBeVisible();
+    await expect(inventory.getByText('Unavailable with current access')).toHaveCount(2);
+    await expect(inventory.locator('input, select, textarea')).toHaveCount(0);
+    await expect(
+      inventory.getByRole('button', { name: 'Inspect schemas & taxonomies' }),
+    ).toHaveCount(profile.operation === 'schema.read' ? 1 : 0);
+    await expect(inventory.getByRole('button', { name: 'Open Media library' })).toHaveCount(
+      profile.operation === 'asset.read' ? 1 : 0,
+    );
+    expect(configurationMethods, profile.name).toEqual(['GET']);
+  }
 });
 
 test('unsupported context fails closed and can retry without legacy identity fallback', async ({

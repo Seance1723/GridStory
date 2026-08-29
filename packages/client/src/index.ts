@@ -42,6 +42,7 @@ import type {
   ContentRevision,
   ContentSchemaDefinition,
   ContentSort,
+  ConfigurationInventory,
   CreateAssetDeliveryInput,
   DataSubject,
   DataSubjectRequest,
@@ -157,6 +158,7 @@ import type {
   WorkflowInstance,
 } from '@gridstory/schema';
 import {
+  configurationInventorySchema,
   editorialOverviewSchema,
   studioContextSchema,
   studioScopeSelectionSchema,
@@ -718,6 +720,28 @@ export class GridStoryClient {
       throw new GridStoryApiError(
         'The editorial overview response is invalid or has a different scope.',
         { status: 502, code: 'invalid_editorial_overview' },
+      );
+    }
+    return parsed.data;
+  }
+
+  async getConfigurationInventory(
+    options: { signal?: AbortSignal } = {},
+  ): Promise<ConfigurationInventory> {
+    const value = await this.#request<unknown>('/api/v1/configuration/inventory', {
+      ...(options.signal ? { signal: options.signal } : {}),
+    });
+    const parsed = configurationInventorySchema.safeParse(value);
+    const expected = { ...this.#scope, tenantId: this.#tenantId };
+    if (
+      !parsed.success ||
+      Object.entries(expected).some(
+        ([key, id]) => parsed.data.scope[key as keyof typeof expected] !== id,
+      )
+    ) {
+      throw new GridStoryApiError(
+        'The configuration inventory response is invalid or has a different scope.',
+        { status: 502, code: 'invalid_configuration_inventory' },
       );
     }
     return parsed.data;
@@ -2746,6 +2770,7 @@ export type {
   ContentRevision,
   ContentSchemaDefinition,
   ContentSort,
+  ConfigurationInventory,
   CreateAssetDeliveryInput,
   DataSubject,
   DataSubjectRequest,

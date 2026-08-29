@@ -43,7 +43,7 @@ const topology = () => ({
 
 describe('minimized Studio contracts', () => {
   it('has exactly the finite destinations and explicit boolean operations', () => {
-    expect(studioDestinations).toHaveLength(22);
+    expect(studioDestinations).toHaveLength(23);
     expect(new Set(studioOperations).size).toBe(studioOperations.length);
     expect(studioContextSchema.parse(response()).capabilities.screens.pages).toBe(false);
     expect(studioContextSchema.parse(response()).capabilities.screens.home).toBe(false);

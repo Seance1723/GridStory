@@ -7,6 +7,7 @@ import {
   type AssetUploadSession,
   type ContentEntry,
   type ContentFederationDocument,
+  type ConfigurationInventory,
   createGridStoryClient,
   type EditorialOverview,
   type ExperimentDesign,
@@ -260,6 +261,7 @@ function createTestClient(
     assets?: AssetRecord[];
     queryFailsAfter?: number;
     overview?: EditorialOverview;
+    inventory?: ConfigurationInventory;
   } = {},
 ) {
   const testSchema = options.schema ?? schema;
@@ -466,6 +468,37 @@ function createTestClient(
           })),
         },
         operations: { availability: 'unavailable' },
+      },
+    };
+  const configurationInventory = (): ConfigurationInventory =>
+    options.inventory ?? {
+      version: 1,
+      scope: options.context?.scope ?? {
+        organizationId: 'local',
+        tenantId: 'default',
+        workspaceId: 'default',
+        siteId: 'default',
+        environmentId: 'development',
+        locale: 'en',
+      },
+      sections: {
+        localesAndEnvironments: { availability: 'unavailable', reason: 'not-authorized' },
+        modelsAndRoutes: {
+          availability: 'available',
+          ownership: 'code',
+          mutable: false,
+          models: testSchemas.map((candidate) => ({
+            ownership: 'code',
+            mutable: false,
+            id: candidate.id,
+            name: candidate.name,
+            version: candidate.version,
+            collection: candidate.collection,
+            ...(candidate.route ? { route: candidate.route } : {}),
+            localizedFields: candidate.localization?.localizedFields ?? [],
+          })),
+        },
+        mediaPolicyAndProviders: { availability: 'unavailable', reason: 'not-authorized' },
       },
     };
   const workflowActionRecords: Array<Record<string, unknown>> = [];
@@ -837,6 +870,7 @@ function createTestClient(
       );
     }
     if (url.pathname === '/api/v1/editorial/overview') return json(editorialOverview());
+    if (url.pathname === '/api/v1/configuration/inventory') return json(configurationInventory());
     const schemaSource = {
       format: 'gridstory.schema-ir',
       irVersion: 1,
@@ -2452,6 +2486,51 @@ describe('GridStory Studio', () => {
     expect(listAssets).toHaveBeenCalledOnce();
   });
 
+  it('loads Settings configuration lazily and keeps exactly one destination page visible', async () => {
+    window.history.replaceState(null, '', '/');
+    const client = createTestClient({
+      context: restrictedContext([...studioOperations], [...studioScreens]),
+    });
+    const read = vi.spyOn(client, 'getConfigurationInventory');
+
+    render(<App client={client} />);
+    await screen.findByRole('region', { name: 'Editorial Home' });
+    expect(read).not.toHaveBeenCalled();
+
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Configuration' }));
+    const inventory = await screen.findByRole('region', { name: 'Configuration inventory' });
+    expect(
+      within(inventory).getByRole('heading', { name: 'Effective configuration' }),
+    ).toBeTruthy();
+    expect(read).toHaveBeenCalledOnce();
+    expect(window.location.hash).toBe('#/settings');
+    expect(screen.queryByRole('region', { name: 'Editorial Home' })).toBeNull();
+    expect(screen.getAllByRole('button', { current: 'page' })).toHaveLength(1);
+
+    await userEvent
+      .setup()
+      .click(within(inventory).getByRole('button', { name: 'Inspect schemas & taxonomies' }));
+    expect(await screen.findByRole('region', { name: 'Schema and taxonomy catalog' })).toBeTruthy();
+    expect(screen.queryByRole('region', { name: 'Configuration inventory' })).toBeNull();
+  });
+
+  it('loads a direct Settings route from only the minimized inventory boundary', async () => {
+    window.history.replaceState(null, '', '/#/settings');
+    const context = restrictedContext(
+      ['settings.read', 'locales.read', 'schema.read'],
+      ['settings'],
+    );
+    const client = createTestClient({ context });
+    const read = vi.spyOn(client, 'getConfigurationInventory');
+    const schemas = vi.spyOn(client, 'getSchemas');
+
+    render(<App client={client} />);
+    expect(await screen.findByRole('region', { name: 'Configuration inventory' })).toBeTruthy();
+    expect(read).toHaveBeenCalledOnce();
+    expect(schemas).not.toHaveBeenCalled();
+    expect(window.location.hash).toBe('#/settings');
+  });
+
   it('delegates Home quick create to the canonical registered-schema authoring path', async () => {
     window.history.replaceState(null, '', '/');
     const client = createTestClient({
@@ -3205,7 +3284,7 @@ describe('GridStory Studio', () => {
     const content = within(navigation).getByRole('button', { name: 'Content', exact: true });
     expect(content.getAttribute('aria-controls')).toBe('studio-navigation-content');
     expect(content.getAttribute('aria-current')).toBeNull();
-    expect(within(navigation).getAllByRole('list')).toHaveLength(9);
+    expect(within(navigation).getAllByRole('list')).toHaveLength(10);
     await user.click(content);
     expect(content.getAttribute('aria-expanded')).toBe('false');
     expect(within(navigation).queryByRole('button', { name: 'Pages', exact: true })).toBeNull();
@@ -3252,7 +3331,7 @@ describe('GridStory Studio', () => {
       within(navigation).queryByRole('button', { name: 'Identity providers', exact: true }),
     ).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Toggle navigation' }));
-    expect(within(navigation).getAllByRole('button')).toHaveLength(21);
+    expect(within(navigation).getAllByRole('button')).toHaveLength(22);
     expect(
       within(navigation)
         .getByRole('button', { name: 'Identity providers', exact: true })

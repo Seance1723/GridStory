@@ -1,0 +1,210 @@
+.configuration-inventory {
+  background: var(--studio-surface);
+  border: 1px solid var(--studio-border);
+  border-radius: 16px;
+  box-shadow: var(--studio-shadow);
+  color: var(--studio-text);
+  display: grid;
+  gap: var(--studio-space-5);
+  margin-bottom: var(--studio-space-5);
+  min-width: 0;
+  padding: var(--studio-space-5);
+}
+
+.configuration-inventory :where(h2, h3, h4, p, dl, ul) {
+  margin-block: 0;
+}
+
+.configuration-inventory :where(p, small) {
+  color: var(--studio-muted);
+}
+
+.configuration-inventory :where(strong, span, code, dd, small, p) {
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+.configuration-inventory__heading,
+.configuration-inventory__section > header,
+.configuration-inventory__state {
+  align-items: flex-start;
+  display: flex;
+  gap: var(--studio-space-4);
+  justify-content: space-between;
+}
+
+.configuration-inventory__heading > div,
+.configuration-inventory__section > header > div {
+  display: grid;
+  gap: var(--studio-space-2);
+  min-width: 0;
+}
+
+.configuration-inventory__badge,
+.configuration-inventory__ownership {
+  background: var(--studio-primary-soft);
+  border: 1px solid var(--studio-primary);
+  border-radius: 999px;
+  color: var(--studio-text);
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  font-weight: 750;
+  padding: 0.35rem 0.6rem;
+}
+
+.studio-shell .configuration-inventory__heading > .configuration-inventory__badge {
+  color: var(--studio-text);
+}
+
+.configuration-inventory__sections {
+  display: grid;
+  gap: var(--studio-space-4);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  min-width: 0;
+}
+
+.configuration-inventory__section,
+.configuration-inventory__state,
+.configuration-inventory__unavailable {
+  background: var(--studio-surface-soft);
+  border: 1px solid var(--studio-border);
+  border-radius: 12px;
+  min-width: 0;
+  padding: var(--studio-space-4);
+}
+
+.configuration-inventory__section {
+  align-content: start;
+  display: grid;
+  gap: var(--studio-space-4);
+}
+
+.configuration-inventory__state--error {
+  border-color: #b91c1c;
+}
+
+.configuration-inventory__boundary {
+  background: var(--studio-primary-soft);
+  border-left: 3px solid var(--studio-primary);
+  border-radius: 8px;
+  color: var(--studio-text) !important;
+  padding: var(--studio-space-3);
+}
+
+.configuration-inventory__facts {
+  display: grid;
+  gap: var(--studio-space-2);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.configuration-inventory__facts > div,
+.configuration-inventory__lists > section,
+.configuration-inventory__models > li,
+.configuration-inventory__providers > li {
+  background: var(--studio-surface);
+  border: 1px solid var(--studio-border);
+  border-radius: 10px;
+  min-width: 0;
+  padding: var(--studio-space-3);
+}
+
+.configuration-inventory :where(dt, h4) {
+  color: var(--studio-muted);
+  font-size: 0.7rem;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.configuration-inventory dd {
+  font-weight: 750;
+  margin: var(--studio-space-1) 0 0;
+}
+
+.configuration-inventory dd small {
+  display: block;
+  font-weight: 500;
+  margin-top: var(--studio-space-1);
+}
+
+.configuration-inventory__lists {
+  display: grid;
+  gap: var(--studio-space-3);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.configuration-inventory__lists ul,
+.configuration-inventory__models,
+.configuration-inventory__providers {
+  display: grid;
+  gap: var(--studio-space-2);
+  list-style: none;
+  padding: 0;
+}
+
+.configuration-inventory__lists li,
+.configuration-inventory__models > li,
+.configuration-inventory__providers > li {
+  display: grid;
+  gap: var(--studio-space-1);
+}
+
+.configuration-inventory__lists li {
+  border-top: 1px solid var(--studio-border);
+  padding-top: var(--studio-space-2);
+}
+
+.configuration-inventory__models > li > div,
+.configuration-inventory__providers > li {
+  align-items: start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--studio-space-2);
+  justify-content: space-between;
+}
+
+.configuration-inventory__models dl {
+  display: grid;
+  gap: var(--studio-space-2);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.configuration-inventory__unavailable {
+  display: grid;
+  gap: var(--studio-space-2);
+}
+
+@media (width <= 1180px) {
+  .configuration-inventory__sections {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (width <= 760px) {
+  .configuration-inventory {
+    padding: var(--studio-space-4);
+  }
+
+  .configuration-inventory__heading,
+  .configuration-inventory__section > header,
+  .configuration-inventory__state {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .configuration-inventory__badge,
+  .configuration-inventory__ownership {
+    align-self: flex-start;
+  }
+
+  .configuration-inventory__facts,
+  .configuration-inventory__lists,
+  .configuration-inventory__models dl {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .configuration-inventory__state > .button,
+  .configuration-inventory__section > .button {
+    width: 100%;
+  }
+}

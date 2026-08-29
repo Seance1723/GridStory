@@ -53,6 +53,7 @@ describe('finite Studio invocation guard', () => {
   it('matches exact route actions for non-obvious operations (BUG-0444)', () => {
     expect(studioMethodOperations.getSearchIndexStatus).toEqual(['search.read']);
     expect(studioMethodOperations.getSchemaLifecycle).toEqual(['schema.read']);
+    expect(studioMethodOperations.getConfigurationInventory).toEqual(['settings.read']);
     expect(studioMethodOperations.getSchemaDrift).toEqual(['schema.read']);
     expect(studioMethodOperations.planSchema).toEqual(['schema.plan']);
     expect(studioMethodOperations.inspectFederationAgreement).toEqual(['federation.manage']);

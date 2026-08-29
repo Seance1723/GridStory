@@ -49,6 +49,7 @@ export const studioDestinations = [
   'regions',
   'components',
   'assets',
+  'settings',
 ] as const;
 export type StudioDestinationId = (typeof studioDestinations)[number];
 
@@ -56,6 +57,7 @@ export type StudioDestinationId = (typeof studioDestinations)[number];
 // Typed page list/create are deliberately distinct from untyped entry/preview checks.
 export const studioOperations = [
   'home.read',
+  'settings.read',
   'pages.list',
   'pages.create',
   'content.create',

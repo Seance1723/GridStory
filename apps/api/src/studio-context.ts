@@ -25,7 +25,7 @@ import { contentScope } from './request-context.js';
 // These are policy preconditions, not guarantees of entry existence, workflow readiness,
 // step-up or provider availability. Routes continue to enforce every operation themselves.
 const checks: Record<
-  Exclude<StudioOperation, 'home.read' | 'identity.manage'>,
+  Exclude<StudioOperation, 'home.read' | 'settings.read' | 'identity.manage'>,
   readonly [GridStoryAction, AuthorizationResource]
 > = {
   'pages.list': ['content.read', { kind: 'content', contentType: 'page' }],
@@ -121,6 +121,7 @@ export function studioCapabilities(
   const operations = Object.fromEntries(
     studioOperations.map((operation) => {
       if (operation === 'home.read') return [operation, false];
+      if (operation === 'settings.read') return [operation, false];
       if (operation === 'identity.manage')
         return [operation, hasIdentityAdministrationAccess(context.principal)];
       const [action, resource] = checks[operation];
@@ -133,6 +134,8 @@ export function studioCapabilities(
     operations['workflow.read'] ||
     operations['release.read'] ||
     operations['operations.read'];
+  operations['settings.read'] =
+    operations['locales.read'] || operations['schema.read'] || operations['asset.read'];
   return {
     operations,
     screens: {
@@ -158,6 +161,7 @@ export function studioCapabilities(
       regions: operations['regional.read'],
       components: operations['component.read'],
       assets: operations['asset.read'],
+      settings: operations['settings.read'],
     },
   };
 }

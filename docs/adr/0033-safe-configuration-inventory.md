@@ -1,8 +1,9 @@
 # ADR 0033: Safe configuration inventory before editable settings
 
-- Status: Proposed — explicit approval is required before runtime or test implementation.
+- Status: Accepted, implemented and verified.
 - Created: 2026-08-29 by Codex.
-- Task: CMS-010. Planning defect: BUG-0534.
+- Approved: 2026-08-29 by the user through the explicit `proceed` instruction after planning commit `03b96b9`.
+- Task: CMS-010. Delivery defects: BUG-0534–BUG-0552.
 - Baseline: `ec408a6` on `codex/content-configuration-foundations`.
 - Tier: T2 because a new private configuration projection crosses schema, core, API, client, authorization metadata and Studio navigation.
 
@@ -32,7 +33,7 @@ Official sources were reviewed on 2026-08-29. They inform information shape and 
 |---|---|---|
 | [Sanity schema configuration](https://www.sanity.io/docs/studio/schema-types) and [Studio configuration](https://www.sanity.io/docs/studio/configuration) | Content models and workspace behavior are declared in JavaScript/TypeScript configuration. | Mark registered models/routes as code-owned and link to CMS-009. Do not add an unchecked runtime model editor. |
 | [Contentful environment access](https://www.contentful.com/developers/docs/tutorials/general/managing-access-to-environments/) | Environment access is distinct from content/media access; its documented list behavior can reveal names beyond usable environments. | GridStory uses the stricter existing policy-filtered choice set and never returns unauthorized topology or environment names. No environment management is added. |
-| [OWASP Authorization Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html) | Enforce least privilege, default deny and permission checks on every request. | Reuse exact existing `content.read`/`schema.read`/`asset.read` decisions per section; a composite Settings flag is presentation only. |
+| [OWASP Authorization Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html) | Enforce least privilege, default deny and permission checks on every request. | Reuse exact existing `locales.read`/`schema.read`/`asset.read` decisions per section; a composite Settings flag is presentation only. |
 | [OWASP Secrets Management Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html) | Secrets need fine-grained access and must not leak through external mechanisms or output. | The response contract has no generic key/value bag and accepts no `ApiConfig`, environment object, URL or credential field. Tests scan serialized responses for forbidden configuration material. |
 
 ## Necessity gate
@@ -117,7 +118,7 @@ No configuration or secret editor, environment-variable browser, generic setting
 
 ## Approval gate
 
-Pending. After the separate documentation-only planning commit, the user must explicitly approve this exact T2 scope before any runtime or test file is edited. Approval starts CMS-010 only; CMS-011 and later tasks retain their own gates.
+Satisfied. Planning commit `03b96b9` preserved the documentation-only checkpoint, and the user's following `proceed` explicitly approved this exact T2 scope. That approval starts CMS-010 only; CMS-011 and later tasks retain their own gates.
 
 ## Planning verification
 
@@ -127,4 +128,14 @@ Codex, 2026-08-29:
 - A read-only audit verifies 64 local Markdown links across the exact six-file planning fence: `BUGS.md`, `CHANGELOG.md`, `README.md`, `TASKS.md`, `docs/cms-admin-gap-analysis.md` and this ADR. Git status confirms no runtime, test, package, dependency, generated artifact, provider or deployment file changed.
 - BUG-0534 is resolved by updating only README's current delivery/style snapshot. The last full repository and browser results remain CMS-009's historical evidence; no runtime, unit, browser, database, recovery, provider or deployment check is represented as fresh verification of this proposal.
 
-Handoff: commit only the six planning documents as `docs(plan): define safe configuration inventory [CMS-010]`, then wait for explicit ADR 0033 approval. No implementation is authorized by the planning commit itself.
+Historical handoff: the six planning documents were committed separately as `03b96b9` (`docs(plan): define safe configuration inventory [CMS-010]`) before approval and implementation began.
+
+## Implementation result
+
+Codex, 2026-08-29:
+
+- Added the strict version-1 schema, pure core projection, authenticated private/no-store parameter-free API route, exact-scope universal client method, finite composite capability and one lazy **Settings > Configuration** destination. The response contains only the three approved fixed sections, fixed provider tuple/modes, ownership and `mutable: false`; denied sections do not project source data.
+- Studio renders real current/configured coverage, model/route and media-policy/provider facts with isolated loading/error/retry states, no editable controls and links only to already permitted Schemas & taxonomies or Library destinations. Direct `#/settings` does not bootstrap the detailed schema catalog, and context/session replacement owns inventory cleanup.
+- API regressions cover production authentication, scope, authorization, query/body rejection, private/no-store caching, current-only non-inference, unauthorized-topology exclusion, fixed provider availability and serialized forbidden material. Schema/core/client/Studio tests cover strictness, deterministic safe projection, exact scope, fail-closed method mapping, independent permission profiles and one-current-page behavior.
+- Real browser coverage passes 25/25 in Chromium, 25/25 in Firefox and 25/25 in the final WebKit rerun (75/75 total), including all three single-permission profiles, denied/no-access behavior, the full effective-inventory journey, zero configuration mutation requests, 1440/1280/1024/768/390/320px containment, keyboard/200% zoom, light/dark themes and unsuppressed WCAG 2.2 A/AA. BUG-0552's one retained WebKit draft assertion failure is non-reproducing after six exact passes and the clean full rerun; no timeout, retry or assertion changed.
+- Full `pnpm check` passes 716 active tests with 17 existing optional skips (306/306 Studio), strict types, generated contracts, security/ASVS, tenant-scope and release-readiness checks, React 18.3.1 SSR and all production builds. PostgreSQL, recovery, external-provider execution and deployment certification are deliberately not claimed because this slice adds no persistence, provider operation or deployment.
