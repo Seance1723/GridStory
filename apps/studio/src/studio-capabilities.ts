@@ -4,6 +4,7 @@ import type { StudioCapabilities, StudioOperation } from '@gridstory/schema';
 // A finite UI adapter, not an authorization policy. The API still authorizes each request.
 // Unknown SDK methods fail closed; adding a feature requires an explicit operation mapping.
 export const studioMethodOperations = {
+  getEditorialOverview: ['home.read'],
   listContent: ['content.read'],
   queryContent: ['content.read'],
   createContent: ['content.create'],

@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { studioCapabilitiesSchema, studioOperations } from '@gridstory/schema';
 import {
   permittedNavigation,
+  permittedPrimaryNavigation,
   studioDestinations,
   studioNavigationGroups,
+  studioPrimaryDestinations,
 } from '../src/navigation.js';
 
 describe('Studio navigation metadata', () => {
@@ -23,6 +25,8 @@ describe('Studio navigation metadata', () => {
     capabilities.screens.assets = false;
     capabilities.screens.operations = false;
     expect(permittedNavigation(capabilities)).toEqual([]);
+    capabilities.screens.home = true;
+    expect(permittedPrimaryNavigation(capabilities)).toEqual(['home']);
   });
   it('retains every original destination exactly once in the agreed nonempty groups', () => {
     expect(studioNavigationGroups.map(({ id, destinations }) => [id, [...destinations]])).toEqual([
@@ -47,9 +51,13 @@ describe('Studio navigation metadata', () => {
         ],
       ],
     ]);
-    const destinations = studioNavigationGroups.flatMap(({ destinations }) => [...destinations]);
-    expect(destinations).toHaveLength(20);
-    expect(new Set(destinations).size).toBe(20);
+    expect(studioPrimaryDestinations).toEqual(['home']);
+    const destinations = [
+      ...studioPrimaryDestinations,
+      ...studioNavigationGroups.flatMap(({ destinations }) => [...destinations]),
+    ];
+    expect(destinations).toHaveLength(21);
+    expect(new Set(destinations).size).toBe(21);
     expect([...destinations].sort()).toEqual(Object.keys(studioDestinations).sort());
     expect(new Set(studioNavigationGroups.map(({ id }) => id)).size).toBe(8);
   });
@@ -62,7 +70,7 @@ describe('Studio navigation metadata', () => {
       expect(label.trim().length).toBeGreaterThan(0);
       expect(icon.startsWith('M') || icon.startsWith('m')).toBe(true);
     }
-    expect(new Set(Object.values(studioDestinations).map(({ label }) => label)).size).toBe(20);
+    expect(new Set(Object.values(studioDestinations).map(({ label }) => label)).size).toBe(21);
     expect(
       studioNavigationGroups.some(({ label }) =>
         ['Home', 'Settings', 'Commerce', 'People', 'Navigation'].includes(label),

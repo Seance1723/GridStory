@@ -114,6 +114,13 @@
   margin: 0 0 17px;
 }
 
+.studio-navigation__primary {
+  border-bottom: 1px solid var(--studio-border);
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0 0 16px;
+}
+
 .studio-navigation__groups,
 .studio-navigation__items {
   list-style: none;

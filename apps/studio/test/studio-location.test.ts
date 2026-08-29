@@ -19,7 +19,7 @@ describe('finite Studio locations', () => {
         }
       }
     }
-    expect(parseStudioLocation('')).toEqual({ location: { destination: 'pages' }, invalid: false });
+    expect(parseStudioLocation('')).toEqual({ location: { destination: 'home' }, invalid: false });
   });
 
   it.each([
@@ -43,7 +43,7 @@ describe('finite Studio locations', () => {
     `#/pages?${'a'.repeat(4096)}`,
   ])('rejects invalid address without reflecting its value: %s', (hash) => {
     expect(parseStudioLocation(hash)).toEqual({
-      location: { destination: 'pages' },
+      location: { destination: 'home' },
       invalid: true,
     });
   });

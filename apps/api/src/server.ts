@@ -44,6 +44,7 @@ import {
   contentCacheTags,
   type DataPlacementAdapter,
   type DueWorkflowExecution,
+  EditorialOverviewService,
   EnterpriseIdentityService,
   ExperimentService,
   type FleetObservationAdapter,
@@ -195,7 +196,11 @@ import {
   WebAuthnAdapter,
 } from './identity-adapters.js';
 import { registerIdentityRoutes } from './identity-routes.js';
-import { StudioContextProjection, validateStudioTopology } from './studio-context.js';
+import {
+  studioCapabilities,
+  StudioContextProjection,
+  validateStudioTopology,
+} from './studio-context.js';
 import type { PlatformTopology } from '@gridstory/schema';
 import { NodeDnsMarketplaceDomainVerifier } from './marketplace-adapters.js';
 import { registerMarketplaceRoutes } from './marketplace-routes.js';
@@ -880,6 +885,13 @@ export async function buildServer({
     ...(allowedWebhookHosts ? { allowedWebhookHosts } : {}),
     ...(resolvedTenantTelemetry ? { telemetry: resolvedTenantTelemetry } : {}),
   });
+  const editorialOverview = new EditorialOverviewService({
+    content: repository,
+    workflows: resolvedWorkflowRepository,
+    releases: resolvedReleaseRepository,
+    schemas: contentSchemas,
+    operations: (scope) => operations.dashboard(scope),
+  });
   const portability = new PortabilityService({ repository });
   const audit = new AuditService({ repository });
   const previews = new PreviewSessionService({
@@ -1084,6 +1096,40 @@ export async function buildServer({
       );
     }
     return studioContext.project(requestContext(request, 'draft'));
+  });
+  server.get('/api/v1/editorial/overview', async (request, reply) => {
+    reply.header('cache-control', 'private, no-store');
+    if (Object.keys(request.query as Record<string, unknown>).length > 0) {
+      throw new GridStoryError(
+        'The editorial overview does not accept query parameters.',
+        'invalid_request',
+        400,
+      );
+    }
+    const context = requestContext(request, 'draft');
+    const capabilities = studioCapabilities(context, policy);
+    if (!capabilities.operations['home.read']) {
+      throw new GridStoryError('The editorial overview is not available.', 'forbidden', 403);
+    }
+    const contentVisibility = capabilities.operations['content.read']
+      ? 'all-registered'
+      : capabilities.operations['pages.list']
+        ? 'pages-only'
+        : undefined;
+    return editorialOverview.read({
+      scope: contentScope(context),
+      principal: { id: context.principal.id, roles: context.principal.roles },
+      visibility: {
+        ...(contentVisibility ? { content: contentVisibility } : {}),
+        reviews: Boolean(
+          contentVisibility &&
+            capabilities.operations['workflow.read'] &&
+            capabilities.operations['workflow.approve'],
+        ),
+        releases: capabilities.operations['release.read'],
+        operations: capabilities.operations['operations.read'],
+      },
+    });
   });
   server.get('/api/v1/schemas', async (request) => {
     const context = requestContext(request, 'draft');

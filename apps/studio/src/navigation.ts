@@ -2,6 +2,7 @@
 import type { StudioCapabilities } from '@gridstory/schema';
 
 export const studioDestinations = {
+  home: { label: 'Home', icon: 'M4 11.5 12 4l8 7.5V20h-5v-5H9v5H4z' },
   pages: { label: 'Pages', icon: 'M4 4h16v16H4zM8 4v16' },
   collections: {
     label: 'Collections',
@@ -56,6 +57,8 @@ export const studioDestinations = {
 
 export type StudioDestination = keyof typeof studioDestinations;
 
+export const studioPrimaryDestinations = ['home'] as const satisfies readonly StudioDestination[];
+
 export const studioNavigationGroups = [
   {
     id: 'content',
@@ -89,6 +92,10 @@ export const studioNavigationGroups = [
 }>;
 
 export type StudioNavigationGroupId = (typeof studioNavigationGroups)[number]['id'];
+
+export function permittedPrimaryNavigation(capabilities: StudioCapabilities) {
+  return studioPrimaryDestinations.filter((destination) => capabilities.screens[destination]);
+}
 
 export function permittedNavigation(capabilities: StudioCapabilities) {
   return studioNavigationGroups

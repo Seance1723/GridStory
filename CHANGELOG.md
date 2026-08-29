@@ -20,6 +20,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Completed CMS-006's factual editorial Home: a strict minimized complete-scope overview, independently authorized and failure-isolated Content/Reviews/Releases/Operations widgets, a top-level finite `#/home` destination, precise existing-detail links, and quick create delegated to CMS-004's canonical candidate/preflight/create path. The private parameter-free endpoint is `no-store`, response lists are fixed at five with exact coverage/bound wording, and denied widgets issue no source reads. Final `pnpm check` passes 669 active tests with 17 existing optional skips, React 18.3.1 SSR and production builds; the unchanged browser matrix passes 60/60 across Chromium, Firefox and WebKit. BUG-0489–BUG-0500 are resolved. No new permission, storage schema, analytics/task system, configurable widget framework, dependency, cross-tenant projection, merge, push or deployment was added.
+
+- Accepted ADR 0032 and started CMS-006 (Codex, 2026-08-29T09:18:11+05:30; baseline `58fc548`) after the user's explicit `proceed`. Implement only the strict minimized editorial overview, top-level Home destination and CMS-004 quick-create delegation inside the approved fence; CMS-007–010, merge, push and deployment remain out of scope.
+
 - Proposed CMS-006 / ADR 0032 (Codex, 2026-08-29; baseline `519235f`) on the shared content/configuration branch: one strict private/no-store editorial overview with independently authorized and error-isolated bounded content, eligible-review, release and operator-attention widgets; a top-level Home destination; and quick create delegated to CMS-004. Existing repositories/actions remain authoritative; no runtime/test edit, new permission, storage schema, aggregate, analytics, notification/task model, configurable widget framework, dependency, cross-tenant metric, merge, push or deployment is approved. Explicit T2 approval is pending after the planning commit.
 
 - Added CMS-004 registered-type authoring: the default example now registers an independently routed non-component Article schema/workflow and seeded entry; Studio adds an authorized Collections destination, type-aware locations/loading/history, canonical preflight creation, declared-target relations, and schema-gated composition/preview without changing storage or permission meanings.
@@ -74,6 +78,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Added consent/GPC-gated exact-published public event ingestion, private operational reports, typed universal-client methods, Studio content/component/release/adapter metrics, recovery/PostgreSQL/browser coverage, analytics guidance/ADR, and verified `THREAT-0032`/`GS-SEC-036` controls (M7-003).
 
 ### Changed
+
+- Logged BUG-0500 during CMS-006's final aggregate gate: after the 13-minute browser matrix, two existing Studio interaction cases exceeded their unchanged deadlines by 305ms/217ms while 271 sibling Studio tests and all preceding repository gates passed. The exact pair and full gate must rerun unchanged before completion; no timeout, retry or assertion relaxation is justified by this observation.
+
+- Studio root startup now selects Home when the verified context permits it and otherwise keeps the first permitted existing destination. Home bootstrap avoids full content/workflow/release/operations detail reads; those sources stay lazy behind their established screens. The finite Studio contract now exposes 21 destinations and `home.read` derived only from existing read decisions, while history, dirty-state, session and scope replacement boundaries remain intact (CMS-006).
 
 - Completed CMS-005 (Codex, 2026-08-29): replaced Studio's unbounded primary entry list with the existing registered-type content query, approved search/status/sort controls, exact loaded/total bounds and ten-row signed-cursor pagination. Added stable selection, isolated loading/empty/error recovery, semantic keyboard/mobile tables and versioned verified-scope/type browser-local saved views that never persist draft content, credentials, principals or authorization. Final `pnpm check` passes 653 active tests with 17 existing optional skips and production builds; all 57 Chromium/Firefox/WebKit scenarios pass. BUG-0477–BUG-0487 are resolved; no new query operator, server preference, bulk mutation, dependency, migration, permission meaning, palette change, merge, push or deployment is included.
 
@@ -130,6 +138,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Recorded the accepted M6-005 evidence-bound marketplace decision: operator-scoped publisher verification, signed compatibility/support metadata, injected non-executing artifact review, separate human approval, and approved-only handoff to the existing disabled plugin installation lifecycle.
 
 ### Fixed
+
+- Gave the two existing BUG-0500 Studio interaction cases bounded 10s/30s ceilings after paired failing-before runs proved their former 5s/15s deadlines had at most 1.6% scheduling margin. Every interaction and assertion remains, no retry/global timeout changed, and the exact pair, complete 273-test Studio file, final 669-active-test repository gate and unchanged 60-scenario real-browser matrix pass.
+
+- Corrected CMS-006 verification defects BUG-0489–BUG-0499: capability-first Home startup, complete-scope assertion order, isolated API spies, strict callback lint, exact browser/schema fixtures, runtime-invalid dirty-history retention, Home dark-status contrast and 1024px containment now pass. Shared selected option-card copy and selected-reference/presence chips also use their semantic/theme foreground and surface tokens, eliminating the sequence-dependent Firefox light/dark contrast failures without changing the palette or weakening WCAG assertions.
 
 - Resolved BUG-0488 during CMS-006 planning: the task ledger's stale `Single next action` now names the verified CMS-005 baseline and CMS-006's required ADR 0032 planning/approval gate instead of instructing already-completed CMS-004/CMS-005 work.
 

@@ -43,9 +43,10 @@ const topology = () => ({
 
 describe('minimized Studio contracts', () => {
   it('has exactly the existing finite destinations and explicit boolean operations', () => {
-    expect(studioDestinations).toHaveLength(20);
+    expect(studioDestinations).toHaveLength(21);
     expect(new Set(studioOperations).size).toBe(studioOperations.length);
     expect(studioContextSchema.parse(response()).capabilities.screens.pages).toBe(false);
+    expect(studioContextSchema.parse(response()).capabilities.screens.home).toBe(false);
     for (const change of [
       { version: 2 },
       { principal: { roles: ['admin'] } },

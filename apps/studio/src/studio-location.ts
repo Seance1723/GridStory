@@ -4,13 +4,13 @@ export type StudioLocation = { destination: StudioDestination; entryId?: string;
 export type ParsedStudioLocation = { location: StudioLocation; invalid: boolean };
 
 const fallback = (): ParsedStudioLocation => ({
-  location: { destination: 'pages' },
+  location: { destination: 'home' },
   invalid: true,
 });
 
 // Only the fragment is Studio-owned. Never infer client scope from an address.
 export function parseStudioLocation(hash: string): ParsedStudioLocation {
-  if (!hash || hash === '#') return { location: { destination: 'pages' }, invalid: false };
+  if (!hash || hash === '#') return { location: { destination: 'home' }, invalid: false };
   if (hash.length > 4096) return fallback();
   const match = /^#\/([a-z-]+)(?:\?([^#]*))?$/.exec(hash);
   if (!match || !Object.hasOwn(studioDestinations, match[1] ?? '')) return fallback();

@@ -1,6 +1,6 @@
 # ADR 0032: Factual editorial Home
 
-- Status: Proposed; explicit approval is required before runtime or test edits.
+- Status: Delivered and verified for CMS-006 on 2026-08-29 after the user's explicit `proceed`.
 - Created: 2026-08-29 by Codex.
 - Task: CMS-006. Planning defect: BUG-0488.
 - Baseline: `519235f` on `codex/content-configuration-foundations`.
@@ -122,8 +122,16 @@ No configurable dashboard/widget framework, analytics/trend collection, chart, n
 
 ## Approval gate
 
-This T2 proposal requires the user's explicit approval after the separate planning commit. Approval starts CMS-006 only inside this fence. CMS-007–010 retain their own task boundaries and T2 gates where applicable.
+The user explicitly approved this T2 proposal with `proceed` on 2026-08-29T09:18:11+05:30 after the separate `58fc548` planning commit. Approval starts CMS-006 only inside this fence. CMS-007–010 retain their own task boundaries and T2 gates where applicable.
 
 ## Planning verification
 
 Codex, 2026-08-29: `pnpm lint`, `pnpm format:check`, `node scripts/check-ledgers.mjs`, `git diff --check`, a six-file local Markdown-link audit and the exact documentation/ledger fence audit pass. Only `TASKS.md`, `CHANGELOG.md`, `BUGS.md`, `README.md`, `docs/cms-admin-gap-analysis.md` and this ADR are included. BUG-0488 is resolved. No runtime, unit, API, database, browser, provider or deployment behavior changes are claimed by this proposal; the unchanged `519235f` baseline retains CMS-005's separately recorded full repository and 57-scenario browser evidence.
+
+## Implementation and verification
+
+Codex, 2026-08-29: the accepted slice is implemented without extending the approved behavior boundary. The strict schema, core projection, authenticated API route, universal client parser, finite capability/location changes and isolated Home component are additive. Root Home starts from the minimized overview and schema/manifest metadata required for canonical quick create; full content, workflow, release and operations lists remain lazy. Widget-level policy checks deny without calling their repositories, core scope assertions precede visibility filtering, and no repository/storage/permission contract changed. BUG-0498/0499 use the existing `_cta.scss` and `_collaboration.scss` component-state homes required by the approved shared-state clause and the user's standing global-style requirement; no second override layer or palette change was introduced.
+
+Focused schema/core/client/API/Studio suites pass the strict scope, exact-bound, review eligibility, per-widget failure, no-store/non-enumeration, history and quick-create cases. Final `pnpm check` passes lint/format, ledgers, boundaries, generated contracts, security/threat/tenant/readiness checks, strict types, 669 active tests with 17 existing optional skips, React 18.3.1 SSR and production builds. The rebuilt unchanged Playwright matrix passes 60/60 scenarios: 20 each in Chromium, Firefox and WebKit, including precise Home links, minimized startup requests, canonical creation, six responsive widths, keyboard operation, 200% zoom, light/dark rendering and unsuppressed WCAG 2.2 A/AA audits. BUG-0489–BUG-0500 retain all defects found and their verified corrections. No PostgreSQL, recovery, provider, deployment or production-readiness result is claimed because those boundaries did not change.
+
+BUG-0500 test-harness decision: the final aggregate run and an exact paired rerun report only wall-clock timeouts at 5.305s/15.217s and 5.293s/15.034s; all earlier assertions and 271 sibling Studio tests pass. Each case passes unchanged alone at 4.92s and 14.39s, leaving 1.6% or less scheduling margin under its former deadline. This is not evidence of a product failure, and the complete real-browser acceptance is green. Retain every interaction/assertion and use bounded 10s/30s case ceilings. The exact pair, full 273-test Studio file and final repository gate pass. No global timeout, retry, skip or assertion changed.

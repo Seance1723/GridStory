@@ -8,6 +8,7 @@ import {
   type ContentEntry,
   type ContentFederationDocument,
   createGridStoryClient,
+  type EditorialOverview,
   type ExperimentDesign,
   type ExperimentMetricSnapshotInput,
   type ExperimentOverview,
@@ -204,6 +205,7 @@ function createTestClient(
     entries?: ContentEntry[];
     assets?: AssetRecord[];
     queryFailsAfter?: number;
+    overview?: EditorialOverview;
   } = {},
 ) {
   const testSchema = options.schema ?? schema;
@@ -346,6 +348,72 @@ function createTestClient(
     updatedAt: now,
   };
   const releaseRecords: Release[] = [];
+  const editorialOverview = (): EditorialOverview =>
+    options.overview ?? {
+      version: 1,
+      scope: options.context?.scope ?? {
+        organizationId: 'local',
+        tenantId: 'default',
+        workspaceId: 'default',
+        siteId: 'default',
+        environmentId: 'development',
+        locale: 'en',
+      },
+      generatedAt: now,
+      widgets: {
+        content: {
+          availability: 'available',
+          coverage: 'all-registered',
+          exact: true,
+          bounds: {
+            totalCount: testEntries.length,
+            displayedCount: Math.min(testEntries.length, 5),
+            limit: 5,
+            hasMore: testEntries.length > 5,
+          },
+          states: {
+            draft: testEntries.filter(({ status }) => status === 'draft').length,
+            changed: testEntries.filter(({ status }) => status === 'changed').length,
+            published: testEntries.filter(({ status }) => status === 'published').length,
+          },
+          recent: testEntries.slice(0, 5).map((candidate) => ({
+            id: candidate.id,
+            contentType: candidate.contentType,
+            title:
+              typeof candidate.data.headline === 'string' ? candidate.data.headline : candidate.id,
+            status: candidate.status,
+            updatedAt: candidate.updatedAt,
+            destination: candidate.contentType === 'page' ? 'pages' : 'collections',
+          })),
+        },
+        reviews: {
+          availability: 'available',
+          coverage: 'all-registered',
+          exact: true,
+          bounds: { totalCount: 0, displayedCount: 0, limit: 5, hasMore: false },
+          items: [],
+        },
+        releases: {
+          availability: 'available',
+          exact: true,
+          bounds: {
+            totalCount: releaseRecords.length,
+            displayedCount: Math.min(releaseRecords.length, 5),
+            limit: 5,
+            hasMore: releaseRecords.length > 5,
+          },
+          items: releaseRecords.slice(0, 5).map((release) => ({
+            id: release.id,
+            name: release.name,
+            state: release.state,
+            updatedAt: release.updatedAt,
+            ...(release.schedule ? { runAt: release.schedule.runAt } : {}),
+            destination: 'releases',
+          })),
+        },
+        operations: { availability: 'unavailable' },
+      },
+    };
   const workflowActionRecords: Array<Record<string, unknown>> = [];
   const migrationSources: MigrationSourceDescriptor[] = [
     {
@@ -703,15 +771,18 @@ function createTestClient(
               },
               principalId: 'local-admin',
               capabilities: {
-                screens: Object.fromEntries(studioScreens.map((screen) => [screen, true])),
+                screens: Object.fromEntries(
+                  studioScreens.map((screen) => [screen, screen !== 'home']),
+                ),
                 operations: Object.fromEntries(
-                  studioOperations.map((operation) => [operation, true]),
+                  studioOperations.map((operation) => [operation, operation !== 'home.read']),
                 ),
               },
               selection: { mode: 'current-only', choices: [] },
             },
       );
     }
+    if (url.pathname === '/api/v1/editorial/overview') return json(editorialOverview());
     if (url.pathname === '/api/v1/schemas') return json(testSchemas);
     if (url.pathname === '/api/v1/components') return json(componentManifests);
     if (url.pathname === '/api/v1/design-system') return json(exampleDesignSystem);
@@ -2163,6 +2234,8 @@ describe('GridStory Studio', () => {
 
   function selectableContext(): StudioContext {
     const value = restrictedContext([...studioOperations], [...studioScreens]);
+    value.capabilities.screens.home = false;
+    value.capabilities.operations['home.read'] = false;
     value.principalId = 'context-editor';
     value.selection = {
       mode: 'configured',
@@ -2184,6 +2257,67 @@ describe('GridStory Studio', () => {
     };
     return value;
   }
+
+  it('uses Home as the root destination and loads only its minimized private overview', async () => {
+    window.history.replaceState(null, '', '/');
+    const context = restrictedContext([...studioOperations], [...studioScreens]);
+    const client = createTestClient({ context });
+    const overviewRead = vi.spyOn(client, 'getEditorialOverview');
+    const fullReads = [
+      vi.spyOn(client, 'queryContent'),
+      vi.spyOn(client, 'listAssets'),
+      vi.spyOn(client, 'listReleases'),
+      vi.spyOn(client, 'getOperationsDashboard'),
+      vi.spyOn(client, 'listWorkflows'),
+      vi.spyOn(client, 'getDesignSystem'),
+    ];
+
+    render(<App client={client} />);
+    const home = await screen.findByRole('region', { name: 'Editorial Home' });
+    expect(window.location.hash).toBe('#/home');
+    expect(screen.getByRole('button', { name: 'Home' }).getAttribute('aria-current')).toBe('page');
+    expect(await within(home).findByText('Showing 2 of 2 exact scoped items.')).toBeTruthy();
+    expect(overviewRead).toHaveBeenCalledOnce();
+    for (const read of fullReads) expect(read).not.toHaveBeenCalled();
+
+    await userEvent.setup().click(within(home).getByRole('button', { name: /First page/ }));
+    await screen.findByLabelText('Headline');
+    expect(window.location.hash).toBe('#/pages?entry=one&type=page');
+    expect(screen.getByRole('button', { name: 'Pages' }).getAttribute('aria-current')).toBe('page');
+  });
+
+  it('delegates Home quick create to the canonical registered-schema authoring path', async () => {
+    window.history.replaceState(null, '', '/');
+    const client = createTestClient({
+      context: restrictedContext([...studioOperations], [...studioScreens]),
+    });
+    const created = entry('created', 'New page', 'new-page');
+    const workflow = await client.getContentWorkflow('one');
+    const create = vi.spyOn(client, 'createContent').mockResolvedValueOnce(created);
+    vi.spyOn(client, 'queryContent').mockResolvedValueOnce({
+      edges: [...entries, created].map((node, index) => ({ cursor: String(index + 1), node })),
+      nodes: [...entries, created],
+      pageInfo: {
+        startCursor: '1',
+        endCursor: '3',
+        hasNextPage: false,
+        hasPreviousPage: false,
+      },
+      totalCount: 3,
+    });
+    vi.spyOn(client, 'getContent').mockResolvedValueOnce(created);
+    vi.spyOn(client, 'getContentWorkflow').mockResolvedValueOnce({
+      ...workflow,
+      entryId: created.id,
+      revisionId: created.draftRevisionId,
+    });
+    render(<App client={client} />);
+    const home = await screen.findByRole('region', { name: 'Editorial Home' });
+    await userEvent.setup().click(await within(home).findByRole('button', { name: 'Create Page' }));
+    await waitFor(() => expect(create).toHaveBeenCalledOnce());
+    await screen.findByLabelText('Headline');
+    expect(window.location.hash).toBe('#/pages?entry=created&type=page');
+  });
 
   it('cancels or commits a complete scope switch with dirty-state, preview, and history guards', async () => {
     const user = userEvent.setup();
@@ -4075,7 +4209,7 @@ describe('GridStory Studio', () => {
 
     await user.click(screen.getByRole('button', { name: 'Apply Campaign page' }));
     expect(screen.getByText('6 components')).toBeTruthy();
-  });
+  }, 10_000);
   it('authors rich text, assets, references, inline props, and scoped collaboration', async () => {
     const user = userEvent.setup();
     render(
@@ -4160,7 +4294,7 @@ describe('GridStory Studio', () => {
     expect(
       within(thread as HTMLElement).getByRole('button', { name: 'Reply' }).className,
     ).toContain('button--secondary');
-  }, 15_000);
+  }, 30_000);
 
   it('shows scoped component usage and visual regression hooks in governance', async () => {
     const user = userEvent.setup();

@@ -30,6 +30,52 @@ async function filterPageList(page: Page, title: string) {
   await page.getByRole('button', { name: 'Apply list view' }).click();
 }
 
+test('root Home uses the minimized overview, exact bounds, existing entry routes, and canonical create', async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  const requestPaths: string[] = [];
+  page.on('request', (request) => {
+    const path = new URL(request.url()).pathname;
+    if (path.startsWith('/api/v1/')) requestPaths.push(path);
+  });
+
+  await page.goto('/');
+  const home = page.getByRole('region', { name: 'Editorial Home' });
+  await expect(home).toBeVisible();
+  await expect(page).toHaveURL(/#\/home$/);
+  await expect(page.locator('[data-destination="home"]')).toHaveAttribute('aria-current', 'page');
+  await expect(home.getByRole('heading', { name: 'Content', exact: true })).toBeVisible();
+  await expect(home.getByRole('heading', { name: 'Reviews', exact: true })).toBeVisible();
+  await expect(home.getByRole('heading', { name: 'Releases', exact: true })).toBeVisible();
+  await expect(
+    home.getByRole('heading', { name: 'Operator attention', exact: true }),
+  ).toBeVisible();
+  await expect(home.locator('.editorial-home-card__bounds').first()).toContainText(
+    /Showing \d+ of \d+ exact scoped items/,
+  );
+  await expect.poll(() => requestPaths.includes('/api/v1/editorial/overview')).toBe(true);
+  expect(requestPaths).not.toContain('/api/v1/assets');
+  expect(requestPaths).not.toContain('/api/v1/releases');
+  expect(requestPaths).not.toContain('/api/v1/workflows');
+  expect(requestPaths).not.toContain('/api/v1/operations/summary');
+
+  const recentEntry = home
+    .getByRole('article', { name: 'Content', exact: true })
+    .locator('.editorial-home-list__link')
+    .first();
+  await expect(recentEntry).toBeVisible();
+  await recentEntry.click();
+  await expect(page.locator('.studio-workspace')).toBeVisible();
+  await expect(page).toHaveURL(/#\/(pages|collections)\?entry=[^&]+&type=[^&]+$/);
+
+  await page.goBack();
+  await expect(home).toBeVisible();
+  await page.getByRole('button', { name: 'Create Page', exact: true }).click();
+  await expect(page.getByText('Draft page created.')).toBeVisible();
+  await expect(page).toHaveURL(/#\/pages\?entry=[^&]+&type=page$/);
+});
+
 test('deep links restore authorized entry context, reload, skip focus and mobile navigation', async ({
   page,
   context,

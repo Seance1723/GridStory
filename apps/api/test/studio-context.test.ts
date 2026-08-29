@@ -181,6 +181,7 @@ describe('Studio permission and topology projection', () => {
     );
     const result = projection.project(current);
     expect(Object.entries(result.capabilities.screens).filter(([, allowed]) => allowed)).toEqual([
+      ['home', true],
       ['operations', true],
     ]);
     expect(result.capabilities.operations['operations.manage']).toBe(false);
@@ -413,7 +414,7 @@ describe('private Studio context HTTP contract', () => {
   });
 
   it.each(['admin', 'viewer', 'author', 'unmapped'])(
-    'matches actual reads for all 20 destinations with %s session',
+    'matches actual reads for all 21 destinations with %s session',
     async (role) => {
       const value = await fixture(role);
       const projected = await value.server.inject({
@@ -424,6 +425,7 @@ describe('private Studio context HTTP contract', () => {
       expect(projected.statusCode).toBe(200);
       const result = projected.json<StudioContext>();
       const routes: Record<StudioDestinationId, string> = {
+        home: '/editorial/overview',
         pages: '/content?contentType=page',
         collections: '/schemas',
         workflows: '/workflows',

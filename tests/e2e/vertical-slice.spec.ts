@@ -34,7 +34,7 @@ test('filters, saves, and paginates a responsive content list without replacing 
     expect(response.ok()).toBe(true);
   }
 
-  await page.goto('/');
+  await page.goto('/#/pages');
   const title = page.getByLabel('Title', { exact: true });
   await expect(title).toBeVisible();
   const selectedTitle = await title.inputValue();
@@ -81,7 +81,7 @@ test('edits, protects, governs, publishes, and delivers React content', async ({
 }) => {
   test.setTimeout(90_000);
 
-  await page.goto('/');
+  await page.goto('/#/pages');
   await expect(page.getByRole('heading', { name: 'Pages' })).toBeVisible();
   await page.getByLabel('Search title or slug').fill('Welcome to GridStory');
   await page.getByRole('button', { name: 'Apply list view' }).click();
@@ -193,7 +193,7 @@ test('creates and revises a registered article without page-only composition or 
 }) => {
   test.setTimeout(60_000);
 
-  await page.goto('/');
+  await page.goto('/#/pages');
   await expect(page.getByRole('heading', { name: 'Pages', exact: true })).toBeVisible();
   await page
     .getByRole('navigation', { name: 'Studio sections' })

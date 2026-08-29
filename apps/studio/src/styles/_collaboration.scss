@@ -73,8 +73,9 @@
 .selected-reference-list > span,
 .presence-chip {
   align-items: center;
-  background: #f3f4f6;
+  background: var(--studio-surface-soft);
   border-radius: 999px;
+  color: var(--studio-text);
   display: inline-flex;
   font-size: 0.78rem;
   gap: 0.35rem;
