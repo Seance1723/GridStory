@@ -1,4 +1,302 @@
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
+
+const contentApi = 'http://127.0.0.1:44000/api/v1';
+const adminHeaders = {
+  'x-gridstory-tenant': 'default',
+  'x-gridstory-actor': 'studio-content-list-test',
+  'x-gridstory-roles': 'admin,editor,publisher',
+};
+
+test('filters, saves, and paginates a responsive content list without replacing the editor', async ({
+  page,
+  request,
+}, testInfo) => {
+  test.setTimeout(90_000);
+  const titlePrefix = `List ${testInfo.project.name}`;
+  const seedResponse = await request.get(
+    `${contentApi}/content?contentType=page&perspective=draft`,
+    { headers: adminHeaders },
+  );
+  expect(seedResponse.ok()).toBe(true);
+  const seed = (await seedResponse.json()) as Array<{ data: Record<string, unknown> }>;
+  for (let index = 1; index <= 11; index += 1) {
+    const response = await request.post(`${contentApi}/content`, {
+      headers: adminHeaders,
+      data: {
+        contentType: 'page',
+        data: {
+          ...seed[0]?.data,
+          title: `${titlePrefix} ${String(index).padStart(2, '0')}`,
+          slug: `list-view-${index}-${crypto.randomUUID()}`,
+        },
+      },
+    });
+    expect(response.ok()).toBe(true);
+  }
+
+  await page.goto('/#/pages');
+  const title = page.getByLabel('Title', { exact: true });
+  await expect(title).toBeVisible();
+  const selectedTitle = await title.inputValue();
+  await page.getByLabel('Search title or slug').fill(titlePrefix);
+  await page.getByLabel('Status').selectOption('draft');
+  await page.getByLabel('Sort').selectOption('title-asc');
+  await page.getByRole('button', { name: 'Apply list view' }).click();
+  await expect(page.getByText('Showing 10 of 11')).toBeVisible();
+  await expect(title).toHaveValue(selectedTitle);
+
+  const results = page.getByRole('region', { name: 'Content results' });
+  const firstResult = results.getByRole('button', { name: new RegExp(`${titlePrefix} 01`) });
+  await firstResult.focus();
+  await expect(firstResult).toBeFocused();
+  await page.getByText('Local saved views (0)').click();
+  await page.getByLabel('View name').fill('Draft list views');
+  await page.getByRole('button', { name: 'Save view' }).click();
+  await expect(page.getByRole('button', { name: 'Draft list views', exact: true })).toBeVisible();
+  const localPreference = await page.evaluate(() =>
+    localStorage.getItem('gridstory-content-list-views.v1'),
+  );
+  expect(localPreference).toContain('Draft list views');
+  expect(localPreference).not.toMatch(/revisionId|sections|gsp_|bearer|credential/i);
+
+  await page.getByRole('button', { name: 'Next' }).click();
+  await expect(page.getByText('Showing 1 of 11')).toBeVisible();
+  await expect(
+    results.getByRole('button', { name: new RegExp(`${titlePrefix} 11`) }),
+  ).toBeVisible();
+  await expect(title).toHaveValue(selectedTitle);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByRole('button', { name: 'Previous' })).toBeVisible();
+  const bounds = await page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }));
+  expect(bounds.scrollWidth).toBeLessThanOrEqual(bounds.clientWidth);
+});
+
+test('loads, uploads, filters, revises, inspects, and privately delivers scoped Media', async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(90_000);
+  const fileName = `media-${testInfo.project.name}-${crypto.randomUUID()}.png`;
+  const updatedTitle = `Managed ${testInfo.project.name} media`;
+  const assetRequests: string[] = [];
+  page.on('request', (request) => {
+    const url = new URL(request.url());
+    if (url.pathname.startsWith('/api/v1/assets')) assetRequests.push(url.pathname);
+  });
+
+  await page.goto('/');
+  await expect(page.getByRole('region', { name: 'Editorial Home' })).toBeVisible();
+  expect(assetRequests).toHaveLength(0);
+  const listResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'GET' &&
+      new URL(response.url()).pathname === '/api/v1/assets',
+  );
+  await page.getByRole('button', { name: 'Library', exact: true }).click();
+  expect((await listResponse).ok()).toBe(true);
+  const library = page.getByRole('region', { name: 'Asset library' });
+  await expect(library).toBeVisible();
+  await expect(library.getByText(/Showing \d+ of \d+ loaded scoped assets/)).toBeVisible();
+
+  await library.getByLabel('Upload asset').setInputFiles({
+    name: fileName,
+    mimeType: 'image/png',
+    buffer: Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+      'base64',
+    ),
+  });
+  await expect(page.getByText(`${fileName} added to the asset library.`)).toBeVisible();
+  await expect(library.getByRole('article', { name: `${fileName} asset details` })).toBeVisible();
+  const details = library.locator('.asset-detail');
+  await expect(details.getByText('verified', { exact: true })).toBeVisible();
+  await expect(details.getByText('not_configured', { exact: true })).toBeVisible();
+  await expect(details.getByText('Unavailable', { exact: true })).toBeVisible();
+
+  await details.getByLabel('Title').fill(updatedTitle);
+  await details.getByLabel('Alternative text').fill('One transparent verification pixel');
+  await details.getByLabel('Tags (comma separated)').fill('browser, media, browser');
+  await details.getByRole('button', { name: 'Save metadata' }).click();
+  await expect(details.getByRole('heading', { name: `${updatedTitle} details` })).toBeVisible();
+  await expect(details.getByText('Version 2')).toBeVisible();
+
+  await details.getByRole('button', { name: 'Inspect usage' }).click();
+  await expect(details.getByText('0 references across 0 entries')).toBeVisible();
+  await details.getByRole('button', { name: 'Create rendition' }).click();
+  await expect(details.getByRole('alert')).toHaveText('No rendition adapter is configured.');
+
+  await library.getByLabel('Search loaded assets').fill(fileName);
+  await library.getByLabel('Kind').selectOption('image');
+  await library.getByLabel('Security state').selectOption('verified');
+  await expect(library.getByText(/Showing 1 of \d+ loaded scoped assets/)).toBeVisible();
+  await details.getByRole('button', { name: 'Open private delivery' }).focus();
+  await expect(details.getByRole('button', { name: 'Open private delivery' })).toBeFocused();
+  const popupPromise = page.waitForEvent('popup');
+  await details.getByRole('button', { name: 'Open private delivery' }).click();
+  const popup = await popupPromise;
+  await expect.poll(() => popup.url()).toMatch(/\/api\/v1\/assets\/[^/]+\/content\?token=/);
+  const deliveryUrl = popup.url();
+  expect(await page.locator('body').textContent()).not.toContain(deliveryUrl);
+  expect(await page.evaluate(() => JSON.stringify(localStorage))).not.toContain('token=');
+  await popup.close();
+
+  await page.getByRole('button', { name: 'Switch to dark theme' }).click();
+  await expect(page.locator('.studio-shell')).toHaveAttribute('data-theme', 'dark');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(details.getByLabel('Title')).toBeVisible();
+  const bounds = await page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }));
+  expect(bounds.scrollWidth).toBeLessThanOrEqual(bounds.clientWidth);
+  const accessibility = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+    .analyze();
+  expect(
+    accessibility.violations,
+    accessibility.violations
+      .map((violation) => `${violation.id}: ${violation.help} (${violation.nodes.length})`)
+      .join('\n'),
+  ).toEqual([]);
+});
+
+test('browses the governed design catalog and inserts an approved pattern into the current draft', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const designRequests: string[] = [];
+  page.on('request', (request) => {
+    const url = new URL(request.url());
+    if (url.pathname === '/api/v1/design-system') designRequests.push(url.pathname);
+  });
+
+  await page.goto('/');
+  await expect(page.getByRole('region', { name: 'Editorial Home' })).toBeVisible();
+  expect(designRequests).toHaveLength(0);
+  const designResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'GET' &&
+      new URL(response.url()).pathname === '/api/v1/design-system',
+  );
+  await page.getByRole('button', { name: 'Components', exact: true }).click();
+  expect((await designResponse).ok()).toBe(true);
+
+  const catalog = page.getByRole('region', { name: 'Governed design catalog' });
+  await expect(catalog).toBeVisible();
+  await expect(
+    catalog.getByRole('heading', { name: 'GridStory Example Design System' }),
+  ).toBeVisible();
+  await expect(catalog.getByRole('group', { name: 'Design ownership' })).toContainText(
+    'gridstory.example · version 1',
+  );
+  await expect(catalog.getByRole('heading', { name: 'Tokens (3)' })).toBeVisible();
+  await expect(catalog.getByRole('heading', { name: 'Breakpoints (3)' })).toBeVisible();
+  await expect(catalog.getByRole('heading', { name: 'Variants (3)' })).toBeVisible();
+  await expect(catalog.getByRole('button', { name: 'Insert Portability callout' })).toBeDisabled();
+  await catalog.getByLabel('Inspect component').selectOption('gridstory.callout');
+  await expect(catalog.getByRole('article', { name: 'Callout contract' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Pages', exact: true }).click();
+  await page.getByLabel('Search title or slug').fill('Welcome to GridStory');
+  await page.getByRole('button', { name: 'Apply list view' }).click();
+  await page
+    .getByRole('complementary', { name: 'Content entries' })
+    .getByRole('button', { name: /Welcome to GridStory/ })
+    .click();
+  await expect(page.getByLabel('Title', { exact: true })).toHaveValue('Welcome to GridStory');
+
+  await page.getByRole('button', { name: 'Components', exact: true }).click();
+  await expect(catalog.getByText('Unsaved target: Welcome to GridStory')).toBeVisible();
+  const insertPattern = catalog.getByRole('button', { name: 'Insert Portability callout' });
+  await expect(insertPattern).toBeEnabled();
+  await insertPattern.click();
+  await page.getByRole('button', { name: 'Pages', exact: true }).click();
+  await expect(page.getByText('Unsaved changes', { exact: true })).toBeVisible();
+  await expect(
+    page
+      .getByRole('region', { name: 'Selected component inspector' })
+      .getByText('Linked to Portability callout'),
+  ).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const bounds = await page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }));
+  expect(bounds.scrollWidth).toBeLessThanOrEqual(bounds.clientWidth);
+});
+
+test('inspects canonical schemas, lifecycle impact, and taxonomy identity without mutation controls', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const catalogRequests: string[] = [];
+  page.on('request', (request) => {
+    const url = new URL(request.url());
+    if (
+      url.pathname.startsWith('/api/v1/schema-lifecycle') ||
+      url.pathname === '/api/v1/taxonomies'
+    ) {
+      catalogRequests.push(`${request.method()} ${url.pathname}`);
+    }
+  });
+
+  await page.goto('/');
+  await expect(page.getByRole('region', { name: 'Editorial Home' })).toBeVisible();
+  expect(catalogRequests).toEqual([]);
+  await page.getByRole('button', { name: 'Schemas & taxonomies', exact: true }).click();
+
+  const catalog = page.getByRole('region', { name: 'Schema and taxonomy catalog' });
+  await expect(catalog).toBeVisible();
+  await expect(catalog.getByText('Code-owned · read-only')).toBeVisible();
+  await expect(
+    catalog.getByRole('heading', { name: 'Source, deployment, and drift' }),
+  ).toBeVisible();
+  await expect(catalog.getByRole('article', { name: 'Page model identity' })).toContainText(
+    '/:slug',
+  );
+  await expect(catalog.getByText('Hierarchical categories')).toBeVisible();
+  await expect(catalog.getByText(/parent product/)).toBeVisible();
+  await expect(catalog.getByText(/assessment only · no activation action/)).toBeVisible();
+
+  await catalog.getByLabel('Inspect model').selectOption('article');
+  await expect(catalog.getByRole('article', { name: 'Article model identity' })).toContainText(
+    '/articles/:slug',
+  );
+  await expect(catalog.getByText('headline · article.headline')).toBeVisible();
+  await catalog.getByLabel('Inspect taxonomy').selectOption('article-topics');
+  await expect(catalog.getByText('Flat tags')).toBeVisible();
+  await expect(catalog.getByText('product-news', { exact: true })).toBeVisible();
+  await expect(catalog.getByRole('button', { name: /edit|save|deploy|activate/i })).toHaveCount(0);
+  expect(catalogRequests).toEqual(
+    expect.arrayContaining([
+      'GET /api/v1/schema-lifecycle',
+      'GET /api/v1/schema-lifecycle/drift',
+      'POST /api/v1/schema-lifecycle/plan',
+      'GET /api/v1/taxonomies',
+    ]),
+  );
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const bounds = await page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }));
+  expect(bounds.scrollWidth).toBeLessThanOrEqual(bounds.clientWidth);
+  const accessibility = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+    .analyze();
+  expect(
+    accessibility.violations,
+    accessibility.violations
+      .map((violation) => `${violation.id}: ${violation.help} (${violation.nodes.length})`)
+      .join('\n'),
+  ).toEqual([]);
+});
 
 test('edits, protects, governs, publishes, and delivers React content', async ({
   page,
@@ -6,8 +304,10 @@ test('edits, protects, governs, publishes, and delivers React content', async ({
 }) => {
   test.setTimeout(90_000);
 
-  await page.goto('/');
+  await page.goto('/#/pages');
   await expect(page.getByRole('heading', { name: 'Pages' })).toBeVisible();
+  await page.getByLabel('Search title or slug').fill('Welcome to GridStory');
+  await page.getByRole('button', { name: 'Apply list view' }).click();
   await page
     .getByRole('complementary', { name: 'Content entries' })
     .getByRole('button', { name: /Welcome to GridStory/ })
@@ -109,4 +409,45 @@ test('edits, protects, governs, publishes, and delivers React content', async ({
   await expect(
     page.getByRole('heading', { name: 'Published from the browser walkthrough' }),
   ).toBeVisible();
+});
+
+test('creates and revises a registered article without page-only composition or preview', async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+
+  await page.goto('/#/pages');
+  await expect(page.getByRole('heading', { name: 'Pages', exact: true })).toBeVisible();
+  await page
+    .getByRole('navigation', { name: 'Studio sections' })
+    .getByRole('button', { name: 'Collections', exact: true })
+    .click();
+
+  await expect(page.getByRole('heading', { name: 'Articles', exact: true })).toBeVisible();
+  await expect(page.getByLabel('Content type')).toHaveValue('article');
+  await expect(page.getByLabel('Headline', { exact: true })).toBeVisible();
+  await expect(page.getByText('Composition', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Open live preview in new window' })).toHaveCount(
+    0,
+  );
+
+  const relations = page.getByRole('region', { name: 'Related pages' });
+  const relationOptions = relations.locator('.button--option-card');
+  await expect(relationOptions.first()).toBeVisible();
+  await expect(relationOptions.first()).toContainText('page');
+
+  await page.getByRole('button', { name: 'Create article' }).click();
+  await expect(page.getByText('Draft article created.')).toBeVisible();
+  await expect(page).toHaveURL(/#\/collections\?entry=[^&]+&type=article$/);
+  const createdHeadline = page.getByLabel('Headline', { exact: true });
+  expect(await createdHeadline.evaluate((field) => field.closest('[inert]') === null)).toBe(true);
+  await createdHeadline.fill('Browser-authored article');
+  await relationOptions.first().click();
+  await expect(relations.getByText('1 selected / 3')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Save draft' }).click();
+  await expect(page.getByText('Draft saved as a new immutable revision.')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Browser-authored article' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Immutable revisions' })).toBeVisible();
+  await expect(page.getByText('Revision 2')).toBeVisible();
 });

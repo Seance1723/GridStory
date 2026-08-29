@@ -27,7 +27,10 @@ export const studioScopeSelectionSchema = studioScopeSchema.pick({
 export type StudioScopeSelection = z.infer<typeof studioScopeSelectionSchema>;
 
 export const studioDestinations = [
+  'home',
   'pages',
+  'collections',
+  'schemas',
   'workflows',
   'releases',
   'search',
@@ -52,8 +55,10 @@ export type StudioDestinationId = (typeof studioDestinations)[number];
 // Operation keys describe existing route checks, not new authorization actions.
 // Typed page list/create are deliberately distinct from untyped entry/preview checks.
 export const studioOperations = [
+  'home.read',
   'pages.list',
   'pages.create',
+  'content.create',
   'content.read',
   'content.draft.update',
   'content.publish',

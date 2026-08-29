@@ -20,7 +20,8 @@ const studioManagementPanels = [
   ['Releases', 'Release manager'],
   ['Search', 'Search and discovery'],
   ['Operations', 'Administrator operations'],
-  ['Components', 'Component governance'],
+  ['Schemas & taxonomies', 'Schema and taxonomy catalog'],
+  ['Components', 'Governed design catalog'],
   ['Library', 'Asset library'],
   ['Page checks', 'Content quality report'],
 ] as const;
@@ -92,6 +93,47 @@ async function selectStudioPages(page: Page, previousRegionName?: string): Promi
   }
 }
 
+async function selectStudioHome(page: Page, previousRegionName?: string): Promise<void> {
+  const button = page
+    .getByRole('navigation', { name: 'Studio sections' })
+    .getByRole('button', { name: 'Home', exact: true });
+  if ((await button.getAttribute('aria-current')) !== 'page') {
+    await openMobileStudioNavigation(page);
+    await expect(button).toBeVisible();
+    await button.click();
+  }
+  await expect(page.getByRole('region', { name: 'Editorial Home' })).toBeVisible();
+  await expect(page.locator('.studio-navigation__item[aria-current="page"]')).toHaveCount(1);
+  await expect(button).toHaveAttribute('aria-current', 'page');
+  expect(new URL(page.url()).hash).toBe('#/home');
+  await expect(page.locator('.studio-page > section')).toHaveCount(1);
+  await expect(page.locator('.studio-workspace')).toHaveCount(0);
+  if (previousRegionName) {
+    await expect(page.getByRole('region', { name: previousRegionName })).toHaveCount(0);
+  }
+}
+
+async function selectStudioCollections(page: Page): Promise<void> {
+  const button = page
+    .getByRole('navigation', { name: 'Studio sections' })
+    .getByRole('button', { name: 'Collections', exact: true });
+  if ((await button.getAttribute('aria-current')) !== 'page') {
+    await openMobileStudioNavigation(page);
+    await expect(button).toBeVisible();
+    await button.click();
+  }
+  await expect(page.getByRole('heading', { name: 'Articles', exact: true })).toBeVisible();
+  await expect(page.locator('.studio-workspace')).toBeVisible();
+  await expect(page.locator('.studio-navigation__item[aria-current="page"]')).toHaveCount(1);
+  await expect(button).toHaveAttribute('aria-current', 'page');
+  expect(new URL(page.url()).hash.split('?')[0]).toBe('#/collections');
+  await expect(page.locator('.studio-page > section')).toHaveCount(0);
+  await expect(page.getByText('Composition', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Open live preview in new window' })).toHaveCount(
+    0,
+  );
+}
+
 async function expectNoDetectableWcagViolations(
   page: Page,
   testInfo: TestInfo,
@@ -120,7 +162,7 @@ for (const condensed of [false, true]) {
     page,
   }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
-    await page.goto('/');
+    await page.goto('/#/pages');
     await expect(page.getByRole('heading', { name: 'Pages', exact: true })).toBeVisible();
     const toggle = page.getByRole('button', { name: 'Toggle navigation' });
     const navigation = page.getByRole('complementary', { name: 'Primary Studio navigation' });
@@ -176,12 +218,17 @@ test('task groups preserve every destination, keyboard disclosure, compact acces
   page,
 }) => {
   test.setTimeout(60_000);
-  await page.goto('/');
+  await page.goto('/#/pages');
   await expect(page.getByRole('heading', { name: 'Pages', exact: true })).toBeVisible();
-  await page.getByLabel('Title', { exact: true }).fill('Unsaved navigation check');
+  const title = page.getByLabel('Title', { exact: true });
+  await expect(title.locator('xpath=ancestor::*[@inert]')).toHaveCount(0);
+  await title.fill('Unsaved navigation check');
   const navigation = page.getByRole('navigation', { name: 'Studio sections' });
   const groups = [
-    ['Content', ['Pages', 'Workflows', 'Releases', 'Search']],
+    [
+      'Content',
+      ['Pages', 'Collections', 'Schemas & taxonomies', 'Workflows', 'Releases', 'Search'],
+    ],
     ['Media', ['Library']],
     ['Design', ['Components']],
     ['SEO & quality', ['Page checks']],
@@ -202,7 +249,10 @@ test('task groups preserve every destination, keyboard disclosure, compact acces
       ],
     ],
   ] as const;
-  await expect(navigation.locator('.studio-navigation__item')).toHaveCount(19);
+  await expect(navigation.locator('.studio-navigation__item')).toHaveCount(22);
+  await expect(
+    navigation.getByRole('list', { name: 'Home' }).getByRole('button', { name: 'Home' }),
+  ).toBeVisible();
   await expect(navigation.locator('.studio-navigation__group-toggle')).toHaveCount(8);
   for (const [label, leaves] of groups) {
     const toggle = navigation.getByRole('button', { name: label, exact: true });
@@ -223,7 +273,7 @@ test('task groups preserve every destination, keyboard disclosure, compact acces
     await expect(page.locator('.studio-workspace')).toBeVisible();
     await expect(page.locator('.studio-navigation__item[aria-current="page"]')).toHaveCount(1);
   }
-  await expect(page.getByLabel('Title', { exact: true })).toHaveValue('Unsaved navigation check');
+  await expect(title).toHaveValue('Unsaved navigation check');
   const shellToggle = page.getByRole('button', { name: 'Toggle navigation' });
   await shellToggle.click();
   await expect(page.locator('.studio-navigation')).toHaveCSS('width', '86px');
@@ -296,7 +346,7 @@ test('task groups preserve every destination, keyboard disclosure, compact acces
 test('Studio shell follows the reference navigation, card, theme, and mobile drawer system', async ({
   page,
 }) => {
-  await page.goto('/');
+  await page.goto('/#/pages');
   await expect(page.getByRole('heading', { name: 'Pages' })).toBeVisible();
 
   const shell = page.locator('.studio-shell');
@@ -362,7 +412,8 @@ test('Studio shell follows the reference navigation, card, theme, and mobile dra
 
   const assetOption = page
     .getByRole('region', { name: 'Social image' })
-    .getByRole('button', { name: /Campaign landscape/ });
+    .locator('button[aria-pressed]')
+    .first();
   const relationOption = page
     .getByRole('region', { name: 'Related pages' })
     .getByRole('button', { name: /Welcome to GridStory/ });
@@ -414,12 +465,17 @@ test('Studio critical authoring states have no detectable WCAG 2.2 A/AA violatio
   page,
 }, testInfo) => {
   test.setTimeout(240_000);
-  await page.goto('/');
+  await page.goto('/#/pages');
   await expect(page.getByRole('heading', { name: 'Pages' })).toBeVisible();
   await expect(page.locator('.studio-navigation__item[aria-current="page"]')).toHaveCount(1);
   await expect(page.locator('.studio-page > section')).toHaveCount(0);
   await expect(page.locator('.studio-workspace')).toBeVisible();
   await expectNoDetectableWcagViolations(page, testInfo, 'studio-default');
+  await selectStudioHome(page);
+  await expectNoDetectableWcagViolations(page, testInfo, 'studio-home');
+  await selectStudioCollections(page);
+  await expectNoDetectableWcagViolations(page, testInfo, 'studio-collections');
+  await selectStudioPages(page);
 
   let previousRegionName: string | undefined;
   for (const [buttonName, regionName] of studioManagementPanels) {
@@ -511,8 +567,12 @@ test('Studio critical authoring states have no detectable WCAG 2.2 A/AA violatio
     'rgb(28, 38, 34)',
   );
   await expectNoDetectableWcagViolations(page, testInfo, 'studio-ai-gateway-dark');
-  await selectStudioPages(page, 'Governed AI gateway workbench');
+  await selectStudioHome(page, 'Governed AI gateway workbench');
+  await expectNoDetectableWcagViolations(page, testInfo, 'studio-home-dark');
+  await selectStudioPages(page, 'Editorial Home');
   await expectNoDetectableWcagViolations(page, testInfo, 'studio-pages-dark');
+  await selectStudioCollections(page);
+  await expectNoDetectableWcagViolations(page, testInfo, 'studio-collections-dark');
   await page.getByRole('button', { name: 'Switch to light theme' }).click();
 });
 
@@ -520,7 +580,7 @@ test('every Studio surface contains readable text and controls at each responsiv
   page,
 }) => {
   test.setTimeout(300_000);
-  await page.goto('/');
+  await page.goto('/#/pages');
   await expect(page.getByRole('heading', { name: 'Pages' })).toBeVisible();
 
   const surfaces = page.locator('.studio-page > section, .studio-workspace');
@@ -591,7 +651,7 @@ test('every Studio surface contains readable text and controls at each responsiv
               rectangle.right > boundaryRectangle.right + 1
             ) {
               issues.push(
-                `${surfaceName}: ${control.tagName.toLowerCase()} ${control.getAttribute('aria-label') ?? control.textContent?.trim() ?? control.getAttribute('type') ?? ''} escapes ${boundary.className}`,
+                `${surfaceName}: ${control.tagName.toLowerCase()} ${control.getAttribute('aria-label') ?? control.getAttribute('name') ?? control.getAttribute('type') ?? (control instanceof HTMLInputElement ? control.value : control.textContent?.trim()) ?? ''} ${rectangle.left.toFixed(2)}..${rectangle.right.toFixed(2)} escapes ${boundary.className} ${boundaryRectangle.left.toFixed(2)}..${boundaryRectangle.right.toFixed(2)}`,
               );
             }
           }
@@ -731,6 +791,8 @@ test('every Studio surface contains readable text and controls at each responsiv
 
   for (const viewport of viewports) {
     await page.setViewportSize(viewport);
+    await selectStudioHome(page);
+    await expectCurrentLayoutContained(`${viewport.width}px Home`);
     await selectStudioPages(page);
     if (viewport.width === 1280) {
       const collaborationVersion = page.locator('.collaboration-version');
@@ -758,6 +820,8 @@ test('every Studio surface contains readable text and controls at each responsiv
       ).toBeLessThanOrEqual(2);
     }
     await expectCurrentLayoutContained(`${viewport.width}px Pages`);
+    await selectStudioCollections(page);
+    await expectCurrentLayoutContained(`${viewport.width}px Collections`);
 
     let previousRegionName: string | undefined;
     for (const [buttonName, regionName] of studioManagementPanels) {
@@ -787,6 +851,9 @@ test('every Studio surface contains readable text and controls at each responsiv
   await expect(page.locator('.section-heading').first()).toHaveCSS('flex-direction', 'column');
 
   await page.getByRole('button', { name: 'Switch to dark theme' }).click();
+  await selectStudioHome(page);
+  await expectCurrentLayoutContained('320px dark Home');
+  await selectStudioPages(page, 'Editorial Home');
   await expectCurrentLayoutContained('320px dark Pages');
   let previousDarkRegionName: string | undefined;
   for (const [buttonName, regionName] of studioManagementPanels) {
@@ -796,17 +863,19 @@ test('every Studio surface contains readable text and controls at each responsiv
   }
   await selectStudioPages(page, previousDarkRegionName);
   await expectCurrentLayoutContained('320px dark Pages return');
+  await selectStudioCollections(page);
+  await expectCurrentLayoutContained('320px dark Collections');
 });
 
 test('critical authoring remains keyboard-operable and adapts at 200% zoom', async ({
   page,
 }, testInfo) => {
-  await page.goto('/');
+  await page.goto('/#/pages');
   await expect(page.getByRole('heading', { name: 'Pages' })).toBeVisible();
 
   // Start keyboard traversal inside the document rather than browser chrome.
   await page.locator('body').press('Tab');
-  const skipLink = page.getByRole('link', { name: 'Skip to page editor' });
+  const skipLink = page.getByRole('link', { name: 'Skip to content editor' });
   await expect(skipLink).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.locator('#studio-editor')).toBeFocused();

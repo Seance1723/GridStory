@@ -14,7 +14,9 @@ Search adapters are untrusted tenant boundaries. Every search result and status 
 
 ## Taxonomies
 
-Taxonomies are declared on a content schema and referenced by taxonomy fields. Definitions have stable IDs, display names, optional hierarchy, and stable term IDs/slugs/labels. Parent IDs must resolve inside the same taxonomy and cycles are rejected by schema validation. The example page schema exposes a hierarchical `topics` taxonomy and an optional multi-value `topics` field.
+Taxonomies are declared on a content schema and referenced by taxonomy fields. Definitions have stable IDs, display names, optional hierarchy, and stable term IDs/slugs/labels. Parent IDs must resolve inside the same taxonomy and cycles are rejected by schema validation. The example Page schema exposes hierarchical `topics` categories and an optional multi-value `topics` field; the independently routed Article schema exposes flat `article-topics` tags. Studio labels these two shapes explicitly, renders the real parent/child tree for hierarchical categories, and always shows stable term IDs, slugs, and parent IDs.
+
+The Studio **Schemas & taxonomies** catalog requests taxonomy definitions only when the authorized context already grants `search.read`. Without that operation it sends no taxonomy request and shows an access boundary. The surface is inspection-only: code remains authoritative for definitions and terms, and no control implies that labels, hierarchy, IDs, or runtime models are editable.
 
 Search filters match canonical term IDs. Facets report counts after text and content-type filtering and before the selected taxonomy filter is applied, making them useful for narrowing a result set. The management API returns the same definitions through `GET /api/v1/taxonomies`.
 

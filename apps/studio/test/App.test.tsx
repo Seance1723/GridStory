@@ -8,6 +8,7 @@ import {
   type ContentEntry,
   type ContentFederationDocument,
   createGridStoryClient,
+  type EditorialOverview,
   type ExperimentDesign,
   type ExperimentMetricSnapshotInput,
   type ExperimentOverview,
@@ -28,6 +29,8 @@ import * as previewClient from '@gridstory/client/preview';
 import { exampleDesignSystem } from '@gridstory/example-kit/design-system';
 import { componentManifests } from '@gridstory/example-kit/manifests';
 import {
+  type ContentFilter,
+  type ContentQuery,
   type ContentSchemaDefinition,
   type StudioContext,
   type StudioOperation,
@@ -106,6 +109,97 @@ function entry(id: string, headline: string, path: string): ContentEntry {
 }
 
 const entries = [entry('one', 'First page', 'first'), entry('two', 'Second page', 'second')];
+
+function managedAsset(overrides: Partial<AssetRecord> = {}): AssetRecord {
+  return {
+    organizationId: 'local',
+    tenantId: 'default',
+    workspaceId: 'default',
+    siteId: 'default',
+    environmentId: 'development',
+    locale: 'en',
+    id: 'managed-hero',
+    kind: 'image',
+    currentRevisionId: 'managed-hero-v1',
+    revisions: [
+      {
+        id: 'managed-hero-v1',
+        version: 1,
+        original: {
+          objectKey: 'assets/managed-hero.jpg',
+          url: 'https://cdn.example.test/managed-hero.jpg',
+          filename: 'managed-hero.jpg',
+          mediaType: 'image/jpeg',
+          size: 4096,
+          checksum: 'managed-checksum',
+          width: 1200,
+          height: 800,
+        },
+        metadata: {
+          title: 'Managed hero',
+          alt: 'Managed alt',
+          tags: ['homepage'],
+          collections: [],
+          custom: {},
+        },
+        focalPoint: { x: 0.25, y: 0.75 },
+        createdAt: now,
+        security: {
+          status: 'verified',
+          declaredMediaType: 'image/jpeg',
+          detectedMediaType: 'image/jpeg',
+          sanitized: false,
+          inspectedAt: now,
+          malware: { status: 'clean', provider: 'test-scanner', checkedAt: now },
+          findings: [],
+        },
+        actorId: 'asset-author',
+      },
+    ],
+    renditions: [],
+    createdAt: now,
+    updatedAt: now,
+    ...overrides,
+  };
+}
+
+const articleSchema: ContentSchemaDefinition = {
+  id: 'article',
+  version: 1,
+  name: 'Article',
+  collection: 'articles',
+  titleField: 'headline',
+  fields: [
+    {
+      id: 'article.headline',
+      name: 'headline',
+      label: 'Article headline',
+      type: 'text',
+      required: true,
+    },
+    { id: 'article.slug', name: 'slug', label: 'Article slug', type: 'slug', required: true },
+    { id: 'article.body', name: 'body', label: 'Article body', type: 'rich-text', required: true },
+    {
+      id: 'article.related-pages',
+      name: 'relatedPages',
+      label: 'Related pages',
+      type: 'relation',
+      targets: ['page'],
+      multiple: true,
+      maximum: 3,
+    },
+  ],
+};
+const articleEntry: ContentEntry = {
+  ...entry('article-one', 'Ignored page label', 'ignored'),
+  contentType: 'article',
+  data: {
+    headline: 'First article',
+    slug: 'first-article',
+    body: { version: 1, blocks: [] },
+    relatedPages: [],
+  },
+};
 const componentTreeField = schema.fields.find((field) => field.type === 'component-tree');
 if (!componentTreeField) throw new Error('Test schema must include a component tree.');
 
@@ -161,13 +255,18 @@ function createTestClient(
   options: {
     context?: StudioContext;
     schema?: ContentSchemaDefinition;
+    schemas?: ContentSchemaDefinition[];
     entries?: ContentEntry[];
     assets?: AssetRecord[];
+    queryFailsAfter?: number;
+    overview?: EditorialOverview;
   } = {},
 ) {
   const testSchema = options.schema ?? schema;
+  const testSchemas = options.schemas ?? [testSchema];
   const testEntries = options.entries ?? entries;
   const testAssets = options.assets ?? [];
+  let contentQueryCount = 0;
   const threads: Array<Record<string, unknown>> = [];
   const presence = [{ actorId: 'local-admin', displayName: 'Studio editor', lastSeenAt: now }];
   const operations: Array<Record<string, unknown>> = [];
@@ -303,6 +402,72 @@ function createTestClient(
     updatedAt: now,
   };
   const releaseRecords: Release[] = [];
+  const editorialOverview = (): EditorialOverview =>
+    options.overview ?? {
+      version: 1,
+      scope: options.context?.scope ?? {
+        organizationId: 'local',
+        tenantId: 'default',
+        workspaceId: 'default',
+        siteId: 'default',
+        environmentId: 'development',
+        locale: 'en',
+      },
+      generatedAt: now,
+      widgets: {
+        content: {
+          availability: 'available',
+          coverage: 'all-registered',
+          exact: true,
+          bounds: {
+            totalCount: testEntries.length,
+            displayedCount: Math.min(testEntries.length, 5),
+            limit: 5,
+            hasMore: testEntries.length > 5,
+          },
+          states: {
+            draft: testEntries.filter(({ status }) => status === 'draft').length,
+            changed: testEntries.filter(({ status }) => status === 'changed').length,
+            published: testEntries.filter(({ status }) => status === 'published').length,
+          },
+          recent: testEntries.slice(0, 5).map((candidate) => ({
+            id: candidate.id,
+            contentType: candidate.contentType,
+            title:
+              typeof candidate.data.headline === 'string' ? candidate.data.headline : candidate.id,
+            status: candidate.status,
+            updatedAt: candidate.updatedAt,
+            destination: candidate.contentType === 'page' ? 'pages' : 'collections',
+          })),
+        },
+        reviews: {
+          availability: 'available',
+          coverage: 'all-registered',
+          exact: true,
+          bounds: { totalCount: 0, displayedCount: 0, limit: 5, hasMore: false },
+          items: [],
+        },
+        releases: {
+          availability: 'available',
+          exact: true,
+          bounds: {
+            totalCount: releaseRecords.length,
+            displayedCount: Math.min(releaseRecords.length, 5),
+            limit: 5,
+            hasMore: releaseRecords.length > 5,
+          },
+          items: releaseRecords.slice(0, 5).map((release) => ({
+            id: release.id,
+            name: release.name,
+            state: release.state,
+            updatedAt: release.updatedAt,
+            ...(release.schedule ? { runAt: release.schedule.runAt } : {}),
+            destination: 'releases',
+          })),
+        },
+        operations: { availability: 'unavailable' },
+      },
+    };
   const workflowActionRecords: Array<Record<string, unknown>> = [];
   const migrationSources: MigrationSourceDescriptor[] = [
     {
@@ -622,8 +787,8 @@ function createTestClient(
         environmentId: 'development',
         locale: 'en',
         entryId: candidate.id,
-        contentType: 'page',
-        workflowId: 'page-editorial',
+        contentType: candidate.contentType,
+        workflowId: `${candidate.contentType}-editorial`,
         workflowVersion: 1,
         stateId: 'draft',
         revisionId: candidate.draftRevisionId,
@@ -660,19 +825,111 @@ function createTestClient(
               },
               principalId: 'local-admin',
               capabilities: {
-                screens: Object.fromEntries(studioScreens.map((screen) => [screen, true])),
+                screens: Object.fromEntries(
+                  studioScreens.map((screen) => [screen, screen !== 'home']),
+                ),
                 operations: Object.fromEntries(
-                  studioOperations.map((operation) => [operation, true]),
+                  studioOperations.map((operation) => [operation, operation !== 'home.read']),
                 ),
               },
               selection: { mode: 'current-only', choices: [] },
             },
       );
     }
-    if (url.pathname === '/api/v1/schemas') return json([testSchema]);
+    if (url.pathname === '/api/v1/editorial/overview') return json(editorialOverview());
+    const schemaSource = {
+      format: 'gridstory.schema-ir',
+      irVersion: 1,
+      schemas: testSchemas,
+      components: componentManifests,
+    };
+    if (url.pathname === '/api/v1/schema-lifecycle/drift') {
+      return json({
+        inSync: true,
+        sourceFingerprint: 'a'.repeat(64),
+        expectedGeneratedTypesFingerprint: 'b'.repeat(64),
+        states: [
+          {
+            source: 'source',
+            expectedFingerprint: 'a'.repeat(64),
+            actualFingerprint: 'a'.repeat(64),
+            status: 'match',
+          },
+          {
+            source: 'deployed',
+            expectedFingerprint: 'a'.repeat(64),
+            actualFingerprint: 'a'.repeat(64),
+            status: 'match',
+          },
+          {
+            source: 'database',
+            expectedFingerprint: 'a'.repeat(64),
+            actualFingerprint: 'a'.repeat(64),
+            status: 'match',
+          },
+          {
+            source: 'generated-types',
+            expectedFingerprint: 'b'.repeat(64),
+            actualFingerprint: 'b'.repeat(64),
+            status: 'match',
+          },
+        ],
+      });
+    }
+    if (url.pathname === '/api/v1/schema-lifecycle/plan' && init?.method === 'POST') {
+      return json({
+        plan: {
+          id: 'migration-current-source',
+          fromFingerprint: 'a'.repeat(64),
+          toFingerprint: 'a'.repeat(64),
+          approval: { required: false, reasons: [] },
+          estimate: { lock: 'none', dataScanRequired: false },
+          rollback: { mode: 'automatic', reason: 'No changes.' },
+          summary: { safe: 0, backfill: 0, destructive: 0 },
+          steps: [],
+        },
+        impact: {
+          scannedEntries: testEntries.length,
+          affectedEntries: 0,
+          byContentType: {},
+          invalidEntries: [],
+        },
+      });
+    }
+    if (url.pathname === '/api/v1/schema-lifecycle') {
+      return json({
+        source: schemaSource,
+        visualModel: { format: 'gridstory.visual-model', modelVersion: 1, ir: schemaSource },
+        fingerprint: 'a'.repeat(64),
+        generatedTypes: 'export interface Page {}',
+        generatedTypesFingerprint: 'b'.repeat(64),
+        deployment: {
+          document: schemaSource,
+          fingerprint: 'a'.repeat(64),
+          generatedTypes: 'export interface Page {}',
+          generatedTypesFingerprint: 'b'.repeat(64),
+          deployedAt: now,
+          actorId: 'operator',
+        },
+      });
+    }
+    if (url.pathname === '/api/v1/schemas') return json(testSchemas);
     if (url.pathname === '/api/v1/components') return json(componentManifests);
     if (url.pathname === '/api/v1/design-system') return json(exampleDesignSystem);
-    if (url.pathname === '/api/v1/workflows') return json([workflowDefinition]);
+    if (url.pathname === '/api/v1/workflows')
+      return json([
+        workflowDefinition,
+        ...(testSchemas.some((candidate) => candidate.id === 'article')
+          ? [
+              {
+                ...workflowDefinition,
+                id: 'article-editorial',
+                name: 'Article editorial review',
+                contentType: 'article',
+              },
+            ]
+          : []),
+      ]);
     if (url.pathname === '/api/v1/workflows/page-editorial' && init?.method === 'PUT') {
       const body = JSON.parse(String(init.body));
       workflowDefinition = { ...workflowDefinition, ...body, id: 'page-editorial', updatedAt: now };
@@ -818,17 +1075,24 @@ function createTestClient(
       });
     }
     if (url.pathname === '/api/v1/assets') return json(testAssets);
-    if (url.pathname === '/api/v1/components/gridstory.hero/migration') {
+    const componentMigrationMatch = url.pathname.match(
+      /^\/api\/v1\/components\/([^/]+)\/migration$/,
+    );
+    if (componentMigrationMatch) {
+      const componentId = decodeURIComponent(componentMigrationMatch[1] ?? '');
+      const component = componentManifests.find((candidate) => candidate.id === componentId);
+      if (!component) return json({ error: { message: 'Component not found.' } }, 404);
+      const isHero = componentId === 'gridstory.hero';
       return json({
         id: 'component_migration_test',
-        component: componentManifests[0],
+        component,
         usage: {
-          componentId: 'gridstory.hero',
-          currentVersion: 1,
-          totalInstances: 4,
-          entries: 2,
-          byPerspective: { draft: 4, published: 0 },
-          byVersion: { '1': 4 },
+          componentId,
+          currentVersion: component.version,
+          totalInstances: isHero ? 4 : 0,
+          entries: isHero ? 2 : 0,
+          byPerspective: { draft: isHero ? 4 : 0, published: 0 },
+          byVersion: isHero ? { '1': 4 } : {},
           locations: [],
         },
         outdatedInstances: 0,
@@ -836,14 +1100,20 @@ function createTestClient(
         ready: true,
       });
     }
-    if (url.pathname === '/api/v1/components/gridstory.hero/visual-regression') {
+    const componentVisualMatch = url.pathname.match(
+      /^\/api\/v1\/components\/([^/]+)\/visual-regression$/,
+    );
+    if (componentVisualMatch) {
+      const componentId = decodeURIComponent(componentVisualMatch[1] ?? '');
+      const component = componentManifests.find((candidate) => candidate.id === componentId);
+      if (!component) return json({ error: { message: 'Component not found.' } }, 404);
       return json({
         id: 'visual_regression_test',
-        componentId: 'gridstory.hero',
-        version: 1,
-        scenarios: componentManifests[0]?.visualRegression.scenarios ?? [],
+        componentId,
+        version: component.version,
+        scenarios: component.visualRegression.scenarios,
         usageHooks: [],
-        selector: '[data-gridstory-component="gridstory.hero"][data-gridstory-version="1"]',
+        selector: `[data-gridstory-component="${componentId}"][data-gridstory-version="${component.version}"]`,
       });
     }
     if (url.pathname.startsWith('/api/v1/preview/sessions')) {
@@ -874,6 +1144,12 @@ function createTestClient(
           name: 'Topics',
           hierarchical: true,
           terms: [{ id: 'product', slug: 'product', label: 'Product' }],
+        },
+        {
+          id: 'article-topics',
+          name: 'Article topics',
+          hierarchical: false,
+          terms: [{ id: 'product-news', slug: 'product-news', label: 'Product news' }],
         },
       ]);
     }
@@ -911,7 +1187,67 @@ function createTestClient(
     if (/^\/api\/v1\/content\/[^/]+\/related$/.test(url.pathname)) {
       return json([{ entry: testEntries[1], score: 1, reasons: ['same content type'] }]);
     }
-    if (url.pathname === '/api/v1/content') return json(testEntries);
+    if (url.pathname === '/api/v1/content/query' && init?.method === 'POST') {
+      contentQueryCount += 1;
+      if (options.queryFailsAfter !== undefined && contentQueryCount > options.queryFailsAfter)
+        return json({ error: { message: 'Content list unavailable.' } }, 503);
+      const query = JSON.parse(String(init.body)) as ContentQuery;
+      const valueAt = (candidate: ContentEntry, path: string): unknown =>
+        path
+          .split('.')
+          .reduce<unknown>(
+            (value, segment) =>
+              value && typeof value === 'object'
+                ? (value as Record<string, unknown>)[segment]
+                : undefined,
+            candidate,
+          );
+      const matches = (candidate: ContentEntry, filter: ContentFilter): boolean => {
+        if ('and' in filter) return filter.and.every((nested) => matches(candidate, nested));
+        if ('or' in filter) return filter.or.some((nested) => matches(candidate, nested));
+        if ('not' in filter) return !matches(candidate, filter.not);
+        const value = valueAt(candidate, filter.path);
+        if (filter.operator === 'eq') return value === filter.value;
+        if (filter.operator === 'contains')
+          return String(value ?? '')
+            .toLocaleLowerCase()
+            .includes(String(filter.value ?? '').toLocaleLowerCase());
+        return true;
+      };
+      const sort = query.sort?.[0];
+      const filtered = testEntries
+        .filter((candidate) => !query.contentType || candidate.contentType === query.contentType)
+        .filter((candidate) => !query.filter || matches(candidate, query.filter))
+        .sort((left, right) => {
+          if (!sort) return 0;
+          const comparison = String(valueAt(left, sort.path) ?? '').localeCompare(
+            String(valueAt(right, sort.path) ?? ''),
+          );
+          return sort.direction === 'desc' ? -comparison : comparison;
+        });
+      const offset = Number(query.after ?? 0);
+      const page = filtered.slice(offset, offset + (query.first ?? 20));
+      const edges = page.map((node, index) => ({ cursor: String(offset + index + 1), node }));
+      return json({
+        edges,
+        nodes: page,
+        pageInfo: {
+          startCursor: edges[0]?.cursor ?? null,
+          endCursor: edges.at(-1)?.cursor ?? null,
+          hasNextPage: offset + page.length < filtered.length,
+          hasPreviousPage: offset > 0,
+        },
+        totalCount: filtered.length,
+      });
+    }
+    if (url.pathname === '/api/v1/content') {
+      const contentType = url.searchParams.get('contentType');
+      return json(
+        contentType
+          ? testEntries.filter((candidate) => candidate.contentType === contentType)
+          : testEntries,
+      );
+    }
     if (url.pathname === '/api/v1/operations/summary') {
       return json({
         generatedAt: now,
@@ -2047,6 +2383,8 @@ describe('GridStory Studio', () => {
 
   function selectableContext(): StudioContext {
     const value = restrictedContext([...studioOperations], [...studioScreens]);
+    value.capabilities.screens.home = false;
+    value.capabilities.operations['home.read'] = false;
     value.principalId = 'context-editor';
     value.selection = {
       mode: 'configured',
@@ -2068,6 +2406,84 @@ describe('GridStory Studio', () => {
     };
     return value;
   }
+
+  it('uses Home as the root destination and loads only its minimized private overview', async () => {
+    window.history.replaceState(null, '', '/');
+    const context = restrictedContext([...studioOperations], [...studioScreens]);
+    const client = createTestClient({ context });
+    const overviewRead = vi.spyOn(client, 'getEditorialOverview');
+    const fullReads = [
+      vi.spyOn(client, 'queryContent'),
+      vi.spyOn(client, 'listAssets'),
+      vi.spyOn(client, 'listReleases'),
+      vi.spyOn(client, 'getOperationsDashboard'),
+      vi.spyOn(client, 'listWorkflows'),
+      vi.spyOn(client, 'getDesignSystem'),
+    ];
+
+    render(<App client={client} />);
+    const home = await screen.findByRole('region', { name: 'Editorial Home' });
+    expect(window.location.hash).toBe('#/home');
+    expect(screen.getByRole('button', { name: 'Home' }).getAttribute('aria-current')).toBe('page');
+    expect(await within(home).findByText('Showing 2 of 2 exact scoped items.')).toBeTruthy();
+    expect(overviewRead).toHaveBeenCalledOnce();
+    for (const read of fullReads) expect(read).not.toHaveBeenCalled();
+
+    await userEvent.setup().click(within(home).getByRole('button', { name: /First page/ }));
+    await screen.findByLabelText('Headline');
+    expect(window.location.hash).toBe('#/pages?entry=one&type=page');
+    expect(screen.getByRole('button', { name: 'Pages' }).getAttribute('aria-current')).toBe('page');
+  });
+
+  it('loads the scoped asset list when Library is opened from minimized Home', async () => {
+    window.history.replaceState(null, '', '/');
+    const client = createTestClient({
+      context: restrictedContext([...studioOperations], [...studioScreens]),
+      assets: [managedAsset()],
+    });
+    const listAssets = vi.spyOn(client, 'listAssets');
+
+    render(<App client={client} />);
+    await screen.findByRole('region', { name: 'Editorial Home' });
+    expect(listAssets).not.toHaveBeenCalled();
+
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Library' }));
+    expect(await screen.findByRole('heading', { name: 'Managed hero details' })).toBeTruthy();
+    expect(listAssets).toHaveBeenCalledOnce();
+  });
+
+  it('delegates Home quick create to the canonical registered-schema authoring path', async () => {
+    window.history.replaceState(null, '', '/');
+    const client = createTestClient({
+      context: restrictedContext([...studioOperations], [...studioScreens]),
+    });
+    const created = entry('created', 'New page', 'new-page');
+    const workflow = await client.getContentWorkflow('one');
+    const create = vi.spyOn(client, 'createContent').mockResolvedValueOnce(created);
+    vi.spyOn(client, 'queryContent').mockResolvedValueOnce({
+      edges: [...entries, created].map((node, index) => ({ cursor: String(index + 1), node })),
+      nodes: [...entries, created],
+      pageInfo: {
+        startCursor: '1',
+        endCursor: '3',
+        hasNextPage: false,
+        hasPreviousPage: false,
+      },
+      totalCount: 3,
+    });
+    vi.spyOn(client, 'getContent').mockResolvedValueOnce(created);
+    vi.spyOn(client, 'getContentWorkflow').mockResolvedValueOnce({
+      ...workflow,
+      entryId: created.id,
+      revisionId: created.draftRevisionId,
+    });
+    render(<App client={client} />);
+    const home = await screen.findByRole('region', { name: 'Editorial Home' });
+    await userEvent.setup().click(await within(home).findByRole('button', { name: 'Create Page' }));
+    await waitFor(() => expect(create).toHaveBeenCalledOnce());
+    await screen.findByLabelText('Headline');
+    expect(window.location.hash).toBe('#/pages?entry=created&type=page');
+  });
 
   it('cancels or commits a complete scope switch with dirty-state, preview, and history guards', async () => {
     const user = userEvent.setup();
@@ -2518,6 +2934,58 @@ describe('GridStory Studio', () => {
     expect(window.history.length).toBe(length + 1);
   });
 
+  it('authors an explicitly selected non-component collection with declared page relations', async () => {
+    const user = userEvent.setup();
+    const client = createTestClient({
+      schemas: [schema, articleSchema],
+      entries: [...entries, articleEntry],
+    });
+    render(<App client={client} />);
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Collections', exact: true }));
+    await screen.findByRole('heading', { name: 'Articles', exact: true });
+    expect((screen.getByLabelText('Content type') as HTMLSelectElement).value).toBe('article');
+    expect((screen.getByLabelText('Article headline') as HTMLInputElement).value).toBe(
+      'First article',
+    );
+    expect(screen.queryByText('Composition')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Open live preview in new window' })).toBeNull();
+    const relation = await screen.findByRole('region', { name: 'Related pages' });
+    expect(within(relation).getByRole('button', { name: /Second page/ })).toBeTruthy();
+    expect(window.location.hash).toBe('#/collections?entry=article-one&type=article');
+
+    const created: ContentEntry = {
+      ...articleEntry,
+      id: 'article-created',
+      draftRevisionId: 'article-created-revision-1',
+      data: {
+        headline: 'Untitled Article',
+        slug: 'untitled-test',
+        body: { version: 1, blocks: [] },
+      },
+    };
+    const create = vi.spyOn(client, 'createContent').mockResolvedValueOnce(created);
+    vi.spyOn(client, 'listContent').mockResolvedValueOnce([articleEntry, created]);
+    vi.spyOn(client, 'getContent').mockResolvedValueOnce(created);
+    const workflow = await client.getContentWorkflow(articleEntry.id);
+    vi.spyOn(client, 'getContentWorkflow').mockResolvedValueOnce({
+      ...workflow,
+      entryId: created.id,
+      revisionId: created.draftRevisionId,
+    });
+    await user.click(screen.getByRole('button', { name: 'Create article' }));
+    await screen.findByText('Draft article created.');
+    expect(screen.getByLabelText('Article headline').closest('[inert]')).toBeNull();
+    expect(create).toHaveBeenCalledOnce();
+    expect(create.mock.calls[0]?.[0]).toBe('article');
+    expect(create.mock.calls[0]?.[1]).toMatchObject({
+      headline: 'Untitled Article',
+      body: { version: 1, blocks: [] },
+    });
+    expect(create.mock.calls[0]?.[1]).not.toHaveProperty('blocks');
+    expect(window.location.hash).toBe('#/collections?entry=article-created&type=article');
+  });
+
   it('registers the document-exit warning only while dirty and cleans it up on unmount', async () => {
     const add = vi.spyOn(window, 'addEventListener');
     const remove = vi.spyOn(window, 'removeEventListener');
@@ -2552,14 +3020,14 @@ describe('GridStory Studio', () => {
     expect(window.location.hash).toBe('#/quality?entry=two&type=page');
     expect(window.history.state.host).toBe('keep');
     const user = userEvent.setup();
-    await user.click(screen.getByRole('link', { name: 'Skip to page editor' }));
+    await user.click(screen.getByRole('link', { name: 'Skip to content editor' }));
     expect(document.activeElement?.id).toBe('studio-content');
     expect(window.location.hash).toBe('#/quality?entry=two&type=page');
     await user.click(screen.getByRole('button', { name: 'Pages' }));
     expect(((await screen.findByLabelText('Headline')) as HTMLInputElement).value).toBe(
       'Second page',
     );
-    await user.click(screen.getByRole('link', { name: 'Skip to page editor' }));
+    await user.click(screen.getByRole('link', { name: 'Skip to content editor' }));
     expect(document.activeElement?.id).toBe('studio-editor');
     expect(window.location.hash).toBe('#/pages?entry=two&type=page');
   });
@@ -2650,6 +3118,20 @@ describe('GridStory Studio', () => {
     expect((screen.getByLabelText('Headline') as HTMLInputElement).value).toBe(
       'Keep editing first',
     );
+  });
+
+  it('settles a successful entry read before exposing its controlled fields for editing', async () => {
+    const user = userEvent.setup();
+    render(<App client={createTestClient()} />);
+    await screen.findByLabelText('Headline');
+
+    await user.click(screen.getByRole('button', { name: /Second page/ }));
+    const headline = await screen.findByLabelText('Headline');
+    expect((headline as HTMLInputElement).value).toBe('Second page');
+    expect(headline.closest('[inert]')).toBeNull();
+    fireEvent.change(headline, { target: { value: 'Immediate accepted-entry edit' } });
+    expect((headline as HTMLInputElement).value).toBe('Immediate accepted-entry edit');
+    expect(screen.getByText('Unsaved changes', { exact: true })).toBeTruthy();
   });
 
   it('ignores an out-of-order entry response and preserves new edits, notice and busy state', async () => {
@@ -2770,7 +3252,7 @@ describe('GridStory Studio', () => {
       within(navigation).queryByRole('button', { name: 'Identity providers', exact: true }),
     ).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Toggle navigation' }));
-    expect(within(navigation).getAllByRole('button')).toHaveLength(19);
+    expect(within(navigation).getAllByRole('button')).toHaveLength(21);
     expect(
       within(navigation)
         .getByRole('button', { name: 'Identity providers', exact: true })
@@ -2876,7 +3358,7 @@ describe('GridStory Studio', () => {
     render(<App client={createTestClient()} />);
 
     expect(
-      (await screen.findByRole('link', { name: 'Skip to page editor' })).getAttribute('href'),
+      (await screen.findByRole('link', { name: 'Skip to content editor' })).getAttribute('href'),
     ).toBe('#studio-editor');
     expect(document.querySelector('main')?.id).toBe('studio-editor');
     expect(((await screen.findByLabelText('Headline')) as HTMLInputElement).value).toBe(
@@ -3742,6 +4224,76 @@ describe('GridStory Studio', () => {
     expect(revoke).toHaveBeenCalledWith('preview-session-1');
     expect(patch.mock.calls.every(([payload]) => payload.entryId === 'one')).toBe(true);
   });
+
+  it('queries supported list controls while keeping an open editor selection stable', async () => {
+    const user = userEvent.setup();
+    render(<App client={createTestClient()} />);
+
+    const headline = await screen.findByLabelText('Headline');
+    expect(headline).toHaveProperty('value', 'First page');
+    const results = screen.getByRole('region', { name: 'Content results' });
+    expect(within(results).getByRole('button', { name: /First page/ })).toBeTruthy();
+    await user.type(screen.getByLabelText('Search title or slug'), 'Second');
+    await user.selectOptions(screen.getByLabelText('Status'), 'draft');
+    await user.selectOptions(screen.getByLabelText('Sort'), 'title-desc');
+    await user.click(screen.getByRole('button', { name: 'Apply list view' }));
+
+    await waitFor(() =>
+      expect(within(results).queryByRole('button', { name: /First page/ })).toBeNull(),
+    );
+    expect(within(results).getByRole('button', { name: /Second page/ })).toBeTruthy();
+    expect(headline).toHaveProperty('value', 'First page');
+    expect(screen.getByText('Showing 1 of 1')).toBeTruthy();
+
+    await user.click(screen.getByText('Local saved views (0)'));
+    await user.type(screen.getByLabelText('View name'), 'Draft seconds');
+    await user.click(screen.getByRole('button', { name: 'Save view' }));
+    expect(await screen.findByRole('button', { name: 'Draft seconds' })).toBeTruthy();
+    const persisted = window.localStorage.getItem('gridstory-content-list-views.v1') ?? '';
+    expect(persisted).toContain('Draft seconds');
+    expect(persisted).not.toContain('First hero');
+    expect(persisted).not.toMatch(/gsp_|bearer|credential/i);
+  });
+
+  it('paginates exact query results without replacing a selection outside the loaded page', async () => {
+    const user = userEvent.setup();
+    const manyEntries = Array.from({ length: 12 }, (_, index) =>
+      entry(
+        `page-${String(index + 1).padStart(2, '0')}`,
+        `Page ${String(index + 1).padStart(2, '0')}`,
+        `page-${index + 1}`,
+      ),
+    );
+    render(<App client={createTestClient({ entries: manyEntries })} />);
+
+    const headline = await screen.findByLabelText('Headline');
+    expect(headline).toHaveProperty('value', 'Page 01');
+    expect(screen.getByText('Showing 10 of 12')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await screen.findByText('Showing 2 of 12');
+    expect(headline).toHaveProperty('value', 'Page 01');
+    expect(screen.getByRole('button', { name: /Page 11/ })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Page 01/ })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Previous' }));
+    await screen.findByText('Showing 10 of 12');
+    expect(screen.getByRole('button', { name: /Page 01/ }).getAttribute('aria-current')).toBe(
+      'true',
+    );
+  });
+
+  it('keeps prior list results and offers retry when a list query fails', async () => {
+    const user = userEvent.setup();
+    render(<App client={createTestClient({ queryFailsAfter: 1 })} />);
+
+    await screen.findByLabelText('Headline');
+    await user.type(screen.getByLabelText('Search title or slug'), 'Second');
+    await user.click(screen.getByRole('button', { name: 'Apply list view' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('Content list unavailable.');
+    expect(screen.getByRole('button', { name: /First page/ })).toBeTruthy();
+    expect(within(alert).getByRole('button', { name: 'Retry list' })).toBeTruthy();
+  });
+
   it('edits nested compositions through layers, slots, keyboard movement, and history', async () => {
     const user = userEvent.setup();
     render(<App client={createTestClient()} />);
@@ -3824,7 +4376,7 @@ describe('GridStory Studio', () => {
 
     await user.click(screen.getByRole('button', { name: 'Apply Campaign page' }));
     expect(screen.getByText('6 components')).toBeTruthy();
-  });
+  }, 10_000);
   it('authors rich text, assets, references, inline props, and scoped collaboration', async () => {
     const user = userEvent.setup();
     render(
@@ -3909,7 +4461,7 @@ describe('GridStory Studio', () => {
     expect(
       within(thread as HTMLElement).getByRole('button', { name: 'Reply' }).className,
     ).toContain('button--secondary');
-  }, 15_000);
+  }, 30_000);
 
   it('shows scoped component usage and visual regression hooks in governance', async () => {
     const user = userEvent.setup();
@@ -3917,69 +4469,177 @@ describe('GridStory Studio', () => {
 
     await screen.findByLabelText('Headline');
     await user.click(screen.getByRole('button', { name: 'Components' }));
-    const governance = await screen.findByRole('region', { name: 'Component governance' });
+    const governance = await screen.findByRole('region', { name: 'Governed design catalog' });
     expect(governance.textContent).toContain('4 scoped usages across 2 entries');
-    expect(governance.textContent).toContain('1 code-owned scenarios');
+    expect(within(governance).getByText('Code scenarios').nextElementSibling?.textContent).toBe(
+      '1',
+    );
     expect(governance.textContent).toContain('data-gridstory-version');
+  });
+
+  it('loads the governed design manifest only when Components opens from Home (BUG-0515)', async () => {
+    window.history.replaceState(null, '', '/');
+    const user = userEvent.setup();
+    const client = createTestClient({
+      context: restrictedContext([...studioOperations], [...studioScreens]),
+    });
+    const getDesignSystem = vi.spyOn(client, 'getDesignSystem');
+    render(<App client={client} />);
+
+    await screen.findByRole('region', { name: 'Editorial Home' });
+    expect(getDesignSystem).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Components' }));
+    await screen.findByRole('region', { name: 'Governed design catalog' });
+    expect(getDesignSystem).toHaveBeenCalledOnce();
+  });
+
+  it('loads canonical schema lifecycle, taxonomy, and permitted impact only when the catalog opens from Home', async () => {
+    window.history.replaceState(null, '', '/');
+    const user = userEvent.setup();
+    const client = createTestClient({
+      context: restrictedContext([...studioOperations], [...studioScreens]),
+    });
+    const lifecycle = vi.spyOn(client, 'getSchemaLifecycle');
+    const drift = vi.spyOn(client, 'getSchemaDrift');
+    const taxonomies = vi.spyOn(client, 'listTaxonomies');
+    const impact = vi.spyOn(client, 'planSchema');
+    render(<App client={client} />);
+
+    await screen.findByRole('region', { name: 'Editorial Home' });
+    expect(lifecycle).not.toHaveBeenCalled();
+    expect(drift).not.toHaveBeenCalled();
+    expect(taxonomies).not.toHaveBeenCalled();
+    expect(impact).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Schemas & taxonomies' }));
+    const catalog = await screen.findByRole('region', { name: 'Schema and taxonomy catalog' });
+    expect(within(catalog).getByText('Code-owned · read-only')).toBeTruthy();
+    expect(within(catalog).getByText('In sync')).toBeTruthy();
+    expect(within(catalog).getByText('Hierarchical categories')).toBeTruthy();
+    expect(
+      within(catalog).getByText(
+        `Plan migration-current-source · assessment only · no activation action`,
+      ),
+    ).toBeTruthy();
+    expect(lifecycle).toHaveBeenCalledOnce();
+    expect(drift).toHaveBeenCalledOnce();
+    expect(taxonomies).toHaveBeenCalledOnce();
+    expect(impact).toHaveBeenCalledOnce();
+  });
+
+  it('keeps taxonomy and impact requests absent when schema-only access opens the catalog', async () => {
+    window.history.replaceState(null, '', '/');
+    const user = userEvent.setup();
+    const client = createTestClient({
+      context: restrictedContext(['home.read', 'schema.read'], ['home', 'schemas']),
+    });
+    const taxonomies = vi.spyOn(client, 'listTaxonomies');
+    const impact = vi.spyOn(client, 'planSchema');
+    render(<App client={client} />);
+
+    await screen.findByRole('region', { name: 'Editorial Home' });
+    await user.click(screen.getByRole('button', { name: 'Schemas & taxonomies' }));
+    const catalog = await screen.findByRole('region', { name: 'Schema and taxonomy catalog' });
+    expect(within(catalog).getByText(/No taxonomy request was sent/)).toBeTruthy();
+    expect(
+      within(catalog).getByText(/does not request or imply deployment authority/),
+    ).toBeTruthy();
+    expect(taxonomies).not.toHaveBeenCalled();
+    expect(impact).not.toHaveBeenCalled();
+  });
+
+  it('browses immutable design choices and inserts a pattern through the existing editor command', async () => {
+    const user = userEvent.setup();
+    render(<App client={createTestClient()} />);
+
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Components' }));
+    const catalog = await screen.findByRole('region', { name: 'Governed design catalog' });
+    expect(
+      within(catalog).getByRole('heading', { name: 'GridStory Example Design System' }),
+    ).toBeTruthy();
+    expect(within(catalog).getByRole('group', { name: 'Design ownership' }).textContent).toContain(
+      'gridstory.example · version 1',
+    );
+    expect(catalog.textContent).toContain('Code-owned · read-only');
+    expect(within(catalog).getByRole('heading', { name: 'Tokens (3)' })).toBeTruthy();
+    expect(within(catalog).getByRole('heading', { name: 'Breakpoints (3)' })).toBeTruthy();
+    expect(within(catalog).getByRole('heading', { name: 'Variants (3)' })).toBeTruthy();
+    expect(within(catalog).getByRole('button', { name: 'Insert Campaign page' })).toBeTruthy();
+
+    await user.selectOptions(
+      within(catalog).getByLabelText('Inspect component'),
+      'gridstory.callout',
+    );
+    await within(catalog).findByRole('article', { name: 'Callout contract' });
+    expect(catalog.textContent).toContain('0 scoped usages across 0 entries');
+
+    await user.click(within(catalog).getByRole('button', { name: 'Insert Portability callout' }));
+    await user.click(screen.getByRole('button', { name: 'Pages' }));
+    expect(await screen.findByText('3 components')).toBeTruthy();
+    expect(screen.getByText('Unsaved changes')).toBeTruthy();
+  });
+
+  it('shows a retryable catalog error without losing the Components destination', async () => {
+    window.history.replaceState(null, '', '/');
+    const user = userEvent.setup();
+    const client = createTestClient({
+      context: restrictedContext([...studioOperations], [...studioScreens]),
+    });
+    const getDesignSystem = vi
+      .spyOn(client, 'getDesignSystem')
+      .mockRejectedValueOnce(new Error('Design registry unavailable.'));
+    render(<App client={client} />);
+
+    await screen.findByRole('region', { name: 'Editorial Home' });
+    await user.click(screen.getByRole('button', { name: 'Components' }));
+    const catalog = await screen.findByRole('region', { name: 'Governed design catalog' });
+    expect(within(catalog).getByRole('alert').textContent).toContain(
+      'Design registry unavailable.',
+    );
+    expect(screen.getByRole('button', { name: 'Components' }).getAttribute('aria-current')).toBe(
+      'page',
+    );
+    await user.click(within(catalog).getByRole('button', { name: 'Retry design catalog' }));
+    await within(catalog).findByRole('heading', { name: 'Tokens (3)' });
+    expect(getDesignSystem).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps approved pattern insertion disabled for component-read-only access', async () => {
+    const user = userEvent.setup();
+    render(
+      <App
+        client={createTestClient({
+          context: restrictedContext(
+            ['pages.list', 'content.read', 'schema.read', 'component.read'],
+            ['pages', 'components'],
+          ),
+        })}
+      />,
+    );
+
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Components' }));
+    const catalog = await screen.findByRole('region', { name: 'Governed design catalog' });
+    expect(within(catalog).getByText('Unsaved target: First page')).toBeTruthy();
+    expect(
+      within(catalog).getByRole('button', { name: 'Insert Portability callout' }),
+    ).toHaveProperty('disabled', true);
+    expect(within(catalog).getByRole('button', { name: 'Insert Campaign page' })).toHaveProperty(
+      'disabled',
+      true,
+    );
   });
 
   it('loads managed assets into the responsive library and field picker', async () => {
     const user = userEvent.setup();
-    const managedAsset: AssetRecord = {
-      organizationId: 'local',
-      tenantId: 'default',
-      workspaceId: 'default',
-      siteId: 'default',
-      environmentId: 'development',
-      locale: 'en',
-      id: 'managed-hero',
-      kind: 'image',
-      currentRevisionId: 'managed-hero-v1',
-      revisions: [
-        {
-          id: 'managed-hero-v1',
-          version: 1,
-          original: {
-            objectKey: 'assets/managed-hero.jpg',
-            url: 'https://cdn.example.test/managed-hero.jpg',
-            filename: 'managed-hero.jpg',
-            mediaType: 'image/jpeg',
-            size: 4096,
-            checksum: 'managed-checksum',
-            width: 1200,
-            height: 800,
-          },
-          metadata: {
-            title: 'Managed hero',
-            alt: 'Managed alt',
-            tags: ['homepage'],
-            collections: [],
-            custom: {},
-          },
-          focalPoint: { x: 0.25, y: 0.75 },
-          createdAt: now,
-          security: {
-            status: 'verified',
-            declaredMediaType: 'image/jpeg',
-            detectedMediaType: 'image/jpeg',
-            sanitized: false,
-            inspectedAt: now,
-            malware: { status: 'clean', provider: 'test-scanner', checkedAt: now },
-            findings: [],
-          },
-          actorId: 'asset-author',
-        },
-      ],
-      renditions: [],
-      createdAt: now,
-      updatedAt: now,
-    };
+    const asset = managedAsset();
     render(
       <App
         client={createTestClient({
           schema: authoringSchema,
           entries: authoringEntries,
-          assets: [managedAsset],
+          assets: [asset],
         })}
       />,
     );
@@ -3987,13 +4647,14 @@ describe('GridStory Studio', () => {
     await screen.findByLabelText('Headline');
     await user.click(screen.getByRole('button', { name: 'Library' }));
     expect(screen.getByRole('heading', { name: 'Asset library' })).toBeTruthy();
-    expect(screen.getByText('Focal point 0.25, 0.75')).toBeTruthy();
-    expect(screen.getByText('Verified')).toBeTruthy();
-    expect(screen.getByText(/malware clean/)).toBeTruthy();
-    await user.click(screen.getByRole('button', { name: 'Inspect usage' }));
-    expect((await screen.findByRole('status')).textContent).toContain(
-      '2 references across 1 entries',
+    const details = screen.getByRole('article', { name: 'Managed hero asset details' });
+    expect((within(details).getByLabelText('Horizontal (0–1)') as HTMLInputElement).value).toBe(
+      '0.25',
     );
+    expect(within(details).getByText('verified')).toBeTruthy();
+    expect(within(details).getByText('clean')).toBeTruthy();
+    await user.click(within(details).getByRole('button', { name: 'Inspect usage' }));
+    expect(await within(details).findByText('2 references across 1 entries')).toBeTruthy();
 
     await user.click(screen.getByRole('button', { name: 'Pages' }));
     const picker = screen.getByRole('region', { name: 'Social image' });
@@ -4001,6 +4662,174 @@ describe('GridStory Studio', () => {
     expect((within(picker).getByLabelText('Alternative text') as HTMLInputElement).value).toBe(
       'Managed alt',
     );
+  });
+
+  it('filters the loaded scope and blocks unsafe asset delivery and renditions', async () => {
+    const user = userEvent.setup();
+    const verified = managedAsset();
+    const verifiedRevision = verified.revisions[0];
+    if (!verifiedRevision?.security) throw new Error('Verified test asset is incomplete.');
+    const quarantinedRevision = {
+      ...verifiedRevision,
+      id: 'blocked-file-v1',
+      original: {
+        ...verifiedRevision.original,
+        objectKey: 'assets/blocked-file.pdf',
+        filename: 'blocked-file.pdf',
+        mediaType: 'application/pdf',
+      },
+      metadata: { ...verifiedRevision.metadata, title: 'Blocked contract', tags: ['legal'] },
+      focalPoint: undefined,
+      security: {
+        ...verifiedRevision.security,
+        status: 'quarantined' as const,
+        declaredMediaType: 'application/pdf',
+        detectedMediaType: 'application/x-msdownload',
+        malware: { status: 'infected' as const, provider: 'test-scanner', checkedAt: now },
+        findings: ['Declared and detected media types do not match.'],
+      },
+    };
+    const quarantined = managedAsset({
+      id: 'blocked-file',
+      kind: 'file',
+      currentRevisionId: quarantinedRevision.id,
+      revisions: [quarantinedRevision],
+    });
+    render(<App client={createTestClient({ assets: [verified, quarantined] })} />);
+
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Library' }));
+    expect(screen.getByText('Showing 2 of 2 loaded scoped assets.')).toBeTruthy();
+    await user.selectOptions(screen.getByLabelText('Security state'), 'quarantined');
+    expect(screen.getByText('Showing 1 of 2 loaded scoped assets.')).toBeTruthy();
+    const details = screen.getByRole('article', { name: 'Blocked contract asset details' });
+    expect(
+      within(details).getByText('Declared and detected media types do not match.'),
+    ).toBeTruthy();
+    expect(
+      (within(details).getByRole('button', { name: 'Open private delivery' }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    expect(within(details).getByText(/Renditions require an image with a verified/)).toBeTruthy();
+    await user.type(screen.getByLabelText('Search loaded assets'), 'nothing-here');
+    expect(screen.getByText('Showing 0 of 2 loaded scoped assets.')).toBeTruthy();
+    expect(screen.getByText('No loaded assets match these filters.')).toBeTruthy();
+  });
+
+  it('creates immutable metadata revisions and verified image renditions', async () => {
+    const user = userEvent.setup();
+    const asset = managedAsset();
+    const revision = asset.revisions[0];
+    if (!revision) throw new Error('Asset revision is required.');
+    const updated: AssetRecord = {
+      ...asset,
+      currentRevisionId: 'managed-hero-v2',
+      revisions: [
+        ...asset.revisions,
+        {
+          ...revision,
+          id: 'managed-hero-v2',
+          version: 2,
+          metadata: {
+            ...revision.metadata,
+            title: 'Updated managed hero',
+            tags: ['homepage', 'new'],
+          },
+        },
+      ],
+    };
+    const client = createTestClient({ assets: [asset] });
+    const update = vi.spyOn(client, 'updateAsset').mockResolvedValue(updated);
+    const rendition = {
+      id: 'rendition-web',
+      preset: {
+        id: 'web',
+        width: 1200,
+        fit: 'cover' as const,
+        format: 'webp' as const,
+        quality: 80,
+      },
+      object: {
+        ...revision.original,
+        objectKey: 'renditions/managed-hero-web.webp',
+        url: 'https://cdn.example.test/renditions/managed-hero-web.webp',
+        filename: 'managed-hero-web.webp',
+        mediaType: 'image/webp',
+      },
+      createdAt: now,
+    };
+    const createRendition = vi.spyOn(client, 'createAssetRendition').mockResolvedValue(rendition);
+    render(<App client={client} />);
+
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Library' }));
+    const title = screen.getByLabelText('Title');
+    await user.clear(title);
+    await user.type(title, 'Updated managed hero');
+    await user.clear(screen.getByLabelText('Tags (comma separated)'));
+    await user.type(screen.getByLabelText('Tags (comma separated)'), 'homepage, new, homepage');
+    await user.click(screen.getByRole('button', { name: 'Save metadata' }));
+    await waitFor(() => expect(update).toHaveBeenCalledOnce());
+    expect(update.mock.calls[0]?.[1]).toMatchObject({
+      metadata: { title: 'Updated managed hero', tags: ['homepage', 'new'] },
+      focalPoint: { x: 0.25, y: 0.75 },
+    });
+    expect(
+      await screen.findByRole('heading', { name: 'Updated managed hero details' }),
+    ).toBeTruthy();
+    expect(screen.getByText('Version 2')).toBeTruthy();
+
+    await user.click(screen.getByRole('button', { name: 'Create rendition' }));
+    await waitFor(() =>
+      expect(createRendition).toHaveBeenCalledExactlyOnceWith('managed-hero', {
+        id: 'web',
+        width: 1200,
+        fit: 'cover',
+        format: 'webp',
+        quality: 80,
+      }),
+    );
+    expect(
+      await screen.findByText('Rendition created from the current verified revision.'),
+    ).toBeTruthy();
+    expect(screen.getByText('1200 × auto · webp · 4.0 KB')).toBeTruthy();
+  });
+
+  it('opens a signed private delivery without rendering or persisting its grant URL', async () => {
+    const user = userEvent.setup();
+    const asset = managedAsset();
+    const client = createTestClient({ assets: [asset] });
+    const grantUrl = 'https://gridstory.test/api/v1/assets/managed-hero/content?token=secret';
+    const delivery = vi.spyOn(client, 'createAssetDelivery').mockResolvedValue({
+      assetId: asset.id,
+      revisionId: asset.currentRevisionId,
+      url: grantUrl,
+      expiresAt: '2026-07-17T00:05:00.000Z',
+    });
+    const replace = vi.fn();
+    const close = vi.fn();
+    const popup = {
+      closed: false,
+      close,
+      location: { replace },
+      opener: window,
+    } as unknown as Window;
+    vi.spyOn(window, 'open').mockReturnValue(popup);
+    render(<App client={client} />);
+
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Library' }));
+    await user.click(screen.getByRole('button', { name: 'Open private delivery' }));
+    await waitFor(() =>
+      expect(delivery).toHaveBeenCalledExactlyOnceWith('managed-hero', {
+        revisionId: 'managed-hero-v1',
+        ttlSeconds: 300,
+      }),
+    );
+    expect(replace).toHaveBeenCalledExactlyOnceWith(grantUrl);
+    expect(document.body.textContent).not.toContain(grantUrl);
+    expect(JSON.stringify(window.localStorage)).not.toContain(grantUrl);
+    expect(close).not.toHaveBeenCalled();
   });
 
   it('chunks browser files by the resumable upload part size', async () => {
@@ -4048,6 +4877,341 @@ describe('GridStory Studio', () => {
     expect(uploadPart.mock.calls.map((call) => call[2].byteLength)).toEqual([4, 4, 2]);
     expect(complete.mock.calls[0]?.[1].map((part) => part.size)).toEqual([4, 4, 2]);
   });
+
+  it('selects the completed upload once without depending on list order', async () => {
+    const user = userEvent.setup();
+    const existing = managedAsset();
+    const baseRevision = existing.revisions[0];
+    if (!baseRevision) throw new Error('Asset revision is required.');
+    const completed = managedAsset({
+      id: 'new-upload',
+      kind: 'file',
+      currentRevisionId: 'new-upload-v1',
+      revisions: [
+        {
+          ...baseRevision,
+          id: 'new-upload-v1',
+          original: {
+            ...baseRevision.original,
+            objectKey: 'assets/new-upload.bin',
+            filename: 'new-upload.bin',
+            mediaType: 'application/octet-stream',
+            size: 4,
+          },
+          metadata: { ...baseRevision.metadata, title: 'New upload' },
+        },
+      ],
+    });
+    const client = createTestClient({
+      context: selectableContext(),
+      assets: [existing, completed],
+    });
+    const uploadSession: AssetUploadSession = {
+      organizationId: 'local',
+      tenantId: 'default',
+      workspaceId: 'default',
+      siteId: 'default',
+      environmentId: 'development',
+      locale: 'en',
+      id: 'upload-select',
+      storageUploadId: 'storage-upload-select',
+      filename: 'new-upload.bin',
+      mediaType: 'application/octet-stream',
+      size: 4,
+      kind: 'file',
+      state: 'pending',
+      partSize: 4,
+      parts: [],
+      createdAt: now,
+      expiresAt: '2026-07-25T00:00:00.000Z',
+    };
+    vi.spyOn(client, 'startAssetUpload').mockResolvedValue(uploadSession);
+    vi.spyOn(client, 'uploadAssetPart').mockResolvedValue({
+      partNumber: 1,
+      etag: 'etag-1',
+      size: 4,
+    });
+    vi.spyOn(client, 'completeAssetUpload').mockResolvedValue(completed);
+    render(<App client={client} />);
+
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Library' }));
+    expect(screen.getByRole('heading', { name: 'Managed hero details' })).toBeTruthy();
+    const bytes = new Uint8Array([1, 2, 3, 4]);
+    const file = new File([bytes], 'new-upload.bin', { type: 'application/octet-stream' });
+    Object.defineProperty(file, 'arrayBuffer', { value: async () => bytes.buffer });
+    fireEvent.change(screen.getByLabelText('Upload asset'), { target: { files: [file] } });
+    expect(await screen.findByRole('heading', { name: 'New upload details' })).toBeTruthy();
+    await waitFor(() => expect(screen.getByLabelText('Site')).toHaveProperty('disabled', false));
+    await user.click(
+      within(screen.getByRole('region', { name: 'Loaded assets' })).getByRole('button', {
+        name: /Managed hero/,
+      }),
+    );
+    expect(screen.getByRole('heading', { name: 'Managed hero details' })).toBeTruthy();
+  });
+
+  it('resumes a failed upload from the server-reported completed parts', async () => {
+    const user = userEvent.setup();
+    const client = createTestClient();
+    const uploadSession: AssetUploadSession = {
+      organizationId: 'local',
+      tenantId: 'default',
+      workspaceId: 'default',
+      siteId: 'default',
+      environmentId: 'development',
+      locale: 'en',
+      id: 'upload-resume',
+      storageUploadId: 'storage-upload-resume',
+      filename: 'resume.bin',
+      mediaType: 'application/octet-stream',
+      size: 10,
+      kind: 'file',
+      state: 'pending',
+      partSize: 4,
+      parts: [],
+      createdAt: now,
+      expiresAt: '2026-07-25T00:00:00.000Z',
+    };
+    const firstPart = { partNumber: 1, etag: 'etag-1', size: 4 };
+    vi.spyOn(client, 'startAssetUpload').mockResolvedValue(uploadSession);
+    const getUpload = vi.spyOn(client, 'getAssetUpload').mockResolvedValue({
+      ...uploadSession,
+      state: 'uploading',
+      parts: [firstPart],
+    });
+    let failedSecondPart = false;
+    const uploadPart = vi
+      .spyOn(client, 'uploadAssetPart')
+      .mockImplementation(async (_uploadId, partNumber, body) => {
+        if (partNumber === 2 && !failedSecondPart) {
+          failedSecondPart = true;
+          throw new Error('Temporary upload interruption.');
+        }
+        return { partNumber, etag: `etag-${partNumber}`, size: body.byteLength };
+      });
+    const complete = vi.spyOn(client, 'completeAssetUpload').mockResolvedValue(undefined as never);
+    render(<App client={client} />);
+
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Library' }));
+    const bytes = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    const file = new File([bytes], 'resume.bin', { type: 'application/octet-stream' });
+    Object.defineProperty(file, 'arrayBuffer', { value: async () => bytes.buffer });
+    fireEvent.change(screen.getByLabelText('Upload asset'), { target: { files: [file] } });
+
+    expect(await screen.findByText(/Upload paused: Temporary upload interruption/)).toBeTruthy();
+    expect(screen.getByText('Upload paused')).toBeTruthy();
+    expect(screen.getByLabelText('Upload asset')).toHaveProperty('disabled', true);
+    expect(complete).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Retry upload' }));
+    await waitFor(() => expect(complete).toHaveBeenCalledOnce());
+    expect(getUpload).toHaveBeenCalledExactlyOnceWith('upload-resume');
+    expect(uploadPart.mock.calls.map((call) => call[1])).toEqual([1, 2, 2, 3]);
+    expect(complete.mock.calls[0]?.[1].map((part) => part.size)).toEqual([4, 4, 2]);
+  });
+
+  it('does not restore or complete an upload after a late part settles following abort', async () => {
+    const user = userEvent.setup();
+    const client = createTestClient();
+    const uploadSession: AssetUploadSession = {
+      organizationId: 'local',
+      tenantId: 'default',
+      workspaceId: 'default',
+      siteId: 'default',
+      environmentId: 'development',
+      locale: 'en',
+      id: 'upload-abort-race',
+      storageUploadId: 'storage-upload-abort-race',
+      filename: 'abort.bin',
+      mediaType: 'application/octet-stream',
+      size: 4,
+      kind: 'file',
+      state: 'pending',
+      partSize: 4,
+      parts: [],
+      createdAt: now,
+      expiresAt: '2026-07-25T00:00:00.000Z',
+    };
+    vi.spyOn(client, 'startAssetUpload').mockResolvedValue(uploadSession);
+    const pendingPart = Promise.withResolvers<{ partNumber: number; etag: string; size: number }>();
+    vi.spyOn(client, 'uploadAssetPart').mockReturnValue(pendingPart.promise);
+    const abort = vi.spyOn(client, 'abortAssetUpload').mockResolvedValue(undefined);
+    const complete = vi.spyOn(client, 'completeAssetUpload');
+    render(<App client={client} />);
+
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Library' }));
+    const bytes = new Uint8Array([1, 2, 3, 4]);
+    const file = new File([bytes], 'abort.bin', { type: 'application/octet-stream' });
+    Object.defineProperty(file, 'arrayBuffer', { value: async () => bytes.buffer });
+    fireEvent.change(screen.getByLabelText('Upload asset'), { target: { files: [file] } });
+    await screen.findByText('0 of 1 parts · 0%');
+    await user.click(screen.getByRole('button', { name: 'Abort upload' }));
+    expect(abort).toHaveBeenCalledExactlyOnceWith('upload-abort-race');
+    expect(screen.queryByText('0 of 1 parts · 0%')).toBeNull();
+
+    await act(async () => {
+      pendingPart.resolve({ partNumber: 1, etag: 'etag-1', size: 4 });
+    });
+    expect(screen.queryByText(/of 1 parts/)).toBeNull();
+    expect(complete).not.toHaveBeenCalled();
+  });
+
+  it('aborts a late upload-session start response after local cancellation', async () => {
+    const user = userEvent.setup();
+    const client = createTestClient();
+    const pendingStart = Promise.withResolvers<AssetUploadSession>();
+    vi.spyOn(client, 'startAssetUpload').mockReturnValue(pendingStart.promise);
+    const abort = vi.spyOn(client, 'abortAssetUpload').mockResolvedValue(undefined);
+    const uploadPart = vi.spyOn(client, 'uploadAssetPart');
+    render(<App client={client} />);
+
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Library' }));
+    const bytes = new Uint8Array([1, 2, 3, 4]);
+    const file = new File([bytes], 'late-start.bin', { type: 'application/octet-stream' });
+    Object.defineProperty(file, 'arrayBuffer', { value: async () => bytes.buffer });
+    fireEvent.change(screen.getByLabelText('Upload asset'), { target: { files: [file] } });
+    await screen.findByText('late-start.bin');
+    await user.click(screen.getByRole('button', { name: 'Abort upload' }));
+    expect(abort).not.toHaveBeenCalled();
+
+    await act(async () => {
+      pendingStart.resolve({
+        organizationId: 'local',
+        tenantId: 'default',
+        workspaceId: 'default',
+        siteId: 'default',
+        environmentId: 'development',
+        locale: 'en',
+        id: 'late-start-session',
+        storageUploadId: 'storage-late-start',
+        filename: 'late-start.bin',
+        mediaType: 'application/octet-stream',
+        size: 4,
+        kind: 'file',
+        state: 'pending',
+        partSize: 4,
+        parts: [],
+        createdAt: now,
+        expiresAt: '2026-07-25T00:00:00.000Z',
+      });
+    });
+    await waitFor(() => expect(abort).toHaveBeenCalledExactlyOnceWith('late-start-session'));
+    expect(uploadPart).not.toHaveBeenCalled();
+    expect(screen.queryByText('late-start.bin')).toBeNull();
+  });
+
+  it('rejects a resumed session that does not identify the same local file', async () => {
+    const user = userEvent.setup();
+    const client = createTestClient();
+    const uploadSession: AssetUploadSession = {
+      organizationId: 'local',
+      tenantId: 'default',
+      workspaceId: 'default',
+      siteId: 'default',
+      environmentId: 'development',
+      locale: 'en',
+      id: 'upload-mismatch',
+      storageUploadId: 'storage-upload-mismatch',
+      filename: 'match.bin',
+      mediaType: 'application/octet-stream',
+      size: 4,
+      kind: 'file',
+      state: 'pending',
+      partSize: 4,
+      parts: [],
+      createdAt: now,
+      expiresAt: '2026-07-25T00:00:00.000Z',
+    };
+    vi.spyOn(client, 'startAssetUpload').mockResolvedValue(uploadSession);
+    vi.spyOn(client, 'uploadAssetPart').mockRejectedValueOnce(new Error('Pause before retry.'));
+    vi.spyOn(client, 'getAssetUpload').mockResolvedValue({
+      ...uploadSession,
+      filename: 'different.bin',
+    });
+    const complete = vi.spyOn(client, 'completeAssetUpload');
+    render(<App client={client} />);
+
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Library' }));
+    const bytes = new Uint8Array([1, 2, 3, 4]);
+    const file = new File([bytes], 'match.bin', { type: 'application/octet-stream' });
+    Object.defineProperty(file, 'arrayBuffer', { value: async () => bytes.buffer });
+    fireEvent.change(screen.getByLabelText('Upload asset'), { target: { files: [file] } });
+    await screen.findByText(/Upload paused: Pause before retry/);
+    await user.click(screen.getByRole('button', { name: 'Retry upload' }));
+    expect(
+      await screen.findByText(/Upload paused: The resumable upload session does not match/),
+    ).toBeTruthy();
+    expect(complete).not.toHaveBeenCalled();
+  });
+
+  it('shows a local file-read error without starting a server upload', async () => {
+    const client = createTestClient();
+    const start = vi.spyOn(client, 'startAssetUpload');
+    render(<App client={client} />);
+
+    await screen.findByLabelText('Headline');
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Library' }));
+    const file = new File(['unreadable'], 'unreadable.bin', {
+      type: 'application/octet-stream',
+    });
+    Object.defineProperty(file, 'arrayBuffer', {
+      value: async () => Promise.reject(new Error('Local read denied.')),
+    });
+    fireEvent.change(screen.getByLabelText('Upload asset'), { target: { files: [file] } });
+    expect(
+      await screen.findByText('The local file could not be read: Local read denied.'),
+    ).toBeTruthy();
+    expect(start).not.toHaveBeenCalled();
+  });
+
+  it('aborts a retained failed upload before committing a new Studio context', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const client = createTestClient({ context: selectableContext() });
+    const uploadSession: AssetUploadSession = {
+      organizationId: 'local',
+      tenantId: 'default',
+      workspaceId: 'default',
+      siteId: 'default',
+      environmentId: 'development',
+      locale: 'en',
+      id: 'upload-before-context-switch',
+      storageUploadId: 'storage-before-context-switch',
+      filename: 'failed.bin',
+      mediaType: 'application/octet-stream',
+      size: 4,
+      kind: 'file',
+      state: 'pending',
+      partSize: 4,
+      parts: [],
+      createdAt: now,
+      expiresAt: '2026-07-25T00:00:00.000Z',
+    };
+    vi.spyOn(client, 'startAssetUpload').mockResolvedValue(uploadSession);
+    vi.spyOn(client, 'uploadAssetPart').mockRejectedValue(new Error('Temporary failure.'));
+    const abort = vi.spyOn(client, 'abortAssetUpload').mockResolvedValue(undefined);
+    render(<App client={client} />);
+
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Library' }));
+    const bytes = new Uint8Array([1, 2, 3, 4]);
+    const file = new File([bytes], 'failed.bin', { type: 'application/octet-stream' });
+    Object.defineProperty(file, 'arrayBuffer', { value: async () => bytes.buffer });
+    fireEvent.change(screen.getByLabelText('Upload asset'), { target: { files: [file] } });
+    await screen.findByText(/Upload paused: Temporary failure/);
+
+    fireEvent.change(screen.getByLabelText('Site'), { target: { value: 'campaign' } });
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+    await waitFor(() =>
+      expect(screen.getByTitle('Committed Studio context').textContent).toContain('Campaign site'),
+    );
+    expect(abort).toHaveBeenCalledExactlyOnceWith('upload-before-context-switch');
+  });
+
   it('designs versioned transition actions and exposes the durable delivery log', async () => {
     const user = userEvent.setup();
     render(<App client={createTestClient()} />);

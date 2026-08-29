@@ -43,7 +43,11 @@ describe('analytics HTTP workflow', () => {
       },
     });
     const published = (
-      await server.inject({ method: 'GET', url: '/api/v1/content', headers: managementHeaders })
+      await server.inject({
+        method: 'GET',
+        url: '/api/v1/content?contentType=page&perspective=published',
+        headers: managementHeaders,
+      })
     ).json()[0];
     const event = {
       id: '018daf23-89b3-7cf8-a4f1-94064c96df90',
@@ -119,7 +123,12 @@ describe('analytics HTTP workflow', () => {
       headers: managementHeaders,
       payload: { limit: 25 },
     });
-    expect(delivered).toHaveLength(3);
+    expect(delivered).toHaveLength(4);
+    expect(
+      delivered.filter(
+        (evidence) => evidence.kind === 'event' && evidence.event.name === 'content.created',
+      ),
+    ).toHaveLength(2);
     expect(
       delivered
         .filter((evidence) => evidence.kind === 'event')
@@ -141,7 +150,7 @@ describe('analytics HTTP workflow', () => {
     expect(report.json()).toMatchObject({
       eventCounts: { 'component.viewed': 1 },
       components: [{ componentId: 'hero', version: 2, views: 1 }],
-      adapterDeliveries: [{ adapterId: 'test-destination', succeeded: 3, dead: 0 }],
+      adapterDeliveries: [{ adapterId: 'test-destination', succeeded: 4, dead: 0 }],
     });
     expect(report.json()).not.toHaveProperty('receipts');
 

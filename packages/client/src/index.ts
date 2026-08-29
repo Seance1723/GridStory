@@ -46,6 +46,7 @@ import type {
   DataSubject,
   DataSubjectRequest,
   DesignSystemManifest,
+  EditorialOverview,
   ExperimentAllocationRequest,
   ExperimentAllocationResult,
   ExperimentDesign,
@@ -155,7 +156,11 @@ import type {
   WorkflowDefinitionInput,
   WorkflowInstance,
 } from '@gridstory/schema';
-import { studioContextSchema, studioScopeSelectionSchema } from '@gridstory/schema';
+import {
+  editorialOverviewSchema,
+  studioContextSchema,
+  studioScopeSelectionSchema,
+} from '@gridstory/schema';
 
 export interface MigrationOverviewRecord {
   sources: MigrationSourceDescriptor[];
@@ -693,6 +698,26 @@ export class GridStoryClient {
           status: 502,
           code: 'invalid_studio_context',
         },
+      );
+    }
+    return parsed.data;
+  }
+
+  async getEditorialOverview(options: { signal?: AbortSignal } = {}): Promise<EditorialOverview> {
+    const value = await this.#request<unknown>('/api/v1/editorial/overview', {
+      ...(options.signal ? { signal: options.signal } : {}),
+    });
+    const parsed = editorialOverviewSchema.safeParse(value);
+    const expected = { ...this.#scope, tenantId: this.#tenantId };
+    if (
+      !parsed.success ||
+      Object.entries(expected).some(
+        ([key, id]) => parsed.data.scope[key as keyof typeof expected] !== id,
+      )
+    ) {
+      throw new GridStoryApiError(
+        'The editorial overview response is invalid or has a different scope.',
+        { status: 502, code: 'invalid_editorial_overview' },
       );
     }
     return parsed.data;
@@ -2724,6 +2749,7 @@ export type {
   CreateAssetDeliveryInput,
   DataSubject,
   DataSubjectRequest,
+  EditorialOverview,
   ExperimentAllocationRequest,
   ExperimentAllocationResult,
   ExperimentDesign,

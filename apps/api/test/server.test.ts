@@ -31,6 +31,24 @@ const validPage = {
     },
   ],
 };
+const validArticle = {
+  headline: 'Registered article',
+  slug: 'registered-article',
+  summary: 'A non-component content type authored through the same content engine.',
+  body: {
+    version: 1,
+    blocks: [
+      {
+        id: 'article-story',
+        type: 'paragraph',
+        content: [{ type: 'text', text: 'Created through registered article fields.', marks: [] }],
+      },
+    ],
+  },
+  relatedPages: [],
+  topics: ['product-news'],
+  featured: false,
+};
 
 describe('GridStory API', () => {
   let server: FastifyInstance | undefined;
@@ -98,6 +116,67 @@ describe('GridStory API', () => {
     });
     expect(redirectResponse.statusCode).toBe(308);
     expect(redirectResponse.headers.location).toBe('/api-page');
+  });
+
+  it('lists, creates, revises, and publishes the registered article collection independently', async () => {
+    server = await buildServer({ databasePath: ':memory:', seed: false });
+    const create = await server.inject({
+      method: 'POST',
+      url: '/api/v1/content',
+      headers,
+      payload: { contentType: 'article', data: validArticle },
+    });
+    expect(create.statusCode).toBe(201);
+    const created = create.json();
+
+    const list = await server.inject({
+      method: 'GET',
+      url: '/api/v1/content?contentType=article',
+      headers,
+    });
+    expect(list.statusCode).toBe(200);
+    expect(list.json().map((entry: { id: string }) => entry.id)).toEqual([created.id]);
+
+    const revisedData = { ...validArticle, headline: 'Revised registered article' };
+    const revise = await server.inject({
+      method: 'PUT',
+      url: `/api/v1/content/${created.id}/draft`,
+      headers,
+      payload: { expectedRevisionId: created.draftRevisionId, data: revisedData },
+    });
+    expect(revise.statusCode).toBe(200);
+    const revised = revise.json();
+    const revisions = await server.inject({
+      method: 'GET',
+      url: `/api/v1/content/${created.id}/revisions`,
+      headers,
+    });
+    expect(revisions.statusCode).toBe(200);
+    expect(revisions.json()).toHaveLength(2);
+
+    await approveForPublication(server, revised, headers);
+    const publish = await server.inject({
+      method: 'POST',
+      url: `/api/v1/content/${created.id}/publish`,
+      headers,
+      payload: { expectedRevisionId: revised.draftRevisionId },
+    });
+    expect(publish.statusCode).toBe(200);
+
+    const delivery = await server.inject({
+      method: 'GET',
+      url: '/api/v1/delivery/article/registered-article',
+      headers,
+    });
+    expect(delivery.statusCode).toBe(200);
+    expect(delivery.json().data.headline).toBe('Revised registered article');
+    const route = await server.inject({
+      method: 'GET',
+      url: '/api/v1/delivery/routes/articles/registered-article',
+      headers,
+    });
+    expect(route.statusCode).toBe(200);
+    expect(route.json().id).toBe(created.id);
   });
 
   it('assesses saved and candidate drafts privately and enforces configurable publish gates', async () => {

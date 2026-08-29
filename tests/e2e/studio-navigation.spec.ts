@@ -1,4 +1,4 @@
-import { type APIRequestContext, expect, test } from '@playwright/test';
+import { type APIRequestContext, expect, type Page, test } from '@playwright/test';
 
 const api = 'http://127.0.0.1:44000/api/v1';
 const headers = {
@@ -25,6 +25,57 @@ async function createPage(request: APIRequestContext, title: string) {
 const address = (destination: string, id: string) =>
   `#/${destination}?${new URLSearchParams({ entry: id, type: 'page' })}`;
 
+async function filterPageList(page: Page, title: string) {
+  await page.getByLabel('Search title or slug').fill(title);
+  await page.getByRole('button', { name: 'Apply list view' }).click();
+}
+
+test('root Home uses the minimized overview, exact bounds, existing entry routes, and canonical create', async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  const requestPaths: string[] = [];
+  page.on('request', (request) => {
+    const path = new URL(request.url()).pathname;
+    if (path.startsWith('/api/v1/')) requestPaths.push(path);
+  });
+
+  await page.goto('/');
+  const home = page.getByRole('region', { name: 'Editorial Home' });
+  await expect(home).toBeVisible();
+  await expect(page).toHaveURL(/#\/home$/);
+  await expect(page.locator('[data-destination="home"]')).toHaveAttribute('aria-current', 'page');
+  await expect(home.getByRole('heading', { name: 'Content', exact: true })).toBeVisible();
+  await expect(home.getByRole('heading', { name: 'Reviews', exact: true })).toBeVisible();
+  await expect(home.getByRole('heading', { name: 'Releases', exact: true })).toBeVisible();
+  await expect(
+    home.getByRole('heading', { name: 'Operator attention', exact: true }),
+  ).toBeVisible();
+  await expect(home.locator('.editorial-home-card__bounds').first()).toContainText(
+    /Showing \d+ of \d+ exact scoped items/,
+  );
+  await expect.poll(() => requestPaths.includes('/api/v1/editorial/overview')).toBe(true);
+  expect(requestPaths).not.toContain('/api/v1/assets');
+  expect(requestPaths).not.toContain('/api/v1/releases');
+  expect(requestPaths).not.toContain('/api/v1/workflows');
+  expect(requestPaths).not.toContain('/api/v1/operations/summary');
+
+  const recentEntry = home
+    .getByRole('article', { name: 'Content', exact: true })
+    .locator('.editorial-home-list__link')
+    .first();
+  await expect(recentEntry).toBeVisible();
+  await recentEntry.click();
+  await expect(page.locator('.studio-workspace')).toBeVisible();
+  await expect(page).toHaveURL(/#\/(pages|collections)\?entry=[^&]+&type=[^&]+$/);
+
+  await page.goBack();
+  await expect(home).toBeVisible();
+  await page.getByRole('button', { name: 'Create Page', exact: true }).click();
+  await expect(page.getByText('Draft page created.')).toBeVisible();
+  await expect(page).toHaveURL(/#\/pages\?entry=[^&]+&type=page$/);
+});
+
 test('deep links restore authorized entry context, reload, skip focus and mobile navigation', async ({
   page,
   context,
@@ -42,7 +93,7 @@ test('deep links restore authorized entry context, reload, skip focus and mobile
   await expect(shared.getByRole('region', { name: 'Asset library' })).toBeVisible();
   await shared.reload();
   await expect(shared.getByRole('region', { name: 'Asset library' })).toBeVisible();
-  await shared.getByRole('link', { name: 'Skip to page editor' }).focus();
+  await shared.getByRole('link', { name: 'Skip to content editor' }).focus();
   await shared.keyboard.press('Enter');
   await expect(shared.locator('#studio-content')).toBeFocused();
   expect(shared.url()).toBe(copied);
@@ -76,11 +127,12 @@ test('entry and history guards preserve drafts and preview until accepted replac
   expect(popup.isClosed()).toBe(false);
   await page.getByRole('button', { name: 'Pages', exact: true }).click();
   await expect(title).toHaveValue('Private unsaved navigation draft');
+  await filterPageList(page, String(second.data.title));
   page.once('dialog', (dialog) => dialog.dismiss());
   await page
     .getByRole('complementary', { name: 'Content entries' })
     .getByRole('button', {
-      name: `${second.data.title} /${second.data.slug} draft`,
+      name: `${second.data.title} /${second.data.slug}`,
       exact: true,
     })
     .click();
@@ -91,12 +143,13 @@ test('entry and history guards preserve drafts and preview until accepted replac
   await page
     .getByRole('complementary', { name: 'Content entries' })
     .getByRole('button', {
-      name: `${second.data.title} /${second.data.slug} draft`,
+      name: `${second.data.title} /${second.data.slug}`,
       exact: true,
     })
     .click();
   await expect(title).toHaveValue('Navigation guarded second');
   await expect.poll(() => popup.isClosed()).toBe(true);
+  await expect(title.locator('xpath=ancestor::*[@inert]')).toHaveCount(0);
   await title.fill('Unsaved second navigation draft');
   await expect(title).toHaveValue('Unsaved second navigation draft');
   await expect(page.getByText('Unsaved changes', { exact: true })).toBeVisible();
@@ -148,10 +201,11 @@ test('manual fragments, unavailable entries and denied destinations remain truth
   await expect(
     page.getByRole('button', { name: 'Open live preview in new window' }),
   ).toBeDisabled();
+  await filterPageList(page, String(entry.data.title));
   await page
     .getByRole('complementary', { name: 'Content entries' })
     .getByRole('button', {
-      name: `${entry.data.title} /${entry.data.slug} draft`,
+      name: `${entry.data.title} /${entry.data.slug}`,
       exact: true,
     })
     .click();

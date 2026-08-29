@@ -181,6 +181,7 @@ describe('Studio permission and topology projection', () => {
     );
     const result = projection.project(current);
     expect(Object.entries(result.capabilities.screens).filter(([, allowed]) => allowed)).toEqual([
+      ['home', true],
       ['operations', true],
     ]);
     expect(result.capabilities.operations['operations.manage']).toBe(false);
@@ -221,6 +222,8 @@ describe('Studio permission and topology projection', () => {
     );
     expect(typed.operations['pages.list']).toBe(true);
     expect(typed.operations['pages.create']).toBe(true);
+    expect(typed.operations['content.create']).toBe(false);
+    expect(typed.screens.collections).toBe(false);
     for (const key of [
       'content.read',
       'content.draft.update',
@@ -229,6 +232,21 @@ describe('Studio permission and topology projection', () => {
       'locales.read',
     ] as const)
       expect(typed.operations[key], key).toBe(false);
+
+    const generic = studioCapabilities(
+      context({
+        id: 'generic',
+        type: 'user',
+        roles: [],
+        authenticationMethod: 'session',
+        grants: [{ actions: ['content.read', 'content.create', 'schema.read'] }],
+      }),
+      new AuthorizationPolicy(),
+    );
+    expect(generic.operations['content.read']).toBe(true);
+    expect(generic.operations['content.create']).toBe(true);
+    expect(generic.operations['schema.read']).toBe(true);
+    expect(generic.screens.collections).toBe(true);
   });
 
   it('rejects duplicate/orphan/oversized topology and locale drift without echoing configuration', async () => {
@@ -396,7 +414,7 @@ describe('private Studio context HTTP contract', () => {
   });
 
   it.each(['admin', 'viewer', 'author', 'unmapped'])(
-    'matches actual reads for all 19 destinations with %s session',
+    'matches actual reads for all 22 destinations with %s session',
     async (role) => {
       const value = await fixture(role);
       const projected = await value.server.inject({
@@ -407,7 +425,10 @@ describe('private Studio context HTTP contract', () => {
       expect(projected.statusCode).toBe(200);
       const result = projected.json<StudioContext>();
       const routes: Record<StudioDestinationId, string> = {
+        home: '/editorial/overview',
         pages: '/content?contentType=page',
+        collections: '/schemas',
+        schemas: '/schema-lifecycle',
         workflows: '/workflows',
         releases: '/releases',
         search: '/search/index/status',

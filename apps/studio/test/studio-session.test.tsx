@@ -266,15 +266,13 @@ describe('Studio session lifetime', () => {
     const check = Promise.withResolvers<StudioContext>();
     const assets = Promise.withResolvers<[]>();
     let captured: StudioSessionView | undefined;
-    render(
-      <StudioSession client={client}>
-        {(view) => {
-          captured = view;
-          return <Probe {...view} />;
-        }}
-      </StudioSession>,
-    );
+    const child = vi.fn((view: StudioSessionView) => {
+      captured = view;
+      return <Probe {...view} />;
+    });
+    render(<StudioSession client={client}>{child}</StudioSession>);
     await screen.findByRole('textbox');
+    const settledRenderCount = child.mock.calls.length;
     read.mockReturnValueOnce(check.promise);
     fireEvent(window, new Event('focus'));
     expect(screen.queryByRole('textbox')).not.toBeNull();
@@ -286,6 +284,7 @@ describe('Studio session lifetime', () => {
     assets.resolve([]);
     await expect(pending).resolves.toEqual([]);
     expect(screen.getByRole('textbox')).toHaveProperty('value', 'focus-restoring edit');
+    expect(child).toHaveBeenCalledTimes(settledRenderCount);
     expect(read).toHaveBeenCalledTimes(2);
     expect(client.listAssets).toHaveBeenCalledTimes(1);
   });

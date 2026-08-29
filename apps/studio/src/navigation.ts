@@ -2,7 +2,16 @@
 import type { StudioCapabilities } from '@gridstory/schema';
 
 export const studioDestinations = {
+  home: { label: 'Home', icon: 'M4 11.5 12 4l8 7.5V20h-5v-5H9v5H4z' },
   pages: { label: 'Pages', icon: 'M4 4h16v16H4zM8 4v16' },
+  collections: {
+    label: 'Collections',
+    icon: 'M4 6h16v5H4zM4 13h16v5H4zM8 8.5h8M8 15.5h8',
+  },
+  schemas: {
+    label: 'Schemas & taxonomies',
+    icon: 'M4 5h7v6H4zM13 5h7v6h-7zM4 13h7v6H4zM13 13h7v6h-7zM11 8h2M8 11v2M16 11v2',
+  },
   workflows: { label: 'Workflows', icon: 'M5 5h5v5H5zM14 14h5v5h-5zM10 7h4a3 3 0 0 1 3 3v4' },
   releases: { label: 'Releases', icon: 'M5 19V5h14v14zM8 9h8M8 13h5' },
   search: {
@@ -52,8 +61,14 @@ export const studioDestinations = {
 
 export type StudioDestination = keyof typeof studioDestinations;
 
+export const studioPrimaryDestinations = ['home'] as const satisfies readonly StudioDestination[];
+
 export const studioNavigationGroups = [
-  { id: 'content', label: 'Content', destinations: ['pages', 'workflows', 'releases', 'search'] },
+  {
+    id: 'content',
+    label: 'Content',
+    destinations: ['pages', 'collections', 'schemas', 'workflows', 'releases', 'search'],
+  },
   { id: 'media', label: 'Media', destinations: ['assets'] },
   { id: 'design', label: 'Design', destinations: ['components'] },
   { id: 'seo-quality', label: 'SEO & quality', destinations: ['quality'] },
@@ -81,6 +96,10 @@ export const studioNavigationGroups = [
 }>;
 
 export type StudioNavigationGroupId = (typeof studioNavigationGroups)[number]['id'];
+
+export function permittedPrimaryNavigation(capabilities: StudioCapabilities) {
+  return studioPrimaryDestinations.filter((destination) => capabilities.screens[destination]);
+}
 
 export function permittedNavigation(capabilities: StudioCapabilities) {
   return studioNavigationGroups

@@ -44,6 +44,7 @@ import {
   contentCacheTags,
   type DataPlacementAdapter,
   type DueWorkflowExecution,
+  EditorialOverviewService,
   EnterpriseIdentityService,
   ExperimentService,
   type FleetObservationAdapter,
@@ -134,7 +135,13 @@ import {
   WorkflowService,
 } from '@gridstory/core';
 import { exampleDesignSystem } from '@gridstory/example-kit/design-system';
-import { componentManifests, pageSchema, welcomePage } from '@gridstory/example-kit/manifests';
+import {
+  articleSchema,
+  componentManifests,
+  pageSchema,
+  welcomeArticle,
+  welcomePage,
+} from '@gridstory/example-kit/manifests';
 import {
   assetRenditionPresetSchema,
   type CollaborationOperation,
@@ -189,7 +196,11 @@ import {
   WebAuthnAdapter,
 } from './identity-adapters.js';
 import { registerIdentityRoutes } from './identity-routes.js';
-import { StudioContextProjection, validateStudioTopology } from './studio-context.js';
+import {
+  studioCapabilities,
+  StudioContextProjection,
+  validateStudioTopology,
+} from './studio-context.js';
 import type { PlatformTopology } from '@gridstory/schema';
 import { NodeDnsMarketplaceDomainVerifier } from './marketplace-adapters.js';
 import { registerMarketplaceRoutes } from './marketplace-routes.js';
@@ -205,6 +216,7 @@ export interface BuildServerOptions {
   databaseUrl?: string;
   allowedOrigins?: string[];
   contentSchemas?: ContentSchemaDefinition[];
+  workflowDefinitions?: Array<{ id: string; definition: WorkflowDefinitionInput }>;
   seed?: boolean;
   logger?: boolean;
   redirects?: RedirectDefinition[];
@@ -515,7 +527,8 @@ export async function buildServer({
   databasePath = '.gridstory/gridstory.db',
   databaseUrl,
   allowedOrigins = ['http://localhost:5173', 'http://localhost:5174'],
-  contentSchemas = [pageSchema],
+  contentSchemas = [pageSchema, articleSchema],
+  workflowDefinitions = defaultWorkflowDefinitions,
   seed = true,
   logger = false,
   redirects = [],
@@ -694,7 +707,7 @@ export async function buildServer({
   const workflows = new WorkflowService({
     repository: resolvedWorkflowRepository,
     jobRepository: repository,
-    defaultDefinitions: defaultWorkflowDefinitions,
+    defaultDefinitions: workflowDefinitions,
   });
   const quality = new ContentQualityService({
     repository,
@@ -871,6 +884,13 @@ export async function buildServer({
         : analytics.deliver(scope, payload),
     ...(allowedWebhookHosts ? { allowedWebhookHosts } : {}),
     ...(resolvedTenantTelemetry ? { telemetry: resolvedTenantTelemetry } : {}),
+  });
+  const editorialOverview = new EditorialOverviewService({
+    content: repository,
+    workflows: resolvedWorkflowRepository,
+    releases: resolvedReleaseRepository,
+    schemas: contentSchemas,
+    operations: (scope) => operations.dashboard(scope),
   });
   const portability = new PortabilityService({ repository });
   const audit = new AuditService({ repository });
@@ -1076,6 +1096,40 @@ export async function buildServer({
       );
     }
     return studioContext.project(requestContext(request, 'draft'));
+  });
+  server.get('/api/v1/editorial/overview', async (request, reply) => {
+    reply.header('cache-control', 'private, no-store');
+    if (Object.keys(request.query as Record<string, unknown>).length > 0) {
+      throw new GridStoryError(
+        'The editorial overview does not accept query parameters.',
+        'invalid_request',
+        400,
+      );
+    }
+    const context = requestContext(request, 'draft');
+    const capabilities = studioCapabilities(context, policy);
+    if (!capabilities.operations['home.read']) {
+      throw new GridStoryError('The editorial overview is not available.', 'forbidden', 403);
+    }
+    const contentVisibility = capabilities.operations['content.read']
+      ? 'all-registered'
+      : capabilities.operations['pages.list']
+        ? 'pages-only'
+        : undefined;
+    return editorialOverview.read({
+      scope: contentScope(context),
+      principal: { id: context.principal.id, roles: context.principal.roles },
+      visibility: {
+        ...(contentVisibility ? { content: contentVisibility } : {}),
+        reviews: Boolean(
+          contentVisibility &&
+            capabilities.operations['workflow.read'] &&
+            capabilities.operations['workflow.approve'],
+        ),
+        releases: capabilities.operations['release.read'],
+        operations: capabilities.operations['operations.read'],
+      },
+    });
   });
   server.get('/api/v1/schemas', async (request) => {
     const context = requestContext(request, 'draft');
@@ -2559,6 +2613,14 @@ export async function buildServer({
       id: created.id,
       expectedRevisionId: created.draftRevisionId,
       actor: seedReviewer,
+    });
+  }
+  if (seed && (await service.list({ scope: seedScope, contentType: 'article' })).length === 0) {
+    await service.create({
+      scope: seedScope,
+      contentType: 'article',
+      data: welcomeArticle,
+      actor: { id: 'gridstory-seed' },
     });
   }
   if (seed) await lifecycle.initialize(seedScope, { id: 'gridstory-schema-bootstrap' });

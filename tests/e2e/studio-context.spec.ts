@@ -41,7 +41,7 @@ test('switches only an allowed complete context after discard and preview cleanu
       } satisfies StudioContext,
     });
   });
-  await page.goto('/');
+  await page.goto('/#/pages');
   const title = page.getByRole('textbox', { name: 'Title', exact: true });
   await expect(title).toBeEnabled();
   const popupEvent = page.waitForEvent('popup');
@@ -95,7 +95,7 @@ test('real viewer context gates every permitted screen and operation without den
       failed.push(response.status());
   });
   const contextResponse = page.waitForResponse('**/api/v1/studio/context');
-  await page.goto('/');
+  await page.goto('/#/pages');
   const context = (await (await contextResponse).json()) as StudioContext;
   await expect(page.getByRole('textbox', { name: 'Title', exact: true })).toBeDisabled();
   await expect(page.getByText(/Read-only page/)).toBeVisible();
@@ -117,7 +117,8 @@ test('real viewer context gates every permitted screen and operation without den
     }
     await leaf.click();
     await expect(leaf).toHaveAttribute('aria-current', 'page');
-    if (destination === 'pages') await expect(page.locator('.studio-workspace')).toBeVisible();
+    if (destination === 'pages' || destination === 'collections')
+      await expect(page.locator('.studio-workspace')).toBeVisible();
     else await expect(page.locator('.studio-page > section')).toBeVisible();
     const controls = await page.locator('[data-required-operations]').evaluateAll((elements) =>
       elements.map((element) => ({
@@ -134,9 +135,17 @@ test('real viewer context gates every permitted screen and operation without den
         expect(control.disabled, `${destination}: ${control.operations.join(', ')}`).toBe(true);
     }
   }
-  expect(requests.filter(({ method }) => method !== 'GET')).toEqual([
+  const readOnlyPosts = requests.filter(({ method }) => method !== 'GET');
+  expect(readOnlyPosts.filter(({ path }) => path === '/api/v1/search')).toEqual([
     { method: 'POST', path: '/api/v1/search' },
   ]);
+  expect(readOnlyPosts.some(({ path }) => path === '/api/v1/content/query')).toBe(true);
+  expect(
+    readOnlyPosts.every(
+      ({ method, path }) =>
+        method === 'POST' && (path === '/api/v1/content/query' || path === '/api/v1/search'),
+    ),
+  ).toBe(true);
   expect(failed).toEqual([]);
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByRole('button', { name: 'Toggle navigation' })).toBeVisible();
@@ -172,7 +181,7 @@ test('unsupported context fails closed and can retry without legacy identity fal
       await route.fulfill({ json: { version: 99 } });
     else await route.continue();
   });
-  await page.goto('/');
+  await page.goto('/#/pages');
   await expect(page.getByRole('button', { name: 'Retry access' })).toBeVisible();
   await expect(page.locator('.studio-shell')).toHaveCount(0);
   expect(paths).toEqual(['/api/v1/studio/context']);
@@ -185,7 +194,7 @@ test('unsupported context fails closed and can retry without legacy identity fal
 test('observed session loss closes the preview and removes unsaved private output', async ({
   page,
 }) => {
-  await page.goto('/');
+  await page.goto('/#/pages');
   const title = page.getByRole('textbox', { name: 'Title', exact: true });
   await expect(title).toBeEnabled();
   const popupEvent = page.waitForEvent('popup');

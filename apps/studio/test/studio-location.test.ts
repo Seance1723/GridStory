@@ -7,20 +7,19 @@ import {
 } from '../src/studio-location.js';
 
 describe('finite Studio locations', () => {
-  it('round trips every destination and opaque page ID without scope or draft parameters', () => {
+  it('round trips every destination, registered type, and opaque entry ID without scope or draft parameters', () => {
     for (const destination of Object.keys(studioDestinations) as StudioLocation['destination'][]) {
-      for (const entryId of [undefined, 'page /?#&=+é', 'x'.repeat(256)]) {
-        const location: StudioLocation = {
-          destination,
-          ...(entryId ? { entryId, type: 'page' } : {}),
-        };
-        expect(parseStudioLocation(formatStudioLocation(location))).toEqual({
-          location,
-          invalid: false,
-        });
+      for (const type of ['page', 'article']) {
+        for (const entryId of [undefined, 'page /?#&=+é', 'x'.repeat(256)]) {
+          const location: StudioLocation = { destination, type, ...(entryId ? { entryId } : {}) };
+          expect(parseStudioLocation(formatStudioLocation(location))).toEqual({
+            location,
+            invalid: false,
+          });
+        }
       }
     }
-    expect(parseStudioLocation('')).toEqual({ location: { destination: 'pages' }, invalid: false });
+    expect(parseStudioLocation('')).toEqual({ location: { destination: 'home' }, invalid: false });
   });
 
   it.each([
@@ -30,9 +29,9 @@ describe('finite Studio locations', () => {
     '#studio-editor',
     '#/pages#extra',
     '#/pages?entry=a',
-    '#/pages?type=page',
     '#/pages?entry=&type=page',
-    '#/pages?entry=a&type=article',
+    '#/pages?type=not/a/type',
+    `#/pages?type=${'a'.repeat(129)}`,
     '#/pages?entry=a&type=page&entry=b',
     '#/pages?entry=a&type=page&tenant=other',
     '#/pages?token=secret',
@@ -44,7 +43,7 @@ describe('finite Studio locations', () => {
     `#/pages?${'a'.repeat(4096)}`,
   ])('rejects invalid address without reflecting its value: %s', (hash) => {
     expect(parseStudioLocation(hash)).toEqual({
-      location: { destination: 'pages' },
+      location: { destination: 'home' },
       invalid: true,
     });
   });
