@@ -20,6 +20,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Completed CMS-007's consolidated Media workflow over the existing asset boundary: isolated lazy Library loading, exact loaded-scope filters, safe resumable upload controls, selected metadata/focal-point revisions, immutable security/revision/rendition/usage evidence and verified-only ephemeral signed delivery. Final `pnpm check` passes 686 active tests with 17 existing optional skips and all builds; the final real-browser matrix passes 63/63 across Chromium, Firefox and WebKit. No DAM, folder/delete/publish behavior, storage/provider contract, dependency, permission meaning or deployment was added.
+
 - Completed CMS-006's factual editorial Home: a strict minimized complete-scope overview, independently authorized and failure-isolated Content/Reviews/Releases/Operations widgets, a top-level finite `#/home` destination, precise existing-detail links, and quick create delegated to CMS-004's canonical candidate/preflight/create path. The private parameter-free endpoint is `no-store`, response lists are fixed at five with exact coverage/bound wording, and denied widgets issue no source reads. Final `pnpm check` passes 669 active tests with 17 existing optional skips, React 18.3.1 SSR and production builds; the unchanged browser matrix passes 60/60 across Chromium, Firefox and WebKit. BUG-0489–BUG-0500 are resolved. No new permission, storage schema, analytics/task system, configurable widget framework, dependency, cross-tenant projection, merge, push or deployment was added.
 
 - Accepted ADR 0032 and started CMS-006 (Codex, 2026-08-29T09:18:11+05:30; baseline `58fc548`) after the user's explicit `proceed`. Implement only the strict minimized editorial overview, top-level Home destination and CMS-004 quick-create delegation inside the approved fence; CMS-007–010, merge, push and deployment remain out of scope.
@@ -78,6 +80,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Added consent/GPC-gated exact-published public event ingestion, private operational reports, typed universal-client methods, Studio content/component/release/adapter metrics, recovery/PostgreSQL/browser coverage, analytics guidance/ADR, and verified `THREAT-0032`/`GS-SEC-036` controls (M7-003).
 
 ### Changed
+
+- Logged CMS-007 aggregate browser findings BUG-0511–BUG-0514 before correction: use an exact security-badge assertion, restore selected-card AA contrast without changing the palette, constrain the Firefox mobile detail, and make the shared option-card style fixture independent of whether synthetic fallback or real assets are present.
+
+- CMS-007 Media now uses an isolated component/SCSS partial over the existing asset contracts: explicit loaded-scope search/kind/security filters, selected metadata/revision/rendition/security/usage detail, in-memory upload retry/abort progress, and ephemeral popup-only signed delivery. Added finite method mappings and failed-session cleanup on Studio context replacement without adding a DAM, provider, storage contract, dependency or permission meaning.
+
+- Logged CMS-007 browser-fixture BUG-0503 after the first real Chromium journey correctly changed the selected detail's accessible title on metadata revision; use its stable detail container for subsequent assertions without weakening before/after title checks.
+
+- Logged CMS-007 browser-fixture BUG-0504 after the rendition-provider negative reached the real existing “No rendition adapter is configured.” alert; assert that established message exactly rather than an invented word order.
+
+- Logged and corrected CMS-007 accessibility naming BUG-0505: the Media filter is now “Security state,” distinct from the selected asset's “Security evidence” region.
+
+- Logged and corrected CMS-007 multi-asset selection BUG-0506 after WebKit completed an upload but retained an older asset detail: a completed asset now sends a one-time selection request that does not overwrite subsequent manual picks.
+
+- Logged and corrected CMS-007 upload-settlement BUG-0507: successful completion now releases the internal management-activity flag after clearing its session reference, without allowing an older upload to settle a newer upload's activity.
+
+- Logged and corrected CMS-007 upload boundary BUG-0508–BUG-0510: a paused session must be retried or aborted before choosing another file; late start responses are identity-validated and aborted after local cancellation; local file-read failures stay visible and create no session.
+
+- Started CMS-007 (Codex, 2026-08-29; baseline `ec72ef2`) as a bounded T1 Studio-only consolidation of the already-implemented asset list, resumable upload, immutable metadata/revisions, renditions, usage and signed private-delivery services. Add no DAM/storage/provider contract, dependency, folder/bulk/delete/publish behavior, merge, push or deployment. BUG-0501 records the false Home-to-Library empty state and must be repaired with an isolated lazy load.
 
 - Logged BUG-0500 during CMS-006's final aggregate gate: after the 13-minute browser matrix, two existing Studio interaction cases exceeded their unchanged deadlines by 305ms/217ms while 271 sibling Studio tests and all preceding repository gates passed. The exact pair and full gate must rerun unchanged before completion; no timeout, retry or assertion relaxation is justified by this observation.
 
@@ -138,6 +158,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Recorded the accepted M6-005 evidence-bound marketplace decision: operator-scoped publisher verification, signed compatibility/support metadata, injected non-executing artifact review, separate human approval, and approved-only handoff to the existing disabled plugin installation lifecycle.
 
 ### Fixed
+
+- Resolved CMS-007 BUG-0501–BUG-0514 across lazy loading, upload cancellation/settlement/session identity, accessible naming/contrast, completed-asset selection, responsive intrinsic sizing and exact stateful browser fixtures. Focused ordered-state controls and the final unchanged 63-scenario three-engine matrix pass without suppressing Axe, weakening assertions, replacing colors or relaxing timeouts/retries.
 
 - Gave the two existing BUG-0500 Studio interaction cases bounded 10s/30s ceilings after paired failing-before runs proved their former 5s/15s deadlines had at most 1.6% scheduling margin. Every interaction and assertion remains, no retry/global timeout changed, and the exact pair, complete 273-test Studio file, final 669-active-test repository gate and unchanged 60-scenario real-browser matrix pass.
 

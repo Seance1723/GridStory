@@ -408,7 +408,8 @@ test('Studio shell follows the reference navigation, card, theme, and mobile dra
 
   const assetOption = page
     .getByRole('region', { name: 'Social image' })
-    .getByRole('button', { name: /Campaign landscape/ });
+    .locator('button[aria-pressed]')
+    .first();
   const relationOption = page
     .getByRole('region', { name: 'Related pages' })
     .getByRole('button', { name: /Welcome to GridStory/ });

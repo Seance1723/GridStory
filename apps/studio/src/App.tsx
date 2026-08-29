@@ -9,7 +9,9 @@ import {
   type AiSemanticSearchResponse,
   type AnalyticsReport,
   type AssetRecord,
-  type AssetUsageReport,
+  type AssetRenditionPreset,
+  type AssetUploadPart,
+  type AssetUploadSession,
   type BacklinkRecord,
   type CollaborationSnapshot,
   type ComponentManifest,
@@ -57,6 +59,7 @@ import {
   type SearchIndexStatus,
   type SearchResponse,
   type TaxonomyDefinition,
+  type UpdateAssetInput,
   type WorkflowDefinition,
   type WorkflowInstance,
 } from '@gridstory/client';
@@ -79,6 +82,7 @@ import type {
 } from '@gridstory/schema';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AssetControl, RelationControl, RichTextControl } from './authoring-controls.js';
+import { AssetLibrary, type AssetUploadView } from './asset-library.js';
 import { candidateIssueMessage, createContentCandidate } from './content-authoring.js';
 import {
   buildContentListQuery,
@@ -150,6 +154,14 @@ type ComponentGovernanceState = {
   migration: ComponentMigrationPlanResponse;
   visual: ComponentVisualRegressionPlan;
 };
+type AssetUploadContext = {
+  body: Uint8Array;
+  fileName: string;
+  kind: AssetRecord['kind'];
+  mediaType: string;
+  session: AssetUploadSession | null;
+  cancelled: boolean;
+};
 
 const studioReadMethods = new Set<string>([
   'listContent',
@@ -164,6 +176,8 @@ const studioReadMethods = new Set<string>([
   'getComponentMigration',
   'getComponentVisualRegression',
   'listAssets',
+  'getAsset',
+  'getAssetUpload',
   'getAssetUsage',
   'getCollaboration',
   'listWorkflows',
@@ -888,8 +902,13 @@ function AuthorizedStudio({
   const [designSystem, setDesignSystem] = useState<DesignSystemManifest | null>(null);
   const [assets, setAssets] = useState<AssetRecord[]>([]);
   const [assetLibraryOpen, setAssetLibraryOpen] = useState(false);
-  const [assetUsage, setAssetUsage] = useState<AssetUsageReport | null>(null);
+  const [assetListLoaded, setAssetListLoaded] = useState(false);
+  const [assetListLoading, setAssetListLoading] = useState(false);
+  const [assetListError, setAssetListError] = useState<string | null>(null);
+  const [assetUpload, setAssetUpload] = useState<AssetUploadView | null>(null);
+  const [assetFocusId, setAssetFocusId] = useState<string | null>(null);
   const [assetUploading, setAssetUploading] = useState(false);
+  const assetUploadRef = useRef<AssetUploadContext | null>(null);
 
   const [dirty, setDirty] = useState(false);
   const dirtyRef = useRef(dirty);
@@ -1464,6 +1483,8 @@ function AuthorizedStudio({
           schemasRef.current = schemaList;
           setDesignSystem(designSystemManifest);
           setAssets(assetList);
+          setAssetListLoaded(can('asset.read') && !homeDestination);
+          setAssetListError(null);
           setWorkflowDefinitions(workflowList);
           setReleases(releaseList);
           setReleaseListLoaded(can('release.read') && !homeDestination);
@@ -1818,48 +1839,242 @@ function AuthorizedStudio({
       [])
     : [];
   const refreshAssets = useCallback(async () => {
-    setAssets(await client.listAssets());
+    setAssetListLoading(true);
+    setAssetListError(null);
+    try {
+      setAssets(await client.listAssets());
+      setAssetListLoaded(true);
+    } catch (error) {
+      setAssetListError(messageFrom(error));
+    } finally {
+      setAssetListLoading(false);
+    }
   }, [client]);
 
+  const continueAssetUpload = useCallback(
+    async (context: AssetUploadContext, resume: boolean) => {
+      setAssetUploading(true);
+      setNotice(null);
+      try {
+        let session = context.session;
+        if (resume && session) {
+          session = await client.getAssetUpload(session.id);
+          if (session.state === 'completed') {
+            assetUploadRef.current = null;
+            setAssetUpload(null);
+            await refreshAssets();
+            return;
+          }
+          if (session.state === 'aborted') session = null;
+        }
+        if (!session) {
+          setAssetUpload({
+            fileName: context.fileName,
+            totalBytes: context.body.byteLength,
+            uploadedBytes: 0,
+            uploadedParts: 0,
+            totalParts: 1,
+            status: 'starting',
+          });
+          session = await client.startAssetUpload({
+            filename: context.fileName,
+            mediaType: context.mediaType,
+            size: context.body.byteLength,
+            kind: context.kind,
+            metadata: { title: context.fileName },
+          });
+        }
+        context.session = session;
+        if (context.cancelled || assetUploadRef.current !== context) {
+          await cleanupClient.abortAssetUpload(session.id).catch(() => undefined);
+          throw new DOMException('Asset upload was cancelled.', 'AbortError');
+        }
+        if (
+          session.filename !== context.fileName ||
+          session.mediaType !== context.mediaType ||
+          session.size !== context.body.byteLength ||
+          session.kind !== context.kind
+        ) {
+          throw new Error('The resumable upload session does not match this local file.');
+        }
+        const totalParts = Math.ceil(context.body.byteLength / session.partSize);
+        const completedParts = new Map(
+          session.parts.map((part): [number, AssetUploadPart] => [part.partNumber, part]),
+        );
+        for (const part of completedParts.values()) {
+          const offset = (part.partNumber - 1) * session.partSize;
+          const expectedSize = Math.min(session.partSize, context.body.byteLength - offset);
+          if (offset < 0 || expectedSize <= 0 || part.size !== expectedSize) {
+            throw new Error('The resumable upload session does not match this local file.');
+          }
+        }
+        const updateProgress = (status: AssetUploadView['status'], message?: string) => {
+          const uploadedBytes = [...completedParts.values()].reduce(
+            (total, part) => total + part.size,
+            0,
+          );
+          setAssetUpload({
+            fileName: context.fileName,
+            totalBytes: context.body.byteLength,
+            uploadedBytes,
+            uploadedParts: completedParts.size,
+            totalParts,
+            status,
+            ...(message ? { message } : {}),
+          });
+        };
+        updateProgress('uploading');
+        for (let partNumber = 1; partNumber <= totalParts; partNumber += 1) {
+          if (completedParts.has(partNumber)) continue;
+          if (context.cancelled || assetUploadRef.current !== context) {
+            throw new DOMException('Asset upload was cancelled.', 'AbortError');
+          }
+          const offset = (partNumber - 1) * session.partSize;
+          const end = Math.min(offset + session.partSize, context.body.byteLength);
+          const part = await client.uploadAssetPart(
+            session.id,
+            partNumber,
+            context.body.subarray(offset, end),
+          );
+          if (context.cancelled || assetUploadRef.current !== context) {
+            throw new DOMException('Asset upload was cancelled.', 'AbortError');
+          }
+          completedParts.set(partNumber, part);
+          updateProgress('uploading');
+        }
+        if (context.cancelled || assetUploadRef.current !== context) {
+          throw new DOMException('Asset upload was cancelled.', 'AbortError');
+        }
+        updateProgress('completing');
+        const completed = await client.completeAssetUpload(
+          session.id,
+          [...completedParts.values()].sort((left, right) => left.partNumber - right.partNumber),
+        );
+        if (completed?.id) {
+          setAssetFocusId(completed.id);
+          setAssets((current) => [
+            completed,
+            ...current.filter((asset) => asset.id !== completed.id),
+          ]);
+        }
+        assetUploadRef.current = null;
+        setAssetUpload(null);
+        await refreshAssets();
+        setNotice({
+          tone: 'success',
+          message: `${context.fileName} added to the asset library.`,
+        });
+      } catch (error) {
+        if (
+          !context.cancelled &&
+          assetUploadRef.current === context &&
+          (error as { name?: string }).name !== 'AbortError'
+        ) {
+          setAssetUpload((current) => ({
+            fileName: context.fileName,
+            totalBytes: context.body.byteLength,
+            uploadedBytes: current?.uploadedBytes ?? 0,
+            uploadedParts: current?.uploadedParts ?? 0,
+            totalParts: current?.totalParts ?? 1,
+            status: 'failed',
+            message: messageFrom(error),
+          }));
+        }
+      } finally {
+        if (assetUploadRef.current === context || assetUploadRef.current === null)
+          setAssetUploading(false);
+      }
+    },
+    [cleanupClient, client, refreshAssets],
+  );
+
   const uploadAssetFile = async (file: File) => {
-    setAssetUploading(true);
-    setAssetUsage(null);
-    setNotice(null);
+    let body: Uint8Array;
     try {
-      const body = new Uint8Array(await file.arrayBuffer());
-      const kind = file.type.startsWith('image/')
+      body = new Uint8Array(await file.arrayBuffer());
+    } catch (error) {
+      setNotice({
+        tone: 'error',
+        message: `The local file could not be read: ${messageFrom(error)}`,
+      });
+      return;
+    }
+    const context: AssetUploadContext = {
+      body,
+      fileName: file.name,
+      mediaType: file.type || 'application/octet-stream',
+      kind: file.type.startsWith('image/')
         ? 'image'
         : file.type.startsWith('video/')
           ? 'video'
-          : 'file';
-      const upload = await client.startAssetUpload({
-        filename: file.name,
-        mediaType: file.type || 'application/octet-stream',
-        size: body.byteLength,
-        kind,
-        metadata: { title: file.name },
-      });
-      const parts = [];
-      for (let offset = 0, partNumber = 1; offset < body.byteLength; partNumber += 1) {
-        const end = Math.min(offset + upload.partSize, body.byteLength);
-        parts.push(await client.uploadAssetPart(upload.id, partNumber, body.subarray(offset, end)));
-        offset = end;
-      }
-      await client.completeAssetUpload(upload.id, parts);
-      await refreshAssets();
-      setNotice({ tone: 'success', message: `${file.name} added to the asset library.` });
-    } catch (error) {
-      setNotice({ tone: 'error', message: messageFrom(error) });
-    } finally {
-      setAssetUploading(false);
-    }
+          : 'file',
+      session: null,
+      cancelled: false,
+    };
+    assetUploadRef.current = context;
+    await continueAssetUpload(context, false);
   };
 
-  const inspectAssetUsage = async (assetId: string) => {
+  const retryAssetUpload = async () => {
+    const context = assetUploadRef.current;
+    if (context) await continueAssetUpload(context, true);
+  };
+
+  const abortAssetUpload = async () => {
+    const context = assetUploadRef.current;
+    if (!context) return;
+    context.cancelled = true;
+    assetUploadRef.current = null;
+    setAssetUpload(null);
+    setAssetUploading(false);
+    if (context.session) await client.abortAssetUpload(context.session.id);
+    setNotice({ tone: 'info', message: `${context.fileName} upload aborted.` });
+  };
+
+  const cleanupPendingAssetUpload = useCallback(async () => {
+    const context = assetUploadRef.current;
+    if (!context) return;
+    context.cancelled = true;
+    assetUploadRef.current = null;
+    setAssetUpload(null);
+    setAssetUploading(false);
+    if (context.session) await cleanupClient.abortAssetUpload(context.session.id);
+  }, [cleanupClient]);
+
+  const updateAsset = async (assetId: string, input: UpdateAssetInput) => {
+    const updated = await client.updateAsset(assetId, input);
+    setAssets((current) => current.map((asset) => (asset.id === assetId ? updated : asset)));
+  };
+
+  const createAssetRendition = async (assetId: string, preset: AssetRenditionPreset) => {
+    const rendition = await client.createAssetRendition(assetId, preset);
+    setAssets((current) =>
+      current.map((asset) =>
+        asset.id === assetId
+          ? {
+              ...asset,
+              renditions: [...asset.renditions, rendition],
+              updatedAt: rendition.createdAt,
+            }
+          : asset,
+      ),
+    );
+  };
+
+  const openAssetDelivery = async (assetId: string, revisionId: string) => {
+    const popup = window.open('about:blank', '_blank', 'popup,width=1280,height=900');
+    if (!popup) throw new Error('Allow popups to open the private asset delivery.');
     try {
-      setAssetUsage(await client.getAssetUsage(assetId));
+      popup.opener = null;
+      const grant = await client.createAssetDelivery(assetId, { revisionId, ttlSeconds: 300 });
+      if (!mountedRef.current || popup.closed) {
+        popup.close();
+        throw new DOMException('Studio authority changed before delivery opened.', 'AbortError');
+      }
+      popup.location.replace(grant.url);
     } catch (error) {
-      setNotice({ tone: 'error', message: messageFrom(error) });
+      popup.close();
+      throw error;
     }
   };
 
@@ -4586,6 +4801,18 @@ function AuthorizedStudio({
     [cleanupClient],
   );
 
+  useEffect(
+    () => () => {
+      const context = assetUploadRef.current;
+      if (!context) return;
+      context.cancelled = true;
+      assetUploadRef.current = null;
+      if (context.session)
+        void cleanupClient.abortAssetUpload(context.session.id).catch(() => undefined);
+    },
+    [cleanupClient],
+  );
+
   useEffect(() => {
     if (!active) void closeExternalPreview();
   }, [active, closeExternalPreview]);
@@ -4620,7 +4847,10 @@ function AuthorizedStudio({
       return;
     try {
       await transitionScope(selection, {
-        cleanup: () => cleanupExternalPreview(true),
+        cleanup: async () => {
+          await cleanupExternalPreview(true);
+          await cleanupPendingAssetUpload();
+        },
         beforeCommit: () => {
           const destination = capabilities.screens[activeStudioDestination]
             ? activeStudioDestination
@@ -4800,6 +5030,11 @@ function AuthorizedStudio({
     selectNavigationItem('search');
   };
 
+  const openAssetLibrary = async () => {
+    setAssetLibraryOpen(true);
+    if (!assetListLoaded) await refreshAssets();
+  };
+
   const navigationActions: Record<
     StudioDestination,
     { loaded: boolean; ensureLoaded?: () => void | Promise<void>; disabled?: boolean }
@@ -4861,7 +5096,7 @@ function AuthorizedStudio({
       loaded: componentGovernance !== null,
       ensureLoaded: () => toggleComponentGovernance(),
     },
-    assets: { loaded: assetLibraryOpen, ensureLoaded: () => setAssetLibraryOpen(true) },
+    assets: { loaded: assetLibraryOpen, ensureLoaded: openAssetLibrary },
   };
 
   const navigationActionsRef = useRef(navigationActions);
@@ -5942,104 +6177,23 @@ function AuthorizedStudio({
             </section>
           ) : null}{' '}
           {visibleDestination === 'assets' && assetLibraryOpen ? (
-            <section className="asset-library-panel" aria-label="Asset library">
-              <div className="section-heading">
-                <div>
-                  <span className="kicker">Digital assets</span>
-                  <h2>Asset library</h2>
-                  <p>Verified uploads, quarantine status, governed metadata, and scoped usage.</p>
-                </div>
-                <label className="button button--primary asset-upload-button">
-                  {assetUploading ? 'Uploading...' : 'Upload asset'}
-                  <input
-                    data-required-operations="asset.create"
-                    type="file"
-                    disabled={!can('asset.create') || assetUploading}
-                    onChange={(event) => {
-                      const file = event.currentTarget.files?.[0];
-                      event.currentTarget.value = '';
-                      if (file) void uploadAssetFile(file);
-                    }}
-                  />
-                </label>
-              </div>
-              <div className="asset-library-grid">
-                {assets.length > 0 ? (
-                  assets.map((asset) => {
-                    const revision = asset.revisions.find(
-                      (candidate) => candidate.id === asset.currentRevisionId,
-                    );
-                    if (!revision) return null;
-                    return (
-                      <article className="asset-library-card" key={asset.id}>
-                        <div>
-                          <div className="asset-library-title-row">
-                            <strong>{revision.metadata.title}</strong>
-                            <span
-                              className={`asset-security-badge asset-security-badge--${revision.security?.status ?? 'unverified'}`}
-                            >
-                              {revision.security?.status === 'verified'
-                                ? 'Verified'
-                                : revision.security?.status === 'quarantined'
-                                  ? 'Quarantined'
-                                  : 'Unverified'}
-                            </span>
-                          </div>
-                          <span>
-                            {asset.kind} - {revision.original.mediaType}
-                          </span>
-                          {revision.security ? (
-                            <small>
-                              Detected {revision.security.detectedMediaType} - malware{' '}
-                              {revision.security.malware.status}
-                              {revision.security.sanitized ? ' - sanitized' : ''}
-                            </small>
-                          ) : null}
-                        </div>
-                        <dl>
-                          <div>
-                            <dt>Version</dt>
-                            <dd>{revision.version}</dd>
-                          </div>
-                          <div>
-                            <dt>Renditions</dt>
-                            <dd>{asset.renditions.length}</dd>
-                          </div>
-                          <div>
-                            <dt>Size</dt>
-                            <dd>{revision.original.size} B</dd>
-                          </div>
-                        </dl>
-                        {revision.focalPoint ? (
-                          <small>
-                            Focal point {revision.focalPoint.x.toFixed(2)},{' '}
-                            {revision.focalPoint.y.toFixed(2)}
-                          </small>
-                        ) : null}
-                        <button
-                          data-required-operations="asset.read"
-                          disabled={!can('asset.read')}
-                          type="button"
-                          className="button button--secondary"
-                          onClick={() => void inspectAssetUsage(asset.id)}
-                        >
-                          Inspect usage
-                        </button>
-                      </article>
-                    );
-                  })
-                ) : (
-                  <p className="empty-state">Upload the first asset for this tenant and locale.</p>
-                )}
-              </div>
-              {assetUsage ? (
-                <p className="asset-usage-summary" role="status">
-                  {assetUsage.totalReferences} references across {assetUsage.entries} entries -{' '}
-                  {assetUsage.byPerspective.draft} draft - {assetUsage.byPerspective.published}{' '}
-                  published
-                </p>
-              ) : null}
-            </section>
+            <AssetLibrary
+              assets={assets}
+              focusAssetId={assetFocusId}
+              loading={assetListLoading}
+              error={assetListError}
+              upload={assetUpload}
+              canCreate={can('asset.create')}
+              canUpdate={can('asset.update')}
+              onReload={refreshAssets}
+              onUpload={uploadAssetFile}
+              onRetryUpload={retryAssetUpload}
+              onAbortUpload={abortAssetUpload}
+              onUpdateAsset={updateAsset}
+              onCreateRendition={createAssetRendition}
+              onLoadUsage={(assetId) => client.getAssetUsage(assetId)}
+              onOpenDelivery={openAssetDelivery}
+            />
           ) : null}
           {visibleDestination === 'search' && searchPanelOpen ? (
             <section className="search-panel" aria-label="Search and discovery">

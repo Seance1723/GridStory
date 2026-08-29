@@ -109,6 +109,60 @@ function entry(id: string, headline: string, path: string): ContentEntry {
 }
 
 const entries = [entry('one', 'First page', 'first'), entry('two', 'Second page', 'second')];
+
+function managedAsset(overrides: Partial<AssetRecord> = {}): AssetRecord {
+  return {
+    organizationId: 'local',
+    tenantId: 'default',
+    workspaceId: 'default',
+    siteId: 'default',
+    environmentId: 'development',
+    locale: 'en',
+    id: 'managed-hero',
+    kind: 'image',
+    currentRevisionId: 'managed-hero-v1',
+    revisions: [
+      {
+        id: 'managed-hero-v1',
+        version: 1,
+        original: {
+          objectKey: 'assets/managed-hero.jpg',
+          url: 'https://cdn.example.test/managed-hero.jpg',
+          filename: 'managed-hero.jpg',
+          mediaType: 'image/jpeg',
+          size: 4096,
+          checksum: 'managed-checksum',
+          width: 1200,
+          height: 800,
+        },
+        metadata: {
+          title: 'Managed hero',
+          alt: 'Managed alt',
+          tags: ['homepage'],
+          collections: [],
+          custom: {},
+        },
+        focalPoint: { x: 0.25, y: 0.75 },
+        createdAt: now,
+        security: {
+          status: 'verified',
+          declaredMediaType: 'image/jpeg',
+          detectedMediaType: 'image/jpeg',
+          sanitized: false,
+          inspectedAt: now,
+          malware: { status: 'clean', provider: 'test-scanner', checkedAt: now },
+          findings: [],
+        },
+        actorId: 'asset-author',
+      },
+    ],
+    renditions: [],
+    createdAt: now,
+    updatedAt: now,
+    ...overrides,
+  };
+}
+
 const articleSchema: ContentSchemaDefinition = {
   id: 'article',
   version: 1,
@@ -2286,6 +2340,23 @@ describe('GridStory Studio', () => {
     expect(screen.getByRole('button', { name: 'Pages' }).getAttribute('aria-current')).toBe('page');
   });
 
+  it('loads the scoped asset list when Library is opened from minimized Home', async () => {
+    window.history.replaceState(null, '', '/');
+    const client = createTestClient({
+      context: restrictedContext([...studioOperations], [...studioScreens]),
+      assets: [managedAsset()],
+    });
+    const listAssets = vi.spyOn(client, 'listAssets');
+
+    render(<App client={client} />);
+    await screen.findByRole('region', { name: 'Editorial Home' });
+    expect(listAssets).not.toHaveBeenCalled();
+
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Library' }));
+    expect(await screen.findByRole('heading', { name: 'Managed hero details' })).toBeTruthy();
+    expect(listAssets).toHaveBeenCalledOnce();
+  });
+
   it('delegates Home quick create to the canonical registered-schema authoring path', async () => {
     window.history.replaceState(null, '', '/');
     const client = createTestClient({
@@ -4310,61 +4381,13 @@ describe('GridStory Studio', () => {
 
   it('loads managed assets into the responsive library and field picker', async () => {
     const user = userEvent.setup();
-    const managedAsset: AssetRecord = {
-      organizationId: 'local',
-      tenantId: 'default',
-      workspaceId: 'default',
-      siteId: 'default',
-      environmentId: 'development',
-      locale: 'en',
-      id: 'managed-hero',
-      kind: 'image',
-      currentRevisionId: 'managed-hero-v1',
-      revisions: [
-        {
-          id: 'managed-hero-v1',
-          version: 1,
-          original: {
-            objectKey: 'assets/managed-hero.jpg',
-            url: 'https://cdn.example.test/managed-hero.jpg',
-            filename: 'managed-hero.jpg',
-            mediaType: 'image/jpeg',
-            size: 4096,
-            checksum: 'managed-checksum',
-            width: 1200,
-            height: 800,
-          },
-          metadata: {
-            title: 'Managed hero',
-            alt: 'Managed alt',
-            tags: ['homepage'],
-            collections: [],
-            custom: {},
-          },
-          focalPoint: { x: 0.25, y: 0.75 },
-          createdAt: now,
-          security: {
-            status: 'verified',
-            declaredMediaType: 'image/jpeg',
-            detectedMediaType: 'image/jpeg',
-            sanitized: false,
-            inspectedAt: now,
-            malware: { status: 'clean', provider: 'test-scanner', checkedAt: now },
-            findings: [],
-          },
-          actorId: 'asset-author',
-        },
-      ],
-      renditions: [],
-      createdAt: now,
-      updatedAt: now,
-    };
+    const asset = managedAsset();
     render(
       <App
         client={createTestClient({
           schema: authoringSchema,
           entries: authoringEntries,
-          assets: [managedAsset],
+          assets: [asset],
         })}
       />,
     );
@@ -4372,13 +4395,14 @@ describe('GridStory Studio', () => {
     await screen.findByLabelText('Headline');
     await user.click(screen.getByRole('button', { name: 'Library' }));
     expect(screen.getByRole('heading', { name: 'Asset library' })).toBeTruthy();
-    expect(screen.getByText('Focal point 0.25, 0.75')).toBeTruthy();
-    expect(screen.getByText('Verified')).toBeTruthy();
-    expect(screen.getByText(/malware clean/)).toBeTruthy();
-    await user.click(screen.getByRole('button', { name: 'Inspect usage' }));
-    expect((await screen.findByRole('status')).textContent).toContain(
-      '2 references across 1 entries',
+    const details = screen.getByRole('article', { name: 'Managed hero asset details' });
+    expect((within(details).getByLabelText('Horizontal (0–1)') as HTMLInputElement).value).toBe(
+      '0.25',
     );
+    expect(within(details).getByText('verified')).toBeTruthy();
+    expect(within(details).getByText('clean')).toBeTruthy();
+    await user.click(within(details).getByRole('button', { name: 'Inspect usage' }));
+    expect(await within(details).findByText('2 references across 1 entries')).toBeTruthy();
 
     await user.click(screen.getByRole('button', { name: 'Pages' }));
     const picker = screen.getByRole('region', { name: 'Social image' });
@@ -4386,6 +4410,174 @@ describe('GridStory Studio', () => {
     expect((within(picker).getByLabelText('Alternative text') as HTMLInputElement).value).toBe(
       'Managed alt',
     );
+  });
+
+  it('filters the loaded scope and blocks unsafe asset delivery and renditions', async () => {
+    const user = userEvent.setup();
+    const verified = managedAsset();
+    const verifiedRevision = verified.revisions[0];
+    if (!verifiedRevision?.security) throw new Error('Verified test asset is incomplete.');
+    const quarantinedRevision = {
+      ...verifiedRevision,
+      id: 'blocked-file-v1',
+      original: {
+        ...verifiedRevision.original,
+        objectKey: 'assets/blocked-file.pdf',
+        filename: 'blocked-file.pdf',
+        mediaType: 'application/pdf',
+      },
+      metadata: { ...verifiedRevision.metadata, title: 'Blocked contract', tags: ['legal'] },
+      focalPoint: undefined,
+      security: {
+        ...verifiedRevision.security,
+        status: 'quarantined' as const,
+        declaredMediaType: 'application/pdf',
+        detectedMediaType: 'application/x-msdownload',
+        malware: { status: 'infected' as const, provider: 'test-scanner', checkedAt: now },
+        findings: ['Declared and detected media types do not match.'],
+      },
+    };
+    const quarantined = managedAsset({
+      id: 'blocked-file',
+      kind: 'file',
+      currentRevisionId: quarantinedRevision.id,
+      revisions: [quarantinedRevision],
+    });
+    render(<App client={createTestClient({ assets: [verified, quarantined] })} />);
+
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Library' }));
+    expect(screen.getByText('Showing 2 of 2 loaded scoped assets.')).toBeTruthy();
+    await user.selectOptions(screen.getByLabelText('Security state'), 'quarantined');
+    expect(screen.getByText('Showing 1 of 2 loaded scoped assets.')).toBeTruthy();
+    const details = screen.getByRole('article', { name: 'Blocked contract asset details' });
+    expect(
+      within(details).getByText('Declared and detected media types do not match.'),
+    ).toBeTruthy();
+    expect(
+      (within(details).getByRole('button', { name: 'Open private delivery' }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    expect(within(details).getByText(/Renditions require an image with a verified/)).toBeTruthy();
+    await user.type(screen.getByLabelText('Search loaded assets'), 'nothing-here');
+    expect(screen.getByText('Showing 0 of 2 loaded scoped assets.')).toBeTruthy();
+    expect(screen.getByText('No loaded assets match these filters.')).toBeTruthy();
+  });
+
+  it('creates immutable metadata revisions and verified image renditions', async () => {
+    const user = userEvent.setup();
+    const asset = managedAsset();
+    const revision = asset.revisions[0];
+    if (!revision) throw new Error('Asset revision is required.');
+    const updated: AssetRecord = {
+      ...asset,
+      currentRevisionId: 'managed-hero-v2',
+      revisions: [
+        ...asset.revisions,
+        {
+          ...revision,
+          id: 'managed-hero-v2',
+          version: 2,
+          metadata: {
+            ...revision.metadata,
+            title: 'Updated managed hero',
+            tags: ['homepage', 'new'],
+          },
+        },
+      ],
+    };
+    const client = createTestClient({ assets: [asset] });
+    const update = vi.spyOn(client, 'updateAsset').mockResolvedValue(updated);
+    const rendition = {
+      id: 'rendition-web',
+      preset: {
+        id: 'web',
+        width: 1200,
+        fit: 'cover' as const,
+        format: 'webp' as const,
+        quality: 80,
+      },
+      object: {
+        ...revision.original,
+        objectKey: 'renditions/managed-hero-web.webp',
+        url: 'https://cdn.example.test/renditions/managed-hero-web.webp',
+        filename: 'managed-hero-web.webp',
+        mediaType: 'image/webp',
+      },
+      createdAt: now,
+    };
+    const createRendition = vi.spyOn(client, 'createAssetRendition').mockResolvedValue(rendition);
+    render(<App client={client} />);
+
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Library' }));
+    const title = screen.getByLabelText('Title');
+    await user.clear(title);
+    await user.type(title, 'Updated managed hero');
+    await user.clear(screen.getByLabelText('Tags (comma separated)'));
+    await user.type(screen.getByLabelText('Tags (comma separated)'), 'homepage, new, homepage');
+    await user.click(screen.getByRole('button', { name: 'Save metadata' }));
+    await waitFor(() => expect(update).toHaveBeenCalledOnce());
+    expect(update.mock.calls[0]?.[1]).toMatchObject({
+      metadata: { title: 'Updated managed hero', tags: ['homepage', 'new'] },
+      focalPoint: { x: 0.25, y: 0.75 },
+    });
+    expect(
+      await screen.findByRole('heading', { name: 'Updated managed hero details' }),
+    ).toBeTruthy();
+    expect(screen.getByText('Version 2')).toBeTruthy();
+
+    await user.click(screen.getByRole('button', { name: 'Create rendition' }));
+    await waitFor(() =>
+      expect(createRendition).toHaveBeenCalledExactlyOnceWith('managed-hero', {
+        id: 'web',
+        width: 1200,
+        fit: 'cover',
+        format: 'webp',
+        quality: 80,
+      }),
+    );
+    expect(
+      await screen.findByText('Rendition created from the current verified revision.'),
+    ).toBeTruthy();
+    expect(screen.getByText('1200 × auto · webp · 4.0 KB')).toBeTruthy();
+  });
+
+  it('opens a signed private delivery without rendering or persisting its grant URL', async () => {
+    const user = userEvent.setup();
+    const asset = managedAsset();
+    const client = createTestClient({ assets: [asset] });
+    const grantUrl = 'https://gridstory.test/api/v1/assets/managed-hero/content?token=secret';
+    const delivery = vi.spyOn(client, 'createAssetDelivery').mockResolvedValue({
+      assetId: asset.id,
+      revisionId: asset.currentRevisionId,
+      url: grantUrl,
+      expiresAt: '2026-07-17T00:05:00.000Z',
+    });
+    const replace = vi.fn();
+    const close = vi.fn();
+    const popup = {
+      closed: false,
+      close,
+      location: { replace },
+      opener: window,
+    } as unknown as Window;
+    vi.spyOn(window, 'open').mockReturnValue(popup);
+    render(<App client={client} />);
+
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Library' }));
+    await user.click(screen.getByRole('button', { name: 'Open private delivery' }));
+    await waitFor(() =>
+      expect(delivery).toHaveBeenCalledExactlyOnceWith('managed-hero', {
+        revisionId: 'managed-hero-v1',
+        ttlSeconds: 300,
+      }),
+    );
+    expect(replace).toHaveBeenCalledExactlyOnceWith(grantUrl);
+    expect(document.body.textContent).not.toContain(grantUrl);
+    expect(JSON.stringify(window.localStorage)).not.toContain(grantUrl);
+    expect(close).not.toHaveBeenCalled();
   });
 
   it('chunks browser files by the resumable upload part size', async () => {
@@ -4433,6 +4625,341 @@ describe('GridStory Studio', () => {
     expect(uploadPart.mock.calls.map((call) => call[2].byteLength)).toEqual([4, 4, 2]);
     expect(complete.mock.calls[0]?.[1].map((part) => part.size)).toEqual([4, 4, 2]);
   });
+
+  it('selects the completed upload once without depending on list order', async () => {
+    const user = userEvent.setup();
+    const existing = managedAsset();
+    const baseRevision = existing.revisions[0];
+    if (!baseRevision) throw new Error('Asset revision is required.');
+    const completed = managedAsset({
+      id: 'new-upload',
+      kind: 'file',
+      currentRevisionId: 'new-upload-v1',
+      revisions: [
+        {
+          ...baseRevision,
+          id: 'new-upload-v1',
+          original: {
+            ...baseRevision.original,
+            objectKey: 'assets/new-upload.bin',
+            filename: 'new-upload.bin',
+            mediaType: 'application/octet-stream',
+            size: 4,
+          },
+          metadata: { ...baseRevision.metadata, title: 'New upload' },
+        },
+      ],
+    });
+    const client = createTestClient({
+      context: selectableContext(),
+      assets: [existing, completed],
+    });
+    const uploadSession: AssetUploadSession = {
+      organizationId: 'local',
+      tenantId: 'default',
+      workspaceId: 'default',
+      siteId: 'default',
+      environmentId: 'development',
+      locale: 'en',
+      id: 'upload-select',
+      storageUploadId: 'storage-upload-select',
+      filename: 'new-upload.bin',
+      mediaType: 'application/octet-stream',
+      size: 4,
+      kind: 'file',
+      state: 'pending',
+      partSize: 4,
+      parts: [],
+      createdAt: now,
+      expiresAt: '2026-07-25T00:00:00.000Z',
+    };
+    vi.spyOn(client, 'startAssetUpload').mockResolvedValue(uploadSession);
+    vi.spyOn(client, 'uploadAssetPart').mockResolvedValue({
+      partNumber: 1,
+      etag: 'etag-1',
+      size: 4,
+    });
+    vi.spyOn(client, 'completeAssetUpload').mockResolvedValue(completed);
+    render(<App client={client} />);
+
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Library' }));
+    expect(screen.getByRole('heading', { name: 'Managed hero details' })).toBeTruthy();
+    const bytes = new Uint8Array([1, 2, 3, 4]);
+    const file = new File([bytes], 'new-upload.bin', { type: 'application/octet-stream' });
+    Object.defineProperty(file, 'arrayBuffer', { value: async () => bytes.buffer });
+    fireEvent.change(screen.getByLabelText('Upload asset'), { target: { files: [file] } });
+    expect(await screen.findByRole('heading', { name: 'New upload details' })).toBeTruthy();
+    await waitFor(() => expect(screen.getByLabelText('Site')).toHaveProperty('disabled', false));
+    await user.click(
+      within(screen.getByRole('region', { name: 'Loaded assets' })).getByRole('button', {
+        name: /Managed hero/,
+      }),
+    );
+    expect(screen.getByRole('heading', { name: 'Managed hero details' })).toBeTruthy();
+  });
+
+  it('resumes a failed upload from the server-reported completed parts', async () => {
+    const user = userEvent.setup();
+    const client = createTestClient();
+    const uploadSession: AssetUploadSession = {
+      organizationId: 'local',
+      tenantId: 'default',
+      workspaceId: 'default',
+      siteId: 'default',
+      environmentId: 'development',
+      locale: 'en',
+      id: 'upload-resume',
+      storageUploadId: 'storage-upload-resume',
+      filename: 'resume.bin',
+      mediaType: 'application/octet-stream',
+      size: 10,
+      kind: 'file',
+      state: 'pending',
+      partSize: 4,
+      parts: [],
+      createdAt: now,
+      expiresAt: '2026-07-25T00:00:00.000Z',
+    };
+    const firstPart = { partNumber: 1, etag: 'etag-1', size: 4 };
+    vi.spyOn(client, 'startAssetUpload').mockResolvedValue(uploadSession);
+    const getUpload = vi.spyOn(client, 'getAssetUpload').mockResolvedValue({
+      ...uploadSession,
+      state: 'uploading',
+      parts: [firstPart],
+    });
+    let failedSecondPart = false;
+    const uploadPart = vi
+      .spyOn(client, 'uploadAssetPart')
+      .mockImplementation(async (_uploadId, partNumber, body) => {
+        if (partNumber === 2 && !failedSecondPart) {
+          failedSecondPart = true;
+          throw new Error('Temporary upload interruption.');
+        }
+        return { partNumber, etag: `etag-${partNumber}`, size: body.byteLength };
+      });
+    const complete = vi.spyOn(client, 'completeAssetUpload').mockResolvedValue(undefined as never);
+    render(<App client={client} />);
+
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Library' }));
+    const bytes = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    const file = new File([bytes], 'resume.bin', { type: 'application/octet-stream' });
+    Object.defineProperty(file, 'arrayBuffer', { value: async () => bytes.buffer });
+    fireEvent.change(screen.getByLabelText('Upload asset'), { target: { files: [file] } });
+
+    expect(await screen.findByText(/Upload paused: Temporary upload interruption/)).toBeTruthy();
+    expect(screen.getByText('Upload paused')).toBeTruthy();
+    expect(screen.getByLabelText('Upload asset')).toHaveProperty('disabled', true);
+    expect(complete).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Retry upload' }));
+    await waitFor(() => expect(complete).toHaveBeenCalledOnce());
+    expect(getUpload).toHaveBeenCalledExactlyOnceWith('upload-resume');
+    expect(uploadPart.mock.calls.map((call) => call[1])).toEqual([1, 2, 2, 3]);
+    expect(complete.mock.calls[0]?.[1].map((part) => part.size)).toEqual([4, 4, 2]);
+  });
+
+  it('does not restore or complete an upload after a late part settles following abort', async () => {
+    const user = userEvent.setup();
+    const client = createTestClient();
+    const uploadSession: AssetUploadSession = {
+      organizationId: 'local',
+      tenantId: 'default',
+      workspaceId: 'default',
+      siteId: 'default',
+      environmentId: 'development',
+      locale: 'en',
+      id: 'upload-abort-race',
+      storageUploadId: 'storage-upload-abort-race',
+      filename: 'abort.bin',
+      mediaType: 'application/octet-stream',
+      size: 4,
+      kind: 'file',
+      state: 'pending',
+      partSize: 4,
+      parts: [],
+      createdAt: now,
+      expiresAt: '2026-07-25T00:00:00.000Z',
+    };
+    vi.spyOn(client, 'startAssetUpload').mockResolvedValue(uploadSession);
+    const pendingPart = Promise.withResolvers<{ partNumber: number; etag: string; size: number }>();
+    vi.spyOn(client, 'uploadAssetPart').mockReturnValue(pendingPart.promise);
+    const abort = vi.spyOn(client, 'abortAssetUpload').mockResolvedValue(undefined);
+    const complete = vi.spyOn(client, 'completeAssetUpload');
+    render(<App client={client} />);
+
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Library' }));
+    const bytes = new Uint8Array([1, 2, 3, 4]);
+    const file = new File([bytes], 'abort.bin', { type: 'application/octet-stream' });
+    Object.defineProperty(file, 'arrayBuffer', { value: async () => bytes.buffer });
+    fireEvent.change(screen.getByLabelText('Upload asset'), { target: { files: [file] } });
+    await screen.findByText('0 of 1 parts · 0%');
+    await user.click(screen.getByRole('button', { name: 'Abort upload' }));
+    expect(abort).toHaveBeenCalledExactlyOnceWith('upload-abort-race');
+    expect(screen.queryByText('0 of 1 parts · 0%')).toBeNull();
+
+    await act(async () => {
+      pendingPart.resolve({ partNumber: 1, etag: 'etag-1', size: 4 });
+    });
+    expect(screen.queryByText(/of 1 parts/)).toBeNull();
+    expect(complete).not.toHaveBeenCalled();
+  });
+
+  it('aborts a late upload-session start response after local cancellation', async () => {
+    const user = userEvent.setup();
+    const client = createTestClient();
+    const pendingStart = Promise.withResolvers<AssetUploadSession>();
+    vi.spyOn(client, 'startAssetUpload').mockReturnValue(pendingStart.promise);
+    const abort = vi.spyOn(client, 'abortAssetUpload').mockResolvedValue(undefined);
+    const uploadPart = vi.spyOn(client, 'uploadAssetPart');
+    render(<App client={client} />);
+
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Library' }));
+    const bytes = new Uint8Array([1, 2, 3, 4]);
+    const file = new File([bytes], 'late-start.bin', { type: 'application/octet-stream' });
+    Object.defineProperty(file, 'arrayBuffer', { value: async () => bytes.buffer });
+    fireEvent.change(screen.getByLabelText('Upload asset'), { target: { files: [file] } });
+    await screen.findByText('late-start.bin');
+    await user.click(screen.getByRole('button', { name: 'Abort upload' }));
+    expect(abort).not.toHaveBeenCalled();
+
+    await act(async () => {
+      pendingStart.resolve({
+        organizationId: 'local',
+        tenantId: 'default',
+        workspaceId: 'default',
+        siteId: 'default',
+        environmentId: 'development',
+        locale: 'en',
+        id: 'late-start-session',
+        storageUploadId: 'storage-late-start',
+        filename: 'late-start.bin',
+        mediaType: 'application/octet-stream',
+        size: 4,
+        kind: 'file',
+        state: 'pending',
+        partSize: 4,
+        parts: [],
+        createdAt: now,
+        expiresAt: '2026-07-25T00:00:00.000Z',
+      });
+    });
+    await waitFor(() => expect(abort).toHaveBeenCalledExactlyOnceWith('late-start-session'));
+    expect(uploadPart).not.toHaveBeenCalled();
+    expect(screen.queryByText('late-start.bin')).toBeNull();
+  });
+
+  it('rejects a resumed session that does not identify the same local file', async () => {
+    const user = userEvent.setup();
+    const client = createTestClient();
+    const uploadSession: AssetUploadSession = {
+      organizationId: 'local',
+      tenantId: 'default',
+      workspaceId: 'default',
+      siteId: 'default',
+      environmentId: 'development',
+      locale: 'en',
+      id: 'upload-mismatch',
+      storageUploadId: 'storage-upload-mismatch',
+      filename: 'match.bin',
+      mediaType: 'application/octet-stream',
+      size: 4,
+      kind: 'file',
+      state: 'pending',
+      partSize: 4,
+      parts: [],
+      createdAt: now,
+      expiresAt: '2026-07-25T00:00:00.000Z',
+    };
+    vi.spyOn(client, 'startAssetUpload').mockResolvedValue(uploadSession);
+    vi.spyOn(client, 'uploadAssetPart').mockRejectedValueOnce(new Error('Pause before retry.'));
+    vi.spyOn(client, 'getAssetUpload').mockResolvedValue({
+      ...uploadSession,
+      filename: 'different.bin',
+    });
+    const complete = vi.spyOn(client, 'completeAssetUpload');
+    render(<App client={client} />);
+
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Library' }));
+    const bytes = new Uint8Array([1, 2, 3, 4]);
+    const file = new File([bytes], 'match.bin', { type: 'application/octet-stream' });
+    Object.defineProperty(file, 'arrayBuffer', { value: async () => bytes.buffer });
+    fireEvent.change(screen.getByLabelText('Upload asset'), { target: { files: [file] } });
+    await screen.findByText(/Upload paused: Pause before retry/);
+    await user.click(screen.getByRole('button', { name: 'Retry upload' }));
+    expect(
+      await screen.findByText(/Upload paused: The resumable upload session does not match/),
+    ).toBeTruthy();
+    expect(complete).not.toHaveBeenCalled();
+  });
+
+  it('shows a local file-read error without starting a server upload', async () => {
+    const client = createTestClient();
+    const start = vi.spyOn(client, 'startAssetUpload');
+    render(<App client={client} />);
+
+    await screen.findByLabelText('Headline');
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Library' }));
+    const file = new File(['unreadable'], 'unreadable.bin', {
+      type: 'application/octet-stream',
+    });
+    Object.defineProperty(file, 'arrayBuffer', {
+      value: async () => Promise.reject(new Error('Local read denied.')),
+    });
+    fireEvent.change(screen.getByLabelText('Upload asset'), { target: { files: [file] } });
+    expect(
+      await screen.findByText('The local file could not be read: Local read denied.'),
+    ).toBeTruthy();
+    expect(start).not.toHaveBeenCalled();
+  });
+
+  it('aborts a retained failed upload before committing a new Studio context', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const client = createTestClient({ context: selectableContext() });
+    const uploadSession: AssetUploadSession = {
+      organizationId: 'local',
+      tenantId: 'default',
+      workspaceId: 'default',
+      siteId: 'default',
+      environmentId: 'development',
+      locale: 'en',
+      id: 'upload-before-context-switch',
+      storageUploadId: 'storage-before-context-switch',
+      filename: 'failed.bin',
+      mediaType: 'application/octet-stream',
+      size: 4,
+      kind: 'file',
+      state: 'pending',
+      partSize: 4,
+      parts: [],
+      createdAt: now,
+      expiresAt: '2026-07-25T00:00:00.000Z',
+    };
+    vi.spyOn(client, 'startAssetUpload').mockResolvedValue(uploadSession);
+    vi.spyOn(client, 'uploadAssetPart').mockRejectedValue(new Error('Temporary failure.'));
+    const abort = vi.spyOn(client, 'abortAssetUpload').mockResolvedValue(undefined);
+    render(<App client={client} />);
+
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Library' }));
+    const bytes = new Uint8Array([1, 2, 3, 4]);
+    const file = new File([bytes], 'failed.bin', { type: 'application/octet-stream' });
+    Object.defineProperty(file, 'arrayBuffer', { value: async () => bytes.buffer });
+    fireEvent.change(screen.getByLabelText('Upload asset'), { target: { files: [file] } });
+    await screen.findByText(/Upload paused: Temporary failure/);
+
+    fireEvent.change(screen.getByLabelText('Site'), { target: { value: 'campaign' } });
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+    await waitFor(() =>
+      expect(screen.getByTitle('Committed Studio context').textContent).toContain('Campaign site'),
+    );
+    expect(abort).toHaveBeenCalledExactlyOnceWith('upload-before-context-switch');
+  });
+
   it('designs versioned transition actions and exposes the durable delivery log', async () => {
     const user = userEvent.setup();
     render(<App client={createTestClient()} />);

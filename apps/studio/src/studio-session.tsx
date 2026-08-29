@@ -17,7 +17,10 @@ export interface StudioSessionView {
     selection: StudioScopeSelection,
     lifecycle: { cleanup: () => Promise<void>; beforeCommit?: () => void },
   ) => Promise<void>;
-  cleanupClient: Pick<GridStoryClient, 'revokePreviewSession' | 'leavePresence'>;
+  cleanupClient: Pick<
+    GridStoryClient,
+    'revokePreviewSession' | 'leavePresence' | 'abortAssetUpload'
+  >;
 }
 
 export function StudioSession({
@@ -134,12 +137,13 @@ export function StudioSession({
     );
   }, [activeClient, lifetime, refresh]);
 
-  // Cleanup-only transport: permits closing an already-issued preview/presence lifetime
+  // Cleanup-only transport: permits closing an already-issued preview/presence/upload lifetime
   // after its authority has gone away. It cannot initiate feature reads or writes.
   const cleanupClient = useMemo(
     () => ({
       revokePreviewSession: activeClient.revokePreviewSession.bind(activeClient),
       leavePresence: activeClient.leavePresence.bind(activeClient),
+      abortAssetUpload: activeClient.abortAssetUpload.bind(activeClient),
     }),
     [activeClient],
   );

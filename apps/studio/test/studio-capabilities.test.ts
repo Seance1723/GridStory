@@ -56,6 +56,12 @@ describe('finite Studio invocation guard', () => {
     expect(studioMethodOperations.setFederationAgreementState).toEqual(['federation.manage']);
     expect(studioMethodOperations.approveGovernancePlan).toEqual(['governance.execute']);
     expect(studioMethodOperations.validateMigrationCutover).toEqual(['migration.execute']);
+    expect(studioMethodOperations.getAsset).toEqual(['asset.read']);
+    expect(studioMethodOperations.createAssetDelivery).toEqual(['asset.read']);
+    expect(studioMethodOperations.getAssetUpload).toEqual(['asset.create']);
+    expect(studioMethodOperations.abortAssetUpload).toEqual(['asset.create']);
+    expect(studioMethodOperations.updateAsset).toEqual(['asset.update']);
+    expect(studioMethodOperations.createAssetRendition).toEqual(['asset.update']);
     expect(studioMethodOperations.installMarketplaceRelease).toEqual([
       'marketplace.read',
       'plugin.manage',

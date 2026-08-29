@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
 const contentApi = 'http://127.0.0.1:44000/api/v1';
@@ -73,6 +74,94 @@ test('filters, saves, and paginates a responsive content list without replacing 
     scrollWidth: document.documentElement.scrollWidth,
   }));
   expect(bounds.scrollWidth).toBeLessThanOrEqual(bounds.clientWidth);
+});
+
+test('loads, uploads, filters, revises, inspects, and privately delivers scoped Media', async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(90_000);
+  const fileName = `media-${testInfo.project.name}-${crypto.randomUUID()}.png`;
+  const updatedTitle = `Managed ${testInfo.project.name} media`;
+  const assetRequests: string[] = [];
+  page.on('request', (request) => {
+    const url = new URL(request.url());
+    if (url.pathname.startsWith('/api/v1/assets')) assetRequests.push(url.pathname);
+  });
+
+  await page.goto('/');
+  await expect(page.getByRole('region', { name: 'Editorial Home' })).toBeVisible();
+  expect(assetRequests).toHaveLength(0);
+  const listResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'GET' &&
+      new URL(response.url()).pathname === '/api/v1/assets',
+  );
+  await page.getByRole('button', { name: 'Library', exact: true }).click();
+  expect((await listResponse).ok()).toBe(true);
+  const library = page.getByRole('region', { name: 'Asset library' });
+  await expect(library).toBeVisible();
+  await expect(library.getByText(/Showing \d+ of \d+ loaded scoped assets/)).toBeVisible();
+
+  await library.getByLabel('Upload asset').setInputFiles({
+    name: fileName,
+    mimeType: 'image/png',
+    buffer: Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+      'base64',
+    ),
+  });
+  await expect(page.getByText(`${fileName} added to the asset library.`)).toBeVisible();
+  await expect(library.getByRole('article', { name: `${fileName} asset details` })).toBeVisible();
+  const details = library.locator('.asset-detail');
+  await expect(details.getByText('verified', { exact: true })).toBeVisible();
+  await expect(details.getByText('not_configured', { exact: true })).toBeVisible();
+  await expect(details.getByText('Unavailable', { exact: true })).toBeVisible();
+
+  await details.getByLabel('Title').fill(updatedTitle);
+  await details.getByLabel('Alternative text').fill('One transparent verification pixel');
+  await details.getByLabel('Tags (comma separated)').fill('browser, media, browser');
+  await details.getByRole('button', { name: 'Save metadata' }).click();
+  await expect(details.getByRole('heading', { name: `${updatedTitle} details` })).toBeVisible();
+  await expect(details.getByText('Version 2')).toBeVisible();
+
+  await details.getByRole('button', { name: 'Inspect usage' }).click();
+  await expect(details.getByText('0 references across 0 entries')).toBeVisible();
+  await details.getByRole('button', { name: 'Create rendition' }).click();
+  await expect(details.getByRole('alert')).toHaveText('No rendition adapter is configured.');
+
+  await library.getByLabel('Search loaded assets').fill(fileName);
+  await library.getByLabel('Kind').selectOption('image');
+  await library.getByLabel('Security state').selectOption('verified');
+  await expect(library.getByText(/Showing 1 of \d+ loaded scoped assets/)).toBeVisible();
+  await details.getByRole('button', { name: 'Open private delivery' }).focus();
+  await expect(details.getByRole('button', { name: 'Open private delivery' })).toBeFocused();
+  const popupPromise = page.waitForEvent('popup');
+  await details.getByRole('button', { name: 'Open private delivery' }).click();
+  const popup = await popupPromise;
+  await expect.poll(() => popup.url()).toMatch(/\/api\/v1\/assets\/[^/]+\/content\?token=/);
+  const deliveryUrl = popup.url();
+  expect(await page.locator('body').textContent()).not.toContain(deliveryUrl);
+  expect(await page.evaluate(() => JSON.stringify(localStorage))).not.toContain('token=');
+  await popup.close();
+
+  await page.getByRole('button', { name: 'Switch to dark theme' }).click();
+  await expect(page.locator('.studio-shell')).toHaveAttribute('data-theme', 'dark');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(details.getByLabel('Title')).toBeVisible();
+  const bounds = await page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }));
+  expect(bounds.scrollWidth).toBeLessThanOrEqual(bounds.clientWidth);
+  const accessibility = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+    .analyze();
+  expect(
+    accessibility.violations,
+    accessibility.violations
+      .map((violation) => `${violation.id}: ${violation.help} (${violation.nodes.length})`)
+      .join('\n'),
+  ).toEqual([]);
 });
 
 test('edits, protects, governs, publishes, and delivers React content', async ({

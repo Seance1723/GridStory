@@ -18,7 +18,7 @@ The canonical contracts live in `@gridstory/schema`. `AssetService`, repositorie
 4. Complete with the exact recorded part descriptors. GridStory rejects missing, substituted, duplicated, or size-mismatched descriptors before consuming the storage multipart upload.
 5. Abort abandoned sessions explicitly. In-process sessions also expire after 24 hours.
 
-Studio follows this lifecycle and chunks browser files by the returned part size. The universal client exposes `startAssetUpload`, `getAssetUpload`, `uploadAssetPart`, `completeAssetUpload`, and `abortAssetUpload` so other authoring applications can provide their own retry and progress interface.
+Studio follows this lifecycle and chunks browser files by the returned part size. Its upload card reports exact byte/part progress. A failed request retains the file bytes and session identifier only in the current browser memory; Retry first reads the authoritative session and sends only missing parts. Abort, Studio-context switching, and unmount explicitly abort a retained server session. Reloading the page intentionally discards this process-local retry context. The universal client exposes `startAssetUpload`, `getAssetUpload`, `uploadAssetPart`, `completeAssetUpload`, and `abortAssetUpload` so other authoring applications can provide their own retry and progress interface.
 
 Upload-session coordination is process-local in the built-in service. A horizontally scaled deployment should route a session consistently or supply a shared coordinator when distributed resumability is required.
 
@@ -50,7 +50,9 @@ Image processing is similarly injected through `AssetRenditionAdapter`. GridStor
 
 `AssetService.usage` scans both draft and published content in the exact active scope. The report includes total references, unique entry count, draft/published counts, and each entry/path location. Draft references never prime a published cache, and usage endpoints inherit the private management cache policy.
 
-Studio exposes the scoped asset library, focal points, revision/rendition counts, file sizes, and usage inspection. Populated managed libraries feed schema-declared asset fields; the demonstration choices remain only when no managed assets exist.
+Studio's **Media > Library** destination loads independently when entered from the minimized Home screen. Search plus kind/security filters operate only over the exact loaded tenant/site/environment/locale list and always state “Showing X of Y loaded scoped assets”; they are not server-wide discovery. The selected detail exposes current metadata and focal-point editing, immutable revision history, rendition records, current security evidence, and every returned usage location. Populated verified managed libraries feed schema-declared asset fields; quarantined or legacy-unverified revisions are excluded. The demonstration choices remain only when no managed assets exist.
+
+Metadata and focal-point saves use the existing revision-appending update operation. A rendition request is offered only for an image whose current revision is verified; an unavailable rendition adapter remains a visible error and is never represented as a successful capability. The screen does not add folders, bulk actions, deletion, asset publication, arbitrary provider configuration, or an image editor.
 
 ## API, authorization, and cache policy
 
@@ -87,6 +89,16 @@ Each revision records declared and detected MIME types, inspection time, sanitiz
 
 Authorized readers request a grant with `POST /api/v1/assets/:id/delivery`, optionally selecting a revision and a 30-900 second lifetime. `AssetDeliveryService` signs an HMAC-SHA256 token containing the complete six-dimensional scope, exact asset and revision IDs, issue/expiry times, and a nonce. The universal client method is `createAssetDelivery`; it resolves the returned relative content path against the configured API base URL.
 
+Studio opens a blank popup synchronously, requests a 300-second grant for the selected verified revision, and replaces only that popup's location after authorization succeeds. It does not render the signed URL, retain the grant in React state, or write it to browser storage. If the popup is blocked, the user receives an explicit error and no delivery request is presented as opened.
+
 `GET /api/v1/assets/:id/content?token=...` authenticates that token without tenant headers, rechecks the stored revision's verified state, scope-checks the storage object key, and streams only that private object. Responses use `Cache-Control: private, no-store`, `X-Content-Type-Options: nosniff`, a safe encoded filename, and a restrictive sandbox CSP for SVG. Invalid, tampered, wrong-asset, or expired grants return 401.
 
 Production object storage must remain private. The descriptor URL is metadata for the configured adapter, not an authorization grant; applications should render confidential bytes through a fresh signed delivery URL. Use a distinct random `GRIDSTORY_ASSET_DELIVERY_SIGNING_SECRET` of at least 32 characters, rotate it independently of preview/cursor/webhook secrets, and never place preview credentials, draft content, or delivery tokens in object keys or published cache keys.
+
+## Studio troubleshooting
+
+- If Library opened from Home reports a load error, use **Retry library load**. The existing loaded records remain visible while a reload is pending; the count remains explicitly bounded to those loaded records.
+- If upload pauses, keep the page open and choose **Retry upload** to reconcile with the server session. Choose **Abort upload** when the local file should no longer be retained. A page reload cannot resume the built-in Studio upload because the file is deliberately not persisted.
+- **Unavailable** malware provider or `not_configured` is deployment evidence, not a clean verdict. Production deployments that require malware scanning must provide and validate a scanner adapter.
+- A disabled rendition or private-delivery action means the current revision is not a verified image/deliverable revision or the current role lacks the required update/read operation. Adapter failures appear in the selected asset detail.
+- Popup blockers can prevent private delivery from opening. Allow popups for the Studio origin and request a new short-lived grant; do not copy an expired token into application configuration.
