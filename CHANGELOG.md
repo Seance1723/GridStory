@@ -85,6 +85,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- Started CMS-010 planning (Codex, 2026-08-29; baseline `ec408a6`) as a documentation-only T2 review of a minimized, permission-filtered configuration inventory. Runtime, tests, permissions, providers, topology, settings mutation, merge, push and deployment remain unchanged pending an ADR, separate planning commit and explicit approval.
+
+- Logged current-status documentation BUG-0534 after the README audit found that its delivery snapshot still ends at CMS-008 despite verified CMS-009 commit `ec408a6`; correct it only inside the CMS-010 planning-document fence.
+
+- Proposed CMS-010 / ADR 0033 (Codex, 2026-08-29; baseline `ec408a6`): one strict private/no-store, permission-filtered inventory for permitted environments/locales, code-owned models/routes and media policy/generic provider availability, plus one finite read-only Settings leaf. No raw configuration/topology, secret/credential/endpoint, new permission, mutation, persistence, provider SDK, dependency, merge, push or deployment is approved; explicit T2 approval remains pending after the planning commit.
+
 - Started CMS-009 (Codex, 2026-08-29; baseline `73d1db7`) as a bounded T1 read-only Studio catalog over the existing registered schema, lifecycle/drift, authorized current-source impact and taxonomy contracts. Add no schema/taxonomy mutation, deployment/activation control, source editor, field kind, permission meaning, dependency, cache/public-delivery change, merge, push or deployment.
 
 - Logged CMS-009 contract-typing BUG-0524 after the first focused typecheck found that defaulted canonical schema arrays remain optional in the input-form type consumed by Studio; preserve that compatibility and render omitted arrays as empty without changing the canonical contract.
@@ -200,6 +206,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Recorded the accepted M6-005 evidence-bound marketplace decision: operator-scoped publisher verification, signed compatibility/support metadata, injected non-executing artifact review, separate human approval, and approved-only handoff to the existing disabled plugin installation lifecycle.
 
 ### Fixed
+
+- Resolved BUG-0534 in the CMS-010 planning fence: README now records verified CMS-009 commit/evidence and the schema-specific SCSS partial while clearly marking ADR 0033 runtime work approval-gated. Documentation links, formatting, ledgers and the exact planning fence are rechecked before commit.
 
 - Resolved BUG-0524–BUG-0530 and BUG-0532–BUG-0533 across CMS-009 contract typing, canonical fixtures, semantic locators, default constraint presentation, build ordering, finite navigation counts and exact verification invocation. Focused gates, 301 Studio tests, the 697-active-test repository gate and the 69-scenario browser matrix pass without relaxed assertions, retries or deadlines.
 
