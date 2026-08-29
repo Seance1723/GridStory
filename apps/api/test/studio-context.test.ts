@@ -223,6 +223,8 @@ describe('Studio permission and topology projection', () => {
     expect(typed.operations['pages.list']).toBe(true);
     expect(typed.operations['pages.create']).toBe(true);
     expect(typed.operations['content.create']).toBe(false);
+    expect(typed.operations['settings.read']).toBe(false);
+    expect(typed.screens.settings).toBe(false);
     expect(typed.screens.collections).toBe(false);
     for (const key of [
       'content.read',
@@ -246,7 +248,9 @@ describe('Studio permission and topology projection', () => {
     expect(generic.operations['content.read']).toBe(true);
     expect(generic.operations['content.create']).toBe(true);
     expect(generic.operations['schema.read']).toBe(true);
+    expect(generic.operations['settings.read']).toBe(true);
     expect(generic.screens.collections).toBe(true);
+    expect(generic.screens.settings).toBe(true);
   });
 
   it('rejects duplicate/orphan/oversized topology and locale drift without echoing configuration', async () => {
@@ -414,7 +418,7 @@ describe('private Studio context HTTP contract', () => {
   });
 
   it.each(['admin', 'viewer', 'author', 'unmapped'])(
-    'matches actual reads for all 22 destinations with %s session',
+    'matches actual reads for all 23 destinations with %s session',
     async (role) => {
       const value = await fixture(role);
       const projected = await value.server.inject({

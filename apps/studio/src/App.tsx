@@ -20,6 +20,7 @@ import {
   type ContentFederationDocument,
   type ContentQualityReport,
   type ContentRevision,
+  type ConfigurationInventory,
   createGridStoryClient,
   type DurableJobRecord,
   type EditorialOverview,
@@ -114,6 +115,7 @@ import {
   saveContentListView,
 } from './content-list.js';
 import { DesignCatalog, type DesignCatalogGovernance } from './design-catalog.js';
+import { ConfigurationInventoryView } from './configuration-inventory.js';
 import { EditorialHome } from './editorial-home.js';
 import {
   permittedNavigation,
@@ -1000,6 +1002,14 @@ function AuthorizedStudio({
   const [editorialOverviewLoading, setEditorialOverviewLoading] = useState(false);
   const [editorialOverviewError, setEditorialOverviewError] = useState(false);
   const editorialOverviewRequestRef = useRef<AbortController | null>(null);
+  const [configurationInventory, setConfigurationInventory] =
+    useState<ConfigurationInventory | null>(null);
+  const [configurationInventoryOpen, setConfigurationInventoryOpen] = useState(false);
+  const [configurationInventoryLoading, setConfigurationInventoryLoading] = useState(false);
+  const [configurationInventoryError, setConfigurationInventoryError] = useState<string | null>(
+    null,
+  );
+  const configurationInventoryRequestRef = useRef<AbortController | null>(null);
   const [operationsDashboard, setOperationsDashboard] = useState<OperationsDashboardRecord | null>(
     null,
   );
@@ -1410,6 +1420,28 @@ function AuthorizedStudio({
     }
   }, [client]);
 
+  const refreshConfigurationInventory = useCallback(async () => {
+    configurationInventoryRequestRef.current?.abort();
+    const controller = new AbortController();
+    configurationInventoryRequestRef.current = controller;
+    setConfigurationInventoryLoading(true);
+    setConfigurationInventoryError(null);
+    try {
+      const next = await client.getConfigurationInventory({ signal: controller.signal });
+      if (!controller.signal.aborted) setConfigurationInventory(next);
+    } catch (error) {
+      if (!controller.signal.aborted && (error as { name?: string }).name !== 'AbortError') {
+        setConfigurationInventory(null);
+        setConfigurationInventoryError(messageFrom(error));
+      }
+    } finally {
+      if (configurationInventoryRequestRef.current === controller) {
+        configurationInventoryRequestRef.current = null;
+        if (!controller.signal.aborted) setConfigurationInventoryLoading(false);
+      }
+    }
+  }, [client]);
+
   useEffect(() => {
     mountedRef.current = true;
     const history = createStudioHistory(window, (location, context) =>
@@ -1424,6 +1456,7 @@ function AuthorizedStudio({
       entryReadRef.current?.abort();
       contentListRequestRef.current?.abort();
       editorialOverviewRequestRef.current?.abort();
+      configurationInventoryRequestRef.current?.abort();
       if (destinationFocusRef.current !== null) cancelAnimationFrame(destinationFocusRef.current);
       destinationFocusRef.current = null;
     };
@@ -1461,7 +1494,7 @@ function AuthorizedStudio({
       can('component.read') && (!homeDestination || homeQuickCreate)
         ? client.getComponentManifests(controller.signal)
         : Promise.resolve([]),
-      can('schema.read') && (!homeDestination || homeQuickCreate)
+      can('schema.read') && ((!homeDestination && destination !== 'settings') || homeQuickCreate)
         ? client.getSchemas(controller.signal)
         : Promise.resolve([]),
       can('component.read') && !homeDestination
@@ -5100,6 +5133,12 @@ function AuthorizedStudio({
     if (!assetListLoaded) await refreshAssets();
   };
 
+  const openConfigurationInventory = async () => {
+    setConfigurationInventoryOpen(true);
+    if (!configurationInventory && !configurationInventoryLoading)
+      await refreshConfigurationInventory();
+  };
+
   const navigationActions: Record<
     StudioDestination,
     { loaded: boolean; ensureLoaded?: () => void | Promise<void>; disabled?: boolean }
@@ -5163,6 +5202,10 @@ function AuthorizedStudio({
       ensureLoaded: openDesignCatalog,
     },
     assets: { loaded: assetLibraryOpen, ensureLoaded: openAssetLibrary },
+    settings: {
+      loaded: configurationInventoryOpen,
+      ensureLoaded: openConfigurationInventory,
+    },
   };
 
   const navigationActionsRef = useRef(navigationActions);
@@ -5622,6 +5665,16 @@ function AuthorizedStudio({
               }
               onNavigate={selectNavigationItem}
               onRetry={() => void refreshEditorialOverview()}
+            />
+          ) : null}
+          {visibleDestination === 'settings' && configurationInventoryOpen ? (
+            <ConfigurationInventoryView
+              inventory={configurationInventory}
+              loading={configurationInventoryLoading}
+              error={configurationInventoryError}
+              canNavigate={(destination) => capabilities.screens[destination]}
+              onNavigate={selectNavigationItem}
+              onRetry={refreshConfigurationInventory}
             />
           ) : null}
           {visibleDestination === 'workflows' && workflowDesignerOpen ? (

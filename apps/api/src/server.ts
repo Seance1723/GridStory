@@ -28,6 +28,7 @@ import {
   type CollaborationRepository,
   CollaborationService,
   ComponentLifecycleService,
+  ConfigurationInventoryService,
   type ContentEventType,
   type ContentFederationRepository,
   ContentFederationService,
@@ -561,7 +562,7 @@ export async function buildServer({
   pluginRuntime,
   trustedPluginPublishers = [],
   searchAdapter,
-  assetStorage = new InMemoryAssetStorageAdapter(),
+  assetStorage,
   assetRenditionAdapter,
   assetContentInspector,
   assetMalwareScanner,
@@ -584,6 +585,13 @@ export async function buildServer({
   // Validate trusted discovery configuration before opening databases or other resources.
   const validatedStudioTopology =
     studioTopology === undefined ? undefined : validateStudioTopology(studioTopology, locales);
+  const resolvedAssetStorage = assetStorage ?? new InMemoryAssetStorageAdapter();
+  const configurationProviderModes = {
+    storage: assetStorage ? ('configured' as const) : ('built-in-local' as const),
+    contentInspection: assetContentInspector ? ('configured' as const) : ('built-in' as const),
+    rendition: assetRenditionAdapter ? ('configured' as const) : ('unavailable' as const),
+    malwareScanning: assetMalwareScanner ? ('configured' as const) : ('unavailable' as const),
+  };
   if (!databaseUrl && databasePath !== ':memory:') {
     mkdirSync(dirname(resolve(databasePath)), { recursive: true });
   }
@@ -826,7 +834,7 @@ export async function buildServer({
     });
   };
   const assets = new AssetService({
-    storage: assetStorage,
+    storage: resolvedAssetStorage,
     contentService: service,
     repository: resolvedAssetRepository,
     governanceGate: governance,
@@ -905,6 +913,18 @@ export async function buildServer({
   });
   const policy = new AuthorizationPolicy();
   const studioContext = new StudioContextProjection(policy, validatedStudioTopology);
+  const configurationInventory = new ConfigurationInventoryService({
+    schemas: contentSchemas,
+    environments: validatedStudioTopology?.environments ?? [],
+    locales,
+    mediaPolicy: {
+      maximumUploadBytes: resourceLimits.assets.maximumBytes,
+      uploadPartBytes: resourceLimits.api.assetPartBodyBytes,
+      maximumDimensionPixels: resourceLimits.assets.maximumDimensionPixels,
+      maximumParts: resourceLimits.assets.maximumParts,
+    },
+    providers: configurationProviderModes,
+  });
   const server = Fastify({
     logger,
     forceCloseConnections: 'idle',
@@ -1128,6 +1148,35 @@ export async function buildServer({
         ),
         releases: capabilities.operations['release.read'],
         operations: capabilities.operations['operations.read'],
+      },
+    });
+  });
+  server.get('/api/v1/configuration/inventory', async (request, reply) => {
+    reply.header('cache-control', 'private, no-store');
+    if (
+      Object.keys(request.query as Record<string, unknown>).length > 0 ||
+      Number(request.headers['content-length'] ?? 0) > 0 ||
+      request.headers['transfer-encoding'] !== undefined
+    ) {
+      throw new GridStoryError(
+        'The configuration inventory does not accept input.',
+        'invalid_request',
+        400,
+      );
+    }
+    const context = requestContext(request, 'draft');
+    const projectedContext = studioContext.project(context);
+    const capabilities = projectedContext.capabilities;
+    if (!capabilities.operations['settings.read']) {
+      throw new GridStoryError('The configuration inventory is not available.', 'forbidden', 403);
+    }
+    return configurationInventory.read({
+      scope: contentScope(context),
+      selection: projectedContext.selection,
+      visibility: {
+        localesAndEnvironments: capabilities.operations['locales.read'],
+        modelsAndRoutes: capabilities.operations['schema.read'],
+        mediaPolicyAndProviders: capabilities.operations['asset.read'],
       },
     });
   });

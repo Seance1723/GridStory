@@ -5,6 +5,7 @@ import type { StudioCapabilities, StudioOperation } from '@gridstory/schema';
 // Unknown SDK methods fail closed; adding a feature requires an explicit operation mapping.
 export const studioMethodOperations = {
   getEditorialOverview: ['home.read'],
+  getConfigurationInventory: ['settings.read'],
   listContent: ['content.read'],
   queryContent: ['content.read'],
   createContent: ['content.create'],

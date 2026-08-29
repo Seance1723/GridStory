@@ -1380,7 +1380,7 @@
       "id": "THREAT-0022",
       "title": "Sensitive error or debug disclosure",
       "stride": ["Information Disclosure"],
-      "scenario": "Stack traces, internal exceptions, secrets, tokens, content, or database detail are returned to an untrusted caller or logged without redaction.",
+      "scenario": "Stack traces, internal exceptions, secrets, tokens, content, database detail, raw configuration/topology, provider identity/endpoints, or adapter diagnostics are returned to an untrusted caller or logged without redaction.",
       "actors": ["ACTOR-008"],
       "assets": ["ASSET-001", "ASSET-005"],
       "boundaries": ["BOUNDARY-001", "BOUNDARY-002"],
@@ -1392,13 +1392,21 @@
       "mitigations": [
         "Return stable generic envelopes for unexpected server errors.",
         "Treat known validation errors as bounded client errors.",
-        "Export only bounded route/error attributes, omit raw requests and exception detail, and apply a fail-closed Collector allow-list."
+        "Export only bounded route/error attributes, omit raw requests and exception detail, and apply a fail-closed Collector allow-list.",
+        "Project effective configuration through a strict parameter-free private/no-store contract that accepts only closed safe inputs, intersects permission-filtered context choices, applies three independent existing permissions, reports fixed provider modes, and exposes no generic values, raw ApiConfig/environment/topology, endpoint, credential, provider identity, adapter object, health claim, or mutation control."
       ],
       "verification": [
         "apps/api/src/server.ts",
         "apps/api/src/observability.ts",
         "apps/api/test/server.test.ts",
         "apps/api/test/observability.test.ts",
+        "apps/api/test/configuration-inventory.test.ts",
+        "packages/core/test/configuration-inventory-service.test.ts",
+        "packages/schema/test/configuration-inventory.test.ts",
+        "tests/e2e/studio-context.spec.ts",
+        "tests/e2e/vertical-slice.spec.ts",
+        "docs/configuration-inventory.md",
+        "docs/adr/0033-safe-configuration-inventory.md",
         "deploy/observability/otel-collector.yaml"
       ]
     },

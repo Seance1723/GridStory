@@ -57,6 +57,10 @@ export const studioDestinations = {
   },
   components: { label: 'Components', icon: 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z' },
   assets: { label: 'Library', icon: 'M4 5h16v14H4zM4 15l4-4 4 4 3-3 5 5M16 9h.01' },
+  settings: {
+    label: 'Configuration',
+    icon: 'M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM19 13.5v-3l-2-.7-.8-1.8.9-1.9-2.2-2.2-1.9.9-1.8-.8-.7-2h-3l-.7 2-1.8.8-1.9-.9-2.2 2.2.9 1.9-.8 1.8-2 .7v3l2 .7.8 1.8-.9 1.9 2.2 2.2 1.9-.9 1.8.8.7 2h3l.7-2 1.8-.8 1.9.9 2.2-2.2-.9-1.9.8-1.8z',
+  },
 } as const;
 
 export type StudioDestination = keyof typeof studioDestinations;
@@ -74,6 +78,7 @@ export const studioNavigationGroups = [
   { id: 'seo-quality', label: 'SEO & quality', destinations: ['quality'] },
   { id: 'insights', label: 'Insights', destinations: ['targeting', 'experiments'] },
   { id: 'apps', label: 'Apps', destinations: ['marketplace'] },
+  { id: 'settings', label: 'Settings', destinations: ['settings'] },
   { id: 'tools', label: 'Tools', destinations: ['migrations'] },
   {
     id: 'advanced',

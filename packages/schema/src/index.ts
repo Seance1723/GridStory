@@ -12,6 +12,7 @@ export * from './studio-context.js';
 export * from './contracts.js';
 export * from './design-system.js';
 export * from './editorial-overview.js';
+export * from './configuration-inventory.js';
 export * from './governance.js';
 export * from './identity.js';
 export * from './interoperability.js';

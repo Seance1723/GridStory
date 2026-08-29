@@ -8,6 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Security
 
+- Extended THREAT-0022 evidence for CMS-010's effective-configuration disclosure boundary: the browser receives only a strict private/no-store closed projection over permission-filtered choices and fixed provider modes, while raw `ApiConfig`, environment/topology, credentials, endpoints, provider identity, adapter objects and diagnostics remain excluded and covered by serialized negative tests.
+
 - Resolved BUG-0435 in CMS-034: preview DELETE now dispatches `gsp_` credentials only to preview self-revocation, while cookie and `gss_` workforce sessions retain permission- and scope-checked management revocation. Malformed/unknown bearer values, wrong-scope requests and AUTH-001 negatives deny. Focused transport tests, security checks and the full 639-test repository gate pass; no new credential format, permission or deployment claim.
 
 - Completed AUTH-001 (Codex, 2026-08-26T16:30:37+05:30): closed preview-prefix management escalation BUG-0433 and activation/revocation method confusion BUG-0434. The original 200/400 triggers now return 401. Security/model checks, 27 focused tests, the full 439-test repository gate (17 existing opt-in skips), all 30 Chromium/Firefox/WebKit scenarios, isolated manual publishing and independent candidate review pass. Restored normal production assets, updated all ledgers and unblocked CMS-003 planning; no push, deployment or external identity certification is included. Completion commit is tagged `[AUTH-001]`; detailed commands, scope and limits are in ADR 0029.
@@ -19,6 +21,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Confirmed and recorded BUG-0433: the production request hook exempts any preview-token prefix from session authentication even on unrelated management routes, allowing development-admin fallback. An isolated read-only memory-backed API check reproduced HTTP 200 with that principal. AUTH-001 proposes exact credential-purpose dispatch and fail-closed production context before CMS-003; the flaw is still open and no fix, live exploitation or deployment is claimed.
 
 ### Added
+
+- Completed the approved CMS-010 safe effective-configuration inventory: a strict pure projection, authenticated private/no-store parameter-free endpoint, exact-scope client method, finite presentation-only capability and lazy **Settings > Configuration** page. Three independently authorized read-only sections expose only permitted locale/environment facts, concise canonical model/routes and safe media policy/fixed provider modes; no generic values, raw configuration/topology, credential, endpoint, adapter detail, health claim or mutation control is exposed. Full `pnpm check` passes 716 active tests with 17 existing optional skips and all builds; the final browser matrix passes 75/75 across Chromium, Firefox and WebKit.
 
 - Completed CMS-009's independently authorized schema and taxonomy catalog over existing canonical contracts: finite lazy navigation; registered model, field, route, localization and constraint inspection; source/deployment/generated drift and permitted current-source impact; stable hierarchical/flat taxonomy identity; truthful denied/error/loading states; and no mutation controls. The complete Studio suite passes 301/301, full `pnpm check` passes 697 active tests with 17 existing optional skips and all builds, and the final real-browser matrix passes 69/69 across Chromium, Firefox and WebKit. No runtime schema/taxonomy mutation, source editor, activation/deployment action, new permission, dependency, persisted-state/public-cache change or deployment was added.
 
@@ -206,6 +210,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Recorded the accepted M6-005 evidence-bound marketplace decision: operator-scoped publisher verification, signed compatibility/support metadata, injected non-executing artifact review, separate human approval, and approved-only handoff to the existing disabled plugin installation lifecycle.
 
 ### Fixed
+
+- Resolved CMS-010 BUG-0535–BUG-0551 across Windows verification spawning, strict projection typing/current-only behavior, configured-topology expectations, GET-body rejection, finite navigation fixtures, schema test hygiene, direct-Settings lazy loading, browser locators/disclosure assertions, definition-list semantics, contrast, fixed provider modes and permission-profile reloads. BUG-0552's one retained WebKit draft assertion is explicitly non-reproducing after six exact passes and a clean 25/25 full rerun; no timeout, retry, assertion or product behavior changed for it.
 
 - Resolved BUG-0534 in the CMS-010 planning fence: README now records verified CMS-009 commit/evidence and the schema-specific SCSS partial while clearly marking ADR 0033 runtime work approval-gated. Documentation links, formatting, ledgers and the exact planning fence are rechecked before commit.
 

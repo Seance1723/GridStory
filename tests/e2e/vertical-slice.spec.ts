@@ -298,6 +298,58 @@ test('inspects canonical schemas, lifecycle impact, and taxonomy identity withou
   ).toEqual([]);
 });
 
+test('inspects safe effective configuration without mutation requests or private provider detail', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const configurationRequests: Array<{ method: string; path: string }> = [];
+  page.on('request', (request) => {
+    const path = new URL(request.url()).pathname;
+    if (path.includes('/configuration/'))
+      configurationRequests.push({ method: request.method(), path });
+  });
+
+  await page.goto('/');
+  await expect(page.getByRole('region', { name: 'Editorial Home' })).toBeVisible();
+  expect(configurationRequests).toEqual([]);
+  await page.getByRole('button', { name: 'Configuration', exact: true }).click();
+
+  const inventory = page.getByRole('region', { name: 'Configuration inventory' });
+  await expect(inventory).toBeVisible();
+  await expect(inventory.getByRole('heading', { name: 'Effective configuration' })).toBeVisible();
+  await expect(inventory.getByText(/Current-only coverage/)).toBeVisible();
+  await expect(inventory.getByText('not declared', { exact: true })).toBeVisible();
+  await expect(inventory.getByText('/:slug', { exact: true })).toBeVisible();
+  await expect(inventory.getByText('100,000,000 bytes')).toBeVisible();
+  await expect(inventory.getByText(/Configured means an adapter was supplied/)).toBeVisible();
+  await expect(inventory.locator('input, select, textarea')).toHaveCount(0);
+  await expect(inventory.getByRole('button', { name: /save|edit|deploy|configure/i })).toHaveCount(
+    0,
+  );
+  expect(configurationRequests).toEqual([
+    { method: 'GET', path: '/api/v1/configuration/inventory' },
+  ]);
+  expect(await inventory.textContent()).not.toMatch(
+    /databasePath|databaseUrl|SigningSecret|cookieName|https?:\/\/|InMemoryAssetStorageAdapter/i,
+  );
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const bounds = await page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }));
+  expect(bounds.scrollWidth).toBeLessThanOrEqual(bounds.clientWidth);
+  const accessibility = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+    .analyze();
+  expect(
+    accessibility.violations,
+    accessibility.violations
+      .map((violation) => `${violation.id}: ${violation.help} (${violation.nodes.length})`)
+      .join('\n'),
+  ).toEqual([]);
+});
+
 test('edits, protects, governs, publishes, and delivers React content', async ({
   page,
   request,

@@ -78,16 +78,18 @@ Production preview credentials are single-purpose: only the matched draft-read, 
 
 ### Studio navigation
 
-The Studio sidebar groups all 20 existing destinations by task:
+The Studio sidebar exposes one top-level Home plus 22 destinations grouped by task:
 
 | Group | Destinations |
 |---|---|
-| Content | Pages, Collections, Workflows, Releases, Search |
+| Top-level | Home |
+| Content | Pages, Collections, Schemas & taxonomies, Workflows, Releases, Search |
 | Media | Library (the existing Asset library) |
 | Design | Components |
 | SEO & quality | Page checks |
 | Insights | Targeting, Experiments |
 | Apps | Marketplace |
+| Settings | Configuration |
 | Tools | Migrations |
 | Advanced | Operations, Identity providers, Data governance, Federation, Fleet, Regions, AI gateway, Knowledge |
 
@@ -113,7 +115,7 @@ Trusted API composition may provide `studioTopology`, or operators may set `GRID
 
 The universal client exposes `getStudioContext({ signal? })` and `withStudioScope({ siteId, environmentId, locale })`. A clone preserves the identity transport and organization/tenant/workspace, leaving the original unchanged. Always validate a candidate using its new context call before using it; cloning itself does not authorize anything. Unsupported/malformed or wrong-scope responses fail closed. Operation booleans represent policy preconditions, not entry existence, workflow readiness, provider availability or an authorization credential. Typed page list/create checks remain separate from untyped entry and preview checks.
 
-Studio consumes that context before mounting private screens. Navigation and existing operation controls use the server's finite capability flags, without role-name guesses or a legacy-context fallback. Read-only fields remain visible; unavailable optional history/workflow/design/asset/collaboration reads are not requested. Page-list-only grants do not imply entry/schema access. All 21 destinations remain for fully authorized users, with the same colors and shared styles. Collections requires the existing generic content-read and schema-read decisions; its generic create control uses the existing content-create decision, while Pages retains its page-specific list/create flags.
+Studio consumes that context before mounting private screens. Navigation and existing operation controls use the server's finite capability flags, without role-name guesses or a legacy-context fallback. Read-only fields remain visible; unavailable optional history/workflow/design/asset/collaboration reads are not requested. Page-list-only grants do not imply entry/schema access. All 23 destinations remain for fully authorized users, with the same colors and shared styles. Collections requires the existing generic content-read and schema-read decisions; its generic create control uses the existing content-create decision, while Pages retains its page-specific list/create flags.
 
 When the server returns more than one permitted complete tuple, the header stages Site, Environment and Locale as a dependent finite selection and shows the committed context separately. Apply confirms unsaved entry or feature-form work, remains disabled while any mapped management write is active, validates a fresh scoped client and commits only after the old preview session is closed and revoked. Cancellation, offline/denied validation or cleanup failure keeps the old authorized context. A successful switch clears old entries/drafts/notices, replaces entry history with the scope-free current destination and rejects callbacks, reads or late preview grants from the old lifetime. Organization, tenant and workspace never change in this control; the selected scope is not stored in the URL, history state or browser storage.
 
@@ -121,11 +123,17 @@ Without a configured catalog, the same header shows the current context read-onl
 
 Studio rechecks authority on window focus while keeping the already verified editor and live preview usable pending the result. Initial verification and explicit recovery block private access; a failed focus check suspends private output/actions and closes preview output. A successful same-authority retry restores the mounted unsaved draft. Confirmed session loss, a changed principal, or changed capabilities replace the private lifetime and discard its cached data/drafts. A current feature 403 clears private state and refreshes context; if authority remains unchanged, explicit retry is required rather than repeatedly calling a denied loader. Old callbacks/results cannot populate or invoke a newer session. Preview revocation is best effort after session loss; the server remains authoritative, and no real-time revocation guarantee is implied.
 
-Delivery status: CMS-032, CMS-033 and CMS-034 completed the authorized navigation/context group; CMS-004 through CMS-009 are separately committed on the shared content/configuration branch. CMS-009 adds a lazy, independently authorized read-only Schemas & taxonomies catalog for canonical model/field/route constraints, lifecycle/drift/current-source impact and stable hierarchical/flat taxonomy identity. Its complete repository gate passes 697 active tests with 17 existing optional skips, and the final 69-scenario Chromium/Firefox/WebKit matrix passes. ADR 0033 now proposes CMS-010's minimized read-only configuration inventory; runtime work remains approval-gated. Detailed context and evidence is retained in ADRs 0030–0033, the schema/design guides and the CMS administration gap analysis. No production readiness, external provider certification or deployment is claimed.
+### Effective configuration inventory
+
+Authorized users can open **Settings > Configuration** to inspect one private, read-only version-1 inventory for the current exact scope. Its fixed sections expose only permitted site/environment/locale facts, concise canonical model/route ownership, and safe media limits/generic provider modes. Each section independently reuses `locales.read`, `schema.read` or `asset.read`; denied sections remain explicit, and the composite `settings.read` screen flag grants no action. The page has no setting editor or save/deploy control.
+
+`GET /api/v1/configuration/inventory` accepts no query/body, returns `Cache-Control: private, no-store`, validates complete scope and never emits raw configuration, topology, environment variables, credentials, provider identities/endpoints or adapter detail. See the [effective configuration inventory guide](docs/configuration-inventory.md) and [ADR 0033](docs/adr/0033-safe-configuration-inventory.md).
+
+Delivery status: CMS-032, CMS-033 and CMS-034 completed the authorized navigation/context group; CMS-004 through CMS-010 complete the content/configuration-foundations group as separate task commits on its shared branch. CMS-010's full repository gate passes 716 active tests with 17 existing optional skips and all builds; its final browser matrix passes 75/75 across Chromium, Firefox and WebKit. Detailed context and evidence is retained in ADRs 0030–0033, the schema/design/configuration guides and the CMS administration gap analysis. No production readiness, external provider certification or deployment is claimed.
 
 ### Studio styles and preview
 
-GridStory Studio imports one `apps/studio/src/styles/studio.scss` entry. It composes ordered Sass `@use` partials for foundation/tokens, management surfaces, authoring, collaboration, assets, design/schema catalogs, workflow/search, shell/navigation, calls to action, typography, forms, cards/spacing, states/themes, responsive layout, and accessibility. Shared native-control appearance belongs in `_form.scss`; button variants belong in `_cta.scss`; card surfaces and structural gaps belong in `_cards.scss`; readable text behavior belongs in `_typographic.scss`. Asset-only workspace layout belongs in `_assets.scss`, governed design layout in `_design.scss`, and schema/taxonomy layout in `_schema.scss`; keep other feature-only layout in its owning feature partial and do not add a second global override layer.
+GridStory Studio imports one `apps/studio/src/styles/studio.scss` entry. It composes ordered Sass `@use` partials for foundation/tokens, management surfaces, authoring, collaboration, assets, design/schema/configuration catalogs, workflow/search, shell/navigation, calls to action, typography, forms, cards/spacing, states/themes, responsive layout, and accessibility. Shared native-control appearance belongs in `_form.scss`; button variants belong in `_cta.scss`; card surfaces and structural gaps belong in `_cards.scss`; readable text behavior belongs in `_typographic.scss`. Asset-only workspace layout belongs in `_assets.scss`, governed design layout in `_design.scss`, schema/taxonomy layout in `_schema.scss`, and effective configuration layout in `_settings.scss`; keep other feature-only layout in its owning feature partial and do not add a second global override layer.
 
 The authoring workspace does not embed application content. Its header preview button creates one scoped standalone draft-preview session in an application-only window; the same button closes the window and revokes the session. Responsive component values remain authored through the component inspector's **Responsive override** selector.
 
