@@ -143,6 +143,8 @@ import type {
   SessionPolicy,
   SignedPluginManifest,
   StartAssetUploadInput,
+  StudioContext,
+  StudioScopeSelection,
   SubjectResourceLink,
   TaxonomyDefinition,
   TranslationCompletenessReport,
@@ -153,6 +155,7 @@ import type {
   WorkflowDefinitionInput,
   WorkflowInstance,
 } from '@gridstory/schema';
+import { studioContextSchema, studioScopeSelectionSchema } from '@gridstory/schema';
 
 export interface MigrationOverviewRecord {
   sources: MigrationSourceDescriptor[];
@@ -670,6 +673,45 @@ export class GridStoryClient {
 
   getRequestContext(signal?: AbortSignal): Promise<RequestContext> {
     return this.#request('/api/v1/context', { ...(signal ? { signal } : {}) });
+  }
+
+  async getStudioContext(options: { signal?: AbortSignal } = {}): Promise<StudioContext> {
+    const value = await this.#request<unknown>('/api/v1/studio/context', {
+      ...(options.signal ? { signal: options.signal } : {}),
+    });
+    const parsed = studioContextSchema.safeParse(value);
+    const expected = { ...this.#scope, tenantId: this.#tenantId };
+    if (
+      !parsed.success ||
+      Object.entries(expected).some(
+        ([key, id]) => parsed.data.scope[key as keyof typeof expected] !== id,
+      )
+    ) {
+      throw new GridStoryApiError(
+        'The Studio context response is invalid or has a different scope.',
+        {
+          status: 502,
+          code: 'invalid_studio_context',
+        },
+      );
+    }
+    return parsed.data;
+  }
+
+  withStudioScope(selection: StudioScopeSelection): GridStoryClient {
+    const parsed = studioScopeSelectionSchema.safeParse(selection);
+    if (!parsed.success)
+      throw new TypeError(
+        'Studio scope requires only valid site, environment and locale identifiers.',
+      );
+    return new GridStoryClient({
+      baseUrl: this.#baseUrl,
+      tenantId: this.#tenantId,
+      actorId: this.#actorId,
+      scope: { ...this.#scope, ...parsed.data },
+      fetch: this.#fetch,
+      developmentIdentityHeaders: this.#developmentIdentityHeaders,
+    });
   }
 
   getIdentity(signal?: AbortSignal): Promise<IdentitySnapshot> {

@@ -86,7 +86,7 @@ describe('production enterprise identity API', () => {
       'bearer gsp_invalid',
       'Bearer\tgsp_invalid',
     ]) {
-      for (const url of ['/api/v1/context', '/api/v1/schemas']) {
+      for (const url of ['/api/v1/context', '/api/v1/schemas', '/api/v1/studio/context']) {
         const response = await server.inject({
           method: 'GET',
           url,
@@ -225,7 +225,7 @@ describe('production enterprise identity API', () => {
     expect(revoked.json().error.code).toBe('invalid_session');
   });
 
-  it('preserves production preview grants, replay/origin/scope checks and both supported revocations', async () => {
+  it('preserves production preview grants, replay/origin/scope checks and supported revocations', async () => {
     const fixture = await productionIdentityFixture();
     server = await buildServer({
       databasePath: ':memory:',
@@ -325,6 +325,7 @@ describe('production enterprise identity API', () => {
     const denyManagement = async (token: string) => {
       for (const [method, url] of [
         ['GET', '/api/v1/context'],
+        ['GET', '/api/v1/studio/context'],
         ['GET', '/api/v1/schemas'],
         ['POST', '/api/v1/content'],
         ['PUT', `/api/v1/content/${entry.id}/draft`],
@@ -359,6 +360,34 @@ describe('production enterprise identity API', () => {
     expect(selfRevoked.statusCode).toBe(204);
     expect((await readPreview()).json().error.code).toBe('preview_expired');
     await denyManagement(grant.token);
+
+    const workforceGrant = await createGrant();
+    const workforceRevocation = await server.inject({
+      method: 'DELETE',
+      url: `/api/v1/preview/sessions/${workforceGrant.sessionId}`,
+      headers: {
+        ...scopeHeaders,
+        authorization: `Bearer ${fixture.session.token}`,
+      },
+      payload: {},
+    });
+    expect(workforceRevocation.statusCode, workforceRevocation.body).toBe(204);
+    const workforceExpired = await readPreview(entry.id, {
+      ...previewHeaders,
+      authorization: `Bearer ${workforceGrant.token}`,
+    });
+    expect(workforceExpired.json().error.code).toBe('preview_expired');
+
+    for (const authorization of ['Bearer gss_invalid', 'Bearer unknown', 'Basic gss_invalid']) {
+      const invalidRevocation = await server.inject({
+        method: 'DELETE',
+        url: `/api/v1/preview/sessions/${workforceGrant.sessionId}`,
+        headers: { ...scopeHeaders, authorization },
+        payload: {},
+      });
+      expect(invalidRevocation.statusCode, authorization).toBe(401);
+      expect(invalidRevocation.json().error.code).toBe('invalid_session');
+    }
 
     const managedGrant = await createGrant();
     const foreignRevocation = await server.inject({

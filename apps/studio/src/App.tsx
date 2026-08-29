@@ -62,8 +62,6 @@ import {
   createGridStoryPreviewController,
   type GridStoryPreviewController,
 } from '@gridstory/client/preview';
-import { exampleDesignSystem } from '@gridstory/example-kit/design-system';
-import { componentManifests } from '@gridstory/example-kit/manifests';
 import type {
   AssetReference,
   CollaborationOperation,
@@ -73,6 +71,8 @@ import type {
   FieldDefinition,
   PropDefinition,
   SignedPluginManifest,
+  StudioOperation,
+  StudioScopeSelection,
   WorkflowActionDefinition,
 } from '@gridstory/schema';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -98,16 +98,27 @@ import {
 import {
   type StudioDestination,
   type StudioNavigationGroupId,
+  permittedNavigation,
   studioDestinations,
   studioNavigationGroups,
 } from './navigation.js';
 import { createStudioHistory, type StudioHistory } from './studio-history.js';
+import { StudioContextControls } from './studio-context-controls.js';
 import { parseStudioLocation, type StudioLocation } from './studio-location.js';
+import { permits, studioMethodOperations } from './studio-capabilities.js';
+import { StudioSession, type StudioSessionView } from './studio-session.js';
 
 const defaultClient = createGridStoryClient({
   baseUrl: import.meta.env.VITE_GRIDSTORY_API_URL ?? 'http://localhost:4000',
   tenantId: import.meta.env.VITE_GRIDSTORY_TENANT ?? 'default',
   actorId: import.meta.env.VITE_GRIDSTORY_ACTOR_ID ?? 'studio-local-admin',
+  scope: {
+    organizationId: import.meta.env.VITE_GRIDSTORY_ORGANIZATION ?? 'local',
+    workspaceId: import.meta.env.VITE_GRIDSTORY_WORKSPACE ?? 'default',
+    siteId: import.meta.env.VITE_GRIDSTORY_SITE ?? 'default',
+    environmentId: import.meta.env.VITE_GRIDSTORY_ENVIRONMENT ?? 'development',
+    locale: import.meta.env.VITE_GRIDSTORY_LOCALE ?? 'en',
+  },
   developmentIdentityHeaders: import.meta.env.VITE_GRIDSTORY_IDENTITY_MODE !== 'production',
 });
 
@@ -124,6 +135,82 @@ type ComponentGovernanceState = {
   migration: ComponentMigrationPlanResponse;
   visual: ComponentVisualRegressionPlan;
 };
+
+const studioReadMethods = new Set<string>([
+  'listContent',
+  'getContent',
+  'listRevisions',
+  'getContentQuality',
+  'getSchemas',
+  'getComponentManifests',
+  'getDesignSystem',
+  'getComponentMigration',
+  'getComponentVisualRegression',
+  'listAssets',
+  'getAssetUsage',
+  'getCollaboration',
+  'listWorkflows',
+  'getContentWorkflow',
+  'listWorkflowActions',
+  'listReleases',
+  'previewRelease',
+  'search',
+  'listTaxonomies',
+  'getSearchIndexStatus',
+  'listBacklinks',
+  'listRelatedContent',
+  'getOperationsDashboard',
+  'getAnalyticsReport',
+  'getIdentity',
+  'getGovernance',
+  'getMigrations',
+  'getMarketplace',
+  'getPersonalization',
+  'previewPersonalization',
+  'getExperiments',
+  'getAiGateway',
+  'getAiAuthoring',
+  'semanticAiSearch',
+  'getRegionalTopology',
+  'getContentFederation',
+  'exploreKnowledgeGraph',
+  'listKnowledgeRecommendations',
+  'getKnowledgeAgent',
+  'getFleet',
+  // Preview has its own grant-settlement and strict cleanup barrier.
+  'createPreviewSession',
+  'revokePreviewSession',
+]);
+
+function trackStudioManagementMutations(
+  client: GridStoryClient,
+  update: (delta: 1 | -1) => void,
+): GridStoryClient {
+  const methods = new Map<string, unknown>();
+  return new Proxy(client, {
+    get(target, property) {
+      if (typeof property !== 'string') return Reflect.get(target, property);
+      if (methods.has(property)) return methods.get(property);
+      const value = Reflect.get(target, property);
+      if (
+        typeof value !== 'function' ||
+        studioReadMethods.has(property) ||
+        !(property in studioMethodOperations)
+      )
+        return value;
+      const tracked = async (...args: unknown[]) => {
+        update(1);
+        try {
+          return await Reflect.apply(value, target, args);
+        } finally {
+          update(-1);
+        }
+      };
+      methods.set(property, tracked);
+      return tracked;
+    },
+  });
+}
 
 const defaultPersonalizationPreview = JSON.stringify(
   {
@@ -434,7 +521,7 @@ function compositionFrom(entry: ContentEntry, fieldName?: string): ComponentNode
 
 function entryTitle(entry: ContentEntry, schemas: ContentSchemaDefinition[]): string {
   const schema = schemas.find((candidate) => candidate.id === entry.contentType);
-  return String(entry.data[schema?.titleField ?? 'title'] ?? 'Untitled');
+  return String(entry.data[schema?.titleField ?? 'title'] ?? (schema ? 'Untitled' : entry.id));
 }
 
 function entrySlug(entry: ContentEntry, schemas: ContentSchemaDefinition[]): string {
@@ -757,13 +844,44 @@ function initialStudioTheme(): StudioTheme {
 }
 
 export function App({ client = defaultClient }: AppProps = {}): ReactNode {
+  return (
+    <StudioSession client={client}>{(session) => <AuthorizedStudio {...session} />}</StudioSession>
+  );
+}
+
+function AuthorizedStudio({
+  client: authorizedClient,
+  context,
+  active,
+  resetEntryContext,
+  transitioning: scopeTransitioning,
+  transitionScope,
+  cleanupClient,
+}: StudioSessionView): ReactNode {
+  const [pendingManagementMutations, setPendingManagementMutations] = useState(0);
+  const pendingManagementMutationsRef = useRef(0);
+  const updatePendingManagementMutations = useCallback((delta: 1 | -1) => {
+    pendingManagementMutationsRef.current += delta;
+    setPendingManagementMutations(pendingManagementMutationsRef.current);
+  }, []);
+  const client = useMemo(
+    () => trackStudioManagementMutations(authorizedClient, updatePendingManagementMutations),
+    [authorizedClient, updatePendingManagementMutations],
+  );
+  const capabilities = context.capabilities;
+  const can = useCallback(
+    (...operations: StudioOperation[]) => active && permits(capabilities, ...operations),
+    [active, capabilities],
+  );
+  const navigation = permittedNavigation(capabilities);
+  const firstDestination = navigation[0]?.destinations[0];
   const [entries, setEntries] = useState<ContentEntry[]>([]);
   const [selected, setSelected] = useState<ContentEntry | null>(null);
   const [draft, setDraft] = useState<EditableContent | null>(null);
   const [revisions, setRevisions] = useState<ContentRevision[]>([]);
   const [schemas, setSchemas] = useState<ContentSchemaDefinition[]>([]);
-  const [manifests, setManifests] = useState<ComponentManifest[]>(componentManifests);
-  const [designSystem, setDesignSystem] = useState<DesignSystemManifest>(exampleDesignSystem);
+  const [manifests, setManifests] = useState<ComponentManifest[]>([]);
+  const [designSystem, setDesignSystem] = useState<DesignSystemManifest | null>(null);
   const [assets, setAssets] = useState<AssetRecord[]>([]);
   const [assetLibraryOpen, setAssetLibraryOpen] = useState(false);
   const [assetUsage, setAssetUsage] = useState<AssetUsageReport | null>(null);
@@ -773,7 +891,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   const [busyState, updateBusy] = useState(true);
   const [pendingWrites, setPendingWrites] = useState(0);
   const pendingWritesRef = useRef(0);
-  const busy = busyState || pendingWrites > 0;
+  const busy =
+    busyState || pendingWrites > 0 || pendingManagementMutations > 0 || scopeTransitioning;
   const trackEntryMutation = async <T,>(operation: () => Promise<T>): Promise<T> => {
     pendingWritesRef.current += 1;
     setPendingWrites(pendingWritesRef.current);
@@ -798,8 +917,12 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   const schemasRef = useRef(schemas);
   schemasRef.current = schemas;
   const initialLocationRef = useRef(parseStudioLocation(window.location.hash));
+  const defaultLocationRef = useRef(
+    !window.location.hash || window.location.hash === '#' || initialLocationRef.current.invalid,
+  );
   const acceptedLocationRef = useRef<StudioLocation>(initialLocationRef.current.location);
   const studioHistoryRef = useRef<StudioHistory | null>(null);
+  const destinationFocusRef = useRef<number | null>(null);
   const transitionRef = useRef<Parameters<typeof createStudioHistory>[1]>(async () => false);
   const stopPreviewRef = useRef<() => Promise<void>>(async () => undefined);
   const previewGenerationRef = useRef(0);
@@ -816,6 +939,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
     () => typeof window !== 'undefined' && window.innerWidth <= 900,
   );
   const [notice, setNotice] = useState<Notice>(null);
+  const [featureDraftDirty, setFeatureDraftDirty] = useState(false);
   const [qualityReport, setQualityReport] = useState<ContentQualityReport | null>(null);
   const [fatalError, setFatalError] = useState<string | null>(null);
   const [responsiveBreakpoint, setResponsiveBreakpoint] = useState('desktop');
@@ -823,8 +947,12 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   const previewControllerRef = useRef<GridStoryPreviewController | null>(null);
   const previewGrantRef = useRef<PreviewSessionGrant | null>(null);
   const previewPopupRef = useRef<Window | null>(null);
+  const previewStartRef = useRef<Promise<void> | null>(null);
   const lastPreviewSlugRef = useRef<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
+  const [featurePending, setFeaturePending] = useState(false);
+  const [featureRetry, setFeatureRetry] = useState(0);
+  const featureAttemptRef = useRef(0);
   const [operationsDashboard, setOperationsDashboard] = useState<OperationsDashboardRecord | null>(
     null,
   );
@@ -1022,6 +1150,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
 
   const selectEntry = useCallback(
     async (id: string, componentFieldName?: string, signal?: AbortSignal) => {
+      if (!can('content.read', 'schema.read')) return null;
       entryReadRef.current?.abort();
       const controller = new AbortController();
       entryReadRef.current = controller;
@@ -1045,8 +1174,12 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
       try {
         const [entry, history, workflowState] = await Promise.all([
           client.getContent(id, { perspective: 'draft', signal: controller.signal }),
-          client.listRevisions(id, controller.signal),
-          client.getContentWorkflow(id, controller.signal),
+          can('content.history.read')
+            ? client.listRevisions(id, controller.signal)
+            : Promise.resolve([]),
+          can('workflow.read')
+            ? client.getContentWorkflow(id, controller.signal)
+            : Promise.resolve(null),
         ]);
         if (!current()) return null;
         if (
@@ -1092,7 +1225,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
         }
       }
     },
-    [client, setBusy],
+    [client, can, setBusy],
   );
 
   const refreshList = useCallback(
@@ -1132,10 +1265,13 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
       history.dispose();
       studioHistoryRef.current = null;
       entryReadRef.current?.abort();
+      if (destinationFocusRef.current !== null) cancelAnimationFrame(destinationFocusRef.current);
+      destinationFocusRef.current = null;
     };
   }, []);
 
   useEffect(() => {
+    if (!active || bootstrapped) return;
     const controller = new AbortController();
     setBusy(true);
     setFatalError(null);
@@ -1143,13 +1279,15 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
       reloadToken > 0 ? { tone: 'info', message: 'Retrying the GridStory connection…' } : null,
     );
     Promise.all([
-      client.listContent({ contentType: 'page', signal: controller.signal }),
-      client.getComponentManifests(controller.signal),
-      client.getSchemas(controller.signal),
-      client.getDesignSystem(controller.signal),
-      client.listAssets(controller.signal).catch(() => []),
-      client.listWorkflows(controller.signal),
-      client.listReleases(controller.signal).catch(() => []),
+      can('pages.list')
+        ? client.listContent({ contentType: 'page', signal: controller.signal })
+        : Promise.resolve([]),
+      can('component.read') ? client.getComponentManifests(controller.signal) : Promise.resolve([]),
+      can('schema.read') ? client.getSchemas(controller.signal) : Promise.resolve([]),
+      can('component.read') ? client.getDesignSystem(controller.signal) : Promise.resolve(null),
+      can('asset.read') ? client.listAssets(controller.signal) : Promise.resolve([]),
+      can('workflow.read') ? client.listWorkflows(controller.signal) : Promise.resolve([]),
+      can('release.read') ? client.listReleases(controller.signal) : Promise.resolve([]),
     ])
       .then(
         async ([
@@ -1171,19 +1309,27 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
           setWorkflowDefinitions(workflowList);
           setReleases(releaseList);
           setActiveReleaseId(releaseList[0]?.id ?? null);
-          const target = initialLocationRef.current.location.entryId ?? entryList[0]?.id;
+          const target = resetEntryContext
+            ? undefined
+            : (initialLocationRef.current.location.entryId ?? entryList[0]?.id);
           let entry: ContentEntry | null = null;
-          if (target) {
+          const destination = defaultLocationRef.current
+            ? (firstDestination ?? 'pages')
+            : initialLocationRef.current.location.destination;
+          if (target && capabilities.screens[destination] && can('content.read', 'schema.read')) {
             const fieldName = schemaList
               .find((schema) => schema.id === entryList[0]?.contentType)
               ?.fields.find((field) => field.type === 'component-tree')?.name;
             entry = await selectEntry(target, fieldName, controller.signal);
           } else setBusy(false);
           if (controller.signal.aborted) return;
-          const location: StudioLocation = {
-            ...initialLocationRef.current.location,
-            ...(entry ? { entryId: entry.id, type: 'page' as const } : {}),
-          };
+          const location: StudioLocation = resetEntryContext
+            ? { destination }
+            : {
+                ...initialLocationRef.current.location,
+                destination,
+                ...(entry ? { entryId: entry.id, type: 'page' as const } : {}),
+              };
           acceptedLocationRef.current = location;
           studioHistoryRef.current?.replace(location);
           setActiveStudioDestination(location.destination);
@@ -1191,7 +1337,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
           if (initialLocationRef.current.invalid)
             setNotice({
               tone: 'info',
-              message: 'That Studio address was not recognized. Pages is shown instead.',
+              message: `That Studio address was not recognized. ${firstDestination ? studioDestinations[firstDestination].label : 'No accessible section'} is shown instead.`,
             });
         },
       )
@@ -1203,16 +1349,27 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
         }
       });
     return () => controller.abort();
-  }, [client, reloadToken, selectEntry, setBusy]);
+  }, [
+    active,
+    bootstrapped,
+    can,
+    capabilities,
+    client,
+    firstDestination,
+    resetEntryContext,
+    reloadToken,
+    selectEntry,
+    setBusy,
+  ]);
 
   useEffect(() => {
-    if (!dirty) return;
+    if (!dirty && !featureDraftDirty && !personalizationConfigurationDirty) return;
     const beforeUnload = (event: BeforeUnloadEvent) => {
       event.preventDefault();
     };
     window.addEventListener('beforeunload', beforeUnload);
     return () => window.removeEventListener('beforeunload', beforeUnload);
-  }, [dirty]);
+  }, [dirty, featureDraftDirty, personalizationConfigurationDirty]);
 
   const manifestById = useMemo(
     () => new Map(manifests.map((manifest) => [manifest.id, manifest])),
@@ -1294,7 +1451,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
       : undefined;
 
   useEffect(() => {
-    if (!selectedEntryId) {
+    if (!selectedEntryId || !can('collaboration.read')) {
       setCollaboration(emptyCollaborationSnapshot());
       return;
     }
@@ -1303,11 +1460,13 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
     const refresh = async () => {
       const [snapshot, presence] = await Promise.all([
         client.getCollaboration(entryId),
-        client.heartbeatPresence(entryId, {
-          displayName: 'Studio editor',
-          ...(commentTargetField ? { field: commentTargetField } : {}),
-          ...(selectedPresenceNodeId ? { nodeId: selectedPresenceNodeId } : {}),
-        }),
+        can('presence.write')
+          ? client.heartbeatPresence(entryId, {
+              displayName: 'Studio editor',
+              ...(commentTargetField ? { field: commentTargetField } : {}),
+              ...(selectedPresenceNodeId ? { nodeId: selectedPresenceNodeId } : {}),
+            })
+          : Promise.resolve([]),
       ]);
       if (active) setCollaboration({ ...snapshot, presence });
     };
@@ -1316,14 +1475,15 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
     return () => {
       active = false;
       window.clearInterval(interval);
-      void client.leavePresence(entryId).catch(() => undefined);
+      if (can('presence.write')) void cleanupClient.leavePresence(entryId).catch(() => undefined);
     };
-  }, [client, commentTargetField, selectedEntryId, selectedPresenceNodeId]);
+  }, [client, cleanupClient, can, commentTargetField, selectedEntryId, selectedPresenceNodeId]);
   const selectedSymbol = selectedNode?.presentation?.symbol
-    ? designSystem.symbols.find((symbol) => symbol.id === selectedNode.presentation?.symbol?.id)
+    ? designSystem?.symbols.find((symbol) => symbol.id === selectedNode.presentation?.symbol?.id)
     : undefined;
   const selectedVariants = selectedNode
-    ? designSystem.variants.filter((variant) => variant.component === selectedNode.component)
+    ? (designSystem?.variants.filter((variant) => variant.component === selectedNode.component) ??
+      [])
     : [];
   const refreshAssets = useCallback(async () => {
     setAssets(await client.listAssets());
@@ -1372,6 +1532,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   };
 
   const changeDraft = (updater: (current: EditableContent) => EditableContent) => {
+    if (!can('content.draft.update')) return;
     if (entryReadRef.current || busyRef.current || pendingWritesRef.current > 0) return;
     setDraft((current) => (current ? updater(current) : current));
     setDirty(true);
@@ -1556,6 +1717,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   };
 
   const applyComposition = (result: CompositionResult, selectedId?: string) => {
+    if (!can('content.draft.update', 'component.read')) return;
     if (entryReadRef.current || busyRef.current) return;
     if (!result.ok) {
       setNotice({ tone: 'error', message: result.error ?? 'Composition change was rejected.' });
@@ -1565,6 +1727,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   };
 
   const restoreComposition = (direction: 'undo' | 'redo') => {
+    if (!can('content.draft.update', 'component.read')) return;
     if (entryReadRef.current || busyRef.current) return;
     if (!componentField) return;
     const restored =
@@ -1647,7 +1810,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   const editablePropsFor = (node: ComponentNode, manifest: ComponentManifest) => {
     const reference = node.presentation?.symbol;
     if (!reference || reference.detached) return manifest.props;
-    const symbol = designSystem.symbols.find((candidate) => candidate.id === reference.id);
+    const symbol = designSystem?.symbols.find((candidate) => candidate.id === reference.id);
     if (!symbol) return manifest.props;
     return manifest.props.filter((prop) => symbol.allowedPropOverrides.includes(prop.name));
   };
@@ -1663,14 +1826,17 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
         updateNodePresentation(
           current,
           node.id,
-          updater({ designSystemVersion: designSystem.version, ...node.presentation }),
+          updater({
+            ...(designSystem ? { designSystemVersion: designSystem.version } : {}),
+            ...node.presentation,
+          }),
         ),
       node.id,
     );
   };
 
   const addTemplateAtRoot = (templateId: string) => {
-    const template = designSystem.templates.find((candidate) => candidate.id === templateId);
+    const template = designSystem?.templates.find((candidate) => candidate.id === templateId);
     if (!template) return;
     const nodes = instantiateTemplate(template, () => crypto.randomUUID());
     let result: CompositionResult = { ok: true, nodes: draftBlocks };
@@ -1682,8 +1848,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   };
 
   const addSymbolAtRoot = (symbolId: string) => {
-    const symbol = designSystem.symbols.find((candidate) => candidate.id === symbolId);
-    if (!symbol) return;
+    const symbol = designSystem?.symbols.find((candidate) => candidate.id === symbolId);
+    if (!symbol || !designSystem) return;
     const node = instantiateSymbol(symbol, designSystem.version, () => crypto.randomUUID());
     applyComposition(
       addNode(draftBlocks, node, { index: draftBlocks.length }, compositionRules),
@@ -1736,8 +1902,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
         setEntries((current) =>
           current.map((entry) => (entry.id === updated.id ? updated : entry)),
         );
-        setRevisions(await client.listRevisions(updated.id));
-        setWorkflowInstance(await client.getContentWorkflow(updated.id));
+        if (can('content.history.read')) setRevisions(await client.listRevisions(updated.id));
+        if (can('workflow.read')) setWorkflowInstance(await client.getContentWorkflow(updated.id));
         setDirty(false);
         setNotice({ tone: 'success', message: 'Draft saved as a new immutable revision.' });
         return updated;
@@ -1753,7 +1919,11 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
     if (!selected || !draft) return;
     setBusy(true);
     try {
-      setQualityReport(await client.assessContentQuality(selected.id, draft));
+      setQualityReport(
+        can('quality.assess')
+          ? await client.assessContentQuality(selected.id, draft)
+          : await client.getContentQuality(selected.id),
+      );
       setNotice({ tone: 'info', message: 'Quality report refreshed for the current draft.' });
     } catch (error) {
       setNotice({ tone: 'error', message: messageFrom(error) });
@@ -1783,7 +1953,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
         const result = await client.publish(publishable.id, publishable.draftRevisionId);
         setSelected(result);
         setEntries((current) => current.map((entry) => (entry.id === result.id ? result : entry)));
-        setWorkflowInstance(await client.getContentWorkflow(result.id));
+        if (can('workflow.read')) setWorkflowInstance(await client.getContentWorkflow(result.id));
         setNotice({
           tone: 'success',
           message: 'Published revision is now available to React applications.',
@@ -1967,8 +2137,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
     if (!activeRelease) return;
     setBusy(true);
     try {
-      const release = await client.validateRelease(activeRelease.id);
-      storeRelease(release);
+      if (can('release.manage')) storeRelease(await client.validateRelease(activeRelease.id));
       setReleasePreview(await client.previewRelease(activeRelease.id));
       setNotice({ tone: 'info', message: 'Future-state preview loaded from pinned revisions.' });
     } catch (error) {
@@ -2070,7 +2239,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
       const definitions = await client.listWorkflows();
       setWorkflowDefinitions(definitions);
       setWorkflowDesign(definitions[0] ? structuredClone(definitions[0]) : null);
-      await refreshWorkflowActionDeliveries();
+      if (can('workflow.action.read')) await refreshWorkflowActionDeliveries();
       setWorkflowDesignerOpen(true);
     } catch (error) {
       setNotice({ tone: 'error', message: messageFrom(error) });
@@ -2221,8 +2390,10 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
     const [taxonomies, status, selectedBacklinks, selectedRelated] = await Promise.all([
       client.listTaxonomies(),
       client.getSearchIndexStatus(),
-      selectedId ? client.listBacklinks(selectedId, 'draft') : Promise.resolve([]),
-      selectedId
+      selectedId && can('search.related.read')
+        ? client.listBacklinks(selectedId, 'draft')
+        : Promise.resolve([]),
+      selectedId && can('search.related.read')
         ? client.listRelatedContent(selectedId, { perspective: 'draft', limit: 8 })
         : Promise.resolve([]),
     ]);
@@ -2266,11 +2437,13 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
     setNotice(null);
     try {
       await client.rebuildSearchIndex('draft');
-      const result = await client.drainOperations(100);
+      const result = can('operations.run') ? await client.drainOperations(100) : null;
       await refreshSearchContext();
       setNotice({
         tone: 'success',
-        message: `Search rebuild completed with ${result.completedJobs} durable job(s).`,
+        message: result
+          ? `Search rebuild completed with ${result.completedJobs} durable job(s).`
+          : 'Search rebuild queued. An authorized operations worker can run it.',
       });
     } catch (error) {
       setNotice({ tone: 'error', message: messageFrom(error) });
@@ -2830,6 +3003,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
     applyKnowledge(await client.getKnowledgeAgent(), synchronizePolicy);
   };
   const toggleKnowledge = async () => {
+    if (!can('agent.read')) return;
     if (knowledge) {
       setKnowledge(null);
       setKnowledgeGraph(null);
@@ -3858,29 +4032,38 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   const slugField = activeSchema?.fields.find((field) => field.type === 'slug');
   const previewSlug = String(draft?.[slugField?.name ?? 'slug'] ?? 'preview');
 
-  const closeExternalPreview = useCallback(async () => {
-    previewGenerationRef.current += 1;
-    previewControllerRef.current?.dispose();
-    previewControllerRef.current = null;
-    const grant = previewGrantRef.current;
-    previewGrantRef.current = null;
-    lastPreviewSlugRef.current = null;
-    const popup = previewPopupRef.current;
-    previewPopupRef.current = null;
-    if (popup && !popup.closed) popup.close();
-    setExternalPreview(null);
-    if (grant) {
-      try {
-        await client.revokePreviewSession(grant.sessionId);
-      } catch (error) {
-        if (mountedRef.current)
-          setNotice({
-            tone: 'error',
-            message: `The preview window was closed, but session revocation failed: ${messageFrom(error)}`,
-          });
+  const cleanupExternalPreview = useCallback(
+    async (waitForPendingGrant = true) => {
+      previewGenerationRef.current += 1;
+      previewControllerRef.current?.dispose();
+      previewControllerRef.current = null;
+      lastPreviewSlugRef.current = null;
+      const popup = previewPopupRef.current;
+      previewPopupRef.current = null;
+      if (popup && !popup.closed) popup.close();
+      setExternalPreview(null);
+      const pending = previewStartRef.current;
+      if (waitForPendingGrant && pending) await pending;
+      const grant = previewGrantRef.current;
+      if (grant) {
+        await cleanupClient.revokePreviewSession(grant.sessionId);
+        if (previewGrantRef.current?.sessionId === grant.sessionId) previewGrantRef.current = null;
       }
+    },
+    [cleanupClient],
+  );
+
+  const closeExternalPreview = useCallback(async () => {
+    try {
+      await cleanupExternalPreview();
+    } catch (error) {
+      if (mountedRef.current)
+        setNotice({
+          tone: 'error',
+          message: `The unused preview session could not be revoked after the preview window closed: ${messageFrom(error)}`,
+        });
     }
-  }, [client]);
+  }, [cleanupExternalPreview]);
   stopPreviewRef.current = closeExternalPreview;
 
   const connectPreviewTarget = useCallback((targetWindow: Window, grant: PreviewSessionGrant) => {
@@ -3914,6 +4097,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   }, []);
 
   const startExternalPreview = async () => {
+    if (!can('preview.manage')) return;
     if (!selected || !draft || entryReadRef.current) return;
     const popup = window.open(
       'about:blank',
@@ -3924,7 +4108,14 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
       setNotice({ tone: 'error', message: 'The standalone preview popup was blocked.' });
       return;
     }
-    void closeExternalPreview();
+    try {
+      await cleanupExternalPreview(false);
+    } catch (error) {
+      popup.close();
+      if (mountedRef.current)
+        setNotice({ tone: 'error', message: `Preview cleanup failed: ${messageFrom(error)}` });
+      return;
+    }
     const generation = previewGenerationRef.current;
     const entryId = selected.id;
     previewPopupRef.current = popup;
@@ -3943,8 +4134,11 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
         popup.closed
       ) {
         if (!popup.closed) popup.close();
+        previewGrantRef.current = grant;
         try {
-          await client.revokePreviewSession(grant.sessionId);
+          await cleanupClient.revokePreviewSession(grant.sessionId);
+          if (previewGrantRef.current?.sessionId === grant.sessionId)
+            previewGrantRef.current = null;
         } catch (error) {
           if (mountedRef.current)
             setNotice({
@@ -3964,6 +4158,14 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
       if (mountedRef.current && generation === previewGenerationRef.current)
         setNotice({ tone: 'error', message: messageFrom(error) });
     }
+  };
+
+  const beginExternalPreview = () => {
+    const pending = startExternalPreview();
+    previewStartRef.current = pending;
+    void pending.finally(() => {
+      if (previewStartRef.current === pending) previewStartRef.current = null;
+    });
   };
 
   useEffect(() => {
@@ -4006,14 +4208,68 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
       previewGenerationRef.current += 1;
       previewControllerRef.current?.dispose();
       const grant = previewGrantRef.current;
-      if (grant) void client.revokePreviewSession(grant.sessionId).catch(() => undefined);
+      if (grant) void cleanupClient.revokePreviewSession(grant.sessionId).catch(() => undefined);
       const popup = previewPopupRef.current;
       if (popup && !popup.closed) popup.close();
     },
-    [client],
+    [cleanupClient],
   );
 
+  useEffect(() => {
+    if (!active) void closeExternalPreview();
+  }, [active, closeExternalPreview]);
+
+  const managementActivity =
+    busyRef.current ||
+    pendingWritesRef.current > 0 ||
+    pendingManagementMutationsRef.current > 0 ||
+    assetUploading ||
+    featurePending ||
+    searchBusy ||
+    federationBusy ||
+    regionalBusy ||
+    aiBusy ||
+    knowledgeBusy ||
+    fleetBusy;
+  const switchStudioContext = async (selection: StudioScopeSelection) => {
+    if (scopeTransitioning) return;
+    if (managementActivity) {
+      setNotice({
+        tone: 'info',
+        message: 'Wait for the current Studio operation to finish before switching context.',
+      });
+      return;
+    }
+    if (
+      (dirty || featureDraftDirty || personalizationConfigurationDirty) &&
+      !window.confirm(
+        'Discard unsaved entry and management-form changes before switching Studio context?',
+      )
+    )
+      return;
+    try {
+      await transitionScope(selection, {
+        cleanup: () => cleanupExternalPreview(true),
+        beforeCommit: () => {
+          const destination = capabilities.screens[activeStudioDestination]
+            ? activeStudioDestination
+            : (firstDestination ?? 'pages');
+          acceptedLocationRef.current = { destination };
+          studioHistoryRef.current?.reset({ destination });
+        },
+      });
+    } catch (error) {
+      if ((error as { name?: string }).name === 'AbortError') return;
+      setNotice({
+        tone: 'error',
+        message: `Studio context was not changed: ${messageFrom(error)}`,
+      });
+    }
+  };
+
   const activateDestination = (destination: StudioDestination) => {
+    if (destinationFocusRef.current !== null) cancelAnimationFrame(destinationFocusRef.current);
+    destinationFocusRef.current = null;
     setActiveStudioDestination(destination);
     const group = studioNavigationGroups.find(({ destinations }) =>
       destinations.some((id) => id === destination),
@@ -4021,17 +4277,42 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
     if (group) setExpandedNavigationGroups((current) => new Set(current).add(group.id));
     setMobileNavigationOpen(false);
     if (destination === 'pages') {
-      requestAnimationFrame(() => document.getElementById('studio-editor')?.focus());
+      const origin = document.activeElement;
+      const entryId = selectedRef.current?.id;
+      destinationFocusRef.current = requestAnimationFrame(() => {
+        destinationFocusRef.current = null;
+        const editor = document.getElementById('studio-editor');
+        const active = document.activeElement;
+        if (
+          !mountedRef.current ||
+          acceptedLocationRef.current.destination !== 'pages' ||
+          selectedRef.current?.id !== entryId ||
+          !editor ||
+          editor.contains(active)
+        )
+          return;
+        // A user's newer focus choice owns subsequent typing, not this deferred navigation.
+        if (active === origin || (!origin?.isConnected && active === document.body)) editor.focus();
+      });
     }
   };
 
   transitionRef.current = async (requested, { signal, invalid }) => {
-    if (!bootstrapped || signal.aborted) return false;
+    if (!active || !bootstrapped || signal.aborted) return false;
+    const destination = invalid
+      ? (firstDestination ?? requested.destination)
+      : requested.destination;
+    if (!capabilities.screens[destination]) {
+      const location = { destination };
+      acceptedLocationRef.current = location;
+      activateDestination(destination);
+      return location;
+    }
     const entryId = invalid
       ? selectedRef.current?.id
       : (requested.entryId ?? selectedRef.current?.id ?? entries[0]?.id);
     const changingEntry = entryId !== selectedRef.current?.id;
-    if (changingEntry) {
+    if (changingEntry && can('content.read', 'schema.read')) {
       if (pendingWritesRef.current > 0 || (busyRef.current && !entryReadRef.current)) {
         setNotice({
           tone: 'info',
@@ -4044,7 +4325,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
     }
     if (signal.aborted) return false;
     const location: StudioLocation = {
-      destination: requested.destination,
+      destination,
       ...(entryId ? { entryId, type: 'page' as const } : {}),
     };
     acceptedLocationRef.current = location;
@@ -4052,7 +4333,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
     if (invalid)
       setNotice({
         tone: 'info',
-        message: 'That Studio address was not recognized. Pages is shown instead.',
+        message: `That Studio address was not recognized. ${studioDestinations[destination].label} is shown instead.`,
       });
     return location;
   };
@@ -4067,62 +4348,62 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
 
   const navigationActions: Record<
     StudioDestination,
-    { loaded: boolean; ensureLoaded?: () => void; disabled?: boolean }
+    { loaded: boolean; ensureLoaded?: () => void | Promise<void>; disabled?: boolean }
   > = {
     pages: { loaded: true },
-    workflows: { loaded: workflowDesignerOpen, ensureLoaded: () => void toggleWorkflowDesigner() },
+    workflows: { loaded: workflowDesignerOpen, ensureLoaded: () => toggleWorkflowDesigner() },
     releases: { loaded: releasePanelOpen, ensureLoaded: () => setReleasePanelOpen(true) },
-    search: { loaded: searchPanelOpen, ensureLoaded: () => void toggleSearchPanel() },
+    search: { loaded: searchPanelOpen, ensureLoaded: () => toggleSearchPanel() },
     operations: {
       loaded: operationsDashboard !== null && analyticsReport !== null,
-      ensureLoaded: () => void toggleOperations(),
+      ensureLoaded: () => toggleOperations(),
     },
-    identity: { loaded: identitySnapshot !== null, ensureLoaded: () => void toggleIdentity() },
+    identity: { loaded: identitySnapshot !== null, ensureLoaded: () => toggleIdentity() },
     'data-governance': {
       loaded: dataGovernance !== null,
-      ensureLoaded: () => void toggleDataGovernance(),
+      ensureLoaded: () => toggleDataGovernance(),
     },
     migrations: {
       loaded: migrationOverview !== null,
-      ensureLoaded: () => void toggleMigrations(),
+      ensureLoaded: () => toggleMigrations(),
     },
     marketplace: {
       loaded: marketplaceOverview !== null,
-      ensureLoaded: () => void toggleMarketplace(),
+      ensureLoaded: () => toggleMarketplace(),
     },
     targeting: {
       loaded: personalization !== null,
-      ensureLoaded: () => void togglePersonalization(),
+      ensureLoaded: () => togglePersonalization(),
     },
     experiments: {
       loaded: experimentOverview !== null,
-      ensureLoaded: () => void toggleExperiments(),
+      ensureLoaded: () => toggleExperiments(),
     },
-    'ai-gateway': { loaded: aiGateway !== null, ensureLoaded: () => void toggleAiGateway() },
+    'ai-gateway': { loaded: aiGateway !== null, ensureLoaded: () => toggleAiGateway() },
     knowledge: {
-      loaded: knowledge !== null,
-      ensureLoaded: () => void toggleKnowledge(),
+      loaded: knowledge !== null || !can('agent.read'),
+      ensureLoaded: () => toggleKnowledge(),
       disabled: knowledgeBusy,
     },
     quality: {
       loaded: qualityReport !== null,
-      ensureLoaded: () => void toggleQuality(),
+      ensureLoaded: () => toggleQuality(),
       disabled: !selected || busy,
     },
     federation: {
       loaded: contentFederation !== null,
-      ensureLoaded: () => void toggleContentFederation(),
+      ensureLoaded: () => toggleContentFederation(),
       disabled: federationBusy,
     },
-    fleet: { loaded: fleet !== null, ensureLoaded: () => void toggleFleet(), disabled: fleetBusy },
+    fleet: { loaded: fleet !== null, ensureLoaded: () => toggleFleet(), disabled: fleetBusy },
     regions: {
       loaded: regional !== null,
-      ensureLoaded: () => void toggleRegional(),
+      ensureLoaded: () => toggleRegional(),
       disabled: regionalBusy,
     },
     components: {
       loaded: componentGovernance !== null,
-      ensureLoaded: () => void toggleComponentGovernance(),
+      ensureLoaded: () => toggleComponentGovernance(),
     },
     assets: { loaded: assetLibraryOpen, ensureLoaded: () => setAssetLibraryOpen(true) },
   };
@@ -4130,17 +4411,37 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
   const navigationActionsRef = useRef(navigationActions);
   navigationActionsRef.current = navigationActions;
   useEffect(() => {
-    if (!bootstrapped) return;
+    if (!active || !bootstrapped || !capabilities.screens[activeStudioDestination]) return;
     const group = studioNavigationGroups.find(({ destinations }) =>
       destinations.some((id) => id === activeStudioDestination),
     );
     if (group) setExpandedNavigationGroups((current) => new Set(current).add(group.id));
     const action = navigationActionsRef.current[activeStudioDestination];
+    if (featureAttemptRef.current !== featureRetry) {
+      featureAttemptRef.current = featureRetry;
+      setNotice(null);
+    }
     if (activeStudioDestination === 'quality' && !selected?.id) return;
-    if (!action.loaded) action.ensureLoaded?.();
-  }, [activeStudioDestination, bootstrapped, selected?.id]);
+    let current = true;
+    setFeaturePending(!action.loaded);
+    if (!action.loaded) {
+      void Promise.resolve(action.ensureLoaded?.())
+        .catch((error: unknown) => {
+          if (current) setNotice({ tone: 'error', message: messageFrom(error) });
+        })
+        .finally(() => {
+          if (current) setFeaturePending(false);
+        });
+    }
+    return () => {
+      current = false;
+    };
+  }, [active, activeStudioDestination, bootstrapped, capabilities, selected?.id, featureRetry]);
 
   const compactNavigation = navigationCondensed && !mobileViewport;
+  const visibleDestination = capabilities.screens[activeStudioDestination]
+    ? activeStudioDestination
+    : null;
   const toggleNavigationGroup = (id: StudioNavigationGroupId) => {
     setExpandedNavigationGroups((current) => {
       const next = new Set(current);
@@ -4212,7 +4513,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
         </div>
         <nav className="studio-navigation__scroll" aria-label="Studio sections">
           <ul className="studio-navigation__groups">
-            {studioNavigationGroups.map((group) => {
+            {navigation.map((group) => {
               const expanded = compactNavigation || expandedNavigationGroups.has(group.id);
               const listId = `studio-navigation-${group.id}`;
               return (
@@ -4289,42 +4590,53 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                 <path d="M4 7h16M4 12h16M4 17h16" />
               </svg>
             </button>
-            <search className="studio-search">
-              <form
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  if (activeStudioDestination === 'search' && searchPanelOpen) {
-                    void runSearch();
-                    return;
-                  }
-                  selectSearchDestination();
-                }}
-              >
-                <StudioNavigationIcon name="search" />
-                <input
-                  aria-label="Search Studio"
-                  placeholder="Search content..."
-                  value={searchText}
-                  onChange={(event) => setSearchText(event.target.value)}
-                />
-              </form>
-            </search>
-            <button
-              type="button"
-              className="studio-icon-button studio-mobile-search"
-              aria-label="Open search"
-              aria-expanded={activeStudioDestination === 'search'}
-              onClick={selectSearchDestination}
-            >
-              <StudioNavigationIcon name="search" />
-            </button>
+            {capabilities.screens.search ? (
+              <>
+                <search className="studio-search">
+                  <form
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      if (activeStudioDestination === 'search' && searchPanelOpen) {
+                        void runSearch();
+                        return;
+                      }
+                      selectSearchDestination();
+                    }}
+                  >
+                    <StudioNavigationIcon name="search" />
+                    <input
+                      aria-label="Search Studio"
+                      placeholder="Search content..."
+                      value={searchText}
+                      onChange={(event) => setSearchText(event.target.value)}
+                    />
+                  </form>
+                </search>
+                <button
+                  type="button"
+                  className="studio-icon-button studio-mobile-search"
+                  aria-label="Open search"
+                  aria-expanded={activeStudioDestination === 'search'}
+                  onClick={selectSearchDestination}
+                >
+                  <StudioNavigationIcon name="search" />
+                </button>
+              </>
+            ) : null}
           </div>
+          <StudioContextControls
+            context={context}
+            disabled={managementActivity}
+            transitioning={scopeTransitioning}
+            onCommit={switchStudioContext}
+          />
           <div className="header-actions">
             <span className={`save-state ${dirty ? 'save-state--dirty' : ''}`}>
               <span aria-hidden="true" />
               {dirty ? 'Unsaved changes' : 'Saved'}
             </span>
             <button
+              data-required-operations="preview.manage"
               type="button"
               className={`studio-icon-button preview-popout-button${externalPreview ? ' is-active' : ''}`}
               aria-label={
@@ -4337,9 +4649,13 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   : 'Open live preview in new window'
               }
               onClick={() =>
-                void (externalPreview ? closeExternalPreview() : startExternalPreview())
+                void (externalPreview ? closeExternalPreview() : beginExternalPreview())
               }
-              disabled={!externalPreview && (!selected || !draft || entryLoading)}
+              disabled={
+                scopeTransitioning ||
+                !can('preview.manage') ||
+                (!externalPreview && (!selected || !draft || entryLoading))
+              }
             >
               <svg aria-hidden="true" viewBox="0 0 24 24">
                 {externalPreview ? (
@@ -4368,18 +4684,20 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               )}
             </button>
             <button
+              data-required-operations="content.draft.update"
               type="button"
               className="button button--secondary"
               onClick={() => void save()}
-              disabled={!dirty || busy}
+              disabled={!can('content.draft.update') || !dirty || busy}
             >
               Save draft
             </button>
             <button
+              data-required-operations="content.publish"
               type="button"
               className="button button--primary"
               onClick={() => void publish()}
-              disabled={!selected || busy || !publishWorkflowTransition}
+              disabled={!can('content.publish') || !selected || busy || !publishWorkflowTransition}
             >
               Publish
             </button>
@@ -4388,13 +4706,96 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
             </span>
           </div>
         </header>
-        <div className="studio-page" id="studio-content" tabIndex={-1}>
-          {activeStudioDestination !== 'pages' && notice ? (
+        <div
+          className="studio-page"
+          id="studio-content"
+          tabIndex={-1}
+          inert={scopeTransitioning}
+          onChangeCapture={(event) => {
+            if (
+              !visibleDestination ||
+              visibleDestination === 'pages' ||
+              visibleDestination === 'search'
+            )
+              return;
+            const target = event.target;
+            if (
+              target instanceof HTMLInputElement ||
+              target instanceof HTMLTextAreaElement ||
+              target instanceof HTMLSelectElement
+            )
+              setFeatureDraftDirty(true);
+          }}
+        >
+          {visibleDestination !== 'pages' && !bootstrapped ? (
+            <div className="loading-state" role={fatalError ? 'alert' : 'status'}>
+              <p>
+                {fatalError ? 'Studio data could not be loaded.' : 'Loading permitted Studio data…'}
+              </p>
+              {fatalError ? (
+                <button
+                  type="button"
+                  className="button button--secondary"
+                  onClick={() => setReloadToken((value) => value + 1)}
+                >
+                  Retry loading
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+          {visibleDestination &&
+          visibleDestination !== 'pages' &&
+          bootstrapped &&
+          !navigationActions[visibleDestination].loaded ? (
+            <div className="loading-state" role={notice?.tone === 'error' ? 'alert' : 'status'}>
+              <p>
+                {featurePending
+                  ? `Loading ${studioDestinations[visibleDestination].label}…`
+                  : notice?.tone === 'error'
+                    ? 'This section could not be loaded.'
+                    : visibleDestination === 'quality' && !selected
+                      ? 'Select an accessible page to view its checks.'
+                      : 'No data is available for this section.'}
+              </p>
+              {!featurePending && !(visibleDestination === 'quality' && !selected) ? (
+                <button
+                  type="button"
+                  className="button button--secondary"
+                  onClick={() => {
+                    setNotice(null);
+                    setFeatureRetry((value) => value + 1);
+                  }}
+                >
+                  Retry section
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+          {bootstrapped && !capabilities.screens[activeStudioDestination] ? (
+            <section className="loading-state" aria-label="Access unavailable">
+              <h1>{firstDestination ? 'Access unavailable' : 'No Studio access'}</h1>
+              <p>
+                {firstDestination
+                  ? 'You do not have access to this section. Choose an available section from the navigation.'
+                  : 'Your account has no available Studio sections. Contact your administrator.'}
+              </p>
+              {firstDestination ? (
+                <button
+                  type="button"
+                  className="button button--secondary"
+                  onClick={() => selectNavigationItem(firstDestination)}
+                >
+                  Open {studioDestinations[firstDestination].label}
+                </button>
+              ) : null}
+            </section>
+          ) : null}
+          {visibleDestination && visibleDestination !== 'pages' && notice ? (
             <div className={`notice notice--${notice.tone}`} role="status">
               {notice.message}
             </div>
           ) : null}
-          {activeStudioDestination === 'workflows' && workflowDesignerOpen ? (
+          {visibleDestination === 'workflows' && workflowDesignerOpen ? (
             <section className="workflow-designer" aria-label="Workflow action designer">
               <div className="section-heading">
                 <div>
@@ -4406,9 +4807,10 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   </p>
                 </div>
                 <button
+                  data-required-operations="workflow.action.run"
                   type="button"
                   className="button button--secondary"
-                  disabled={busy}
+                  disabled={!can('workflow.action.run') || busy}
                   onClick={() => void drainWorkflowActions()}
                 >
                   Run due actions
@@ -4437,9 +4839,10 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                       </select>
                     </label>
                     <button
+                      data-required-operations="workflow.manage"
                       type="button"
                       className="button button--primary"
-                      disabled={!workflowDesign || busy}
+                      disabled={!can('workflow.manage') || !workflowDesign || busy}
                       onClick={() => void saveWorkflowDesign()}
                     >
                       Save next version
@@ -4475,18 +4878,24 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                             <fieldset className="workflow-action-adders">
                               <legend>Add actions to {transition.label}</legend>
                               <button
+                                data-required-operations="workflow.manage"
+                                disabled={!can('workflow.manage')}
                                 type="button"
                                 onClick={() => addWorkflowAction(transition.id, 'notification')}
                               >
                                 + Notification
                               </button>
                               <button
+                                data-required-operations="workflow.manage"
+                                disabled={!can('workflow.manage')}
                                 type="button"
                                 onClick={() => addWorkflowAction(transition.id, 'webhook')}
                               >
                                 + Webhook
                               </button>
                               <button
+                                data-required-operations="workflow.manage"
+                                disabled={!can('workflow.manage')}
                                 type="button"
                                 onClick={() => addWorkflowAction(transition.id, 'cache-invalidate')}
                               >
@@ -4500,6 +4909,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                                     <div className="workflow-action-definition-heading">
                                       <span className="workflow-action-kind">{action.type}</span>
                                       <button
+                                        data-required-operations="workflow.manage"
+                                        disabled={!can('workflow.manage')}
                                         type="button"
                                         className="text-button text-button--danger"
                                         onClick={() =>
@@ -4512,6 +4923,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                                     <label className="gs-field">
                                       <span>Action label</span>
                                       <input
+                                        data-required-operations="workflow.manage"
+                                        disabled={!can('workflow.manage')}
                                         aria-label={`${transition.label} ${action.id} label`}
                                         value={action.label}
                                         onChange={(event) =>
@@ -4531,6 +4944,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                                         <label className="gs-field">
                                           <span>Message</span>
                                           <input
+                                            data-required-operations="workflow.manage"
+                                            disabled={!can('workflow.manage')}
                                             value={action.message}
                                             onChange={(event) =>
                                               updateWorkflowAction(
@@ -4538,7 +4953,10 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                                                 action.id,
                                                 (current) =>
                                                   current.type === 'notification'
-                                                    ? { ...current, message: event.target.value }
+                                                    ? {
+                                                        ...current,
+                                                        message: event.target.value,
+                                                      }
                                                     : current,
                                               )
                                             }
@@ -4547,6 +4965,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                                         <label className="gs-field">
                                           <span>Audience roles</span>
                                           <input
+                                            data-required-operations="workflow.manage"
+                                            disabled={!can('workflow.manage')}
                                             value={action.audienceRoles.join(', ')}
                                             onChange={(event) =>
                                               updateWorkflowAction(
@@ -4572,6 +4992,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                                         <label className="gs-field">
                                           <span>HTTPS endpoint</span>
                                           <input
+                                            data-required-operations="workflow.manage"
+                                            disabled={!can('workflow.manage')}
                                             value={action.url}
                                             onChange={(event) =>
                                               updateWorkflowAction(
@@ -4588,6 +5010,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                                         <label className="gs-field">
                                           <span>Event name</span>
                                           <input
+                                            data-required-operations="workflow.manage"
+                                            disabled={!can('workflow.manage')}
                                             value={action.eventName}
                                             onChange={(event) =>
                                               updateWorkflowAction(
@@ -4595,7 +5019,10 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                                                 action.id,
                                                 (current) =>
                                                   current.type === 'webhook'
-                                                    ? { ...current, eventName: event.target.value }
+                                                    ? {
+                                                        ...current,
+                                                        eventName: event.target.value,
+                                                      }
                                                     : current,
                                               )
                                             }
@@ -4606,6 +5033,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                                       <label className="gs-field">
                                         <span>Cache tags</span>
                                         <input
+                                          data-required-operations="workflow.manage"
+                                          disabled={!can('workflow.manage')}
                                           value={action.tags.join(', ')}
                                           onChange={(event) =>
                                             updateWorkflowAction(
@@ -4629,6 +5058,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                                     <label className="gs-field workflow-attempt-field">
                                       <span>Maximum attempts</span>
                                       <input
+                                        data-required-operations="workflow.manage"
+                                        disabled={!can('workflow.manage')}
                                         type="number"
                                         min="1"
                                         max="20"
@@ -4696,9 +5127,10 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                           {delivery.lastError ? <p>{delivery.lastError}</p> : null}
                           {delivery.state === 'dead' || delivery.state === 'succeeded' ? (
                             <button
+                              data-required-operations="workflow.action.replay"
                               type="button"
                               className="text-button"
-                              disabled={busy}
+                              disabled={!can('workflow.action.replay') || busy}
                               onClick={() => void replayWorkflowAction(delivery.id)}
                             >
                               Replay delivery
@@ -4714,7 +5146,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               </div>
             </section>
           ) : null}
-          {activeStudioDestination === 'releases' && releasePanelOpen ? (
+          {visibleDestination === 'releases' && releasePanelOpen ? (
             <section className="release-panel" aria-label="Release manager">
               <div className="section-heading">
                 <div>
@@ -4736,6 +5168,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   <label className="gs-field">
                     <span>Release name</span>
                     <input
+                      data-required-operations="release.manage"
+                      disabled={!can('release.manage')}
                       value={releaseName}
                       placeholder="Campaign launch"
                       onChange={(event) => setReleaseName(event.target.value)}
@@ -4746,6 +5180,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                     {entries.map((entry) => (
                       <label key={entry.id}>
                         <input
+                          data-required-operations="release.manage"
+                          disabled={!can('release.manage')}
                           type="checkbox"
                           checked={releaseEntryIds.includes(entry.id)}
                           onChange={(event) =>
@@ -4764,9 +5200,15 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                     ))}
                   </fieldset>
                   <button
+                    data-required-operations="release.manage"
                     type="button"
                     className="button button--primary"
-                    disabled={busy || !releaseName.trim() || releaseEntryIds.length < 2}
+                    disabled={
+                      !can('release.manage') ||
+                      busy ||
+                      !releaseName.trim() ||
+                      releaseEntryIds.length < 2
+                    }
                     onClick={() => void createRelease()}
                   >
                     Create release
@@ -4849,9 +5291,11 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                       ) : null}
                       <div className="release-actions">
                         <button
+                          data-required-operations="release.manage"
                           type="button"
                           className="button button--secondary"
                           disabled={
+                            !can('release.manage') ||
                             busy ||
                             ['executing', 'published', 'rolled-back'].includes(activeRelease.state)
                           }
@@ -4860,17 +5304,20 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                           Validate release
                         </button>
                         <button
+                          data-required-operations="release.read"
                           type="button"
                           className="button button--secondary"
-                          disabled={busy}
+                          disabled={!can('release.read') || busy}
                           onClick={() => void previewActiveRelease()}
                         >
                           Preview future state
                         </button>
                         <button
+                          data-required-operations="release.execute"
                           type="button"
                           className="button button--primary"
                           disabled={
+                            !can('release.execute') ||
                             busy ||
                             !activeRelease.validation?.valid ||
                             ['executing', 'published', 'rolled-back'].includes(activeRelease.state)
@@ -4881,9 +5328,11 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                         </button>
                         {activeRelease.state === 'published' ? (
                           <button
+                            data-required-operations="release.rollback"
                             type="button"
                             className="button button--secondary"
                             disabled={
+                              !can('release.rollback') ||
                               busy ||
                               activeRelease.rollbackPolicy.mode === 'disabled' ||
                               activeRelease.entries.some(
@@ -4903,6 +5352,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                           <label className="gs-field">
                             <span>Date and time</span>
                             <input
+                              data-required-operations="release.schedule"
+                              disabled={!can('release.schedule')}
                               type="datetime-local"
                               value={releaseScheduleAt}
                               onChange={(event) => setReleaseScheduleAt(event.target.value)}
@@ -4911,24 +5362,28 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                           <label className="gs-field">
                             <span>IANA time zone</span>
                             <input
+                              data-required-operations="release.schedule"
+                              disabled={!can('release.schedule')}
                               value={releaseTimeZone}
                               onChange={(event) => setReleaseTimeZone(event.target.value)}
                             />
                           </label>
                           {activeRelease.schedule?.state === 'pending' ? (
                             <button
+                              data-required-operations="release.schedule"
                               type="button"
                               className="button button--secondary"
-                              disabled={busy}
+                              disabled={!can('release.schedule') || busy}
                               onClick={() => void cancelActiveReleaseSchedule()}
                             >
                               Cancel release schedule
                             </button>
                           ) : (
                             <button
+                              data-required-operations="release.schedule"
                               type="button"
                               className="button button--secondary"
-                              disabled={busy || !releaseScheduleAt}
+                              disabled={!can('release.schedule') || busy || !releaseScheduleAt}
                               onClick={() => void scheduleActiveRelease()}
                             >
                               Schedule release
@@ -4958,7 +5413,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               </div>
             </section>
           ) : null}{' '}
-          {activeStudioDestination === 'assets' && assetLibraryOpen ? (
+          {visibleDestination === 'assets' && assetLibraryOpen ? (
             <section className="asset-library-panel" aria-label="Asset library">
               <div className="section-heading">
                 <div>
@@ -4969,8 +5424,9 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                 <label className="button button--primary asset-upload-button">
                   {assetUploading ? 'Uploading...' : 'Upload asset'}
                   <input
+                    data-required-operations="asset.create"
                     type="file"
-                    disabled={assetUploading}
+                    disabled={!can('asset.create') || assetUploading}
                     onChange={(event) => {
                       const file = event.currentTarget.files?.[0];
                       event.currentTarget.value = '';
@@ -5033,6 +5489,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                           </small>
                         ) : null}
                         <button
+                          data-required-operations="asset.read"
+                          disabled={!can('asset.read')}
                           type="button"
                           className="button button--secondary"
                           onClick={() => void inspectAssetUsage(asset.id)}
@@ -5055,7 +5513,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               ) : null}
             </section>
           ) : null}
-          {activeStudioDestination === 'search' && searchPanelOpen ? (
+          {visibleDestination === 'search' && searchPanelOpen ? (
             <section className="search-panel" aria-label="Search and discovery">
               <div className="search-panel__query">
                 <div>
@@ -5100,6 +5558,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   {searchResponse?.hits.map((hit) => (
                     <li key={hit.entry.id}>
                       <button
+                        data-required-operations="content.read schema.read"
+                        disabled={!can('content.read', 'schema.read')}
                         type="button"
                         className="button button--secondary button--compact search-result-button"
                         onClick={() => requestSelectEntry(hit.entry.id)}
@@ -5121,9 +5581,10 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                     {searchIndexStatus?.deadJobs ?? 0} dead
                   </span>
                   <button
+                    data-required-operations="search.manage"
                     type="button"
                     className="button button--secondary"
-                    disabled={searchBusy}
+                    disabled={!can('search.manage') || searchBusy}
                     onClick={() => void rebuildSearchIndex()}
                   >
                     Rebuild draft index
@@ -5131,7 +5592,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                 </div>
                 <div>
                   <strong>Backlinks to selected entry</strong>
-                  <ul>
+                  {/* biome-ignore lint/a11y/noNoninteractiveTabindex: Safari keyboard users need a focus target when this bounded text list scrolls. */}
+                  <ul aria-label="Backlinks to selected entry" tabIndex={0}>
                     {backlinks.map((backlink) => (
                       <li key={backlink.source.id}>{entryTitle(backlink.source, schemas)}</li>
                     ))}
@@ -5140,7 +5602,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                 </div>
                 <div>
                   <strong>Related content</strong>
-                  <ul>
+                  {/* biome-ignore lint/a11y/noNoninteractiveTabindex: Safari keyboard users need a focus target when this bounded text list scrolls. */}
+                  <ul aria-label="Related content" tabIndex={0}>
                     {relatedContent.map((related) => (
                       <li key={related.entry.id}>
                         {entryTitle(related.entry, schemas)} · {related.reasons.join(', ')}
@@ -5152,7 +5615,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               </aside>
             </section>
           ) : null}{' '}
-          {activeStudioDestination === 'operations' && operationsDashboard && analyticsReport ? (
+          {visibleDestination === 'operations' && operationsDashboard && analyticsReport ? (
             <section className="operations-panel" aria-label="Administrator operations">
               <div>
                 <span className="kicker">Administrator</span>
@@ -5208,23 +5671,31 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               </dl>
             </section>
           ) : null}
-          {activeStudioDestination === 'knowledge' && knowledge ? (
+          {visibleDestination === 'knowledge' && (knowledge || can('knowledge.read')) ? (
             <section className="knowledge-panel" aria-label="Knowledge graph and reviewed agents">
               <div className="section-heading">
                 <div>
                   <span className="kicker">Private bounded knowledge</span>
                   <h2>Graph exploration, explained recommendations, and reviewed draft plans</h2>
-                  <p>
-                    Agent {knowledge.policy.enabled ? 'enabled' : 'disabled'} · policy r
-                    {knowledge.version} · {knowledge.plans.length} retained plans ·{' '}
-                    {knowledge.receipts.length} receipts
-                  </p>
+                  {knowledge ? (
+                    <p>
+                      Agent {knowledge.policy.enabled ? 'enabled' : 'disabled'} · policy r
+                      {knowledge.version} · {knowledge.plans.length} retained plans ·{' '}
+                      {knowledge.receipts.length} receipts
+                    </p>
+                  ) : (
+                    <p>
+                      Knowledge access is available. Agent configuration is not available with your
+                      current access.
+                    </p>
+                  )}
                 </div>
                 <button
+                  data-required-operations="agent.read"
                   type="button"
                   className="button button--secondary"
                   onClick={() => void refreshKnowledge(true)}
-                  disabled={knowledgeBusy}
+                  disabled={!can('agent.read') || knowledgeBusy}
                 >
                   Refresh knowledge state
                 </button>
@@ -5244,18 +5715,20 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   </p>
                   <div className="knowledge-panel__actions">
                     <button
+                      data-required-operations="knowledge.read"
                       type="button"
                       className="button button--secondary"
                       onClick={() => void exploreSelectedKnowledge()}
-                      disabled={knowledgeBusy || !selected}
+                      disabled={!can('knowledge.read') || knowledgeBusy || !selected}
                     >
                       Explore graph
                     </button>
                     <button
+                      data-required-operations="knowledge.read"
                       type="button"
                       className="button button--secondary"
                       onClick={() => void recommendSelectedKnowledge()}
-                      disabled={knowledgeBusy || !selected}
+                      disabled={!can('knowledge.read') || knowledgeBusy || !selected}
                     >
                       Explain recommendations
                     </button>
@@ -5280,123 +5753,145 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                     ))}
                   </div>
                 </fieldset>
-                <fieldset>
-                  <legend>Disabled-by-default agent policy</legend>
-                  <label>
-                    <span>Policy JSON</span>
-                    <textarea
-                      value={knowledgePolicyJson}
-                      onChange={(event) => setKnowledgePolicyJson(event.target.value)}
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    className="button button--secondary"
-                    onClick={() => void saveKnowledgePolicy()}
-                    disabled={knowledgeBusy}
-                  >
-                    Save bounded agent policy
-                  </button>
-                </fieldset>
-                <fieldset>
-                  <legend>Plan and human review</legend>
-                  <label>
-                    <span>Goal for the selected saved draft</span>
-                    <textarea
-                      value={knowledgeGoal}
-                      onChange={(event) => setKnowledgeGoal(event.target.value)}
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    className="button button--secondary"
-                    onClick={() => void createKnowledgePlan()}
-                    disabled={
-                      knowledgeBusy ||
-                      !selected ||
-                      !knowledge.policy.enabled ||
-                      !knowledgeGoal.trim()
-                    }
-                  >
-                    Create reviewable draft plan
-                  </button>
-                  <label>
-                    <span>Human review reason</span>
-                    <textarea
-                      value={knowledgeReviewReason}
-                      onChange={(event) => setKnowledgeReviewReason(event.target.value)}
-                    />
-                  </label>
-                </fieldset>
-              </div>
-              <div className="knowledge-panel__records" aria-live="polite">
-                <h3>Bounded plan history</h3>
-                {knowledge.plans
-                  .slice()
-                  .reverse()
-                  .map((plan) => (
-                    <article key={plan.id}>
-                      <div>
-                        <strong>
-                          {plan.target.contentType}/{plan.target.entryId} · {plan.status}
-                        </strong>
-                        <span>{plan.summary}</span>
-                        <ul>
-                          {plan.changes.map((change) => (
-                            <li key={change.fieldPath}>
-                              <code>{change.fieldPath}</code>: {change.value} — {change.rationale}
-                            </li>
-                          ))}
-                        </ul>
-                        <small>
-                          {plan.toolTrace.length} mediated tool call(s) · expires {plan.expiresAt}
-                        </small>
-                      </div>
-                      <div className="knowledge-panel__actions">
-                        {plan.status === 'pending-review' ? (
-                          <>
-                            <button
-                              type="button"
-                              className="button button--secondary"
-                              onClick={() =>
-                                void reviewKnowledgePlan(plan.id, plan.digest, 'approved')
-                              }
-                              disabled={knowledgeBusy}
-                            >
-                              Approve exact plan
-                            </button>
-                            <button
-                              type="button"
-                              className="button button--secondary"
-                              onClick={() =>
-                                void reviewKnowledgePlan(plan.id, plan.digest, 'rejected')
-                              }
-                              disabled={knowledgeBusy}
-                            >
-                              Reject plan
-                            </button>
-                          </>
-                        ) : null}
-                        {plan.status === 'approved' ? (
-                          <button
-                            type="button"
-                            className="button button--danger"
-                            onClick={() => void executeKnowledgePlan(plan.id, plan.digest)}
-                            disabled={knowledgeBusy || selected?.id !== plan.target.entryId}
-                          >
-                            Execute approved draft patch
-                          </button>
-                        ) : null}
-                      </div>
-                    </article>
-                  ))}
-                {knowledge.plans.length === 0 ? (
-                  <p className="empty-copy">No knowledge-agent plan has been retained.</p>
+                {knowledge ? (
+                  <>
+                    <fieldset>
+                      <legend>Disabled-by-default agent policy</legend>
+                      <label>
+                        <span>Policy JSON</span>
+                        <textarea
+                          data-required-operations="agent.manage"
+                          disabled={!can('agent.manage')}
+                          value={knowledgePolicyJson}
+                          onChange={(event) => setKnowledgePolicyJson(event.target.value)}
+                        />
+                      </label>
+                      <button
+                        data-required-operations="agent.manage"
+                        type="button"
+                        className="button button--secondary"
+                        onClick={() => void saveKnowledgePolicy()}
+                        disabled={!can('agent.manage') || knowledgeBusy}
+                      >
+                        Save bounded agent policy
+                      </button>
+                    </fieldset>
+                    <fieldset>
+                      <legend>Plan and human review</legend>
+                      <label>
+                        <span>Goal for the selected saved draft</span>
+                        <textarea
+                          data-required-operations="agent.plan content.read"
+                          disabled={!can('agent.plan', 'content.read')}
+                          value={knowledgeGoal}
+                          onChange={(event) => setKnowledgeGoal(event.target.value)}
+                        />
+                      </label>
+                      <button
+                        data-required-operations="agent.plan content.read"
+                        type="button"
+                        className="button button--secondary"
+                        onClick={() => void createKnowledgePlan()}
+                        disabled={
+                          !can('agent.plan', 'content.read') ||
+                          knowledgeBusy ||
+                          !selected ||
+                          !knowledge.policy.enabled ||
+                          !knowledgeGoal.trim()
+                        }
+                      >
+                        Create reviewable draft plan
+                      </button>
+                      <label>
+                        <span>Human review reason</span>
+                        <textarea
+                          data-required-operations="agent.review content.read"
+                          disabled={!can('agent.review', 'content.read')}
+                          value={knowledgeReviewReason}
+                          onChange={(event) => setKnowledgeReviewReason(event.target.value)}
+                        />
+                      </label>
+                    </fieldset>
+                  </>
                 ) : null}
               </div>
+              {knowledge ? (
+                <div className="knowledge-panel__records" aria-live="polite">
+                  <h3>Bounded plan history</h3>
+                  {knowledge.plans
+                    .slice()
+                    .reverse()
+                    .map((plan) => (
+                      <article key={plan.id}>
+                        <div>
+                          <strong>
+                            {plan.target.contentType}/{plan.target.entryId} · {plan.status}
+                          </strong>
+                          <span>{plan.summary}</span>
+                          <ul>
+                            {plan.changes.map((change) => (
+                              <li key={change.fieldPath}>
+                                <code>{change.fieldPath}</code>: {change.value} — {change.rationale}
+                              </li>
+                            ))}
+                          </ul>
+                          <small>
+                            {plan.toolTrace.length} mediated tool call(s) · expires {plan.expiresAt}
+                          </small>
+                        </div>
+                        <div className="knowledge-panel__actions">
+                          {plan.status === 'pending-review' ? (
+                            <>
+                              <button
+                                data-required-operations="agent.review content.read"
+                                type="button"
+                                className="button button--secondary"
+                                onClick={() =>
+                                  void reviewKnowledgePlan(plan.id, plan.digest, 'approved')
+                                }
+                                disabled={!can('agent.review', 'content.read') || knowledgeBusy}
+                              >
+                                Approve exact plan
+                              </button>
+                              <button
+                                data-required-operations="agent.review content.read"
+                                type="button"
+                                className="button button--secondary"
+                                onClick={() =>
+                                  void reviewKnowledgePlan(plan.id, plan.digest, 'rejected')
+                                }
+                                disabled={!can('agent.review', 'content.read') || knowledgeBusy}
+                              >
+                                Reject plan
+                              </button>
+                            </>
+                          ) : null}
+                          {plan.status === 'approved' ? (
+                            <button
+                              data-required-operations="agent.execute content.draft.update"
+                              type="button"
+                              className="button button--danger"
+                              onClick={() => void executeKnowledgePlan(plan.id, plan.digest)}
+                              disabled={
+                                !can('agent.execute', 'content.draft.update') ||
+                                knowledgeBusy ||
+                                selected?.id !== plan.target.entryId
+                              }
+                            >
+                              Execute approved draft patch
+                            </button>
+                          ) : null}
+                        </div>
+                      </article>
+                    ))}
+                  {knowledge.plans.length === 0 ? (
+                    <p className="empty-copy">No knowledge-agent plan has been retained.</p>
+                  ) : null}
+                </div>
+              ) : null}
             </section>
           ) : null}
-          {activeStudioDestination === 'fleet' && fleet ? (
+          {visibleDestination === 'fleet' && fleet ? (
             <section className="fleet-panel" aria-label="Self-hosted fleet observations">
               <div className="section-heading">
                 <div>
@@ -5408,10 +5903,11 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   </p>
                 </div>
                 <button
+                  data-required-operations="fleet.read"
                   type="button"
                   className="button button--secondary"
                   onClick={() => void refreshFleet()}
-                  disabled={fleetBusy}
+                  disabled={!can('fleet.read') || fleetBusy}
                 >
                   Refresh fleet state
                 </button>
@@ -5427,6 +5923,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   <label>
                     <span>Member ID</span>
                     <input
+                      data-required-operations="fleet.manage"
+                      disabled={!can('fleet.manage')}
                       value={fleetMemberId}
                       onChange={(event) => setFleetMemberId(event.target.value)}
                     />
@@ -5434,6 +5932,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   <label>
                     <span>Display label</span>
                     <input
+                      data-required-operations="fleet.manage"
+                      disabled={!can('fleet.manage')}
                       value={fleetMemberLabel}
                       onChange={(event) => setFleetMemberLabel(event.target.value)}
                     />
@@ -5441,6 +5941,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   <label>
                     <span>Configured adapter ID</span>
                     <input
+                      data-required-operations="fleet.manage"
+                      disabled={!can('fleet.manage')}
                       value={fleetAdapterId}
                       onChange={(event) => setFleetAdapterId(event.target.value)}
                     />
@@ -5448,6 +5950,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   <label>
                     <span>Expected instance ID</span>
                     <input
+                      data-required-operations="fleet.manage"
+                      disabled={!can('fleet.manage')}
                       value={fleetExpectedInstanceId}
                       onChange={(event) => setFleetExpectedInstanceId(event.target.value)}
                     />
@@ -5455,15 +5959,19 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   <label>
                     <span>Expected service version (optional)</span>
                     <input
+                      data-required-operations="fleet.manage"
+                      disabled={!can('fleet.manage')}
                       value={fleetExpectedServiceVersion}
                       onChange={(event) => setFleetExpectedServiceVersion(event.target.value)}
                     />
                   </label>
                   <button
+                    data-required-operations="fleet.manage"
                     type="button"
                     className="button button--secondary"
                     onClick={() => void registerFleetMember()}
                     disabled={
+                      !can('fleet.manage') ||
                       fleetBusy ||
                       !fleetMemberId.trim() ||
                       !fleetMemberLabel.trim() ||
@@ -5511,14 +6019,16 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                         </div>
                         <div className="fleet-panel__actions">
                           <button
+                            data-required-operations="fleet.check"
                             type="button"
                             className="button button--secondary"
                             onClick={() => void checkFleetMember(member.id)}
-                            disabled={fleetBusy || member.state !== 'active'}
+                            disabled={!can('fleet.check') || fleetBusy || member.state !== 'active'}
                           >
                             Check compatibility
                           </button>
                           <button
+                            data-required-operations="fleet.manage"
                             type="button"
                             className="button button--secondary"
                             onClick={() =>
@@ -5527,15 +6037,16 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                                 member.state === 'active' ? 'paused' : 'active',
                               )
                             }
-                            disabled={fleetBusy}
+                            disabled={!can('fleet.manage') || fleetBusy}
                           >
                             {member.state === 'active' ? 'Pause member' : 'Resume member'}
                           </button>
                           <button
+                            data-required-operations="fleet.manage"
                             type="button"
                             className="button button--danger"
                             onClick={() => void removeFleetMember(member.id)}
-                            disabled={fleetBusy}
+                            disabled={!can('fleet.manage') || fleetBusy}
                           >
                             Remove member
                           </button>
@@ -5552,7 +6063,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               </div>
             </section>
           ) : null}
-          {activeStudioDestination === 'federation' && contentFederation ? (
+          {visibleDestination === 'federation' && contentFederation ? (
             <section className="federation-panel" aria-label="Content federation and syndication">
               <div className="section-heading">
                 <div>
@@ -5565,10 +6076,11 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   </p>
                 </div>
                 <button
+                  data-required-operations="federation.read"
                   type="button"
                   className="button button--secondary"
                   onClick={() => void refreshContentFederation()}
-                  disabled={federationBusy}
+                  disabled={!can('federation.read') || federationBusy}
                 >
                   Refresh federation state
                 </button>
@@ -5584,15 +6096,18 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   <label>
                     <span>Offer JSON</span>
                     <textarea
+                      data-required-operations="federation.manage"
+                      disabled={!can('federation.manage')}
                       value={federationOfferJson}
                       onChange={(event) => setFederationOfferJson(event.target.value)}
                     />
                   </label>
                   <button
+                    data-required-operations="federation.manage"
                     type="button"
                     className="button button--secondary"
                     onClick={() => void saveFederationOffer()}
-                    disabled={federationBusy}
+                    disabled={!can('federation.manage') || federationBusy}
                   >
                     Save exact offer version
                   </button>
@@ -5605,6 +6120,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   <label>
                     <span>Local agreement ID</span>
                     <input
+                      data-required-operations="federation.manage"
+                      disabled={!can('federation.manage')}
                       value={federationAgreementId}
                       onChange={(event) => setFederationAgreementId(event.target.value)}
                     />
@@ -5612,15 +6129,20 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   <label>
                     <span>Agreement JSON</span>
                     <textarea
+                      data-required-operations="federation.manage"
+                      disabled={!can('federation.manage')}
                       value={federationAgreementJson}
                       onChange={(event) => setFederationAgreementJson(event.target.value)}
                     />
                   </label>
                   <button
+                    data-required-operations="federation.manage"
                     type="button"
                     className="button button--secondary"
                     onClick={() => void inspectFederationAgreement()}
-                    disabled={federationBusy || !federationAgreementId.trim()}
+                    disabled={
+                      !can('federation.manage') || federationBusy || !federationAgreementId.trim()
+                    }
                   >
                     Inspect and pin signed offer
                   </button>
@@ -5645,6 +6167,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                     </div>
                     <div className="federation-panel__actions">
                       <button
+                        data-required-operations="federation.manage"
                         type="button"
                         className="button button--secondary"
                         onClick={() =>
@@ -5653,16 +6176,17 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                             agreement.state === 'active' ? 'disabled' : 'active',
                           )
                         }
-                        disabled={federationBusy}
+                        disabled={!can('federation.manage') || federationBusy}
                       >
                         {agreement.state === 'active' ? 'Disable agreement' : 'Activate agreement'}
                       </button>
                       {agreement.mode === 'mirror' && agreement.state === 'active' ? (
                         <button
+                          data-required-operations="federation.sync"
                           type="button"
                           className="button button--secondary"
                           onClick={() => void planFederationSync(agreement.id)}
-                          disabled={federationBusy}
+                          disabled={!can('federation.sync') || federationBusy}
                         >
                           Preview mirror sync
                         </button>
@@ -5693,10 +6217,12 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                       <div className="federation-panel__actions">
                         {plan.state === 'preview' ? (
                           <button
+                            data-required-operations="federation.sync"
                             type="button"
                             className="button button--danger"
                             onClick={() => void executeFederationSync(plan.id, plan.digest)}
                             disabled={
+                              !can('federation.sync') ||
                               federationBusy ||
                               plan.effects.some((effect) => effect.action === 'blocked')
                             }
@@ -5713,7 +6239,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               </div>
             </section>
           ) : null}
-          {activeStudioDestination === 'regions' && regional ? (
+          {visibleDestination === 'regions' && regional ? (
             <section
               className="regional-panel"
               aria-label="Regional delivery and failover controls"
@@ -5729,10 +6255,11 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   </p>
                 </div>
                 <button
+                  data-required-operations="regional.read"
                   type="button"
                   className="button button--secondary"
                   onClick={() => void refreshRegional(true)}
-                  disabled={regionalBusy}
+                  disabled={!can('regional.read') || regionalBusy}
                 >
                   Refresh regional state
                 </button>
@@ -5748,15 +6275,18 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   <label>
                     <span>Policy JSON</span>
                     <textarea
+                      data-required-operations="regional.manage"
+                      disabled={!can('regional.manage')}
                       value={regionalPolicyJson}
                       onChange={(event) => setRegionalPolicyJson(event.target.value)}
                     />
                   </label>
                   <button
+                    data-required-operations="regional.manage"
                     type="button"
                     className="button button--secondary"
                     onClick={() => void saveRegionalPolicy()}
-                    disabled={regionalBusy}
+                    disabled={!can('regional.manage') || regionalBusy}
                   >
                     Save topology policy
                   </button>
@@ -5766,15 +6296,20 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   <label>
                     <span>Preflight JSON</span>
                     <textarea
+                      data-required-operations="regional.failover"
+                      disabled={!can('regional.failover')}
                       value={regionalFailoverJson}
                       onChange={(event) => setRegionalFailoverJson(event.target.value)}
                     />
                   </label>
                   <button
+                    data-required-operations="regional.failover"
                     type="button"
                     className="button button--secondary"
                     onClick={() => void preflightRegionalFailover()}
-                    disabled={regionalBusy || regional.state !== 'enabled'}
+                    disabled={
+                      !can('regional.failover') || regionalBusy || regional.state !== 'enabled'
+                    }
                   >
                     Record provider preflight
                   </button>
@@ -5784,12 +6319,16 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   <label>
                     <span>Review reason</span>
                     <textarea
+                      data-required-operations="regional.failover"
+                      disabled={!can('regional.failover')}
                       value={regionalApprovalReason}
                       onChange={(event) => setRegionalApprovalReason(event.target.value)}
                     />
                   </label>
                   <label className="regional-panel__checkbox">
                     <input
+                      data-required-operations="regional.failover"
+                      disabled={!can('regional.failover')}
                       type="checkbox"
                       checked={regionalAcceptDataLoss}
                       onChange={(event) => setRegionalAcceptDataLoss(event.target.checked)}
@@ -5827,32 +6366,39 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                       <div className="regional-panel__actions">
                         {operation.state === 'preview' ? (
                           <button
+                            data-required-operations="regional.failover"
                             type="button"
                             className="button button--secondary"
                             onClick={() =>
                               void approveRegionalFailover(operation.id, operation.digest)
                             }
-                            disabled={regionalBusy || !regionalApprovalReason.trim()}
+                            disabled={
+                              !can('regional.failover') ||
+                              regionalBusy ||
+                              !regionalApprovalReason.trim()
+                            }
                           >
                             Approve as second human
                           </button>
                         ) : null}
                         {operation.state === 'approved' ? (
                           <button
+                            data-required-operations="regional.failover"
                             type="button"
                             className="button button--danger"
                             onClick={() => void executeRegionalFailover(operation.id)}
-                            disabled={regionalBusy}
+                            disabled={!can('regional.failover') || regionalBusy}
                           >
                             Execute approved transition
                           </button>
                         ) : null}
                         {operation.state === 'executing' || operation.state === 'ambiguous' ? (
                           <button
+                            data-required-operations="regional.failover"
                             type="button"
                             className="button button--danger"
                             onClick={() => void reconcileRegionalFailover(operation.id)}
-                            disabled={regionalBusy}
+                            disabled={!can('regional.failover') || regionalBusy}
                           >
                             Reconcile provider state
                           </button>
@@ -5866,7 +6412,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               </div>
             </section>
           ) : null}
-          {activeStudioDestination === 'ai-gateway' && aiGateway ? (
+          {visibleDestination === 'ai-gateway' && aiGateway ? (
             <section className="ai-panel" aria-label="Governed AI gateway workbench">
               <div className="section-heading">
                 <div>
@@ -5879,10 +6425,11 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   </p>
                 </div>
                 <button
+                  data-required-operations="ai.read"
                   type="button"
                   className="button button--secondary"
                   onClick={() => void refreshAiWorkbench(true)}
-                  disabled={aiBusy}
+                  disabled={!can('ai.read') || aiBusy}
                 >
                   Refresh AI policy
                 </button>
@@ -5898,15 +6445,18 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   <label>
                     <span>Policy JSON</span>
                     <textarea
+                      data-required-operations="ai.manage"
+                      disabled={!can('ai.manage')}
                       value={aiPolicyJson}
                       onChange={(event) => setAiPolicyJson(event.target.value)}
                     />
                   </label>
                   <button
+                    data-required-operations="ai.manage"
                     type="button"
                     className="button button--secondary"
                     onClick={() => void saveAiPolicy()}
-                    disabled={aiBusy}
+                    disabled={!can('ai.manage') || aiBusy}
                   >
                     Save AI policy
                   </button>
@@ -5916,24 +6466,28 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   <label>
                     <span>Prompt version JSON</span>
                     <textarea
+                      data-required-operations="ai.manage"
+                      disabled={!can('ai.manage')}
                       value={aiPromptJson}
                       onChange={(event) => setAiPromptJson(event.target.value)}
                     />
                   </label>
                   <div className="ai-panel__actions">
                     <button
+                      data-required-operations="ai.manage"
                       type="button"
                       className="button button--secondary"
                       onClick={() => void createAiPrompt()}
-                      disabled={aiBusy}
+                      disabled={!can('ai.manage') || aiBusy}
                     >
                       Create prompt version
                     </button>
                     <button
+                      data-required-operations="ai.manage"
                       type="button"
                       className="button button--secondary"
                       onClick={() => void activateAiPrompt()}
-                      disabled={aiBusy}
+                      disabled={!can('ai.manage') || aiBusy}
                     >
                       Activate exact prompt
                     </button>
@@ -5944,11 +6498,14 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   <label>
                     <span>Accountable reason</span>
                     <input
+                      data-required-operations="ai.manage"
+                      disabled={!can('ai.manage')}
                       value={aiSwitchReason}
                       onChange={(event) => setAiSwitchReason(event.target.value)}
                     />
                   </label>
                   <button
+                    data-required-operations="ai.manage"
                     type="button"
                     className={
                       aiGateway.state === 'enabled'
@@ -5956,7 +6513,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                         : 'button button--primary'
                     }
                     onClick={() => void changeAiGatewayState()}
-                    disabled={aiBusy}
+                    disabled={!can('ai.manage') || aiBusy}
                   >
                     {aiGateway.state === 'enabled' ? 'Disable AI gateway' : 'Enable AI gateway'}
                   </button>
@@ -5967,15 +6524,18 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   <label>
                     <span>Generation request JSON</span>
                     <textarea
+                      data-required-operations="ai.execute"
+                      disabled={!can('ai.execute')}
                       value={aiRequestJson}
                       onChange={(event) => setAiRequestJson(event.target.value)}
                     />
                   </label>
                   <button
+                    data-required-operations="ai.execute"
                     type="button"
                     className="button button--secondary"
                     onClick={() => void generateAiTest()}
-                    disabled={aiBusy || aiGateway.state !== 'enabled'}
+                    disabled={!can('ai.execute') || aiBusy || aiGateway.state !== 'enabled'}
                   >
                     Generate untrusted output
                   </button>
@@ -6003,15 +6563,18 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                     <label>
                       <span>Authoring policy JSON</span>
                       <textarea
+                        data-required-operations="ai.manage"
+                        disabled={!can('ai.manage')}
                         value={aiAuthoringPolicyJson}
                         onChange={(event) => setAiAuthoringPolicyJson(event.target.value)}
                       />
                     </label>
                     <button
+                      data-required-operations="ai.manage"
                       type="button"
                       className="button button--secondary"
                       onClick={() => void saveAiAuthoringPolicy()}
-                      disabled={aiBusy}
+                      disabled={!can('ai.manage') || aiBusy}
                     >
                       Save authoring policy
                     </button>
@@ -6027,10 +6590,12 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                         : 'none'}
                     </p>
                     <button
+                      data-required-operations="ai.execute content.read"
                       type="button"
                       className="button button--secondary"
                       onClick={() => void createAiAuthoringProposal()}
                       disabled={
+                        !can('ai.execute', 'content.read') ||
                         aiBusy ||
                         dirty ||
                         !selected ||
@@ -6043,6 +6608,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                     <label>
                       <span>Human review reason</span>
                       <input
+                        data-required-operations="ai.review content.read"
+                        disabled={!can('ai.review', 'content.read')}
                         value={aiReviewReason}
                         onChange={(event) => setAiReviewReason(event.target.value)}
                       />
@@ -6077,22 +6644,24 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                               {proposal.status === 'pending-review' ? (
                                 <>
                                   <button
+                                    data-required-operations="ai.review content.read"
                                     type="button"
                                     className="button button--primary"
                                     onClick={() =>
                                       void reviewAiAuthoringProposal(proposal.id, 'approved')
                                     }
-                                    disabled={aiBusy}
+                                    disabled={!can('ai.review', 'content.read') || aiBusy}
                                   >
                                     Approve proposal
                                   </button>
                                   <button
+                                    data-required-operations="ai.review content.read"
                                     type="button"
                                     className="button button--secondary"
                                     onClick={() =>
                                       void reviewAiAuthoringProposal(proposal.id, 'rejected')
                                     }
-                                    disabled={aiBusy}
+                                    disabled={!can('ai.review', 'content.read') || aiBusy}
                                   >
                                     Reject proposal
                                   </button>
@@ -6100,10 +6669,12 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                               ) : null}
                               {proposal.status === 'approved' ? (
                                 <button
+                                  data-required-operations="content.draft.update"
                                   type="button"
                                   className="button button--secondary"
                                   onClick={() => applyAiProposalToEditor(proposal.id)}
                                   disabled={
+                                    !can('content.draft.update') ||
                                     !selected ||
                                     proposal.target.entryId !== selected.id ||
                                     proposal.target.revisionId !== selected.draftRevisionId
@@ -6127,16 +6698,24 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                     <label>
                       <span>Bounded semantic query</span>
                       <input
+                        data-required-operations="ai.read"
+                        disabled={!can('ai.read')}
                         value={aiSemanticText}
                         onChange={(event) => setAiSemanticText(event.target.value)}
                         placeholder="Find related saved drafts"
                       />
                     </label>
                     <button
+                      data-required-operations="ai.read"
                       type="button"
                       className="button button--secondary"
                       onClick={() => void searchAiSemantically()}
-                      disabled={aiBusy || !aiSemanticText.trim() || !aiAuthoring.semantic.enabled}
+                      disabled={
+                        !can('ai.read') ||
+                        aiBusy ||
+                        !aiSemanticText.trim() ||
+                        !aiAuthoring.semantic.enabled
+                      }
                     >
                       Search private semantic index
                     </button>
@@ -6166,7 +6745,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               </div>
             </section>
           ) : null}
-          {activeStudioDestination === 'identity' && identitySnapshot ? (
+          {visibleDestination === 'identity' && identitySnapshot ? (
             <section className="identity-panel" aria-label="Enterprise identity administration">
               <div className="section-heading">
                 <div>
@@ -6180,6 +6759,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   </p>
                 </div>
                 <button
+                  data-required-operations="identity.manage"
+                  disabled={!can('identity.manage')}
                   type="button"
                   className="button button--secondary"
                   onClick={() => void refreshIdentity()}
@@ -6193,6 +6774,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   <label>
                     <span>Adapter ID</span>
                     <input
+                      data-required-operations="identity.manage"
+                      disabled={!can('identity.manage')}
                       value={identityProviderId}
                       onChange={(event) => setIdentityProviderId(event.target.value)}
                       placeholder="workforce-oidc"
@@ -6201,6 +6784,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   <label>
                     <span>Protocol</span>
                     <select
+                      data-required-operations="identity.manage"
+                      disabled={!can('identity.manage')}
                       value={identityProviderProtocol}
                       onChange={(event) =>
                         setIdentityProviderProtocol(event.target.value as 'oidc' | 'saml')
@@ -6213,6 +6798,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   <label>
                     <span>Issuer</span>
                     <input
+                      data-required-operations="identity.manage"
+                      disabled={!can('identity.manage')}
                       value={identityProviderIssuer}
                       onChange={(event) => setIdentityProviderIssuer(event.target.value)}
                       placeholder="https://identity.example.com"
@@ -6221,12 +6808,16 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   <label>
                     <span>Display name</span>
                     <input
+                      data-required-operations="identity.manage"
+                      disabled={!can('identity.manage')}
                       value={identityProviderName}
                       onChange={(event) => setIdentityProviderName(event.target.value)}
                       placeholder="Workforce identity"
                     />
                   </label>
                   <button
+                    data-required-operations="identity.manage"
+                    disabled={!can('identity.manage')}
                     type="button"
                     className="button button--secondary"
                     onClick={() => void configureIdentityProvider()}
@@ -6256,6 +6847,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                     <label key={field}>
                       <span>{label}</span>
                       <input
+                        data-required-operations="identity.manage"
+                        disabled={!can('identity.manage')}
                         type="number"
                         min={1}
                         value={identitySnapshot.policy[field]}
@@ -6277,6 +6870,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   ))}
                   <label className="identity-panel__checkbox">
                     <input
+                      data-required-operations="identity.manage"
+                      disabled={!can('identity.manage')}
                       type="checkbox"
                       checked={identitySnapshot.policy.privilegedStepUpRequired}
                       onChange={(event) =>
@@ -6296,6 +6891,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                     <span>Require WebAuthn step-up for privileged operations</span>
                   </label>
                   <button
+                    data-required-operations="identity.manage"
+                    disabled={!can('identity.manage')}
                     type="button"
                     className="button button--secondary"
                     onClick={() => void saveIdentityPolicy()}
@@ -6309,6 +6906,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   <label>
                     <span>External group</span>
                     <input
+                      data-required-operations="identity.manage"
+                      disabled={!can('identity.manage')}
                       value={identityGroup}
                       onChange={(event) => setIdentityGroup(event.target.value)}
                       placeholder="cms-editors"
@@ -6317,12 +6916,16 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   <label>
                     <span>GridStory role</span>
                     <input
+                      data-required-operations="identity.manage"
+                      disabled={!can('identity.manage')}
                       value={identityRole}
                       onChange={(event) => setIdentityRole(event.target.value)}
                       placeholder="author"
                     />
                   </label>
                   <button
+                    data-required-operations="identity.manage"
+                    disabled={!can('identity.manage')}
                     type="button"
                     className="button button--secondary"
                     onClick={() => void createIdentityMapping()}
@@ -6341,6 +6944,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                 <fieldset>
                   <legend>Emergency and directory access</legend>
                   <button
+                    data-required-operations="identity.manage"
+                    disabled={!can('identity.manage')}
                     type="button"
                     className="button button--secondary"
                     onClick={() => void issueDirectoryCredential()}
@@ -6350,12 +6955,16 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   <label>
                     <span>Incident ID</span>
                     <input
+                      data-required-operations="identity.manage"
+                      disabled={!can('identity.manage')}
                       value={identityIncident}
                       onChange={(event) => setIdentityIncident(event.target.value)}
                       placeholder="INC-2026-001"
                     />
                   </label>
                   <button
+                    data-required-operations="identity.manage"
+                    disabled={!can('identity.manage')}
                     type="button"
                     className="button button--secondary"
                     onClick={() => void issueBreakGlassCredential()}
@@ -6392,7 +7001,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               </div>
             </section>
           ) : null}
-          {activeStudioDestination === 'data-governance' && dataGovernance ? (
+          {visibleDestination === 'data-governance' && dataGovernance ? (
             <section className="data-governance-panel" aria-label="Data governance administration">
               <div className="section-heading">
                 <div>
@@ -6405,6 +7014,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   </p>
                 </div>
                 <button
+                  data-required-operations="governance.read"
+                  disabled={!can('governance.read')}
                   type="button"
                   className="button button--secondary"
                   onClick={() => void refreshDataGovernance()}
@@ -6422,12 +7033,16 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   <label>
                     <span>Customer reference</span>
                     <input
+                      data-required-operations="governance.manage"
+                      disabled={!can('governance.manage')}
                       value={governanceSubjectReference}
                       onChange={(event) => setGovernanceSubjectReference(event.target.value)}
                       placeholder="customer-123"
                     />
                   </label>
                   <button
+                    data-required-operations="governance.manage"
+                    disabled={!can('governance.manage')}
                     type="button"
                     className="button button--secondary"
                     onClick={() => void registerDataSubject()}
@@ -6450,6 +7065,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   <label>
                     <span>Matter</span>
                     <input
+                      data-required-operations="governance.manage"
+                      disabled={!can('governance.manage')}
                       value={governanceHoldMatter}
                       onChange={(event) => setGovernanceHoldMatter(event.target.value)}
                       placeholder="CASE-2026-001"
@@ -6458,11 +7075,15 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   <label>
                     <span>Reason</span>
                     <textarea
+                      data-required-operations="governance.manage"
+                      disabled={!can('governance.manage')}
                       value={governanceHoldReason}
                       onChange={(event) => setGovernanceHoldReason(event.target.value)}
                     />
                   </label>
                   <button
+                    data-required-operations="governance.manage"
+                    disabled={!can('governance.manage')}
                     type="button"
                     className="button button--secondary"
                     onClick={() => void createScopeHold()}
@@ -6480,6 +7101,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                 <fieldset>
                   <legend>Retention execution</legend>
                   <button
+                    data-required-operations="governance.manage"
+                    disabled={!can('governance.manage')}
                     type="button"
                     className="button button--secondary"
                     onClick={() => void previewRetention()}
@@ -6489,6 +7112,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   <label>
                     <span>Independent approval reason</span>
                     <textarea
+                      data-required-operations="governance.execute"
+                      disabled={!can('governance.execute')}
                       value={governanceApprovalReason}
                       onChange={(event) => setGovernanceApprovalReason(event.target.value)}
                     />
@@ -6496,6 +7121,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   <label>
                     <span>Verified backup reference</span>
                     <input
+                      data-required-operations="governance.execute"
+                      disabled={!can('governance.execute')}
                       value={governanceBackupReference}
                       onChange={(event) => setGovernanceBackupReference(event.target.value)}
                       placeholder="backup://tenant/date"
@@ -6504,6 +7131,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   <label>
                     <span>Backup SHA-256</span>
                     <input
+                      data-required-operations="governance.execute"
+                      disabled={!can('governance.execute')}
                       value={governanceBackupSha}
                       onChange={(event) => setGovernanceBackupSha(event.target.value)}
                       placeholder="64 lowercase hex characters"
@@ -6538,6 +7167,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                       </ul>
                       {plan.state === 'preview' ? (
                         <button
+                          data-required-operations="governance.execute"
+                          disabled={!can('governance.execute')}
                           type="button"
                           className="button button--danger"
                           onClick={() => void approveGovernancePlan(plan)}
@@ -6550,7 +7181,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               </div>
             </section>
           ) : null}
-          {activeStudioDestination === 'migrations' && migrationOverview ? (
+          {visibleDestination === 'migrations' && migrationOverview ? (
             <section className="migration-panel" aria-label="CMS migration workbench">
               <div className="section-heading">
                 <div>
@@ -6563,6 +7194,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   </p>
                 </div>
                 <button
+                  data-required-operations="migration.read"
+                  disabled={!can('migration.read')}
                   type="button"
                   className="button button--secondary"
                   onClick={() => void refreshMigrations()}
@@ -6601,6 +7234,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                     <label>
                       <span>Recipe ID</span>
                       <input
+                        data-required-operations="migration.manage"
+                        disabled={!can('migration.manage')}
                         value={migrationRecipeId}
                         onChange={(event) => setMigrationRecipeId(event.target.value)}
                         placeholder="contentful-page"
@@ -6609,6 +7244,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                     <label>
                       <span>Recipe name</span>
                       <input
+                        data-required-operations="migration.manage"
+                        disabled={!can('migration.manage')}
                         value={migrationRecipeName}
                         onChange={(event) => setMigrationRecipeName(event.target.value)}
                         placeholder="Contentful pages"
@@ -6617,6 +7254,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                     <label>
                       <span>Source type</span>
                       <input
+                        data-required-operations="migration.manage"
+                        disabled={!can('migration.manage')}
                         value={migrationSourceType}
                         onChange={(event) => setMigrationSourceType(event.target.value)}
                         placeholder="contentful.Entry.page"
@@ -6625,6 +7264,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                     <label>
                       <span>Target content type</span>
                       <input
+                        data-required-operations="migration.manage"
+                        disabled={!can('migration.manage')}
                         value={migrationTargetType}
                         onChange={(event) => setMigrationTargetType(event.target.value)}
                       />
@@ -6633,6 +7274,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   <label>
                     <span>Field mappings, one per line</span>
                     <textarea
+                      data-required-operations="migration.manage"
+                      disabled={!can('migration.manage')}
                       value={migrationMappings}
                       onChange={(event) => setMigrationMappings(event.target.value)}
                       aria-describedby="migration-mapping-help"
@@ -6644,6 +7287,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   <label>
                     <span>Publication behavior</span>
                     <select
+                      data-required-operations="migration.manage"
+                      disabled={!can('migration.manage')}
                       value={migrationPublicationMode}
                       onChange={(event) =>
                         setMigrationPublicationMode(event.target.value as 'draft' | 'mirror-source')
@@ -6656,6 +7301,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                     </select>
                   </label>
                   <button
+                    data-required-operations="migration.manage"
+                    disabled={!can('migration.manage')}
                     type="button"
                     className="button button--secondary"
                     onClick={() => void saveMigrationRecipe()}
@@ -6668,6 +7315,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   <label>
                     <span>Project ID</span>
                     <input
+                      data-required-operations="migration.manage"
+                      disabled={!can('migration.manage')}
                       value={migrationProjectId}
                       onChange={(event) => setMigrationProjectId(event.target.value)}
                       placeholder="contentful-cutover"
@@ -6676,12 +7325,16 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   <label>
                     <span>Project name</span>
                     <input
+                      data-required-operations="migration.manage"
+                      disabled={!can('migration.manage')}
                       value={migrationProjectName}
                       onChange={(event) => setMigrationProjectName(event.target.value)}
                       placeholder="Website cutover"
                     />
                   </label>
                   <button
+                    data-required-operations="migration.manage"
+                    disabled={!can('migration.manage')}
                     type="button"
                     className="button button--secondary"
                     onClick={() => void createMigrationProject()}
@@ -6708,10 +7361,12 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   {activeMigrationProjectId ? (
                     <div className="migration-panel__actions">
                       <button
+                        data-required-operations="migration.manage"
                         type="button"
                         className="button button--secondary"
                         onClick={() => void previewMigrationSync()}
                         disabled={
+                          !can('migration.manage') ||
                           migrationOverview.projects.find(
                             (project) => project.id === activeMigrationProjectId,
                           )?.state !== 'active'
@@ -6720,6 +7375,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                         Preview next sync
                       </button>
                       <button
+                        data-required-operations="migration.manage"
+                        disabled={!can('migration.manage')}
                         type="button"
                         className="button button--secondary"
                         onClick={() =>
@@ -6739,6 +7396,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                           : 'Pause project'}
                       </button>
                       <button
+                        data-required-operations="migration.execute"
+                        disabled={!can('migration.execute')}
                         type="button"
                         className="button button--primary"
                         onClick={() => void validateMigrationCutover()}
@@ -6792,9 +7451,11 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                               </span>
                             </label>
                             <button
+                              data-required-operations="migration.execute"
                               type="button"
                               className="button button--primary"
                               disabled={
+                                !can('migration.execute') ||
                                 !migrationPlanReviewed ||
                                 plan.counts.blocked > 0 ||
                                 plan.counts.sourceDeleted > 0
@@ -6849,7 +7510,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               </div>
             </section>
           ) : null}
-          {activeStudioDestination === 'marketplace' && marketplaceOverview ? (
+          {visibleDestination === 'marketplace' && marketplaceOverview ? (
             <section className="marketplace-panel" aria-label="Plugin marketplace workbench">
               <div className="section-heading">
                 <div>
@@ -6861,6 +7522,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   </p>
                 </div>
                 <button
+                  data-required-operations="marketplace.read"
+                  disabled={!can('marketplace.read')}
                   type="button"
                   className="button button--secondary"
                   onClick={() => void refreshMarketplace()}
@@ -6881,6 +7544,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                     <label>
                       <span>Publisher ID</span>
                       <input
+                        data-required-operations="marketplace.manage"
+                        disabled={!can('marketplace.manage')}
                         value={marketplacePublisherId}
                         onChange={(event) => setMarketplacePublisherId(event.target.value)}
                         placeholder="example"
@@ -6889,6 +7554,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                     <label>
                       <span>Display name</span>
                       <input
+                        data-required-operations="marketplace.manage"
+                        disabled={!can('marketplace.manage')}
                         value={marketplacePublisherName}
                         onChange={(event) => setMarketplacePublisherName(event.target.value)}
                         placeholder="Example"
@@ -6897,6 +7564,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                     <label>
                       <span>Verified domain</span>
                       <input
+                        data-required-operations="marketplace.manage"
+                        disabled={!can('marketplace.manage')}
                         value={marketplacePublisherDomain}
                         onChange={(event) => setMarketplacePublisherDomain(event.target.value)}
                         placeholder="example.com"
@@ -6905,6 +7574,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                     <label>
                       <span>Signing key ID</span>
                       <input
+                        data-required-operations="marketplace.manage"
+                        disabled={!can('marketplace.manage')}
                         value={marketplacePublisherKeyId}
                         onChange={(event) => setMarketplacePublisherKeyId(event.target.value)}
                       />
@@ -6913,6 +7584,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   <label>
                     <span>Ed25519 public key (PEM)</span>
                     <textarea
+                      data-required-operations="marketplace.manage"
+                      disabled={!can('marketplace.manage')}
                       value={marketplacePublisherPublicKey}
                       onChange={(event) => setMarketplacePublisherPublicKey(event.target.value)}
                       aria-describedby="marketplace-key-help"
@@ -6922,6 +7595,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                     </small>
                   </label>
                   <button
+                    data-required-operations="marketplace.manage"
+                    disabled={!can('marketplace.manage')}
                     type="button"
                     className="button button--secondary"
                     onClick={() => void registerMarketplacePublisher()}
@@ -6934,6 +7609,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   <label>
                     <span>Signed Plugin SDK manifest JSON</span>
                     <textarea
+                      data-required-operations="marketplace.manage"
+                      disabled={!can('marketplace.manage')}
                       value={marketplaceManifestJson}
                       onChange={(event) => setMarketplaceManifestJson(event.target.value)}
                       aria-describedby="marketplace-manifest-help"
@@ -6946,12 +7623,16 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   <label>
                     <span>Opaque artifact scanner reference</span>
                     <input
+                      data-required-operations="marketplace.manage"
+                      disabled={!can('marketplace.manage')}
                       value={marketplaceArtifactReference}
                       onChange={(event) => setMarketplaceArtifactReference(event.target.value)}
                       placeholder="scanner://review-system/package-version"
                     />
                   </label>
                   <button
+                    data-required-operations="marketplace.manage"
+                    disabled={!can('marketplace.manage')}
                     type="button"
                     className="button button--secondary"
                     onClick={() => void submitMarketplaceRelease()}
@@ -6973,6 +7654,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                 <label>
                   <span>Evidence reference</span>
                   <input
+                    data-required-operations="marketplace.review"
+                    disabled={!can('marketplace.review')}
                     value={marketplaceEvidenceReference}
                     onChange={(event) => setMarketplaceEvidenceReference(event.target.value)}
                     placeholder="publisher-review:ticket-123"
@@ -6981,6 +7664,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                 <label>
                   <span>Reason</span>
                   <input
+                    data-required-operations="marketplace.review"
+                    disabled={!can('marketplace.review')}
                     value={marketplaceReason}
                     onChange={(event) => setMarketplaceReason(event.target.value)}
                     placeholder="What was reviewed and why this decision is safe"
@@ -7029,6 +7714,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                         {publisher.state === 'pending' ? (
                           <>
                             <button
+                              data-required-operations="marketplace.manage"
+                              disabled={!can('marketplace.manage')}
                               type="button"
                               className="button button--secondary"
                               onClick={() => void issueMarketplaceChallenge(publisher.id)}
@@ -7036,6 +7723,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                               Issue DNS challenge
                             </button>
                             <button
+                              data-required-operations="marketplace.manage"
+                              disabled={!can('marketplace.manage')}
                               type="button"
                               className="button button--secondary"
                               onClick={() => void verifyMarketplaceDomain(publisher.id)}
@@ -7043,9 +7732,10 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                               Verify TXT proof
                             </button>
                             <button
+                              data-required-operations="marketplace.review"
                               type="button"
                               className="button button--primary"
-                              disabled={!publisher.domainVerifiedAt}
+                              disabled={!can('marketplace.review') || !publisher.domainVerifiedAt}
                               onClick={() => void approveMarketplacePublisher(publisher.id)}
                             >
                               Approve publisher
@@ -7054,6 +7744,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                         ) : null}
                         {publisher.state === 'verified' ? (
                           <button
+                            data-required-operations="marketplace.review"
+                            disabled={!can('marketplace.review')}
                             type="button"
                             className="button button--danger"
                             onClick={() => void suspendMarketplacePublisher(publisher.id)}
@@ -7149,6 +7841,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                         <div className="marketplace-card__actions">
                           {release.state === 'submitted' ? (
                             <button
+                              data-required-operations="marketplace.review"
+                              disabled={!can('marketplace.review')}
                               type="button"
                               className="button button--secondary"
                               onClick={() => void reviewMarketplaceRelease(release.id)}
@@ -7159,6 +7853,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                           {release.state === 'reviewed' ? (
                             <>
                               <button
+                                data-required-operations="marketplace.review"
+                                disabled={!can('marketplace.review')}
                                 type="button"
                                 className="button button--primary"
                                 onClick={() => void decideMarketplaceRelease(release.id, 'approve')}
@@ -7166,6 +7862,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                                 Approve exact release
                               </button>
                               <button
+                                data-required-operations="marketplace.review"
+                                disabled={!can('marketplace.review')}
                                 type="button"
                                 className="button button--danger"
                                 onClick={() => void decideMarketplaceRelease(release.id, 'reject')}
@@ -7177,6 +7875,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                           {release.state === 'approved' ? (
                             <>
                               <button
+                                data-required-operations="marketplace.read plugin.manage"
+                                disabled={!can('marketplace.read', 'plugin.manage')}
                                 type="button"
                                 className="button button--secondary"
                                 onClick={() => void installMarketplaceRelease(release.id)}
@@ -7184,6 +7884,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                                 Install disabled · no grants
                               </button>
                               <button
+                                data-required-operations="marketplace.review"
+                                disabled={!can('marketplace.review')}
                                 type="button"
                                 className="button button--danger"
                                 onClick={() => void decideMarketplaceRelease(release.id, 'yank')}
@@ -7203,7 +7905,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               </div>
             </section>
           ) : null}
-          {activeStudioDestination === 'targeting' && personalization ? (
+          {visibleDestination === 'targeting' && personalization ? (
             <section
               className="personalization-panel"
               aria-label="Personalization targeting workbench"
@@ -7220,6 +7922,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   </p>
                 </div>
                 <button
+                  data-required-operations="personalization.read"
+                  disabled={!can('personalization.read')}
                   type="button"
                   className="button button--secondary"
                   onClick={() => void refreshPersonalization()}
@@ -7238,6 +7942,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   <label>
                     <span>Targeting configuration JSON</span>
                     <textarea
+                      data-required-operations="personalization.manage"
+                      disabled={!can('personalization.manage')}
                       value={personalizationConfigurationJson}
                       onChange={(event) => {
                         setPersonalizationConfigurationJson(event.target.value);
@@ -7252,6 +7958,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   </small>
                   <div className="personalization-panel__actions">
                     <button
+                      data-required-operations="personalization.manage"
+                      disabled={!can('personalization.manage')}
                       type="button"
                       className="button button--secondary"
                       onClick={() => void savePersonalizationDraft()}
@@ -7259,10 +7967,11 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                       Save targeting draft
                     </button>
                     <button
+                      data-required-operations="personalization.manage"
                       type="button"
                       className="button button--primary"
                       onClick={() => void publishPersonalization()}
-                      disabled={personalizationConfigurationDirty}
+                      disabled={!can('personalization.manage') || personalizationConfigurationDirty}
                     >
                       Publish exact draft
                     </button>
@@ -7273,6 +7982,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   <label>
                     <span>Hypothetical decision JSON</span>
                     <textarea
+                      data-required-operations="personalization.preview"
+                      disabled={!can('personalization.preview')}
                       value={personalizationPreviewJson}
                       onChange={(event) => setPersonalizationPreviewJson(event.target.value)}
                       aria-describedby="personalization-preview-help"
@@ -7283,6 +7994,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                     override. No protected user is searched for or impersonated.
                   </small>
                   <button
+                    data-required-operations="personalization.preview"
+                    disabled={!can('personalization.preview')}
                     type="button"
                     className="button button--secondary"
                     onClick={() => void previewPersonalizationDecision()}
@@ -7329,7 +8042,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               </div>
             </section>
           ) : null}
-          {activeStudioDestination === 'experiments' && experimentOverview ? (
+          {visibleDestination === 'experiments' && experimentOverview ? (
             <section className="experiment-panel" aria-label="Content experiments workbench">
               <div className="section-heading">
                 <div>
@@ -7344,6 +8057,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   </p>
                 </div>
                 <button
+                  data-required-operations="experiment.read"
+                  disabled={!can('experiment.read')}
                   type="button"
                   className="button button--secondary"
                   onClick={() => void refreshExperiments()}
@@ -7376,9 +8091,13 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   <label>
                     <span>Experiment design JSON</span>
                     <textarea
+                      data-required-operations="experiment.manage"
                       value={experimentDesignJson}
                       onChange={(event) => setExperimentDesignJson(event.target.value)}
-                      disabled={activeExperiment !== null && activeExperiment.state !== 'draft'}
+                      disabled={
+                        !can('experiment.manage') ||
+                        (activeExperiment !== null && activeExperiment.state !== 'draft')
+                      }
                       aria-describedby="experiment-design-help"
                     />
                   </label>
@@ -7387,60 +8106,74 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                     active experiments cannot overlap the same resource and audience placement.
                   </small>
                   <button
+                    data-required-operations="experiment.manage"
                     type="button"
                     className="button button--secondary"
                     onClick={() => void saveExperimentDraft()}
-                    disabled={activeExperiment !== null && activeExperiment.state !== 'draft'}
+                    disabled={
+                      !can('experiment.manage') ||
+                      (activeExperiment !== null && activeExperiment.state !== 'draft')
+                    }
                   >
                     Save experiment draft
                   </button>
                   <label>
                     <span>Lifecycle or promotion reason</span>
                     <input
+                      data-required-operations="experiment.manage"
+                      disabled={!can('experiment.manage')}
                       value={experimentReason}
                       onChange={(event) => setExperimentReason(event.target.value)}
                     />
                   </label>
                   <div className="experiment-panel__actions">
                     <button
+                      data-required-operations="experiment.manage"
                       type="button"
                       className="button button--primary"
                       onClick={() => void transitionExperiment('start')}
-                      disabled={activeExperiment?.state !== 'draft'}
+                      disabled={!can('experiment.manage') || activeExperiment?.state !== 'draft'}
                     >
                       Start experiment
                     </button>
                     <button
+                      data-required-operations="experiment.manage"
                       type="button"
                       className="button button--secondary"
                       onClick={() => void transitionExperiment('pause')}
-                      disabled={activeExperiment?.state !== 'running'}
+                      disabled={!can('experiment.manage') || activeExperiment?.state !== 'running'}
                     >
                       Pause experiment
                     </button>
                     <button
+                      data-required-operations="experiment.manage"
                       type="button"
                       className="button button--secondary"
                       onClick={() => void transitionExperiment('resume')}
-                      disabled={activeExperiment?.state !== 'paused'}
+                      disabled={!can('experiment.manage') || activeExperiment?.state !== 'paused'}
                     >
                       Resume experiment
                     </button>
                     <button
+                      data-required-operations="experiment.manage"
                       type="button"
                       className="button button--secondary"
                       onClick={() => void transitionExperiment('complete')}
                       disabled={
-                        !activeExperiment || !['running', 'paused'].includes(activeExperiment.state)
+                        !can('experiment.manage') ||
+                        !activeExperiment ||
+                        !['running', 'paused'].includes(activeExperiment.state)
                       }
                     >
                       Complete experiment
                     </button>
                     <button
+                      data-required-operations="experiment.manage"
                       type="button"
                       className="button button--danger"
                       onClick={() => void transitionExperiment('cancel')}
                       disabled={
+                        !can('experiment.manage') ||
                         !activeExperiment ||
                         !['draft', 'running', 'paused'].includes(activeExperiment.state)
                       }
@@ -7456,6 +8189,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   <label>
                     <span>Aggregate metric snapshot JSON</span>
                     <textarea
+                      data-required-operations="experiment.metrics"
+                      disabled={!can('experiment.metrics')}
                       value={experimentMetricSnapshotJson}
                       onChange={(event) => setExperimentMetricSnapshotJson(event.target.value)}
                       aria-describedby="experiment-metric-help"
@@ -7466,10 +8201,12 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                     totals are bounded aggregates; the digest links the retained external evidence.
                   </small>
                   <button
+                    data-required-operations="experiment.metrics"
                     type="button"
                     className="button button--secondary"
                     onClick={() => void recordExperimentMetrics()}
                     disabled={
+                      !can('experiment.metrics') ||
                       !activeExperiment ||
                       !['running', 'paused', 'completed'].includes(activeExperiment.state)
                     }
@@ -7479,6 +8216,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   <label>
                     <span>Promotion snapshot ID</span>
                     <input
+                      data-required-operations="experiment.promote"
+                      disabled={!can('experiment.promote')}
                       value={experimentPromotionSnapshotId}
                       onChange={(event) => setExperimentPromotionSnapshotId(event.target.value)}
                     />
@@ -7486,15 +8225,18 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   <label>
                     <span>Supported winner variant</span>
                     <input
+                      data-required-operations="experiment.promote"
+                      disabled={!can('experiment.promote')}
                       value={experimentWinnerVariant}
                       onChange={(event) => setExperimentWinnerVariant(event.target.value)}
                     />
                   </label>
                   <button
+                    data-required-operations="experiment.promote"
                     type="button"
                     className="button button--primary"
                     onClick={() => void promoteExperimentWinner()}
-                    disabled={activeExperiment?.state !== 'completed'}
+                    disabled={!can('experiment.promote') || activeExperiment?.state !== 'completed'}
                   >
                     Promote winner to draft
                   </button>
@@ -7538,13 +8280,15 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               </div>
             </section>
           ) : null}
-          {activeStudioDestination === 'components' && componentGovernance ? (
+          {visibleDestination === 'components' && componentGovernance ? (
             <section className="governance-panel" aria-label="Component governance">
               <div className="governance-panel__heading">
                 <span className="kicker">Component governance</span>
                 <label>
                   <span>Inspect component</span>
                   <select
+                    data-required-operations="component.read"
+                    disabled={!can('component.read')}
                     value={componentGovernance.componentId}
                     onChange={(event) => void inspectComponent(event.target.value)}
                   >
@@ -7596,10 +8340,13 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   ).values(),
                 ].map((location) => (
                   <button
+                    data-required-operations="content.draft.update"
                     type="button"
                     className="button button--secondary"
                     key={location.entryId}
-                    disabled={!componentGovernance.migration.ready || busy}
+                    disabled={
+                      !can('content.draft.update') || !componentGovernance.migration.ready || busy
+                    }
                     onClick={() =>
                       void migrateComponentEntry(
                         location.entryId,
@@ -7614,7 +8361,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               </div>
             </section>
           ) : null}
-          {activeStudioDestination === 'quality' && qualityReport ? (
+          {visibleDestination === 'quality' && qualityReport ? (
             <section className="quality-panel" aria-label="Content quality report">
               <div className="quality-panel__score">
                 <span className="kicker">Publish quality</span>
@@ -7631,10 +8378,11 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   {qualityReport.bypassed ? ' · role bypass applied' : ''}
                 </p>
                 <button
+                  data-required-operations="quality.read"
                   type="button"
                   className="button button--secondary"
                   onClick={() => void runQuality()}
-                  disabled={busy}
+                  disabled={!can('quality.read') || busy}
                 >
                   Re-run checks
                 </button>
@@ -7660,7 +8408,7 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
               )}
             </section>
           ) : null}{' '}
-          {activeStudioDestination === 'pages' ? (
+          {visibleDestination === 'pages' ? (
             <div className="studio-workspace" aria-busy={busy}>
               <aside className="content-sidebar" aria-label="Content entries">
                 <div className="sidebar-heading">
@@ -7669,10 +8417,11 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                     <h1>Pages</h1>
                   </div>
                   <button
+                    data-required-operations="pages.create"
                     type="button"
                     className="icon-button"
                     onClick={() => void createPage()}
-                    disabled={busy || entryLoading}
+                    disabled={!can('pages.create') || !activeSchema || busy || entryLoading}
                     aria-label="Create page"
                   >
                     +
@@ -7681,6 +8430,8 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                 <nav>
                   {entries.map((entry) => (
                     <button
+                      data-required-operations="content.read schema.read"
+                      disabled={!can('content.read', 'schema.read')}
                       type="button"
                       className={`entry-card ${selected?.id === entry.id ? 'entry-card--active' : ''}`}
                       key={entry.id}
@@ -7693,11 +8444,26 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                   ))}
                 </nav>
                 {entries.length === 0 && !busy ? (
-                  <p className="empty-copy">No pages yet. Create the first one.</p>
+                  <p className="empty-copy">
+                    {can('pages.create')
+                      ? 'No pages yet. Create the first one.'
+                      : 'No pages are available.'}
+                  </p>
                 ) : null}
               </aside>
 
               <main className="editor-panel" id="studio-editor" tabIndex={-1}>
+                {!can('content.read', 'schema.read') ? (
+                  <p className="empty-copy" role="status">
+                    Page editing is unavailable with your current access. Listing permission does
+                    not grant access to entry details or schemas.
+                  </p>
+                ) : null}
+                {draft && !can('content.draft.update') ? (
+                  <p className="notice notice--info" role="status">
+                    Read-only page. You do not have permission to edit this draft.
+                  </p>
+                ) : null}
                 {notice ? (
                   <div className={`notice notice--${notice.tone}`} role="status">
                     {notice.message}
@@ -7720,7 +8486,10 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                     <button
                       type="button"
                       className="button button--secondary"
-                      onClick={() => setReloadToken((current) => current + 1)}
+                      onClick={() => {
+                        setBootstrapped(false);
+                        setReloadToken((current) => current + 1);
+                      }}
                     >
                       Try again
                     </button>
@@ -7737,243 +8506,470 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                       </div>
                       <span className={`status status--${selected.status}`}>{selected.status}</span>
                     </section>
-                    <section className="document-fields" aria-label="Page fields">
-                      {activeSchema?.fields.map((field) => {
-                        if (field.type === 'component-tree') return null;
-                        return (
-                          <SchemaFieldControl
-                            key={field.id}
-                            definition={field}
-                            value={draft[field.name]}
-                            entries={entries}
-                            assets={assetChoices}
-                            onChange={(value) =>
-                              changeDraft((current) => ({ ...current, [field.name]: value }))
-                            }
-                          />
-                        );
-                      })}
-                    </section>
-
-                    <section className="workflow-panel" aria-label="Editorial workflow">
-                      <div className="section-heading">
-                        <div>
-                          <span className="kicker">Governance</span>
-                          <h2>Editorial workflow</h2>
-                          <p>
-                            {activeWorkflow?.name ?? 'Configured workflow'} · version{' '}
-                            {workflowInstance?.workflowVersion ?? '—'}
-                          </p>
+                    <fieldset
+                      disabled={!can('content.draft.update')}
+                      style={{ display: 'contents' }}
+                    >
+                      <section className="document-fields" aria-label="Page fields">
+                        {activeSchema?.fields.map((field) => {
+                          if (field.type === 'component-tree') return null;
+                          return (
+                            <SchemaFieldControl
+                              key={field.id}
+                              definition={field}
+                              value={draft[field.name]}
+                              entries={entries}
+                              assets={assetChoices}
+                              onChange={(value) =>
+                                changeDraft((current) => ({ ...current, [field.name]: value }))
+                              }
+                            />
+                          );
+                        })}
+                      </section>
+                    </fieldset>
+                    {can('workflow.read') ? (
+                      <section className="workflow-panel" aria-label="Editorial workflow">
+                        <div className="section-heading">
+                          <div>
+                            <span className="kicker">Governance</span>
+                            <h2>Editorial workflow</h2>
+                            <p>
+                              {activeWorkflow?.name ?? 'Configured workflow'} · version{' '}
+                              {workflowInstance?.workflowVersion ?? '—'}
+                            </p>
+                          </div>
+                          <span
+                            className={`workflow-state workflow-state--${workflowState?.kind ?? 'draft'}`}
+                          >
+                            {workflowState?.label ?? workflowInstance?.stateId ?? 'Loading'}
+                          </span>
                         </div>
-                        <span
-                          className={`workflow-state workflow-state--${workflowState?.kind ?? 'draft'}`}
-                        >
-                          {workflowState?.label ?? workflowInstance?.stateId ?? 'Loading'}
-                        </span>
-                      </div>
 
-                      <div className="workflow-grid">
-                        <div className="workflow-actions">
-                          <h3>Available actions</h3>
-                          <div className="workflow-action-row">
-                            {availableWorkflowTransitions
-                              .filter(
-                                (transition) => transition.id !== publishWorkflowTransition?.id,
-                              )
-                              .map((transition) => (
+                        <div className="workflow-grid">
+                          <div className="workflow-actions">
+                            <h3>Available actions</h3>
+                            <div className="workflow-action-row">
+                              {availableWorkflowTransitions
+                                .filter(
+                                  (transition) => transition.id !== publishWorkflowTransition?.id,
+                                )
+                                .map((transition) => (
+                                  <button
+                                    data-required-operations="workflow.transition"
+                                    key={transition.id}
+                                    type="button"
+                                    className="button button--secondary"
+                                    disabled={
+                                      !can('workflow.transition') ||
+                                      busy ||
+                                      workflowInstance?.pendingApproval !== undefined
+                                    }
+                                    onClick={() => void runWorkflowTransition(transition.id)}
+                                  >
+                                    {transition.label}
+                                  </button>
+                                ))}
+                              {availableWorkflowTransitions.length === 0 ? (
+                                <span className="empty-copy">
+                                  Save a new draft to restart editorial review.
+                                </span>
+                              ) : null}
+                            </div>
+
+                            {workflowInstance?.pendingApproval ? (
+                              <article className="approval-card">
+                                <div>
+                                  <strong>Approval pending</strong>
+                                  <p>
+                                    Requested by {workflowInstance.pendingApproval.requestedBy}
+                                    {workflowInstance.pendingApproval.dueAt
+                                      ? ` · due ${new Date(
+                                          workflowInstance.pendingApproval.dueAt,
+                                        ).toLocaleString()}`
+                                      : ''}
+                                  </p>
+                                  <small>
+                                    {
+                                      workflowInstance.pendingApproval.decisions.filter(
+                                        (decision) => decision.decision === 'approved',
+                                      ).length
+                                    }{' '}
+                                    approvals recorded
+                                    {workflowInstance.pendingApproval.escalatedAt
+                                      ? ' · escalated'
+                                      : ''}
+                                  </small>
+                                </div>
+                                <div className="workflow-action-row">
+                                  <button
+                                    data-required-operations="workflow.approve"
+                                    type="button"
+                                    className="button button--primary"
+                                    disabled={!can('workflow.approve') || busy || dirty}
+                                    onClick={() => void decideWorkflow('approved')}
+                                  >
+                                    Approve
+                                  </button>
+                                  <button
+                                    data-required-operations="workflow.approve"
+                                    type="button"
+                                    className="button button--secondary"
+                                    disabled={!can('workflow.approve') || busy || dirty}
+                                    onClick={() => void decideWorkflow('rejected')}
+                                  >
+                                    Reject and request changes
+                                  </button>
+                                </div>
+                              </article>
+                            ) : null}
+
+                            {publishWorkflowTransition ? (
+                              <div className="workflow-scheduler">
+                                <h3>Schedule publication</h3>
+                                <label className="gs-field">
+                                  <span>Date and time</span>
+                                  <input
+                                    data-required-operations="workflow.schedule"
+                                    disabled={!can('workflow.schedule')}
+                                    type="datetime-local"
+                                    value={workflowScheduleAt}
+                                    onChange={(event) => setWorkflowScheduleAt(event.target.value)}
+                                  />
+                                </label>
+                                <label className="gs-field">
+                                  <span>IANA time zone</span>
+                                  <input
+                                    data-required-operations="workflow.schedule"
+                                    disabled={!can('workflow.schedule')}
+                                    value={workflowTimeZone}
+                                    onChange={(event) => setWorkflowTimeZone(event.target.value)}
+                                  />
+                                </label>
                                 <button
-                                  key={transition.id}
+                                  data-required-operations="workflow.schedule"
                                   type="button"
                                   className="button button--secondary"
-                                  disabled={busy || workflowInstance?.pendingApproval !== undefined}
-                                  onClick={() => void runWorkflowTransition(transition.id)}
+                                  disabled={
+                                    !can('workflow.schedule') || !workflowScheduleAt || busy
+                                  }
+                                  onClick={() =>
+                                    void scheduleWorkflowTransition(publishWorkflowTransition.id)
+                                  }
                                 >
-                                  {transition.label}
+                                  Schedule publish
                                 </button>
-                              ))}
-                            {availableWorkflowTransitions.length === 0 ? (
-                              <span className="empty-copy">
-                                Save a new draft to restart editorial review.
-                              </span>
+                              </div>
                             ) : null}
                           </div>
 
-                          {workflowInstance?.pendingApproval ? (
-                            <article className="approval-card">
-                              <div>
-                                <strong>Approval pending</strong>
-                                <p>
-                                  Requested by {workflowInstance.pendingApproval.requestedBy}
-                                  {workflowInstance.pendingApproval.dueAt
-                                    ? ` · due ${new Date(
-                                        workflowInstance.pendingApproval.dueAt,
-                                      ).toLocaleString()}`
-                                    : ''}
-                                </p>
-                                <small>
-                                  {
-                                    workflowInstance.pendingApproval.decisions.filter(
-                                      (decision) => decision.decision === 'approved',
-                                    ).length
-                                  }{' '}
-                                  approvals recorded
-                                  {workflowInstance.pendingApproval.escalatedAt
-                                    ? ' · escalated'
-                                    : ''}
-                                </small>
-                              </div>
-                              <div className="workflow-action-row">
-                                <button
-                                  type="button"
-                                  className="button button--primary"
-                                  disabled={busy || dirty}
-                                  onClick={() => void decideWorkflow('approved')}
-                                >
-                                  Approve
-                                </button>
-                                <button
-                                  type="button"
-                                  className="button button--secondary"
-                                  disabled={busy || dirty}
-                                  onClick={() => void decideWorkflow('rejected')}
-                                >
-                                  Reject and request changes
-                                </button>
-                              </div>
-                            </article>
-                          ) : null}
-
-                          {publishWorkflowTransition ? (
-                            <div className="workflow-scheduler">
-                              <h3>Schedule publication</h3>
-                              <label className="gs-field">
-                                <span>Date and time</span>
-                                <input
-                                  type="datetime-local"
-                                  value={workflowScheduleAt}
-                                  onChange={(event) => setWorkflowScheduleAt(event.target.value)}
-                                />
-                              </label>
-                              <label className="gs-field">
-                                <span>IANA time zone</span>
-                                <input
-                                  value={workflowTimeZone}
-                                  onChange={(event) => setWorkflowTimeZone(event.target.value)}
-                                />
-                              </label>
-                              <button
-                                type="button"
-                                className="button button--secondary"
-                                disabled={!workflowScheduleAt || busy}
-                                onClick={() =>
-                                  void scheduleWorkflowTransition(publishWorkflowTransition.id)
+                          <div className="workflow-activity">
+                            <h3>Schedules and notifications</h3>
+                            {workflowInstance?.schedules.length ? (
+                              <ul className="workflow-list">
+                                {workflowInstance.schedules
+                                  .slice()
+                                  .reverse()
+                                  .slice(0, 4)
+                                  .map((schedule) => (
+                                    <li key={schedule.id}>
+                                      <div>
+                                        <strong>{schedule.transitionId}</strong>
+                                        <small>
+                                          {new Date(schedule.runAt).toLocaleString()} ·{' '}
+                                          {schedule.timeZone} · {schedule.state}
+                                        </small>
+                                      </div>
+                                      {schedule.state === 'pending' ? (
+                                        <button
+                                          data-required-operations="workflow.schedule"
+                                          type="button"
+                                          className="button button--danger button--compact"
+                                          disabled={!can('workflow.schedule') || busy}
+                                          onClick={() => void cancelWorkflowSchedule(schedule.id)}
+                                        >
+                                          Cancel
+                                        </button>
+                                      ) : null}
+                                    </li>
+                                  ))}
+                              </ul>
+                            ) : null}
+                            {workflowInstance?.notifications.length ? (
+                              <ol className="workflow-list workflow-notifications">
+                                {workflowInstance.notifications
+                                  .slice()
+                                  .reverse()
+                                  .slice(0, 5)
+                                  .map((notification) => (
+                                    <li key={notification.id}>
+                                      <div>
+                                        <strong>{notification.message}</strong>
+                                        <small>
+                                          {new Date(notification.createdAt).toLocaleString()}
+                                          {notification.audienceRoles.length
+                                            ? ` · ${notification.audienceRoles.join(', ')}`
+                                            : ''}
+                                        </small>
+                                      </div>
+                                    </li>
+                                  ))}
+                              </ol>
+                            ) : (
+                              <p className="empty-copy">No workflow activity yet.</p>
+                            )}
+                          </div>
+                        </div>
+                      </section>
+                    ) : null}
+                    {can('collaboration.read') ? (
+                      <section className="collaboration-panel" aria-label="Collaboration workspace">
+                        <div className="section-heading">
+                          <div>
+                            <span className="kicker">Collaboration</span>
+                            <h2>Branches, suggestions, and comments</h2>
+                          </div>
+                          <ul className="presence-list" aria-label="Active editors">
+                            {collaboration.presence.length > 0 ? (
+                              collaboration.presence.map((participant) => (
+                                <li className="presence-chip" key={participant.actorId}>
+                                  {participant.displayName}
+                                  {participant.field ? ` · ${participant.field}` : ''}
+                                </li>
+                              ))
+                            ) : (
+                              <li className="presence-chip presence-chip--idle">
+                                No active editors
+                              </li>
+                            )}
+                          </ul>
+                        </div>
+                        <div className="collaboration-workbench">
+                          <div className="collaboration-controls">
+                            <label className="gs-field">
+                              <span>Working branch</span>
+                              <select
+                                value={collaborationBranchId}
+                                onChange={(event) => setCollaborationBranchId(event.target.value)}
+                              >
+                                {collaboration.branches.map((candidate) => (
+                                  <option key={candidate.id} value={candidate.id}>
+                                    {candidate.name} · {candidate.status}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="gs-field">
+                              <span>Shared field or block</span>
+                              <select
+                                value={collaborationTargetField}
+                                onChange={(event) =>
+                                  setCollaborationTargetField(event.target.value)
                                 }
                               >
-                                Schedule publish
-                              </button>
-                            </div>
-                          ) : null}
-                        </div>
+                                <option value="">Choose a field</option>
+                                {activeSchema?.fields.map((field) => (
+                                  <option key={field.id} value={field.name}>
+                                    {field.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <button
+                              data-required-operations="collaboration.write"
+                              type="button"
+                              className="button button--secondary"
+                              disabled={
+                                !can('collaboration.write') ||
+                                !collaborationTargetField ||
+                                selectedCollaborationValue === undefined
+                              }
+                              onClick={() => void shareCollaborationValue()}
+                            >
+                              Share current value
+                            </button>
+                            <span className="collaboration-version">
+                              {collaboration.operations.length} operations · document v
+                              {collaboration.version}
+                            </span>
+                          </div>
 
-                        <div className="workflow-activity">
-                          <h3>Schedules and notifications</h3>
-                          {workflowInstance?.schedules.length ? (
-                            <ul className="workflow-list">
-                              {workflowInstance.schedules
-                                .slice()
-                                .reverse()
-                                .slice(0, 4)
-                                .map((schedule) => (
-                                  <li key={schedule.id}>
-                                    <div>
-                                      <strong>{schedule.transitionId}</strong>
-                                      <small>
-                                        {new Date(schedule.runAt).toLocaleString()} ·{' '}
-                                        {schedule.timeZone} · {schedule.state}
-                                      </small>
-                                    </div>
-                                    {schedule.state === 'pending' ? (
+                          <div className="collaboration-create-row">
+                            <label className="gs-field">
+                              <span>New branch from current</span>
+                              <input
+                                data-required-operations="collaboration.write"
+                                disabled={!can('collaboration.write')}
+                                placeholder="Campaign revision"
+                                value={collaborationBranchName}
+                                onChange={(event) => setCollaborationBranchName(event.target.value)}
+                              />
+                            </label>
+                            <button
+                              data-required-operations="collaboration.write"
+                              type="button"
+                              className="button button--secondary"
+                              disabled={
+                                !can('collaboration.write') || !collaborationBranchName.trim()
+                              }
+                              onClick={() => void createCollaborationBranch()}
+                            >
+                              Create branch
+                            </button>
+                            <button
+                              data-required-operations="collaboration.write"
+                              type="button"
+                              className="button button--primary"
+                              disabled={
+                                !can('collaboration.write') ||
+                                collaborationBranchId === 'main' ||
+                                collaboration.branches.find(
+                                  (candidate) => candidate.id === collaborationBranchId,
+                                )?.status !== 'open'
+                              }
+                              onClick={() => void mergeCollaborationBranch()}
+                            >
+                              Merge into Main
+                            </button>
+                          </div>
+
+                          <div className="collaboration-create-row collaboration-suggestion-composer">
+                            <label className="gs-field">
+                              <span>Proposed value</span>
+                              <textarea
+                                data-required-operations="collaboration.write"
+                                disabled={!can('collaboration.write')}
+                                rows={2}
+                                placeholder="Suggest a replacement value for the selected field or block"
+                                value={collaborationSuggestionValue}
+                                onChange={(event) =>
+                                  setCollaborationSuggestionValue(event.target.value)
+                                }
+                              />
+                            </label>
+                            <button
+                              data-required-operations="collaboration.write"
+                              type="button"
+                              className="button button--secondary"
+                              disabled={
+                                !can('collaboration.write') ||
+                                !collaborationTargetField ||
+                                !collaborationSuggestionValue.trim()
+                              }
+                              onClick={() => void createCollaborationSuggestion()}
+                            >
+                              Open suggestion
+                            </button>
+                          </div>
+
+                          {collaboration.suggestions.length > 0 ? (
+                            <section className="collaboration-review-list" aria-label="Suggestions">
+                              <h3>Suggestions</h3>
+                              {collaboration.suggestions.map((suggestion) => (
+                                <article key={suggestion.id} className="collaboration-review-card">
+                                  <div>
+                                    <strong>{suggestion.target.field}</strong>
+                                    {suggestion.target.nodeId
+                                      ? ` · ${suggestion.target.nodeId}`
+                                      : ''}
+                                    <p>{collaborationValueLabel(suggestion.value)}</p>
+                                    <small>
+                                      {suggestion.createdBy} · {suggestion.status}
+                                    </small>
+                                  </div>
+                                  {suggestion.status === 'open' ? (
+                                    <div className="collaboration-card-actions">
                                       <button
+                                        data-required-operations="collaboration.write"
+                                        disabled={!can('collaboration.write')}
+                                        type="button"
+                                        className="button button--primary button--compact"
+                                        onClick={() =>
+                                          void reviewCollaborationSuggestion(
+                                            suggestion.id,
+                                            'accept',
+                                          )
+                                        }
+                                      >
+                                        Accept
+                                      </button>
+                                      <button
+                                        data-required-operations="collaboration.write"
+                                        disabled={!can('collaboration.write')}
                                         type="button"
                                         className="button button--danger button--compact"
-                                        disabled={busy}
-                                        onClick={() => void cancelWorkflowSchedule(schedule.id)}
+                                        onClick={() =>
+                                          void reviewCollaborationSuggestion(
+                                            suggestion.id,
+                                            'reject',
+                                          )
+                                        }
                                       >
-                                        Cancel
+                                        Reject
                                       </button>
-                                    ) : null}
-                                  </li>
-                                ))}
-                            </ul>
-                          ) : null}
-                          {workflowInstance?.notifications.length ? (
-                            <ol className="workflow-list workflow-notifications">
-                              {workflowInstance.notifications
-                                .slice()
-                                .reverse()
-                                .slice(0, 5)
-                                .map((notification) => (
-                                  <li key={notification.id}>
-                                    <div>
-                                      <strong>{notification.message}</strong>
-                                      <small>
-                                        {new Date(notification.createdAt).toLocaleString()}
-                                        {notification.audienceRoles.length
-                                          ? ` · ${notification.audienceRoles.join(', ')}`
-                                          : ''}
-                                      </small>
                                     </div>
-                                  </li>
-                                ))}
-                            </ol>
-                          ) : (
-                            <p className="empty-copy">No workflow activity yet.</p>
-                          )}
-                        </div>
-                      </div>
-                    </section>
-
-                    <section className="collaboration-panel" aria-label="Collaboration workspace">
-                      <div className="section-heading">
-                        <div>
-                          <span className="kicker">Collaboration</span>
-                          <h2>Branches, suggestions, and comments</h2>
-                        </div>
-                        <ul className="presence-list" aria-label="Active editors">
-                          {collaboration.presence.length > 0 ? (
-                            collaboration.presence.map((participant) => (
-                              <li className="presence-chip" key={participant.actorId}>
-                                {participant.displayName}
-                                {participant.field ? ` · ${participant.field}` : ''}
-                              </li>
-                            ))
-                          ) : (
-                            <li className="presence-chip presence-chip--idle">No active editors</li>
-                          )}
-                        </ul>
-                      </div>
-                      <div className="collaboration-workbench">
-                        <div className="collaboration-controls">
-                          <label className="gs-field">
-                            <span>Working branch</span>
-                            <select
-                              value={collaborationBranchId}
-                              onChange={(event) => setCollaborationBranchId(event.target.value)}
-                            >
-                              {collaboration.branches.map((candidate) => (
-                                <option key={candidate.id} value={candidate.id}>
-                                  {candidate.name} · {candidate.status}
-                                </option>
+                                  ) : null}
+                                </article>
                               ))}
-                            </select>
-                          </label>
-                          <label className="gs-field">
-                            <span>Shared field or block</span>
-                            <select
-                              value={collaborationTargetField}
-                              onChange={(event) => setCollaborationTargetField(event.target.value)}
+                            </section>
+                          ) : null}
+
+                          {collaboration.conflicts.some(
+                            (conflict) => conflict.status === 'open',
+                          ) ? (
+                            <section
+                              className="collaboration-review-list"
+                              aria-label="Merge conflicts"
                             >
-                              <option value="">Choose a field</option>
+                              <h3>Merge conflicts</h3>
+                              {collaboration.conflicts
+                                .filter((conflict) => conflict.status === 'open')
+                                .map((conflict) => (
+                                  <article
+                                    key={conflict.id}
+                                    className="collaboration-review-card collaboration-conflict-card"
+                                  >
+                                    <div>
+                                      <strong>{conflict.target.field}</strong>
+                                      {conflict.target.nodeId ? ` · ${conflict.target.nodeId}` : ''}
+                                      <p>
+                                        Choose the value that should become the causal successor.
+                                      </p>
+                                    </div>
+                                    <div className="collaboration-conflict-variants">
+                                      {conflict.variants.map((variant) => (
+                                        <button
+                                          data-required-operations="collaboration.write"
+                                          disabled={!can('collaboration.write')}
+                                          type="button"
+                                          key={variant.operationId}
+                                          onClick={() =>
+                                            void resolveCollaborationConflict(
+                                              conflict.id,
+                                              variant.operationId,
+                                            )
+                                          }
+                                        >
+                                          <strong>{variant.branchId}</strong>
+                                          <span>{collaborationValueLabel(variant.value)}</span>
+                                          <small>{variant.actorId}</small>
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </article>
+                                ))}
+                            </section>
+                          ) : null}
+                        </div>
+                        <h3 className="collaboration-comments-heading">Comments</h3>
+                        <div className="comment-composer">
+                          <label className="gs-field">
+                            <span>Comment target</span>
+                            <select
+                              value={commentTargetField}
+                              onChange={(event) => setCommentTargetField(event.target.value)}
+                            >
+                              <option value="">Whole entry</option>
                               {activeSchema?.fields.map((field) => (
                                 <option key={field.id} value={field.name}>
                                   {field.label}
@@ -7981,802 +8977,662 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                               ))}
                             </select>
                           </label>
-                          <button
-                            type="button"
-                            className="button button--secondary"
-                            disabled={
-                              !collaborationTargetField || selectedCollaborationValue === undefined
-                            }
-                            onClick={() => void shareCollaborationValue()}
-                          >
-                            Share current value
-                          </button>
-                          <span className="collaboration-version">
-                            {collaboration.operations.length} operations · document v
-                            {collaboration.version}
-                          </span>
-                        </div>
-
-                        <div className="collaboration-create-row">
-                          <label className="gs-field">
-                            <span>New branch from current</span>
-                            <input
-                              placeholder="Campaign revision"
-                              value={collaborationBranchName}
-                              onChange={(event) => setCollaborationBranchName(event.target.value)}
-                            />
-                          </label>
-                          <button
-                            type="button"
-                            className="button button--secondary"
-                            disabled={!collaborationBranchName.trim()}
-                            onClick={() => void createCollaborationBranch()}
-                          >
-                            Create branch
-                          </button>
-                          <button
-                            type="button"
-                            className="button button--primary"
-                            disabled={
-                              collaborationBranchId === 'main' ||
-                              collaboration.branches.find(
-                                (candidate) => candidate.id === collaborationBranchId,
-                              )?.status !== 'open'
-                            }
-                            onClick={() => void mergeCollaborationBranch()}
-                          >
-                            Merge into Main
-                          </button>
-                        </div>
-
-                        <div className="collaboration-create-row collaboration-suggestion-composer">
-                          <label className="gs-field">
-                            <span>Proposed value</span>
+                          <label className="gs-field comment-body-field">
+                            <span>New comment</span>
                             <textarea
-                              rows={2}
-                              placeholder="Suggest a replacement value for the selected field or block"
-                              value={collaborationSuggestionValue}
-                              onChange={(event) =>
-                                setCollaborationSuggestionValue(event.target.value)
-                              }
+                              data-required-operations="collaboration.write"
+                              disabled={!can('collaboration.write')}
+                              rows={3}
+                              placeholder="Write a comment and mention @reviewer"
+                              value={commentBody}
+                              onChange={(event) => setCommentBody(event.target.value)}
+                            />
+                          </label>
+                          <label className="gs-field">
+                            <span>Assign to</span>
+                            <input
+                              data-required-operations="collaboration.write"
+                              disabled={!can('collaboration.write')}
+                              placeholder="actor-id"
+                              value={commentAssignee}
+                              onChange={(event) => setCommentAssignee(event.target.value)}
+                            />
+                          </label>
+                          <label className="gs-field">
+                            <span>Due date</span>
+                            <input
+                              data-required-operations="collaboration.write"
+                              disabled={!can('collaboration.write')}
+                              type="datetime-local"
+                              value={commentDueAt}
+                              onChange={(event) => setCommentDueAt(event.target.value)}
                             />
                           </label>
                           <button
+                            data-required-operations="collaboration.write"
                             type="button"
                             className="button button--secondary"
-                            disabled={
-                              !collaborationTargetField || !collaborationSuggestionValue.trim()
-                            }
-                            onClick={() => void createCollaborationSuggestion()}
+                            disabled={!can('collaboration.write') || !commentBody.trim()}
+                            onClick={() => void createComment()}
                           >
-                            Open suggestion
+                            Add comment
                           </button>
                         </div>
-
-                        {collaboration.suggestions.length > 0 ? (
-                          <section className="collaboration-review-list" aria-label="Suggestions">
-                            <h3>Suggestions</h3>
-                            {collaboration.suggestions.map((suggestion) => (
-                              <article key={suggestion.id} className="collaboration-review-card">
-                                <div>
-                                  <strong>{suggestion.target.field}</strong>
-                                  {suggestion.target.nodeId ? ` · ${suggestion.target.nodeId}` : ''}
-                                  <p>{collaborationValueLabel(suggestion.value)}</p>
-                                  <small>
-                                    {suggestion.createdBy} · {suggestion.status}
-                                  </small>
-                                </div>
-                                {suggestion.status === 'open' ? (
-                                  <div className="collaboration-card-actions">
-                                    <button
-                                      type="button"
-                                      className="button button--primary button--compact"
-                                      onClick={() =>
-                                        void reviewCollaborationSuggestion(suggestion.id, 'accept')
-                                      }
-                                    >
-                                      Accept
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="button button--danger button--compact"
-                                      onClick={() =>
-                                        void reviewCollaborationSuggestion(suggestion.id, 'reject')
-                                      }
-                                    >
-                                      Reject
-                                    </button>
-                                  </div>
-                                ) : null}
-                              </article>
-                            ))}
-                          </section>
-                        ) : null}
-
-                        {collaboration.conflicts.some((conflict) => conflict.status === 'open') ? (
-                          <section
-                            className="collaboration-review-list"
-                            aria-label="Merge conflicts"
-                          >
-                            <h3>Merge conflicts</h3>
-                            {collaboration.conflicts
-                              .filter((conflict) => conflict.status === 'open')
-                              .map((conflict) => (
-                                <article
-                                  key={conflict.id}
-                                  className="collaboration-review-card collaboration-conflict-card"
-                                >
-                                  <div>
-                                    <strong>{conflict.target.field}</strong>
-                                    {conflict.target.nodeId ? ` · ${conflict.target.nodeId}` : ''}
-                                    <p>Choose the value that should become the causal successor.</p>
-                                  </div>
-                                  <div className="collaboration-conflict-variants">
-                                    {conflict.variants.map((variant) => (
-                                      <button
-                                        type="button"
-                                        key={variant.operationId}
-                                        onClick={() =>
-                                          void resolveCollaborationConflict(
-                                            conflict.id,
-                                            variant.operationId,
-                                          )
-                                        }
-                                      >
-                                        <strong>{variant.branchId}</strong>
-                                        <span>{collaborationValueLabel(variant.value)}</span>
-                                        <small>{variant.actorId}</small>
-                                      </button>
-                                    ))}
-                                  </div>
-                                </article>
-                              ))}
-                          </section>
-                        ) : null}
-                      </div>
-                      <h3 className="collaboration-comments-heading">Comments</h3>
-                      <div className="comment-composer">
-                        <label className="gs-field">
-                          <span>Comment target</span>
-                          <select
-                            value={commentTargetField}
-                            onChange={(event) => setCommentTargetField(event.target.value)}
-                          >
-                            <option value="">Whole entry</option>
-                            {activeSchema?.fields.map((field) => (
-                              <option key={field.id} value={field.name}>
-                                {field.label}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <label className="gs-field comment-body-field">
-                          <span>New comment</span>
-                          <textarea
-                            rows={3}
-                            placeholder="Write a comment and mention @reviewer"
-                            value={commentBody}
-                            onChange={(event) => setCommentBody(event.target.value)}
-                          />
-                        </label>
-                        <label className="gs-field">
-                          <span>Assign to</span>
-                          <input
-                            placeholder="actor-id"
-                            value={commentAssignee}
-                            onChange={(event) => setCommentAssignee(event.target.value)}
-                          />
-                        </label>
-                        <label className="gs-field">
-                          <span>Due date</span>
-                          <input
-                            type="datetime-local"
-                            value={commentDueAt}
-                            onChange={(event) => setCommentDueAt(event.target.value)}
-                          />
-                        </label>
-                        <button
-                          type="button"
-                          className="button button--secondary"
-                          disabled={!commentBody.trim()}
-                          onClick={() => void createComment()}
-                        >
-                          Add comment
-                        </button>
-                      </div>
-                      <div className="comment-thread-list">
-                        {collaboration.threads.map((thread) => (
-                          <article
-                            className={`comment-thread${thread.resolvedAt ? ' comment-thread--resolved' : ''}`}
-                            key={thread.id}
-                          >
-                            <header>
-                              <div>
-                                <strong>
-                                  {thread.target.field ?? 'Entry'}
-                                  {thread.target.nodeId ? ` · ${thread.target.nodeId}` : ''}
-                                </strong>
-                                <small>
-                                  {thread.assigneeId
-                                    ? `Assigned to ${thread.assigneeId}`
-                                    : 'Unassigned'}
-                                  {thread.dueAt
-                                    ? ` · due ${new Date(thread.dueAt).toLocaleDateString()}`
-                                    : ''}
-                                </small>
-                              </div>
-                              <button
-                                type="button"
-                                className="button button--secondary button--compact"
-                                onClick={() =>
-                                  void setThreadResolved(thread.id, !thread.resolvedAt)
-                                }
-                              >
-                                {thread.resolvedAt ? 'Reopen' : 'Resolve'}
-                              </button>
-                            </header>
-                            <ol>
-                              {thread.messages.map((message) => (
-                                <li key={message.id}>
-                                  <strong>{message.actorId}</strong>
-                                  <p>{message.body}</p>
-                                  {message.mentions.length > 0 ? (
-                                    <small>Mentioned: {message.mentions.join(', ')}</small>
-                                  ) : null}
-                                </li>
-                              ))}
-                            </ol>
-                            <div className="comment-reply">
-                              <input
-                                aria-label={`Reply to comment ${thread.id}`}
-                                placeholder="Reply…"
-                                value={replyBodies[thread.id] ?? ''}
-                                onChange={(event) =>
-                                  setReplyBodies((current) => ({
-                                    ...current,
-                                    [thread.id]: event.target.value,
-                                  }))
-                                }
-                              />
-                              <button
-                                type="button"
-                                className="button button--secondary button--compact"
-                                onClick={() => void replyToThread(thread.id)}
-                              >
-                                Reply
-                              </button>
-                            </div>
-                          </article>
-                        ))}
-                        {collaboration.threads.length === 0 ? (
-                          <p className="empty-copy">No comment threads for this entry.</p>
-                        ) : null}
-                      </div>
-                    </section>
-
-                    <section className="blocks-section">
-                      <div className="section-heading">
-                        <div>
-                          <span className="kicker">Composition</span>
-                          <h2>{componentField?.label ?? 'Page blocks'}</h2>
-                        </div>
-                        <div className="composition-toolbar">
-                          <span>{layers.length} components</span>
-                          <button
-                            type="button"
-                            onClick={() => restoreComposition('undo')}
-                            disabled={compositionHistory.past.length === 0}
-                            aria-label="Undo composition change"
-                          >
-                            Undo
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => restoreComposition('redo')}
-                            disabled={compositionHistory.future.length === 0}
-                            aria-label="Redo composition change"
-                          >
-                            Redo
-                          </button>
-                        </div>
-                      </div>
-                      <section className="layers-panel" aria-label="Composition layers">
-                        <span>Layers</span>
-                        <p className="composition-help" id="composition-keyboard-help">
-                          Select a layer, then use arrow keys to reorder or nest it. Press Delete to
-                          remove it.
-                        </p>
-                        <button
-                          type="button"
-                          className="layer-root-drop"
-                          onClick={() => {
-                            if (compositionHistory.selectedId) {
-                              applyComposition(
-                                moveNode(
-                                  draftBlocks,
-                                  compositionHistory.selectedId,
-                                  { index: draftBlocks.length },
-                                  compositionRules,
-                                ),
-                                compositionHistory.selectedId,
-                              );
-                            }
-                          }}
-                          onDragOver={(event) => event.preventDefault()}
-                          onDrop={() => {
-                            if (draggedNodeId) {
-                              applyComposition(
-                                moveNode(
-                                  draftBlocks,
-                                  draggedNodeId,
-                                  { index: draftBlocks.length },
-                                  compositionRules,
-                                ),
-                                draggedNodeId,
-                              );
-                            }
-                            setDraggedNodeId(null);
-                          }}
-                        >
-                          Move selected to root
-                        </button>
-                        {layers.map((layer) => (
-                          <button
-                            type="button"
-                            className={`layer-row ${compositionHistory.selectedId === layer.node.id ? 'layer-row--selected' : ''}`}
-                            key={layer.node.id}
-                            aria-describedby="composition-keyboard-help"
-                            style={{ paddingLeft: `${0.75 + layer.depth * 1.1}rem` }}
-                            draggable
-                            onDragStart={() => setDraggedNodeId(layer.node.id)}
-                            onDragEnd={() => setDraggedNodeId(null)}
-                            onDragOver={(event) => event.preventDefault()}
-                            onDrop={(event) => {
-                              event.preventDefault();
-                              if (draggedNodeId && draggedNodeId !== layer.node.id) {
-                                applyComposition(
-                                  moveNode(
-                                    draftBlocks,
-                                    draggedNodeId,
-                                    targetAt(layer.location, layer.location.index),
-                                    compositionRules,
-                                  ),
-                                  draggedNodeId,
-                                );
-                              }
-                              setDraggedNodeId(null);
-                            }}
-                            onClick={() =>
-                              setCompositionHistory((current) => ({
-                                ...current,
-                                selectedId: layer.node.id,
-                              }))
-                            }
-                            onKeyDown={(event) => {
-                              if (
-                                [
-                                  'ArrowUp',
-                                  'ArrowDown',
-                                  'ArrowLeft',
-                                  'ArrowRight',
-                                  'Delete',
-                                ].includes(event.key)
-                              ) {
-                                event.preventDefault();
-                                moveByKeyboard(layer.node.id, event.key);
-                              }
-                            }}
-                          >
-                            <span>
-                              {manifestById.get(layer.node.component)?.name ?? layer.node.component}
-                            </span>
-                            <small>
-                              {layer.location.slotName ? `${layer.location.slotName} · ` : ''}
-                              {layer.node.id}
-                            </small>
-                          </button>
-                        ))}
-                      </section>
-                      <div className="block-list">
-                        {draftBlocks.map((node, index) => {
-                          const manifest = manifestById.get(node.component);
-                          return (
+                        <div className="comment-thread-list">
+                          {collaboration.threads.map((thread) => (
                             <article
-                              className={`block-editor ${compositionHistory.selectedId === node.id ? 'block-editor--selected' : ''}`}
-                              key={node.id}
+                              className={`comment-thread${thread.resolvedAt ? ' comment-thread--resolved' : ''}`}
+                              key={thread.id}
                             >
                               <header>
+                                <div>
+                                  <strong>
+                                    {thread.target.field ?? 'Entry'}
+                                    {thread.target.nodeId ? ` · ${thread.target.nodeId}` : ''}
+                                  </strong>
+                                  <small>
+                                    {thread.assigneeId
+                                      ? `Assigned to ${thread.assigneeId}`
+                                      : 'Unassigned'}
+                                    {thread.dueAt
+                                      ? ` · due ${new Date(thread.dueAt).toLocaleDateString()}`
+                                      : ''}
+                                  </small>
+                                </div>
                                 <button
+                                  data-required-operations="collaboration.write"
+                                  disabled={!can('collaboration.write')}
                                   type="button"
-                                  className="block-select"
+                                  className="button button--secondary button--compact"
                                   onClick={() =>
-                                    setCompositionHistory((current) => ({
-                                      ...current,
-                                      selectedId: node.id,
-                                    }))
+                                    void setThreadResolved(thread.id, !thread.resolvedAt)
                                   }
                                 >
-                                  <span className="block-number">
-                                    {String(index + 1).padStart(2, '0')}
-                                  </span>
-                                  <span>
-                                    <strong>{manifest?.name ?? node.component}</strong>
-                                    <small>{manifest?.description}</small>
-                                  </span>
+                                  {thread.resolvedAt ? 'Reopen' : 'Resolve'}
                                 </button>
-                                <div className="block-actions">
-                                  <button
-                                    type="button"
-                                    aria-label="Move block up"
-                                    disabled={index === 0}
-                                    onClick={() =>
-                                      applyComposition(
-                                        moveNode(
-                                          draftBlocks,
-                                          node.id,
-                                          { index: index - 1 },
-                                          compositionRules,
-                                        ),
-                                        node.id,
-                                      )
-                                    }
-                                  >
-                                    ↑
-                                  </button>
-                                  <button
-                                    type="button"
-                                    aria-label="Move block down"
-                                    disabled={index === draftBlocks.length - 1}
-                                    onClick={() =>
-                                      applyComposition(
-                                        moveNode(
-                                          draftBlocks,
-                                          node.id,
-                                          { index: index + 2 },
-                                          compositionRules,
-                                        ),
-                                        node.id,
-                                      )
-                                    }
-                                  >
-                                    ↓
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="danger"
-                                    aria-label="Remove block"
-                                    disabled={draftBlocks.length <= (componentField?.minimum ?? 0)}
-                                    onClick={() =>
-                                      applyComposition(
-                                        removeNode(draftBlocks, node.id, compositionRules),
-                                      )
-                                    }
-                                  >
-                                    ×
-                                  </button>
-                                </div>
                               </header>
-                              <div className="block-fields">
-                                {manifest
-                                  ? editablePropsFor(node, manifest).map((prop) => (
-                                      <FieldControl
-                                        key={prop.id}
-                                        idPrefix={node.id}
-                                        definition={prop}
-                                        value={node.props[prop.name]}
-                                        onChange={(value) =>
-                                          changeBlocks(
-                                            (current) =>
-                                              updateNodeProps(current, node.id, {
-                                                ...node.props,
-                                                [prop.name]: value,
-                                              }),
-                                            node.id,
-                                          )
-                                        }
-                                      />
-                                    ))
-                                  : null}
-                              </div>
-                            </article>
-                          );
-                        })}
-                      </div>
-                      <div className="component-palette">
-                        <span>Add at root</span>
-                        {manifests
-                          .filter(
-                            (manifest) =>
-                              rootAccepts.length === 0 || rootAccepts.includes(manifest.id),
-                          )
-                          .map((manifest) => (
-                            <button
-                              type="button"
-                              key={manifest.id}
-                              onClick={() => {
-                                const node = newNode(manifest);
-                                applyComposition(
-                                  addNode(
-                                    draftBlocks,
-                                    node,
-                                    { index: draftBlocks.length },
-                                    compositionRules,
-                                  ),
-                                  node.id,
-                                );
-                              }}
-                            >
-                              + {manifest.name}
-                            </button>
-                          ))}
-                      </div>
-                      <div className="design-library">
-                        <fieldset className="component-palette">
-                          <legend>Reusable symbols</legend>
-                          {designSystem.symbols.map((symbol) => (
-                            <button
-                              type="button"
-                              key={symbol.id}
-                              onClick={() => addSymbolAtRoot(symbol.id)}
-                            >
-                              + {symbol.name}
-                            </button>
-                          ))}
-                        </fieldset>
-                        <fieldset className="component-palette">
-                          <legend>Page templates</legend>
-                          {designSystem.templates.map((template) => (
-                            <button
-                              type="button"
-                              key={template.id}
-                              onClick={() => addTemplateAtRoot(template.id)}
-                            >
-                              Apply {template.name}
-                            </button>
-                          ))}
-                        </fieldset>
-                      </div>
-                      {selectedNode && selectedManifest ? (
-                        <section
-                          className="component-inspector"
-                          aria-label="Selected component inspector"
-                        >
-                          <header>
-                            <div>
-                              <span className="kicker">Selected component</span>
-                              <h3>{selectedManifest.name}</h3>
-                              <code>{selectedNode.id}</code>
-                            </div>
-                            <button
-                              type="button"
-                              className="danger-link"
-                              onClick={() =>
-                                applyComposition(
-                                  removeNode(draftBlocks, selectedNode.id, compositionRules),
-                                )
-                              }
-                            >
-                              Remove
-                            </button>
-                          </header>
-                          {selectedSymbol ? (
-                            <p className="symbol-notice">
-                              Linked to {selectedSymbol.name}. Only approved overrides are editable;
-                              governed values update from the design system.
-                            </p>
-                          ) : null}
-                          {editablePropsFor(selectedNode, selectedManifest).length > 0 ? (
-                            <div className="block-fields">
-                              {editablePropsFor(selectedNode, selectedManifest).map((prop) => (
-                                <FieldControl
-                                  key={prop.id}
-                                  idPrefix={`inspector-${selectedNode.id}`}
-                                  definition={prop}
-                                  value={selectedNode.props[prop.name]}
-                                  onChange={(value) =>
-                                    changeBlocks(
-                                      (current) =>
-                                        updateNodeProps(current, selectedNode.id, {
-                                          ...selectedNode.props,
-                                          [prop.name]: value,
-                                        }),
-                                      selectedNode.id,
-                                    )
+                              <ol>
+                                {thread.messages.map((message) => (
+                                  <li key={message.id}>
+                                    <strong>{message.actorId}</strong>
+                                    <p>{message.body}</p>
+                                    {message.mentions.length > 0 ? (
+                                      <small>Mentioned: {message.mentions.join(', ')}</small>
+                                    ) : null}
+                                  </li>
+                                ))}
+                              </ol>
+                              <div className="comment-reply">
+                                <input
+                                  data-required-operations="collaboration.write"
+                                  disabled={!can('collaboration.write')}
+                                  aria-label={`Reply to comment ${thread.id}`}
+                                  placeholder="Reply…"
+                                  value={replyBodies[thread.id] ?? ''}
+                                  onChange={(event) =>
+                                    setReplyBodies((current) => ({
+                                      ...current,
+                                      [thread.id]: event.target.value,
+                                    }))
                                   }
                                 />
-                              ))}
-                            </div>
+                                <button
+                                  data-required-operations="collaboration.write"
+                                  disabled={!can('collaboration.write')}
+                                  type="button"
+                                  className="button button--secondary button--compact"
+                                  onClick={() => void replyToThread(thread.id)}
+                                >
+                                  Reply
+                                </button>
+                              </div>
+                            </article>
+                          ))}
+                          {collaboration.threads.length === 0 ? (
+                            <p className="empty-copy">No comment threads for this entry.</p>
                           ) : null}
-                          <section className="presentation-editor" aria-label="Design bindings">
-                            <label className="gs-field">
-                              <span>Component variant</span>
-                              <select
-                                value={selectedNode.presentation?.variantId ?? ''}
-                                onChange={(event) =>
-                                  changePresentation(selectedNode, (current) => ({
+                        </div>
+                      </section>
+                    ) : null}
+
+                    {can('component.read') ? (
+                      <fieldset
+                        disabled={!can('content.draft.update')}
+                        style={{ display: 'contents' }}
+                      >
+                        <section className="blocks-section">
+                          <div className="section-heading">
+                            <div>
+                              <span className="kicker">Composition</span>
+                              <h2>{componentField?.label ?? 'Page blocks'}</h2>
+                            </div>
+                            <div className="composition-toolbar">
+                              <span>{layers.length} components</span>
+                              <button
+                                data-required-operations="content.draft.update"
+                                type="button"
+                                onClick={() => restoreComposition('undo')}
+                                disabled={
+                                  !can('content.draft.update') ||
+                                  compositionHistory.past.length === 0
+                                }
+                                aria-label="Undo composition change"
+                              >
+                                Undo
+                              </button>
+                              <button
+                                data-required-operations="content.draft.update"
+                                type="button"
+                                onClick={() => restoreComposition('redo')}
+                                disabled={
+                                  !can('content.draft.update') ||
+                                  compositionHistory.future.length === 0
+                                }
+                                aria-label="Redo composition change"
+                              >
+                                Redo
+                              </button>
+                            </div>
+                          </div>
+                          <section className="layers-panel" aria-label="Composition layers">
+                            <span>Layers</span>
+                            <p className="composition-help" id="composition-keyboard-help">
+                              Select a layer, then use arrow keys to reorder or nest it. Press
+                              Delete to remove it.
+                            </p>
+                            <button
+                              data-required-operations="content.draft.update"
+                              disabled={!can('content.draft.update')}
+                              type="button"
+                              className="layer-root-drop"
+                              onClick={() => {
+                                if (compositionHistory.selectedId) {
+                                  applyComposition(
+                                    moveNode(
+                                      draftBlocks,
+                                      compositionHistory.selectedId,
+                                      { index: draftBlocks.length },
+                                      compositionRules,
+                                    ),
+                                    compositionHistory.selectedId,
+                                  );
+                                }
+                              }}
+                              onDragOver={(event) => event.preventDefault()}
+                              onDrop={() => {
+                                if (draggedNodeId) {
+                                  applyComposition(
+                                    moveNode(
+                                      draftBlocks,
+                                      draggedNodeId,
+                                      { index: draftBlocks.length },
+                                      compositionRules,
+                                    ),
+                                    draggedNodeId,
+                                  );
+                                }
+                                setDraggedNodeId(null);
+                              }}
+                            >
+                              Move selected to root
+                            </button>
+                            {layers.map((layer) => (
+                              <button
+                                data-required-operations="content.draft.update"
+                                disabled={!can('content.draft.update')}
+                                type="button"
+                                className={`layer-row ${compositionHistory.selectedId === layer.node.id ? 'layer-row--selected' : ''}`}
+                                key={layer.node.id}
+                                aria-describedby="composition-keyboard-help"
+                                style={{ paddingLeft: `${0.75 + layer.depth * 1.1}rem` }}
+                                draggable
+                                onDragStart={() => setDraggedNodeId(layer.node.id)}
+                                onDragEnd={() => setDraggedNodeId(null)}
+                                onDragOver={(event) => event.preventDefault()}
+                                onDrop={(event) => {
+                                  event.preventDefault();
+                                  if (draggedNodeId && draggedNodeId !== layer.node.id) {
+                                    applyComposition(
+                                      moveNode(
+                                        draftBlocks,
+                                        draggedNodeId,
+                                        targetAt(layer.location, layer.location.index),
+                                        compositionRules,
+                                      ),
+                                      draggedNodeId,
+                                    );
+                                  }
+                                  setDraggedNodeId(null);
+                                }}
+                                onClick={() =>
+                                  setCompositionHistory((current) => ({
                                     ...current,
-                                    ...(event.target.value
-                                      ? { variantId: event.target.value }
-                                      : { variantId: undefined }),
+                                    selectedId: layer.node.id,
                                   }))
                                 }
+                                onKeyDown={(event) => {
+                                  if (
+                                    [
+                                      'ArrowUp',
+                                      'ArrowDown',
+                                      'ArrowLeft',
+                                      'ArrowRight',
+                                      'Delete',
+                                    ].includes(event.key)
+                                  ) {
+                                    event.preventDefault();
+                                    moveByKeyboard(layer.node.id, event.key);
+                                  }
+                                }}
                               >
-                                <option value="">Default</option>
-                                {selectedVariants.map((variant) => (
-                                  <option key={variant.id} value={variant.id}>
-                                    {variant.name}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                            <label className="gs-field">
-                              <span>Responsive override</span>
-                              <select
-                                value={responsiveBreakpoint}
-                                onChange={(event) => setResponsiveBreakpoint(event.target.value)}
-                              >
-                                {designSystem.breakpoints.map((breakpoint) => (
-                                  <option key={breakpoint.id} value={breakpoint.id}>
-                                    {breakpoint.name}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                            <div className="binding-list">
-                              {editablePropsFor(selectedNode, selectedManifest).map((prop) => {
-                                const tokens = designSystem.tokens.filter((token) =>
-                                  tokenCompatible(prop, token.value),
-                                );
-                                return (
-                                  <div className="binding-row" key={prop.id}>
-                                    <label>
-                                      <span>{prop.label} token</span>
-                                      <select
-                                        value={
-                                          selectedNode.presentation?.tokenBindings?.[prop.name] ??
-                                          ''
-                                        }
-                                        onChange={(event) =>
-                                          changePresentation(selectedNode, (current) => {
-                                            const tokenBindings = {
-                                              ...current.tokenBindings,
-                                            };
-                                            if (event.target.value)
-                                              tokenBindings[prop.name] = event.target.value;
-                                            else delete tokenBindings[prop.name];
-                                            return { ...current, tokenBindings };
-                                          })
-                                        }
-                                      >
-                                        <option value="">Unbound</option>
-                                        {tokens.map((token) => (
-                                          <option key={token.id} value={token.id}>
-                                            {token.name}
-                                          </option>
-                                        ))}
-                                      </select>
-                                    </label>
+                                <span>
+                                  {manifestById.get(layer.node.component)?.name ??
+                                    layer.node.component}
+                                </span>
+                                <small>
+                                  {layer.location.slotName ? `${layer.location.slotName} · ` : ''}
+                                  {layer.node.id}
+                                </small>
+                              </button>
+                            ))}
+                          </section>
+                          <div className="block-list">
+                            {draftBlocks.map((node, index) => {
+                              const manifest = manifestById.get(node.component);
+                              return (
+                                <article
+                                  className={`block-editor ${compositionHistory.selectedId === node.id ? 'block-editor--selected' : ''}`}
+                                  key={node.id}
+                                >
+                                  <header>
                                     <button
                                       type="button"
+                                      className="block-select"
                                       onClick={() =>
-                                        changePresentation(selectedNode, (current) => ({
+                                        setCompositionHistory((current) => ({
                                           ...current,
-                                          responsive: {
-                                            ...current.responsive,
-                                            [prop.name]: {
-                                              ...current.responsive?.[prop.name],
-                                              [responsiveBreakpoint]: selectedNode.props[prop.name],
-                                            },
-                                          },
+                                          selectedId: node.id,
                                         }))
                                       }
                                     >
-                                      Capture for {responsiveBreakpoint}
+                                      <span className="block-number">
+                                        {String(index + 1).padStart(2, '0')}
+                                      </span>
+                                      <span>
+                                        <strong>{manifest?.name ?? node.component}</strong>
+                                        <small>{manifest?.description}</small>
+                                      </span>
                                     </button>
-                                    {Object.hasOwn(
-                                      selectedNode.presentation?.responsive?.[prop.name] ?? {},
-                                      responsiveBreakpoint,
-                                    ) ? (
+                                    <div className="block-actions">
                                       <button
+                                        data-required-operations="content.draft.update"
                                         type="button"
+                                        aria-label="Move block up"
+                                        disabled={!can('content.draft.update') || index === 0}
                                         onClick={() =>
-                                          changePresentation(selectedNode, (current) => {
-                                            const values = { ...current.responsive?.[prop.name] };
-                                            delete values[responsiveBreakpoint];
-                                            return {
-                                              ...current,
-                                              responsive: {
-                                                ...current.responsive,
-                                                [prop.name]: values,
-                                              },
-                                            };
-                                          })
-                                        }
-                                      >
-                                        Clear {responsiveBreakpoint}
-                                      </button>
-                                    ) : null}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </section>
-                          {selectedManifest.slots.length > 0 ? (
-                            <div className="slot-list">
-                              {selectedManifest.slots.map((slot) => {
-                                const children = selectedNode.slots?.[slot.name] ?? [];
-                                return (
-                                  <section className="slot-editor" key={slot.id}>
-                                    <header>
-                                      <div>
-                                        <strong className="slot-title">{slot.label}</strong>
-                                        <span className="slot-count">
-                                          {children.length}
-                                          {slot.max === undefined ? '' : ` / ${slot.max}`}{' '}
-                                          components
-                                        </span>
-                                      </div>
-                                      <small className="slot-rule">
-                                        Minimum {slot.min}; accepts{' '}
-                                        {slot.accepts.length > 0
-                                          ? slot.accepts.join(', ')
-                                          : 'any component'}
-                                      </small>
-                                    </header>
-                                    <button
-                                      type="button"
-                                      className="slot-drop-zone"
-                                      onClick={() =>
-                                        setNotice({
-                                          tone: 'info',
-                                          message:
-                                            'To nest without dragging, focus the layer after a compatible container and press ArrowRight.',
-                                        })
-                                      }
-                                      onDragOver={(event) => event.preventDefault()}
-                                      onDrop={(event) => {
-                                        event.preventDefault();
-                                        if (draggedNodeId) {
                                           applyComposition(
                                             moveNode(
                                               draftBlocks,
-                                              draggedNodeId,
-                                              {
-                                                parentId: selectedNode.id,
-                                                slotName: slot.name,
-                                                index: children.length,
-                                              },
+                                              node.id,
+                                              { index: index - 1 },
                                               compositionRules,
                                             ),
-                                            draggedNodeId,
-                                          );
+                                            node.id,
+                                          )
                                         }
-                                        setDraggedNodeId(null);
-                                      }}
-                                    >
-                                      Drop a layer into {slot.label} · keyboard help
-                                    </button>
-                                    <fieldset className="slot-palette">
-                                      <legend>Add to {slot.label}</legend>
-                                      {manifests
-                                        .filter(
-                                          (manifest) =>
-                                            slot.accepts.length === 0 ||
-                                            slot.accepts.includes(manifest.id),
-                                        )
-                                        .map((manifest) => (
-                                          <button
-                                            type="button"
-                                            key={manifest.id}
-                                            disabled={
-                                              slot.max !== undefined && children.length >= slot.max
+                                      >
+                                        ↑
+                                      </button>
+                                      <button
+                                        data-required-operations="content.draft.update"
+                                        type="button"
+                                        aria-label="Move block down"
+                                        disabled={
+                                          !can('content.draft.update') ||
+                                          index === draftBlocks.length - 1
+                                        }
+                                        onClick={() =>
+                                          applyComposition(
+                                            moveNode(
+                                              draftBlocks,
+                                              node.id,
+                                              { index: index + 2 },
+                                              compositionRules,
+                                            ),
+                                            node.id,
+                                          )
+                                        }
+                                      >
+                                        ↓
+                                      </button>
+                                      <button
+                                        data-required-operations="content.draft.update"
+                                        type="button"
+                                        className="danger"
+                                        aria-label="Remove block"
+                                        disabled={
+                                          !can('content.draft.update') ||
+                                          draftBlocks.length <= (componentField?.minimum ?? 0)
+                                        }
+                                        onClick={() =>
+                                          applyComposition(
+                                            removeNode(draftBlocks, node.id, compositionRules),
+                                          )
+                                        }
+                                      >
+                                        ×
+                                      </button>
+                                    </div>
+                                  </header>
+                                  <div className="block-fields">
+                                    {manifest
+                                      ? editablePropsFor(node, manifest).map((prop) => (
+                                          <FieldControl
+                                            key={prop.id}
+                                            idPrefix={node.id}
+                                            definition={prop}
+                                            value={node.props[prop.name]}
+                                            onChange={(value) =>
+                                              changeBlocks(
+                                                (current) =>
+                                                  updateNodeProps(current, node.id, {
+                                                    ...node.props,
+                                                    [prop.name]: value,
+                                                  }),
+                                                node.id,
+                                              )
                                             }
-                                            onClick={() => {
-                                              const node = newNode(manifest);
+                                          />
+                                        ))
+                                      : null}
+                                  </div>
+                                </article>
+                              );
+                            })}
+                          </div>
+                          <div className="component-palette">
+                            <span>Add at root</span>
+                            {manifests
+                              .filter(
+                                (manifest) =>
+                                  rootAccepts.length === 0 || rootAccepts.includes(manifest.id),
+                              )
+                              .map((manifest) => (
+                                <button
+                                  data-required-operations="content.draft.update"
+                                  disabled={!can('content.draft.update')}
+                                  type="button"
+                                  key={manifest.id}
+                                  onClick={() => {
+                                    const node = newNode(manifest);
+                                    applyComposition(
+                                      addNode(
+                                        draftBlocks,
+                                        node,
+                                        { index: draftBlocks.length },
+                                        compositionRules,
+                                      ),
+                                      node.id,
+                                    );
+                                  }}
+                                >
+                                  + {manifest.name}
+                                </button>
+                              ))}
+                          </div>
+                          <div className="design-library">
+                            <fieldset className="component-palette">
+                              <legend>Reusable symbols</legend>
+                              {designSystem?.symbols.map((symbol) => (
+                                <button
+                                  data-required-operations="content.draft.update"
+                                  disabled={!can('content.draft.update')}
+                                  type="button"
+                                  key={symbol.id}
+                                  onClick={() => addSymbolAtRoot(symbol.id)}
+                                >
+                                  + {symbol.name}
+                                </button>
+                              ))}
+                            </fieldset>
+                            <fieldset className="component-palette">
+                              <legend>Page templates</legend>
+                              {designSystem?.templates.map((template) => (
+                                <button
+                                  data-required-operations="content.draft.update"
+                                  disabled={!can('content.draft.update')}
+                                  type="button"
+                                  key={template.id}
+                                  onClick={() => addTemplateAtRoot(template.id)}
+                                >
+                                  Apply {template.name}
+                                </button>
+                              ))}
+                            </fieldset>
+                          </div>
+                          {selectedNode && selectedManifest ? (
+                            <section
+                              className="component-inspector"
+                              aria-label="Selected component inspector"
+                            >
+                              <header>
+                                <div>
+                                  <span className="kicker">Selected component</span>
+                                  <h3>{selectedManifest.name}</h3>
+                                  <code>{selectedNode.id}</code>
+                                </div>
+                                <button
+                                  data-required-operations="content.draft.update"
+                                  disabled={!can('content.draft.update')}
+                                  type="button"
+                                  className="danger-link"
+                                  onClick={() =>
+                                    applyComposition(
+                                      removeNode(draftBlocks, selectedNode.id, compositionRules),
+                                    )
+                                  }
+                                >
+                                  Remove
+                                </button>
+                              </header>
+                              {selectedSymbol ? (
+                                <p className="symbol-notice">
+                                  Linked to {selectedSymbol.name}. Only approved overrides are
+                                  editable; governed values update from the design system.
+                                </p>
+                              ) : null}
+                              {editablePropsFor(selectedNode, selectedManifest).length > 0 ? (
+                                <div className="block-fields">
+                                  {editablePropsFor(selectedNode, selectedManifest).map((prop) => (
+                                    <FieldControl
+                                      key={prop.id}
+                                      idPrefix={`inspector-${selectedNode.id}`}
+                                      definition={prop}
+                                      value={selectedNode.props[prop.name]}
+                                      onChange={(value) =>
+                                        changeBlocks(
+                                          (current) =>
+                                            updateNodeProps(current, selectedNode.id, {
+                                              ...selectedNode.props,
+                                              [prop.name]: value,
+                                            }),
+                                          selectedNode.id,
+                                        )
+                                      }
+                                    />
+                                  ))}
+                                </div>
+                              ) : null}
+                              <section className="presentation-editor" aria-label="Design bindings">
+                                <label className="gs-field">
+                                  <span>Component variant</span>
+                                  <select
+                                    data-required-operations="content.draft.update"
+                                    disabled={!can('content.draft.update')}
+                                    value={selectedNode.presentation?.variantId ?? ''}
+                                    onChange={(event) =>
+                                      changePresentation(selectedNode, (current) => ({
+                                        ...current,
+                                        ...(event.target.value
+                                          ? { variantId: event.target.value }
+                                          : { variantId: undefined }),
+                                      }))
+                                    }
+                                  >
+                                    <option value="">Default</option>
+                                    {selectedVariants.map((variant) => (
+                                      <option key={variant.id} value={variant.id}>
+                                        {variant.name}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                                <label className="gs-field">
+                                  <span>Responsive override</span>
+                                  <select
+                                    value={responsiveBreakpoint}
+                                    onChange={(event) =>
+                                      setResponsiveBreakpoint(event.target.value)
+                                    }
+                                  >
+                                    {designSystem?.breakpoints.map((breakpoint) => (
+                                      <option key={breakpoint.id} value={breakpoint.id}>
+                                        {breakpoint.name}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                                <div className="binding-list">
+                                  {editablePropsFor(selectedNode, selectedManifest).map((prop) => {
+                                    const tokens = (designSystem?.tokens ?? []).filter((token) =>
+                                      tokenCompatible(prop, token.value),
+                                    );
+                                    return (
+                                      <div className="binding-row" key={prop.id}>
+                                        <label>
+                                          <span>{prop.label} token</span>
+                                          <select
+                                            data-required-operations="content.draft.update"
+                                            disabled={!can('content.draft.update')}
+                                            value={
+                                              selectedNode.presentation?.tokenBindings?.[
+                                                prop.name
+                                              ] ?? ''
+                                            }
+                                            onChange={(event) =>
+                                              changePresentation(selectedNode, (current) => {
+                                                const tokenBindings = {
+                                                  ...current.tokenBindings,
+                                                };
+                                                if (event.target.value)
+                                                  tokenBindings[prop.name] = event.target.value;
+                                                else delete tokenBindings[prop.name];
+                                                return { ...current, tokenBindings };
+                                              })
+                                            }
+                                          >
+                                            <option value="">Unbound</option>
+                                            {tokens.map((token) => (
+                                              <option key={token.id} value={token.id}>
+                                                {token.name}
+                                              </option>
+                                            ))}
+                                          </select>
+                                        </label>
+                                        <button
+                                          data-required-operations="content.draft.update"
+                                          disabled={!can('content.draft.update')}
+                                          type="button"
+                                          onClick={() =>
+                                            changePresentation(selectedNode, (current) => ({
+                                              ...current,
+                                              responsive: {
+                                                ...current.responsive,
+                                                [prop.name]: {
+                                                  ...current.responsive?.[prop.name],
+                                                  [responsiveBreakpoint]:
+                                                    selectedNode.props[prop.name],
+                                                },
+                                              },
+                                            }))
+                                          }
+                                        >
+                                          Capture for {responsiveBreakpoint}
+                                        </button>
+                                        {Object.hasOwn(
+                                          selectedNode.presentation?.responsive?.[prop.name] ?? {},
+                                          responsiveBreakpoint,
+                                        ) ? (
+                                          <button
+                                            data-required-operations="content.draft.update"
+                                            disabled={!can('content.draft.update')}
+                                            type="button"
+                                            onClick={() =>
+                                              changePresentation(selectedNode, (current) => {
+                                                const values = {
+                                                  ...current.responsive?.[prop.name],
+                                                };
+                                                delete values[responsiveBreakpoint];
+                                                return {
+                                                  ...current,
+                                                  responsive: {
+                                                    ...current.responsive,
+                                                    [prop.name]: values,
+                                                  },
+                                                };
+                                              })
+                                            }
+                                          >
+                                            Clear {responsiveBreakpoint}
+                                          </button>
+                                        ) : null}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </section>
+                              {selectedManifest.slots.length > 0 ? (
+                                <div className="slot-list">
+                                  {selectedManifest.slots.map((slot) => {
+                                    const children = selectedNode.slots?.[slot.name] ?? [];
+                                    return (
+                                      <section className="slot-editor" key={slot.id}>
+                                        <header>
+                                          <div>
+                                            <strong className="slot-title">{slot.label}</strong>
+                                            <span className="slot-count">
+                                              {children.length}
+                                              {slot.max === undefined ? '' : ` / ${slot.max}`}{' '}
+                                              components
+                                            </span>
+                                          </div>
+                                          <small className="slot-rule">
+                                            Minimum {slot.min}; accepts{' '}
+                                            {slot.accepts.length > 0
+                                              ? slot.accepts.join(', ')
+                                              : 'any component'}
+                                          </small>
+                                        </header>
+                                        <button
+                                          data-required-operations="content.draft.update"
+                                          disabled={!can('content.draft.update')}
+                                          type="button"
+                                          className="slot-drop-zone"
+                                          onClick={() =>
+                                            setNotice({
+                                              tone: 'info',
+                                              message:
+                                                'To nest without dragging, focus the layer after a compatible container and press ArrowRight.',
+                                            })
+                                          }
+                                          onDragOver={(event) => event.preventDefault()}
+                                          onDrop={(event) => {
+                                            event.preventDefault();
+                                            if (draggedNodeId) {
                                               applyComposition(
-                                                addNode(
+                                                moveNode(
                                                   draftBlocks,
-                                                  node,
+                                                  draggedNodeId,
                                                   {
                                                     parentId: selectedNode.id,
                                                     slotName: slot.name,
@@ -8784,41 +9640,83 @@ export function App({ client = defaultClient }: AppProps = {}): ReactNode {
                                                   },
                                                   compositionRules,
                                                 ),
-                                                node.id,
+                                                draggedNodeId,
                                               );
-                                            }}
-                                          >
-                                            + {manifest.name}
-                                          </button>
-                                        ))}
-                                    </fieldset>
-                                  </section>
-                                );
-                              })}
-                            </div>
+                                            }
+                                            setDraggedNodeId(null);
+                                          }}
+                                        >
+                                          Drop a layer into {slot.label} · keyboard help
+                                        </button>
+                                        <fieldset className="slot-palette">
+                                          <legend>Add to {slot.label}</legend>
+                                          {manifests
+                                            .filter(
+                                              (manifest) =>
+                                                slot.accepts.length === 0 ||
+                                                slot.accepts.includes(manifest.id),
+                                            )
+                                            .map((manifest) => (
+                                              <button
+                                                data-required-operations="content.draft.update"
+                                                type="button"
+                                                key={manifest.id}
+                                                disabled={
+                                                  !can('content.draft.update') ||
+                                                  (slot.max !== undefined &&
+                                                    children.length >= slot.max)
+                                                }
+                                                onClick={() => {
+                                                  const node = newNode(manifest);
+                                                  applyComposition(
+                                                    addNode(
+                                                      draftBlocks,
+                                                      node,
+                                                      {
+                                                        parentId: selectedNode.id,
+                                                        slotName: slot.name,
+                                                        index: children.length,
+                                                      },
+                                                      compositionRules,
+                                                    ),
+                                                    node.id,
+                                                  );
+                                                }}
+                                              >
+                                                + {manifest.name}
+                                              </button>
+                                            ))}
+                                        </fieldset>
+                                      </section>
+                                    );
+                                  })}
+                                </div>
+                              ) : null}
+                            </section>
                           ) : null}
                         </section>
-                      ) : null}
-                    </section>
-
-                    <section className="history-section">
-                      <div className="section-heading">
-                        <div>
-                          <span className="kicker">History</span>
-                          <h2>Immutable revisions</h2>
+                      </fieldset>
+                    ) : null}
+                    {can('content.history.read') ? (
+                      <section className="history-section">
+                        <div className="section-heading">
+                          <div>
+                            <span className="kicker">History</span>
+                            <h2>Immutable revisions</h2>
+                          </div>
+                          <span>{revisions.length} saved</span>
                         </div>
-                        <span>{revisions.length} saved</span>
-                      </div>
-                      <ol>
-                        {revisions.map((revision) => (
-                          <li key={revision.id}>
-                            <strong>Revision {revision.sequence}</strong>
-                            <span>{new Date(revision.createdAt).toLocaleString()}</span>
-                            <code>{revision.actorId}</code>
-                          </li>
-                        ))}
-                      </ol>
-                    </section>
+                        <ol>
+                          {revisions.map((revision) => (
+                            <li key={revision.id}>
+                              <strong>Revision {revision.sequence}</strong>
+                              <span>{new Date(revision.createdAt).toLocaleString()}</span>
+                              <code>{revision.actorId}</code>
+                            </li>
+                          ))}
+                        </ol>
+                      </section>
+                    ) : null}
                   </div>
                 ) : null}
               </main>

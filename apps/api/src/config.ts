@@ -1,4 +1,5 @@
-import type { LocaleConfiguration } from '@gridstory/schema';
+import type { LocaleConfiguration, PlatformTopology } from '@gridstory/schema';
+import { validateStudioTopology } from './studio-context.js';
 import type { FederationAdapterConfig } from './identity-adapters.js';
 
 export interface ApiConfig {
@@ -12,6 +13,7 @@ export interface ApiConfig {
   assetDeliverySigningSecret: string;
   allowedPreviewOrigins: string[];
   locales: LocaleConfiguration[];
+  studioTopology?: PlatformTopology;
   webhookSigningSecret: string;
   allowedWebhookHosts?: string[];
   workerIntervalMs: number;
@@ -225,6 +227,17 @@ function parseDataRegions(value: string | undefined): string[] {
 }
 
 export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiConfig {
+  const locales = parseLocales(environment.GRIDSTORY_LOCALES_JSON);
+  let studioTopology: PlatformTopology | undefined;
+  if (environment.GRIDSTORY_STUDIO_TOPOLOGY_JSON !== undefined) {
+    let value: unknown;
+    try {
+      value = JSON.parse(environment.GRIDSTORY_STUDIO_TOPOLOGY_JSON);
+    } catch {
+      throw new Error('GRIDSTORY_STUDIO_TOPOLOGY_JSON must be valid JSON.');
+    }
+    studioTopology = validateStudioTopology(value, locales);
+  }
   const allowedOrigins = (
     environment.GRIDSTORY_ALLOWED_ORIGINS ?? 'http://localhost:5173,http://localhost:5174'
   )
@@ -307,7 +320,8 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiCon
     assetDeliverySigningSecret:
       environment.GRIDSTORY_ASSET_DELIVERY_SIGNING_SECRET ??
       'gridstory-local-asset-delivery-secret-change-me',
-    locales: parseLocales(environment.GRIDSTORY_LOCALES_JSON),
+    locales,
+    ...(studioTopology ? { studioTopology } : {}),
     webhookSigningSecret:
       environment.GRIDSTORY_WEBHOOK_SIGNING_SECRET ??
       'gridstory-local-webhook-signing-secret-change-me',

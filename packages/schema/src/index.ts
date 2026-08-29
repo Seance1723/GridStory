@@ -8,6 +8,7 @@ export * from './collaboration.js';
 export * from './content.js';
 export * from './content-federation.js';
 export * from './context.js';
+export * from './studio-context.js';
 export * from './contracts.js';
 export * from './design-system.js';
 export * from './governance.js';

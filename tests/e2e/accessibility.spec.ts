@@ -29,10 +29,16 @@ async function openMobileStudioNavigation(page: Page): Promise<void> {
   if ((page.viewportSize()?.width ?? Number.POSITIVE_INFINITY) > 900) return;
   const toggle = page.getByRole('button', { name: 'Toggle navigation' });
   const navigation = page.getByRole('complementary', { name: 'Primary Studio navigation' });
-  if ((await toggle.getAttribute('aria-expanded')) === 'false') {
+  if (
+    !(await navigation.evaluate((element) => element.classList.contains('studio-navigation--open')))
+  ) {
+    // Desktop ARIA describes condensation, not the drawer. Wait for the mobile render:
+    // expanded desktop has aria-expanded=true; compact desktop has no group disclosures.
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await expect(navigation.locator('.studio-navigation__group-toggle').first()).toBeVisible();
     await toggle.click();
-    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
   }
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
   await expect(navigation).toHaveClass(/studio-navigation--open/);
   await expect
     .poll(() => navigation.evaluate((element) => getComputedStyle(element).transform))
@@ -50,7 +56,7 @@ async function selectStudioPanel(
   if ((await button.getAttribute('aria-current')) !== 'page') {
     await openMobileStudioNavigation(page);
     await expect(button).toBeVisible();
-    await button.scrollIntoViewIfNeeded();
+    // Native clicks already scroll and check actionability; a separate scroll can stall WebKit.
     await button.click();
   }
   await expect(page.getByRole('region', { name: regionName })).toBeVisible();
@@ -74,7 +80,6 @@ async function selectStudioPages(page: Page, previousRegionName?: string): Promi
   if ((await button.getAttribute('aria-current')) !== 'page') {
     await openMobileStudioNavigation(page);
     await expect(button).toBeVisible();
-    await button.scrollIntoViewIfNeeded();
     await button.click();
   }
   await expect(page.locator('.studio-workspace')).toBeVisible();
@@ -108,6 +113,63 @@ async function expectNoDetectableWcagViolations(
       )
       .join('\n'),
   ).toEqual([]);
+}
+
+for (const condensed of [false, true]) {
+  test(`navigation helper waits for delayed desktop-to-mobile state (${condensed ? 'compact' : 'expanded'})`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto('/');
+    await expect(page.getByRole('heading', { name: 'Pages', exact: true })).toBeVisible();
+    const toggle = page.getByRole('button', { name: 'Toggle navigation' });
+    const navigation = page.getByRole('complementary', { name: 'Primary Studio navigation' });
+    if (condensed) await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-expanded', String(!condensed));
+
+    // Keep the app's width observation stale while the real CSS viewport changes.
+    // Native resize propagation must remain intact for browser automation (BUG-0460).
+    await page.evaluate(() => {
+      const descriptor = Object.getOwnPropertyDescriptor(window, 'innerWidth');
+      Object.defineProperty(window, 'innerWidth', {
+        configurable: true,
+        value: window.innerWidth,
+      });
+      window.addEventListener(
+        'gridstory-test-release-resize',
+        () => {
+          // A bounded fixture delay exposes the stale state to the helper; the helper
+          // itself must synchronize on rendered state, with its original deadlines.
+          window.setTimeout(() => {
+            if (descriptor) Object.defineProperty(window, 'innerWidth', descriptor);
+            else Reflect.deleteProperty(window, 'innerWidth');
+            window.dispatchEvent(new Event('resize'));
+          }, 500);
+        },
+        { once: true },
+      );
+    });
+    await page.setViewportSize({ width: 768, height: 900 });
+    await expect(toggle).toHaveAttribute('aria-expanded', String(!condensed));
+    await expect(navigation).not.toHaveClass(/studio-navigation--open/);
+
+    await page.evaluate(() => {
+      window.dispatchEvent(new Event('gridstory-test-release-resize'));
+    });
+    await openMobileStudioNavigation(page);
+    expect(await page.evaluate(() => window.innerWidth)).toBe(768);
+    await openMobileStudioNavigation(page); // An already-open drawer must not be toggled closed.
+    await selectStudioPanel(page, 'Library', 'Asset library');
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await expect(navigation).not.toHaveClass(/studio-navigation--open/);
+    await selectStudioPages(page, 'Asset library');
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await expect(toggle).toHaveAttribute('aria-expanded', String(!condensed));
+    await expect(navigation).toHaveCSS('width', condensed ? '86px' : '270px');
+    await expect(navigation).not.toHaveClass(/studio-navigation--open/);
+  });
 }
 
 test('task groups preserve every destination, keyboard disclosure, compact access and mobile selection', async ({
@@ -243,7 +305,21 @@ test('Studio shell follows the reference navigation, card, theme, and mobile dra
   const activePage = page.getByRole('button', { name: 'Pages', exact: true });
   await expect(navigation).toHaveCSS('width', '270px');
   await expect(navigation).toHaveCSS('background-color', 'rgb(255, 255, 255)');
-  await expect(header).toHaveCSS('height', '70px');
+  await expect(header).toHaveCSS('min-height', '70px');
+  await expect
+    .poll(async () => {
+      const [headerBox, contextBox] = await Promise.all([
+        header.boundingBox(),
+        header.locator('.studio-context-controls').boundingBox(),
+      ]);
+      return Boolean(
+        headerBox &&
+          contextBox &&
+          contextBox.y >= headerBox.y - 1 &&
+          contextBox.y + contextBox.height <= headerBox.y + headerBox.height + 1,
+      );
+    })
+    .toBe(true);
   await expect(page.locator('.studio-page')).toHaveCSS('background-color', 'rgb(245, 245, 245)');
   await expect(activePage).toHaveCSS('background-color', 'rgb(22, 90, 80)');
   await expect(activePage.locator('.studio-navigation__icon')).toHaveCSS(

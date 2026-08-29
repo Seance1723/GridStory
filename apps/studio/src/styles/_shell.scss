@@ -274,11 +274,11 @@
   background: var(--studio-surface);
   border-bottom: 1px solid var(--studio-border);
   color: var(--studio-text);
-  display: flex;
+  display: grid;
   gap: 20px;
-  height: 70px;
-  justify-content: space-between;
-  padding: 0 24px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-height: 70px;
+  padding: 8px 24px;
   position: sticky;
   top: 0;
   z-index: 20;
@@ -289,6 +289,96 @@
   align-items: center;
   display: flex;
   gap: 10px;
+}
+
+.studio-context-controls {
+  border: 0;
+  justify-self: center;
+  max-width: 660px;
+  margin: 0;
+  min-inline-size: 0;
+  min-width: 0;
+  padding: 0;
+  width: 100%;
+}
+
+.studio-context-controls__layout {
+  align-items: center;
+  display: grid;
+  gap: 8px 12px;
+  grid-template-columns: minmax(7rem, auto) minmax(0, 1fr);
+  min-width: 0;
+  width: 100%;
+}
+
+.studio-context-controls > legend {
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  width: 1px;
+}
+
+.studio-context-controls__current {
+  color: var(--studio-muted);
+  display: grid;
+  font-size: 0.65rem;
+  line-height: 1.25;
+  min-width: 0;
+}
+
+.studio-context-controls__current span {
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.studio-context-controls__current strong {
+  color: var(--studio-text);
+  font-size: 0.72rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-context-controls__fields {
+  align-items: end;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(3, minmax(5.5rem, 1fr)) auto;
+  min-width: 0;
+}
+
+.studio-context-controls__fields label {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.studio-context-controls__fields label > span,
+.studio-context-controls__notice {
+  color: var(--studio-muted);
+  font-size: 0.62rem;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.studio-shell.studio-shell .studio-context-controls select {
+  border-radius: 8px;
+  font-size: 0.69rem;
+  min-height: 32px;
+  padding-block: 0.3rem;
+  padding-left: 0.5rem;
+  padding-right: 1.7rem;
+}
+
+.studio-context-controls__apply {
+  min-height: 32px;
+}
+
+.studio-context-controls__notice {
+  grid-column: 2;
 }
 
 .studio-icon-button {

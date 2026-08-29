@@ -15,6 +15,7 @@ import {
   scimPatchSchema,
   scimUserInputSchema,
   sessionPolicySchema,
+  type Principal,
 } from '@gridstory/schema';
 import type { AuthenticationResponseJSON, RegistrationResponseJSON } from '@simplewebauthn/server';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
@@ -89,9 +90,12 @@ function setSessionCookie(
   });
 }
 
+export function hasIdentityAdministrationAccess(principal: Principal): boolean {
+  return principal.roles.some((role) => role === 'admin' || role === 'identity-admin');
+}
+
 function requireIdentityAdmin(request: FastifyRequest): void {
-  const principal = requestContext(request, 'draft').principal;
-  if (!principal.roles.some((role) => role === 'admin' || role === 'identity-admin')) {
+  if (!hasIdentityAdministrationAccess(requestContext(request, 'draft').principal)) {
     throw new GridStoryError('Identity administration requires an admin role.', 'forbidden', 403);
   }
 }

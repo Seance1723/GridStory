@@ -118,6 +118,12 @@ export function createStudioHistory(browser: Window, request: Request) {
       const hash = formatStudioLocation(location);
       if (hash !== accepted.hash) push(hash);
     },
+    reset(location: StudioLocation) {
+      pending?.abort();
+      compensation = undefined;
+      newEpoch();
+      write(formatStudioLocation(location), 0, false);
+    },
     navigate(location: StudioLocation) {
       if (compensation) return Promise.resolve();
       return transition(formatStudioLocation(location), false);
