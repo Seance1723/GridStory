@@ -31,6 +31,10 @@ Breakpoint selection is explicit rather than derived from browser globals. This 
 
 ## Studio controls
 
+The **Components** destination exposes the active manifest as a governed, read-only catalog. It identifies the application-owned system and immutable version; lists component props, slots, status, scoped usage, migration readiness and visual-regression hooks; and browses the registered tokens, ordered breakpoints, variants, symbols and templates. Opening Components from the minimized Home loads this manifest on demand and exposes an isolated retry state without making Home fetch the full catalog.
+
+Catalog browsing does not edit component source, renderer behavior, global tokens, application colors or the Studio theme. When an authorized component-capable draft remains selected, **Insert** delegates to the same atomic composition commands used by the editor. Without a loaded target or `content.draft.update`, the target context remains truthful and insertion controls remain disabled. Component migration actions retain their existing scoped impact and authorization checks.
+
 The selected-component inspector offers only variants for that component. Token choices must satisfy the prop's primitive type plus enum, numeric range, and string-length constraints. Editors can capture or clear a prop override for the selected authoring breakpoint.
 
 Linked symbols expose only their approved override fields. Their governed props and slots resolve from the versioned design system. Templates are inserted as one undoable command; insertion is rejected atomically if any root acceptance or cardinality rule fails.

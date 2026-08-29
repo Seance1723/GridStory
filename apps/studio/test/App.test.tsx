@@ -999,17 +999,24 @@ function createTestClient(
       });
     }
     if (url.pathname === '/api/v1/assets') return json(testAssets);
-    if (url.pathname === '/api/v1/components/gridstory.hero/migration') {
+    const componentMigrationMatch = url.pathname.match(
+      /^\/api\/v1\/components\/([^/]+)\/migration$/,
+    );
+    if (componentMigrationMatch) {
+      const componentId = decodeURIComponent(componentMigrationMatch[1] ?? '');
+      const component = componentManifests.find((candidate) => candidate.id === componentId);
+      if (!component) return json({ error: { message: 'Component not found.' } }, 404);
+      const isHero = componentId === 'gridstory.hero';
       return json({
         id: 'component_migration_test',
-        component: componentManifests[0],
+        component,
         usage: {
-          componentId: 'gridstory.hero',
-          currentVersion: 1,
-          totalInstances: 4,
-          entries: 2,
-          byPerspective: { draft: 4, published: 0 },
-          byVersion: { '1': 4 },
+          componentId,
+          currentVersion: component.version,
+          totalInstances: isHero ? 4 : 0,
+          entries: isHero ? 2 : 0,
+          byPerspective: { draft: isHero ? 4 : 0, published: 0 },
+          byVersion: isHero ? { '1': 4 } : {},
           locations: [],
         },
         outdatedInstances: 0,
@@ -1017,14 +1024,20 @@ function createTestClient(
         ready: true,
       });
     }
-    if (url.pathname === '/api/v1/components/gridstory.hero/visual-regression') {
+    const componentVisualMatch = url.pathname.match(
+      /^\/api\/v1\/components\/([^/]+)\/visual-regression$/,
+    );
+    if (componentVisualMatch) {
+      const componentId = decodeURIComponent(componentVisualMatch[1] ?? '');
+      const component = componentManifests.find((candidate) => candidate.id === componentId);
+      if (!component) return json({ error: { message: 'Component not found.' } }, 404);
       return json({
         id: 'visual_regression_test',
-        componentId: 'gridstory.hero',
-        version: 1,
-        scenarios: componentManifests[0]?.visualRegression.scenarios ?? [],
+        componentId,
+        version: component.version,
+        scenarios: component.visualRegression.scenarios,
         usageHooks: [],
-        selector: '[data-gridstory-component="gridstory.hero"][data-gridstory-version="1"]',
+        selector: `[data-gridstory-component="${componentId}"][data-gridstory-version="${component.version}"]`,
       });
     }
     if (url.pathname.startsWith('/api/v1/preview/sessions')) {
@@ -4373,10 +4386,111 @@ describe('GridStory Studio', () => {
 
     await screen.findByLabelText('Headline');
     await user.click(screen.getByRole('button', { name: 'Components' }));
-    const governance = await screen.findByRole('region', { name: 'Component governance' });
+    const governance = await screen.findByRole('region', { name: 'Governed design catalog' });
     expect(governance.textContent).toContain('4 scoped usages across 2 entries');
-    expect(governance.textContent).toContain('1 code-owned scenarios');
+    expect(within(governance).getByText('Code scenarios').nextElementSibling?.textContent).toBe(
+      '1',
+    );
     expect(governance.textContent).toContain('data-gridstory-version');
+  });
+
+  it('loads the governed design manifest only when Components opens from Home (BUG-0515)', async () => {
+    window.history.replaceState(null, '', '/');
+    const user = userEvent.setup();
+    const client = createTestClient({
+      context: restrictedContext([...studioOperations], [...studioScreens]),
+    });
+    const getDesignSystem = vi.spyOn(client, 'getDesignSystem');
+    render(<App client={client} />);
+
+    await screen.findByRole('region', { name: 'Editorial Home' });
+    expect(getDesignSystem).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Components' }));
+    await screen.findByRole('region', { name: 'Governed design catalog' });
+    expect(getDesignSystem).toHaveBeenCalledOnce();
+  });
+
+  it('browses immutable design choices and inserts a pattern through the existing editor command', async () => {
+    const user = userEvent.setup();
+    render(<App client={createTestClient()} />);
+
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Components' }));
+    const catalog = await screen.findByRole('region', { name: 'Governed design catalog' });
+    expect(
+      within(catalog).getByRole('heading', { name: 'GridStory Example Design System' }),
+    ).toBeTruthy();
+    expect(within(catalog).getByRole('group', { name: 'Design ownership' }).textContent).toContain(
+      'gridstory.example · version 1',
+    );
+    expect(catalog.textContent).toContain('Code-owned · read-only');
+    expect(within(catalog).getByRole('heading', { name: 'Tokens (3)' })).toBeTruthy();
+    expect(within(catalog).getByRole('heading', { name: 'Breakpoints (3)' })).toBeTruthy();
+    expect(within(catalog).getByRole('heading', { name: 'Variants (3)' })).toBeTruthy();
+    expect(within(catalog).getByRole('button', { name: 'Insert Campaign page' })).toBeTruthy();
+
+    await user.selectOptions(
+      within(catalog).getByLabelText('Inspect component'),
+      'gridstory.callout',
+    );
+    await within(catalog).findByRole('article', { name: 'Callout contract' });
+    expect(catalog.textContent).toContain('0 scoped usages across 0 entries');
+
+    await user.click(within(catalog).getByRole('button', { name: 'Insert Portability callout' }));
+    await user.click(screen.getByRole('button', { name: 'Pages' }));
+    expect(await screen.findByText('3 components')).toBeTruthy();
+    expect(screen.getByText('Unsaved changes')).toBeTruthy();
+  });
+
+  it('shows a retryable catalog error without losing the Components destination', async () => {
+    window.history.replaceState(null, '', '/');
+    const user = userEvent.setup();
+    const client = createTestClient({
+      context: restrictedContext([...studioOperations], [...studioScreens]),
+    });
+    const getDesignSystem = vi
+      .spyOn(client, 'getDesignSystem')
+      .mockRejectedValueOnce(new Error('Design registry unavailable.'));
+    render(<App client={client} />);
+
+    await screen.findByRole('region', { name: 'Editorial Home' });
+    await user.click(screen.getByRole('button', { name: 'Components' }));
+    const catalog = await screen.findByRole('region', { name: 'Governed design catalog' });
+    expect(within(catalog).getByRole('alert').textContent).toContain(
+      'Design registry unavailable.',
+    );
+    expect(screen.getByRole('button', { name: 'Components' }).getAttribute('aria-current')).toBe(
+      'page',
+    );
+    await user.click(within(catalog).getByRole('button', { name: 'Retry design catalog' }));
+    await within(catalog).findByRole('heading', { name: 'Tokens (3)' });
+    expect(getDesignSystem).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps approved pattern insertion disabled for component-read-only access', async () => {
+    const user = userEvent.setup();
+    render(
+      <App
+        client={createTestClient({
+          context: restrictedContext(
+            ['pages.list', 'content.read', 'schema.read', 'component.read'],
+            ['pages', 'components'],
+          ),
+        })}
+      />,
+    );
+
+    await screen.findByLabelText('Headline');
+    await user.click(screen.getByRole('button', { name: 'Components' }));
+    const catalog = await screen.findByRole('region', { name: 'Governed design catalog' });
+    expect(within(catalog).getByText('Unsaved target: First page')).toBeTruthy();
+    expect(
+      within(catalog).getByRole('button', { name: 'Insert Portability callout' }),
+    ).toHaveProperty('disabled', true);
+    expect(within(catalog).getByRole('button', { name: 'Insert Campaign page' })).toHaveProperty(
+      'disabled',
+      true,
+    );
   });
 
   it('loads managed assets into the responsive library and field picker', async () => {

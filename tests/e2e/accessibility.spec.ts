@@ -20,7 +20,7 @@ const studioManagementPanels = [
   ['Releases', 'Release manager'],
   ['Search', 'Search and discovery'],
   ['Operations', 'Administrator operations'],
-  ['Components', 'Component governance'],
+  ['Components', 'Governed design catalog'],
   ['Library', 'Asset library'],
   ['Page checks', 'Content quality report'],
 ] as const;

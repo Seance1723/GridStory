@@ -164,6 +164,72 @@ test('loads, uploads, filters, revises, inspects, and privately delivers scoped 
   ).toEqual([]);
 });
 
+test('browses the governed design catalog and inserts an approved pattern into the current draft', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const designRequests: string[] = [];
+  page.on('request', (request) => {
+    const url = new URL(request.url());
+    if (url.pathname === '/api/v1/design-system') designRequests.push(url.pathname);
+  });
+
+  await page.goto('/');
+  await expect(page.getByRole('region', { name: 'Editorial Home' })).toBeVisible();
+  expect(designRequests).toHaveLength(0);
+  const designResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'GET' &&
+      new URL(response.url()).pathname === '/api/v1/design-system',
+  );
+  await page.getByRole('button', { name: 'Components', exact: true }).click();
+  expect((await designResponse).ok()).toBe(true);
+
+  const catalog = page.getByRole('region', { name: 'Governed design catalog' });
+  await expect(catalog).toBeVisible();
+  await expect(
+    catalog.getByRole('heading', { name: 'GridStory Example Design System' }),
+  ).toBeVisible();
+  await expect(catalog.getByRole('group', { name: 'Design ownership' })).toContainText(
+    'gridstory.example · version 1',
+  );
+  await expect(catalog.getByRole('heading', { name: 'Tokens (3)' })).toBeVisible();
+  await expect(catalog.getByRole('heading', { name: 'Breakpoints (3)' })).toBeVisible();
+  await expect(catalog.getByRole('heading', { name: 'Variants (3)' })).toBeVisible();
+  await expect(catalog.getByRole('button', { name: 'Insert Portability callout' })).toBeDisabled();
+  await catalog.getByLabel('Inspect component').selectOption('gridstory.callout');
+  await expect(catalog.getByRole('article', { name: 'Callout contract' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Pages', exact: true }).click();
+  await page.getByLabel('Search title or slug').fill('Welcome to GridStory');
+  await page.getByRole('button', { name: 'Apply list view' }).click();
+  await page
+    .getByRole('complementary', { name: 'Content entries' })
+    .getByRole('button', { name: /Welcome to GridStory/ })
+    .click();
+  await expect(page.getByLabel('Title', { exact: true })).toHaveValue('Welcome to GridStory');
+
+  await page.getByRole('button', { name: 'Components', exact: true }).click();
+  await expect(catalog.getByText('Unsaved target: Welcome to GridStory')).toBeVisible();
+  const insertPattern = catalog.getByRole('button', { name: 'Insert Portability callout' });
+  await expect(insertPattern).toBeEnabled();
+  await insertPattern.click();
+  await page.getByRole('button', { name: 'Pages', exact: true }).click();
+  await expect(page.getByText('Unsaved changes', { exact: true })).toBeVisible();
+  await expect(
+    page
+      .getByRole('region', { name: 'Selected component inspector' })
+      .getByText('Linked to Portability callout'),
+  ).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const bounds = await page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }));
+  expect(bounds.scrollWidth).toBeLessThanOrEqual(bounds.clientWidth);
+});
+
 test('edits, protects, governs, publishes, and delivers React content', async ({
   page,
   request,

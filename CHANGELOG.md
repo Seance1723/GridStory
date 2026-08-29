@@ -20,6 +20,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Completed CMS-008's governed design catalog over the existing application-owned contracts: lazy Home-to-Components loading with isolated retry, immutable ownership/version identity, component prop/slot/status and lifecycle evidence, token/breakpoint/variant browsing, approved symbol/template browsing and authorized insertion through the unchanged atomic composition editor. Full `pnpm check` passes 690 active tests with 17 existing optional skips and all builds; the final real-browser matrix passes 66/66 across Chromium, Firefox and WebKit. No design mutation, raw source editing, global token write, palette/renderer contract, dependency or deployment was added.
+
 - Completed CMS-007's consolidated Media workflow over the existing asset boundary: isolated lazy Library loading, exact loaded-scope filters, safe resumable upload controls, selected metadata/focal-point revisions, immutable security/revision/rendition/usage evidence and verified-only ephemeral signed delivery. Final `pnpm check` passes 686 active tests with 17 existing optional skips and all builds; the final real-browser matrix passes 63/63 across Chromium, Firefox and WebKit. No DAM, folder/delete/publish behavior, storage/provider contract, dependency, permission meaning or deployment was added.
 
 - Completed CMS-006's factual editorial Home: a strict minimized complete-scope overview, independently authorized and failure-isolated Content/Reviews/Releases/Operations widgets, a top-level finite `#/home` destination, precise existing-detail links, and quick create delegated to CMS-004's canonical candidate/preflight/create path. The private parameter-free endpoint is `no-store`, response lists are fixed at five with exact coverage/bound wording, and denied widgets issue no source reads. Final `pnpm check` passes 669 active tests with 17 existing optional skips, React 18.3.1 SSR and production builds; the unchanged browser matrix passes 60/60 across Chromium, Firefox and WebKit. BUG-0489–BUG-0500 are resolved. No new permission, storage schema, analytics/task system, configurable widget framework, dependency, cross-tenant projection, merge, push or deployment was added.
@@ -80,6 +82,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Added consent/GPC-gated exact-published public event ingestion, private operational reports, typed universal-client methods, Studio content/component/release/adapter metrics, recovery/PostgreSQL/browser coverage, analytics guidance/ADR, and verified `THREAT-0032`/`GS-SEC-036` controls (M7-003).
 
 ### Changed
+
+- Started CMS-008 (Codex, 2026-08-29; baseline `0f31af5`) as a bounded T1 Studio-only catalog over the existing immutable component/design manifests, migration/usage/visual evidence and validated editor insertion commands. Add no design mutation, raw source editor, global token write, renderer contract, dependency, merge, push or deployment. BUG-0515 records the missing Home-to-Components design-manifest lazy load.
+
+- Logged new CMS-008 regression-fixture BUG-0516 after its first focused run correctly rejected Home under the general test context's deliberate `home.read` denial; use the existing fully authorized Home context without weakening the lazy-request boundary.
+
+- Logged CMS-008 compile-boundary BUG-0517: catalog insertion and its target label must require a loaded draft as well as entry, component field and permission, because selected identity alone is not editor readiness.
+
+- Logged CMS-008 fixture BUG-0518 after the focused gate reached the new governed catalog but retained unit/browser assertions still targeted the superseded panel landmark and prose layout.
+
+- Logged CMS-008 fixture BUG-0519 because the in-memory Studio transport mocked component lifecycle evidence only for Hero and therefore could not verify browsing another registered component contract.
+
+- Logged CMS-008 fixture BUG-0520 after a read-only assertion incorrectly treated the absence of update authorization as absence of a valid selected target; the catalog intentionally reports target context independently from disabled controls.
+
+- Logged CMS-008 verification-setup BUG-0521 after an ordinary Studio build overwrote the port-specific e2e bundle before a direct Playwright run and caused all engines to stop at access verification.
+
+- Logged CMS-008 accessibility BUG-0522 after the three-engine axe matrix measured 4.3:1 contrast for two muted labels on the primary-soft surface; retain the palette and use the existing standard text token for those roles.
+
+- Logged CMS-008 verification BUG-0523 after the first final Chromium matrix reached 21/22 passing scenarios but the unchanged all-surface containment case crossed its five-minute timeout during an abnormal 6.9-minute wall interval, despite passing in 59.1 seconds earlier in the same turn.
 
 - Logged CMS-007 aggregate browser findings BUG-0511–BUG-0514 before correction: use an exact security-badge assertion, restore selected-card AA contrast without changing the palette, constrain the Firefox mobile detail, and make the shared option-card style fixture independent of whether synthetic fallback or real assets are present.
 
@@ -158,6 +178,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Recorded the accepted M6-005 evidence-bound marketplace decision: operator-scoped publisher verification, signed compatibility/support metadata, injected non-executing artifact review, separate human approval, and approved-only handoff to the existing disabled plugin installation lifecycle.
 
 ### Fixed
+
+- Resolved CMS-008 BUG-0515–BUG-0523 across minimized-Home catalog loading, draft-ready insertion typing, generic component-selection fixtures, retained landmark assertions, focused e2e build setup, two 4.3:1 catalog labels and one non-reproducing host-delay timeout. The unchanged containment case passed twice at 58.6s/57.9s after the anomalous run, and the final 66-scenario matrix passes without assertion suppression, retry, timeout relaxation or palette replacement.
 
 - Resolved CMS-007 BUG-0501–BUG-0514 across lazy loading, upload cancellation/settlement/session identity, accessible naming/contrast, completed-asset selection, responsive intrinsic sizing and exact stateful browser fixtures. Focused ordered-state controls and the final unchanged 63-scenario three-engine matrix pass without suppressing Axe, weakening assertions, replacing colors or relaxing timeouts/retries.
 

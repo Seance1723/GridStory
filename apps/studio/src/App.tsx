@@ -15,8 +15,6 @@ import {
   type BacklinkRecord,
   type CollaborationSnapshot,
   type ComponentManifest,
-  type ComponentMigrationPlanResponse,
-  type ComponentVisualRegressionPlan,
   type ContentConnection,
   type ContentEntry,
   type ContentFederationDocument,
@@ -81,19 +79,8 @@ import type {
   WorkflowActionDefinition,
 } from '@gridstory/schema';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AssetControl, RelationControl, RichTextControl } from './authoring-controls.js';
 import { AssetLibrary, type AssetUploadView } from './asset-library.js';
-import { candidateIssueMessage, createContentCandidate } from './content-authoring.js';
-import {
-  buildContentListQuery,
-  contentListScopeKey,
-  type ContentListViewState,
-  defaultContentListView,
-  loadContentListViews,
-  removeContentListView,
-  type SavedContentListView,
-  saveContentListView,
-} from './content-list.js';
+import { AssetControl, RelationControl, RichTextControl } from './authoring-controls.js';
 import {
   addNode,
   type CompositionResult,
@@ -112,19 +99,31 @@ import {
   updateNodePresentation,
   updateNodeProps,
 } from './composition-editor.js';
+import { candidateIssueMessage, createContentCandidate } from './content-authoring.js';
 import {
-  type StudioDestination,
-  type StudioNavigationGroupId,
+  buildContentListQuery,
+  type ContentListViewState,
+  contentListScopeKey,
+  defaultContentListView,
+  loadContentListViews,
+  removeContentListView,
+  type SavedContentListView,
+  saveContentListView,
+} from './content-list.js';
+import { DesignCatalog, type DesignCatalogGovernance } from './design-catalog.js';
+import { EditorialHome } from './editorial-home.js';
+import {
   permittedNavigation,
   permittedPrimaryNavigation,
+  type StudioDestination,
+  type StudioNavigationGroupId,
   studioDestinations,
   studioNavigationGroups,
 } from './navigation.js';
-import { EditorialHome } from './editorial-home.js';
-import { createStudioHistory, type StudioHistory } from './studio-history.js';
-import { StudioContextControls } from './studio-context-controls.js';
-import { parseStudioLocation, type StudioLocation } from './studio-location.js';
 import { permits, studioMethodOperations } from './studio-capabilities.js';
+import { StudioContextControls } from './studio-context-controls.js';
+import { createStudioHistory, type StudioHistory } from './studio-history.js';
+import { parseStudioLocation, type StudioLocation } from './studio-location.js';
 import { StudioSession, type StudioSessionView } from './studio-session.js';
 
 const defaultClient = createGridStoryClient({
@@ -149,11 +148,6 @@ type ExternalPreviewState = {
   ready: boolean;
 };
 type EditableContent = Record<string, unknown>;
-type ComponentGovernanceState = {
-  componentId: string;
-  migration: ComponentMigrationPlanResponse;
-  visual: ComponentVisualRegressionPlan;
-};
 type AssetUploadContext = {
   body: Uint8Array;
   fileName: string;
@@ -1128,9 +1122,12 @@ function AuthorizedStudio({
   const [searchIndexStatus, setSearchIndexStatus] = useState<SearchIndexStatus | null>(null);
   const [backlinks, setBacklinks] = useState<BacklinkRecord[]>([]);
   const [relatedContent, setRelatedContent] = useState<RelatedContentRecord[]>([]);
-  const [componentGovernance, setComponentGovernance] = useState<ComponentGovernanceState | null>(
+  const [componentGovernance, setComponentGovernance] = useState<DesignCatalogGovernance | null>(
     null,
   );
+  const [designCatalogOpen, setDesignCatalogOpen] = useState(false);
+  const [designSystemLoading, setDesignSystemLoading] = useState(false);
+  const [designSystemError, setDesignSystemError] = useState<string | null>(null);
   const [compositionHistory, setCompositionHistory] = useState(() => createCompositionHistory([]));
   const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
   const [collaboration, setCollaboration] = useState<CollaborationSnapshot>(() =>
@@ -1482,6 +1479,7 @@ function AuthorizedStudio({
           setSchemas(schemaList);
           schemasRef.current = schemaList;
           setDesignSystem(designSystemManifest);
+          setDesignSystemError(null);
           setAssets(assetList);
           setAssetListLoaded(can('asset.read') && !homeDestination);
           setAssetListError(null);
@@ -4581,12 +4579,24 @@ function AuthorizedStudio({
     }
   };
 
-  const toggleComponentGovernance = async () => {
-    if (componentGovernance) {
-      setComponentGovernance(null);
-      return;
+  const refreshDesignSystem = async () => {
+    setDesignSystemLoading(true);
+    setDesignSystemError(null);
+    try {
+      setDesignSystem(await client.getDesignSystem());
+    } catch (error) {
+      setDesignSystemError(messageFrom(error));
+    } finally {
+      setDesignSystemLoading(false);
     }
-    await inspectComponent(manifests[0]?.id);
+  };
+
+  const openDesignCatalog = async () => {
+    setDesignCatalogOpen(true);
+    await Promise.all([
+      designSystem ? Promise.resolve() : refreshDesignSystem(),
+      componentGovernance ? Promise.resolve() : inspectComponent(manifests[0]?.id),
+    ]);
   };
 
   const migrateComponentEntry = async (entryId: string, componentId: string, revisionId: string) =>
@@ -5093,8 +5103,8 @@ function AuthorizedStudio({
       disabled: regionalBusy,
     },
     components: {
-      loaded: componentGovernance !== null,
-      ensureLoaded: () => toggleComponentGovernance(),
+      loaded: designCatalogOpen,
+      ensureLoaded: openDesignCatalog,
     },
     assets: { loaded: assetLibraryOpen, ensureLoaded: openAssetLibrary },
   };
@@ -8962,86 +8972,37 @@ function AuthorizedStudio({
               </div>
             </section>
           ) : null}
-          {visibleDestination === 'components' && componentGovernance ? (
-            <section className="governance-panel" aria-label="Component governance">
-              <div className="governance-panel__heading">
-                <span className="kicker">Component governance</span>
-                <label>
-                  <span>Inspect component</span>
-                  <select
-                    data-required-operations="component.read"
-                    disabled={!can('component.read')}
-                    value={componentGovernance.componentId}
-                    onChange={(event) => void inspectComponent(event.target.value)}
-                  >
-                    {manifests.map((manifest) => (
-                      <option key={manifest.id} value={manifest.id}>
-                        {manifest.name} · v{manifest.version}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              <div>
-                <strong>
-                  {componentGovernance.migration.component.name} ·{' '}
-                  {componentGovernance.migration.component.status}
-                </strong>
-                {componentGovernance.migration.component.deprecation ? (
-                  <p>
-                    {componentGovernance.migration.component.deprecation.reason}
-                    {componentGovernance.migration.component.deprecation.replacementId
-                      ? ` Replace with ${componentGovernance.migration.component.deprecation.replacementId}.`
-                      : ''}
-                  </p>
-                ) : null}
-                <p>
-                  {componentGovernance.migration.usage.totalInstances} scoped usages across{' '}
-                  {componentGovernance.migration.usage.entries} entries ·{' '}
-                  {componentGovernance.migration.outdatedInstances} outdated
-                </p>
-              </div>
-              <div>
-                <strong>Visual regression hooks</strong>
-                <p>
-                  {componentGovernance.visual.scenarios.length} code-owned scenarios ·{' '}
-                  {componentGovernance.visual.usageHooks.length} content hooks
-                </p>
-                <code>{componentGovernance.visual.selector}</code>
-              </div>
-              <div className="governance-panel__migrations">
-                {[
-                  ...new Map(
-                    componentGovernance.migration.usage.locations
-                      .filter(
-                        (location) =>
-                          location.perspective === 'draft' &&
-                          location.version !== componentGovernance.migration.component.version,
-                      )
-                      .map((location) => [location.entryId, location]),
-                  ).values(),
-                ].map((location) => (
-                  <button
-                    data-required-operations="content.draft.update"
-                    type="button"
-                    className="button button--secondary"
-                    key={location.entryId}
-                    disabled={
-                      !can('content.draft.update') || !componentGovernance.migration.ready || busy
-                    }
-                    onClick={() =>
-                      void migrateComponentEntry(
-                        location.entryId,
-                        componentGovernance.componentId,
-                        location.revisionId,
-                      )
-                    }
-                  >
-                    Migrate {location.entryId} from v{location.version}
-                  </button>
-                ))}
-              </div>
-            </section>
+          {visibleDestination === 'components' && designCatalogOpen ? (
+            <DesignCatalog
+              manifests={manifests}
+              designSystem={designSystem}
+              designLoading={designSystemLoading}
+              designError={designSystemError}
+              governance={componentGovernance}
+              canMigrate={can('content.draft.update')}
+              canInsert={Boolean(
+                selected &&
+                  draft &&
+                  componentField &&
+                  can('content.draft.update', 'component.read'),
+              )}
+              busy={busy}
+              insertionTarget={
+                selected && draft && componentField
+                  ? String(
+                      draft[activeSchema?.titleField ?? 'title'] ??
+                        draft.headline ??
+                        draft.title ??
+                        selected.id,
+                    )
+                  : null
+              }
+              onReloadDesign={refreshDesignSystem}
+              onInspectComponent={inspectComponent}
+              onMigrate={migrateComponentEntry}
+              onInsertSymbol={addSymbolAtRoot}
+              onInsertTemplate={addTemplateAtRoot}
+            />
           ) : null}
           {visibleDestination === 'quality' && qualityReport ? (
             <section className="quality-panel" aria-label="Content quality report">
