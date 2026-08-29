@@ -230,6 +230,74 @@ test('browses the governed design catalog and inserts an approved pattern into t
   expect(bounds.scrollWidth).toBeLessThanOrEqual(bounds.clientWidth);
 });
 
+test('inspects canonical schemas, lifecycle impact, and taxonomy identity without mutation controls', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const catalogRequests: string[] = [];
+  page.on('request', (request) => {
+    const url = new URL(request.url());
+    if (
+      url.pathname.startsWith('/api/v1/schema-lifecycle') ||
+      url.pathname === '/api/v1/taxonomies'
+    ) {
+      catalogRequests.push(`${request.method()} ${url.pathname}`);
+    }
+  });
+
+  await page.goto('/');
+  await expect(page.getByRole('region', { name: 'Editorial Home' })).toBeVisible();
+  expect(catalogRequests).toEqual([]);
+  await page.getByRole('button', { name: 'Schemas & taxonomies', exact: true }).click();
+
+  const catalog = page.getByRole('region', { name: 'Schema and taxonomy catalog' });
+  await expect(catalog).toBeVisible();
+  await expect(catalog.getByText('Code-owned · read-only')).toBeVisible();
+  await expect(
+    catalog.getByRole('heading', { name: 'Source, deployment, and drift' }),
+  ).toBeVisible();
+  await expect(catalog.getByRole('article', { name: 'Page model identity' })).toContainText(
+    '/:slug',
+  );
+  await expect(catalog.getByText('Hierarchical categories')).toBeVisible();
+  await expect(catalog.getByText(/parent product/)).toBeVisible();
+  await expect(catalog.getByText(/assessment only · no activation action/)).toBeVisible();
+
+  await catalog.getByLabel('Inspect model').selectOption('article');
+  await expect(catalog.getByRole('article', { name: 'Article model identity' })).toContainText(
+    '/articles/:slug',
+  );
+  await expect(catalog.getByText('headline · article.headline')).toBeVisible();
+  await catalog.getByLabel('Inspect taxonomy').selectOption('article-topics');
+  await expect(catalog.getByText('Flat tags')).toBeVisible();
+  await expect(catalog.getByText('product-news', { exact: true })).toBeVisible();
+  await expect(catalog.getByRole('button', { name: /edit|save|deploy|activate/i })).toHaveCount(0);
+  expect(catalogRequests).toEqual(
+    expect.arrayContaining([
+      'GET /api/v1/schema-lifecycle',
+      'GET /api/v1/schema-lifecycle/drift',
+      'POST /api/v1/schema-lifecycle/plan',
+      'GET /api/v1/taxonomies',
+    ]),
+  );
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const bounds = await page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }));
+  expect(bounds.scrollWidth).toBeLessThanOrEqual(bounds.clientWidth);
+  const accessibility = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+    .analyze();
+  expect(
+    accessibility.violations,
+    accessibility.violations
+      .map((violation) => `${violation.id}: ${violation.help} (${violation.nodes.length})`)
+      .join('\n'),
+  ).toEqual([]);
+});
+
 test('edits, protects, governs, publishes, and delivers React content', async ({
   page,
   request,
@@ -371,7 +439,9 @@ test('creates and revises a registered article without page-only composition or 
   await page.getByRole('button', { name: 'Create article' }).click();
   await expect(page.getByText('Draft article created.')).toBeVisible();
   await expect(page).toHaveURL(/#\/collections\?entry=[^&]+&type=article$/);
-  await page.getByLabel('Headline', { exact: true }).fill('Browser-authored article');
+  const createdHeadline = page.getByLabel('Headline', { exact: true });
+  expect(await createdHeadline.evaluate((field) => field.closest('[inert]') === null)).toBe(true);
+  await createdHeadline.fill('Browser-authored article');
   await relationOptions.first().click();
   await expect(relations.getByText('1 selected / 3')).toBeVisible();
 

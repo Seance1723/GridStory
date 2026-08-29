@@ -139,6 +139,7 @@ export function studioCapabilities(
       home: operations['home.read'],
       pages: operations['pages.list'],
       collections: operations['content.read'] && operations['schema.read'],
+      schemas: operations['schema.read'],
       workflows: operations['workflow.read'],
       releases: operations['release.read'],
       search: operations['search.read'],

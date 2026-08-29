@@ -14,6 +14,12 @@ GridStory uses one versioned, JSON-serializable IR for schema-as-code, the visua
 
 The deployment endpoint never accepts an alternate runtime schema. A visual change must round-trip into the code-owned IR first, preserving normal review and CI controls.
 
+## Studio inspection boundary
+
+Studio exposes a read-only **Schemas & taxonomies** catalog for the same canonical contracts. With `schema.read`, it shows registered model identity/version, collections, routes, localized fields, reusable objects, field types/constraints, source/deployment/generated fingerprints, and all four drift states. It does not expose source editing or deployment controls.
+
+The current-source migration assessment is shown only when the session already has `schema.plan`. This is the existing scoped assessment request: it can report safe/backfill/destructive steps, scanned/affected/invalid entry counts, lock estimate, rollback mode, and per-content-type impact. The catalog never calls `schema-lifecycle/deploy` and plan access does not imply activation authority. Without `schema.plan`, Studio sends no assessment request and states the boundary explicitly.
+
 For rolling deployment, use expand/contract sequencing: deploy additive compatibility first, keep current and candidate code tolerant of both representations, perform application-owned backfills separately, and contract only after the old generation is gone. Both generations must return exact successful `/ready` responses against the same PostgreSQL database before traffic shifts. The runnable preflight, backup prerequisite, shutdown contract, and rollback boundary are in [Database recovery, graceful shutdown, and rolling upgrades](recovery-and-rollouts.md).
 
 ## Risk model

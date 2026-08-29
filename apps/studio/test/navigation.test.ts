@@ -30,7 +30,7 @@ describe('Studio navigation metadata', () => {
   });
   it('retains every original destination exactly once in the agreed nonempty groups', () => {
     expect(studioNavigationGroups.map(({ id, destinations }) => [id, [...destinations]])).toEqual([
-      ['content', ['pages', 'collections', 'workflows', 'releases', 'search']],
+      ['content', ['pages', 'collections', 'schemas', 'workflows', 'releases', 'search']],
       ['media', ['assets']],
       ['design', ['components']],
       ['seo-quality', ['quality']],
@@ -56,8 +56,8 @@ describe('Studio navigation metadata', () => {
       ...studioPrimaryDestinations,
       ...studioNavigationGroups.flatMap(({ destinations }) => [...destinations]),
     ];
-    expect(destinations).toHaveLength(21);
-    expect(new Set(destinations).size).toBe(21);
+    expect(destinations).toHaveLength(22);
+    expect(new Set(destinations).size).toBe(22);
     expect([...destinations].sort()).toEqual(Object.keys(studioDestinations).sort());
     expect(new Set(studioNavigationGroups.map(({ id }) => id)).size).toBe(8);
   });
@@ -70,7 +70,8 @@ describe('Studio navigation metadata', () => {
       expect(label.trim().length).toBeGreaterThan(0);
       expect(icon.startsWith('M') || icon.startsWith('m')).toBe(true);
     }
-    expect(new Set(Object.values(studioDestinations).map(({ label }) => label)).size).toBe(21);
+    expect(studioDestinations.schemas.label).toBe('Schemas & taxonomies');
+    expect(new Set(Object.values(studioDestinations).map(({ label }) => label)).size).toBe(22);
     expect(
       studioNavigationGroups.some(({ label }) =>
         ['Home', 'Settings', 'Commerce', 'People', 'Navigation'].includes(label),

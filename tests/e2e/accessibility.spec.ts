@@ -20,6 +20,7 @@ const studioManagementPanels = [
   ['Releases', 'Release manager'],
   ['Search', 'Search and discovery'],
   ['Operations', 'Administrator operations'],
+  ['Schemas & taxonomies', 'Schema and taxonomy catalog'],
   ['Components', 'Governed design catalog'],
   ['Library', 'Asset library'],
   ['Page checks', 'Content quality report'],
@@ -224,7 +225,10 @@ test('task groups preserve every destination, keyboard disclosure, compact acces
   await title.fill('Unsaved navigation check');
   const navigation = page.getByRole('navigation', { name: 'Studio sections' });
   const groups = [
-    ['Content', ['Pages', 'Collections', 'Workflows', 'Releases', 'Search']],
+    [
+      'Content',
+      ['Pages', 'Collections', 'Schemas & taxonomies', 'Workflows', 'Releases', 'Search'],
+    ],
     ['Media', ['Library']],
     ['Design', ['Components']],
     ['SEO & quality', ['Page checks']],
@@ -245,7 +249,7 @@ test('task groups preserve every destination, keyboard disclosure, compact acces
       ],
     ],
   ] as const;
-  await expect(navigation.locator('.studio-navigation__item')).toHaveCount(21);
+  await expect(navigation.locator('.studio-navigation__item')).toHaveCount(22);
   await expect(
     navigation.getByRole('list', { name: 'Home' }).getByRole('button', { name: 'Home' }),
   ).toBeVisible();

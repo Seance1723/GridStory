@@ -414,7 +414,7 @@ describe('private Studio context HTTP contract', () => {
   });
 
   it.each(['admin', 'viewer', 'author', 'unmapped'])(
-    'matches actual reads for all 21 destinations with %s session',
+    'matches actual reads for all 22 destinations with %s session',
     async (role) => {
       const value = await fixture(role);
       const projected = await value.server.inject({
@@ -428,6 +428,7 @@ describe('private Studio context HTTP contract', () => {
         home: '/editorial/overview',
         pages: '/content?contentType=page',
         collections: '/schemas',
+        schemas: '/schema-lifecycle',
         workflows: '/workflows',
         releases: '/releases',
         search: '/search/index/status',

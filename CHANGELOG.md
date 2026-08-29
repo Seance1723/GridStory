@@ -20,6 +20,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Completed CMS-009's independently authorized schema and taxonomy catalog over existing canonical contracts: finite lazy navigation; registered model, field, route, localization and constraint inspection; source/deployment/generated drift and permitted current-source impact; stable hierarchical/flat taxonomy identity; truthful denied/error/loading states; and no mutation controls. The complete Studio suite passes 301/301, full `pnpm check` passes 697 active tests with 17 existing optional skips and all builds, and the final real-browser matrix passes 69/69 across Chromium, Firefox and WebKit. No runtime schema/taxonomy mutation, source editor, activation/deployment action, new permission, dependency, persisted-state/public-cache change or deployment was added.
+
 - Completed CMS-008's governed design catalog over the existing application-owned contracts: lazy Home-to-Components loading with isolated retry, immutable ownership/version identity, component prop/slot/status and lifecycle evidence, token/breakpoint/variant browsing, approved symbol/template browsing and authorized insertion through the unchanged atomic composition editor. Full `pnpm check` passes 690 active tests with 17 existing optional skips and all builds; the final real-browser matrix passes 66/66 across Chromium, Firefox and WebKit. No design mutation, raw source editing, global token write, palette/renderer contract, dependency or deployment was added.
 
 - Completed CMS-007's consolidated Media workflow over the existing asset boundary: isolated lazy Library loading, exact loaded-scope filters, safe resumable upload controls, selected metadata/focal-point revisions, immutable security/revision/rendition/usage evidence and verified-only ephemeral signed delivery. Final `pnpm check` passes 686 active tests with 17 existing optional skips and all builds; the final real-browser matrix passes 63/63 across Chromium, Firefox and WebKit. No DAM, folder/delete/publish behavior, storage/provider contract, dependency, permission meaning or deployment was added.
@@ -82,6 +84,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Added consent/GPC-gated exact-published public event ingestion, private operational reports, typed universal-client methods, Studio content/component/release/adapter metrics, recovery/PostgreSQL/browser coverage, analytics guidance/ADR, and verified `THREAT-0032`/`GS-SEC-036` controls (M7-003).
 
 ### Changed
+
+- Started CMS-009 (Codex, 2026-08-29; baseline `73d1db7`) as a bounded T1 read-only Studio catalog over the existing registered schema, lifecycle/drift, authorized current-source impact and taxonomy contracts. Add no schema/taxonomy mutation, deployment/activation control, source editor, field kind, permission meaning, dependency, cache/public-delivery change, merge, push or deployment.
+
+- Logged CMS-009 contract-typing BUG-0524 after the first focused typecheck found that defaulted canonical schema arrays remain optional in the input-form type consumed by Studio; preserve that compatibility and render omitted arrays as empty without changing the canonical contract.
+
+- Logged CMS-009 verification-environment BUG-0525 after the first focused Vitest command executed zero tests because the managed Windows sandbox denied all forks workers with `spawn EPERM`; rerun the identical suite with process-spawn permission and change no test behavior.
+
+- Logged CMS-009 regression-fixture BUG-0526 after the permitted focused run passed 173 existing tests but strict canonical construction rejected the new catalog fixture's undeclared slug fields and taxonomy reference before its cases started.
+
+- Logged CMS-009 focused findings BUG-0527–BUG-0528 before correction: retain the exact taxonomy parent identity with a substring matcher, and render the canonical default slug pattern instead of `undefined` for input-form definitions.
+
+- Logged CMS-009 browser-setup BUG-0529 after the first catalog journey used newly built Studio assets against a stale pre-change API/schema distribution and correctly stopped at fail-closed context verification; rebuild the full workspace before e2e bundles and retain the browser assertions unchanged.
+
+- Logged CMS-009 retained-fixture BUG-0530 after the complete Studio suite passed 300/301 tests and found only the compact-navigation assertion still constrained to the pre-catalog destination count.
+
+- Logged existing post-create readiness BUG-0531 during CMS-009's final WebKit gate: the Article success notice could render before its tracked mutation released editor inertness, allowing an immediate visible fill to be lost before a relation update and Revision 2 save. CMS-009 itself passes; reproduce the exact case before a bounded CMS-004 readiness repair.
+
+- Logged CMS-009 verification-invocation BUG-0532 after the exact Studio regression used a repository-relative path inside the package-scoped script and therefore ran no tests; rerun the same named case with the correct package-relative path and change no assertion or deadline.
+
+- Logged BUG-0531 regression-locator BUG-0533 after the new unit check used `Headline` instead of that canonical fixture's `Article headline`; correct only the locator and retain the exact post-notice inertness contract.
 
 - Started CMS-008 (Codex, 2026-08-29; baseline `0f31af5`) as a bounded T1 Studio-only catalog over the existing immutable component/design manifests, migration/usage/visual evidence and validated editor insertion commands. Add no design mutation, raw source editor, global token write, renderer contract, dependency, merge, push or deployment. BUG-0515 records the missing Home-to-Components design-manifest lazy load.
 
@@ -178,6 +200,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Recorded the accepted M6-005 evidence-bound marketplace decision: operator-scoped publisher verification, signed compatibility/support metadata, injected non-executing artifact review, separate human approval, and approved-only handoff to the existing disabled plugin installation lifecycle.
 
 ### Fixed
+
+- Resolved BUG-0524–BUG-0530 and BUG-0532–BUG-0533 across CMS-009 contract typing, canonical fixtures, semantic locators, default constraint presentation, build ordering, finite navigation counts and exact verification invocation. Focused gates, 301 Studio tests, the 697-active-test repository gate and the 69-scenario browser matrix pass without relaxed assertions, retries or deadlines.
+
+- Resolved BUG-0531 by publishing the existing creation-success notice only after its tracked entry mutation settles, so the editor cannot still be inert when immediate authoring begins. The direct no-inert unit assertion, 9/9 repeated Article journeys across all engines and final 69/69 browser matrix pass; no mutation semantics or timeout changed.
 
 - Resolved CMS-008 BUG-0515–BUG-0523 across minimized-Home catalog loading, draft-ready insertion typing, generic component-selection fixtures, retained landmark assertions, focused e2e build setup, two 4.3:1 catalog labels and one non-reproducing host-delay timeout. The unchanged containment case passed twice at 58.6s/57.9s after the anomalous run, and the final 66-scenario matrix passes without assertion suppression, retry, timeout relaxation or palette replacement.
 

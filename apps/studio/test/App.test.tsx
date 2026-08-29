@@ -837,6 +837,82 @@ function createTestClient(
       );
     }
     if (url.pathname === '/api/v1/editorial/overview') return json(editorialOverview());
+    const schemaSource = {
+      format: 'gridstory.schema-ir',
+      irVersion: 1,
+      schemas: testSchemas,
+      components: componentManifests,
+    };
+    if (url.pathname === '/api/v1/schema-lifecycle/drift') {
+      return json({
+        inSync: true,
+        sourceFingerprint: 'a'.repeat(64),
+        expectedGeneratedTypesFingerprint: 'b'.repeat(64),
+        states: [
+          {
+            source: 'source',
+            expectedFingerprint: 'a'.repeat(64),
+            actualFingerprint: 'a'.repeat(64),
+            status: 'match',
+          },
+          {
+            source: 'deployed',
+            expectedFingerprint: 'a'.repeat(64),
+            actualFingerprint: 'a'.repeat(64),
+            status: 'match',
+          },
+          {
+            source: 'database',
+            expectedFingerprint: 'a'.repeat(64),
+            actualFingerprint: 'a'.repeat(64),
+            status: 'match',
+          },
+          {
+            source: 'generated-types',
+            expectedFingerprint: 'b'.repeat(64),
+            actualFingerprint: 'b'.repeat(64),
+            status: 'match',
+          },
+        ],
+      });
+    }
+    if (url.pathname === '/api/v1/schema-lifecycle/plan' && init?.method === 'POST') {
+      return json({
+        plan: {
+          id: 'migration-current-source',
+          fromFingerprint: 'a'.repeat(64),
+          toFingerprint: 'a'.repeat(64),
+          approval: { required: false, reasons: [] },
+          estimate: { lock: 'none', dataScanRequired: false },
+          rollback: { mode: 'automatic', reason: 'No changes.' },
+          summary: { safe: 0, backfill: 0, destructive: 0 },
+          steps: [],
+        },
+        impact: {
+          scannedEntries: testEntries.length,
+          affectedEntries: 0,
+          byContentType: {},
+          invalidEntries: [],
+        },
+      });
+    }
+    if (url.pathname === '/api/v1/schema-lifecycle') {
+      return json({
+        source: schemaSource,
+        visualModel: { format: 'gridstory.visual-model', modelVersion: 1, ir: schemaSource },
+        fingerprint: 'a'.repeat(64),
+        generatedTypes: 'export interface Page {}',
+        generatedTypesFingerprint: 'b'.repeat(64),
+        deployment: {
+          document: schemaSource,
+          fingerprint: 'a'.repeat(64),
+          generatedTypes: 'export interface Page {}',
+          generatedTypesFingerprint: 'b'.repeat(64),
+          deployedAt: now,
+          actorId: 'operator',
+        },
+      });
+    }
     if (url.pathname === '/api/v1/schemas') return json(testSchemas);
     if (url.pathname === '/api/v1/components') return json(componentManifests);
     if (url.pathname === '/api/v1/design-system') return json(exampleDesignSystem);
@@ -1068,6 +1144,12 @@ function createTestClient(
           name: 'Topics',
           hierarchical: true,
           terms: [{ id: 'product', slug: 'product', label: 'Product' }],
+        },
+        {
+          id: 'article-topics',
+          name: 'Article topics',
+          hierarchical: false,
+          terms: [{ id: 'product-news', slug: 'product-news', label: 'Product news' }],
         },
       ]);
     }
@@ -2893,6 +2975,7 @@ describe('GridStory Studio', () => {
     });
     await user.click(screen.getByRole('button', { name: 'Create article' }));
     await screen.findByText('Draft article created.');
+    expect(screen.getByLabelText('Article headline').closest('[inert]')).toBeNull();
     expect(create).toHaveBeenCalledOnce();
     expect(create.mock.calls[0]?.[0]).toBe('article');
     expect(create.mock.calls[0]?.[1]).toMatchObject({
@@ -3169,7 +3252,7 @@ describe('GridStory Studio', () => {
       within(navigation).queryByRole('button', { name: 'Identity providers', exact: true }),
     ).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Toggle navigation' }));
-    expect(within(navigation).getAllByRole('button')).toHaveLength(20);
+    expect(within(navigation).getAllByRole('button')).toHaveLength(21);
     expect(
       within(navigation)
         .getByRole('button', { name: 'Identity providers', exact: true })
@@ -4408,6 +4491,61 @@ describe('GridStory Studio', () => {
     await user.click(screen.getByRole('button', { name: 'Components' }));
     await screen.findByRole('region', { name: 'Governed design catalog' });
     expect(getDesignSystem).toHaveBeenCalledOnce();
+  });
+
+  it('loads canonical schema lifecycle, taxonomy, and permitted impact only when the catalog opens from Home', async () => {
+    window.history.replaceState(null, '', '/');
+    const user = userEvent.setup();
+    const client = createTestClient({
+      context: restrictedContext([...studioOperations], [...studioScreens]),
+    });
+    const lifecycle = vi.spyOn(client, 'getSchemaLifecycle');
+    const drift = vi.spyOn(client, 'getSchemaDrift');
+    const taxonomies = vi.spyOn(client, 'listTaxonomies');
+    const impact = vi.spyOn(client, 'planSchema');
+    render(<App client={client} />);
+
+    await screen.findByRole('region', { name: 'Editorial Home' });
+    expect(lifecycle).not.toHaveBeenCalled();
+    expect(drift).not.toHaveBeenCalled();
+    expect(taxonomies).not.toHaveBeenCalled();
+    expect(impact).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Schemas & taxonomies' }));
+    const catalog = await screen.findByRole('region', { name: 'Schema and taxonomy catalog' });
+    expect(within(catalog).getByText('Code-owned · read-only')).toBeTruthy();
+    expect(within(catalog).getByText('In sync')).toBeTruthy();
+    expect(within(catalog).getByText('Hierarchical categories')).toBeTruthy();
+    expect(
+      within(catalog).getByText(
+        `Plan migration-current-source · assessment only · no activation action`,
+      ),
+    ).toBeTruthy();
+    expect(lifecycle).toHaveBeenCalledOnce();
+    expect(drift).toHaveBeenCalledOnce();
+    expect(taxonomies).toHaveBeenCalledOnce();
+    expect(impact).toHaveBeenCalledOnce();
+  });
+
+  it('keeps taxonomy and impact requests absent when schema-only access opens the catalog', async () => {
+    window.history.replaceState(null, '', '/');
+    const user = userEvent.setup();
+    const client = createTestClient({
+      context: restrictedContext(['home.read', 'schema.read'], ['home', 'schemas']),
+    });
+    const taxonomies = vi.spyOn(client, 'listTaxonomies');
+    const impact = vi.spyOn(client, 'planSchema');
+    render(<App client={client} />);
+
+    await screen.findByRole('region', { name: 'Editorial Home' });
+    await user.click(screen.getByRole('button', { name: 'Schemas & taxonomies' }));
+    const catalog = await screen.findByRole('region', { name: 'Schema and taxonomy catalog' });
+    expect(within(catalog).getByText(/No taxonomy request was sent/)).toBeTruthy();
+    expect(
+      within(catalog).getByText(/does not request or imply deployment authority/),
+    ).toBeTruthy();
+    expect(taxonomies).not.toHaveBeenCalled();
+    expect(impact).not.toHaveBeenCalled();
   });
 
   it('browses immutable design choices and inserts a pattern through the existing editor command', async () => {

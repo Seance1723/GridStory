@@ -8,6 +8,10 @@ export const studioDestinations = {
     label: 'Collections',
     icon: 'M4 6h16v5H4zM4 13h16v5H4zM8 8.5h8M8 15.5h8',
   },
+  schemas: {
+    label: 'Schemas & taxonomies',
+    icon: 'M4 5h7v6H4zM13 5h7v6h-7zM4 13h7v6H4zM13 13h7v6h-7zM11 8h2M8 11v2M16 11v2',
+  },
   workflows: { label: 'Workflows', icon: 'M5 5h5v5H5zM14 14h5v5h-5zM10 7h4a3 3 0 0 1 3 3v4' },
   releases: { label: 'Releases', icon: 'M5 19V5h14v14zM8 9h8M8 13h5' },
   search: {
@@ -63,7 +67,7 @@ export const studioNavigationGroups = [
   {
     id: 'content',
     label: 'Content',
-    destinations: ['pages', 'collections', 'workflows', 'releases', 'search'],
+    destinations: ['pages', 'collections', 'schemas', 'workflows', 'releases', 'search'],
   },
   { id: 'media', label: 'Media', destinations: ['assets'] },
   { id: 'design', label: 'Design', destinations: ['components'] },

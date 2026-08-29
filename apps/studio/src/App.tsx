@@ -56,6 +56,9 @@ import {
   type ReleasePreview,
   type SearchIndexStatus,
   type SearchResponse,
+  type SchemaDriftReport,
+  type SchemaLifecycleInspection,
+  type SchemaMigrationAssessmentResponse,
   type TaxonomyDefinition,
   type UpdateAssetInput,
   type WorkflowDefinition,
@@ -124,6 +127,7 @@ import { permits, studioMethodOperations } from './studio-capabilities.js';
 import { StudioContextControls } from './studio-context-controls.js';
 import { createStudioHistory, type StudioHistory } from './studio-history.js';
 import { parseStudioLocation, type StudioLocation } from './studio-location.js';
+import { SchemaCatalog } from './schema-catalog.js';
 import { StudioSession, type StudioSessionView } from './studio-session.js';
 
 const defaultClient = createGridStoryClient({
@@ -1122,6 +1126,15 @@ function AuthorizedStudio({
   const [searchIndexStatus, setSearchIndexStatus] = useState<SearchIndexStatus | null>(null);
   const [backlinks, setBacklinks] = useState<BacklinkRecord[]>([]);
   const [relatedContent, setRelatedContent] = useState<RelatedContentRecord[]>([]);
+  const [schemaCatalogOpen, setSchemaCatalogOpen] = useState(false);
+  const [schemaCatalogLoading, setSchemaCatalogLoading] = useState(false);
+  const [schemaCatalogError, setSchemaCatalogError] = useState<string | null>(null);
+  const [schemaLifecycle, setSchemaLifecycle] = useState<SchemaLifecycleInspection | null>(null);
+  const [schemaDrift, setSchemaDrift] = useState<SchemaDriftReport | null>(null);
+  const [schemaTaxonomies, setSchemaTaxonomies] = useState<TaxonomyDefinition[]>([]);
+  const [schemaImpact, setSchemaImpact] = useState<SchemaMigrationAssessmentResponse | null>(null);
+  const [schemaImpactLoading, setSchemaImpactLoading] = useState(false);
+  const [schemaImpactError, setSchemaImpactError] = useState<string | null>(null);
   const [componentGovernance, setComponentGovernance] = useState<DesignCatalogGovernance | null>(
     null,
   );
@@ -2415,8 +2428,9 @@ function AuthorizedStudio({
     !dirtyRef.current ||
     window.confirm('Discard the unsaved changes and open another content entry?');
 
-  const createEntry = async (schemaOverride?: ContentSchemaDefinition) =>
-    trackEntryMutation(async () => {
+  const createEntry = async (schemaOverride?: ContentSchemaDefinition) => {
+    let createdSchemaName: string | null = null;
+    await trackEntryMutation(async () => {
       if (busyRef.current || entryReadRef.current) return;
       const schema = schemaOverride ?? activeSchema;
       if (!schema) {
@@ -2448,12 +2462,15 @@ function AuthorizedStudio({
         );
         if (createdFromHome && opened) activateDestination(destination);
         setEditorialOverview(null);
-        setNotice({ tone: 'success', message: `Draft ${schema.name.toLowerCase()} created.` });
+        createdSchemaName = schema.name.toLowerCase();
       } catch (error) {
         setNotice({ tone: 'error', message: messageFrom(error) });
         setBusy(false);
       }
     });
+    if (createdSchemaName)
+      setNotice({ tone: 'success', message: `Draft ${createdSchemaName} created.` });
+  };
 
   const save = async (): Promise<ContentEntry | null> =>
     trackEntryMutation(async () => {
@@ -4599,6 +4616,44 @@ function AuthorizedStudio({
     ]);
   };
 
+  const refreshSchemaCatalog = async () => {
+    setSchemaCatalogLoading(true);
+    setSchemaCatalogError(null);
+    const contracts = Promise.all([
+      schemas.length ? Promise.resolve(schemas) : client.getSchemas(),
+      client.getSchemaLifecycle(),
+      client.getSchemaDrift(),
+      can('search.read') ? client.listTaxonomies() : Promise.resolve([]),
+    ])
+      .then(([schemaList, lifecycle, drift, taxonomies]) => {
+        setSchemas(schemaList);
+        schemasRef.current = schemaList;
+        setSchemaLifecycle(lifecycle);
+        setSchemaDrift(drift);
+        setSchemaTaxonomies(taxonomies);
+      })
+      .catch((error: unknown) => setSchemaCatalogError(messageFrom(error)))
+      .finally(() => setSchemaCatalogLoading(false));
+
+    const assessment = can('schema.plan')
+      ? (() => {
+          setSchemaImpactLoading(true);
+          setSchemaImpactError(null);
+          return client
+            .planSchema()
+            .then(setSchemaImpact)
+            .catch((error: unknown) => setSchemaImpactError(messageFrom(error)))
+            .finally(() => setSchemaImpactLoading(false));
+        })()
+      : Promise.resolve();
+    await Promise.all([contracts, assessment]);
+  };
+
+  const openSchemaCatalog = async () => {
+    setSchemaCatalogOpen(true);
+    if (!schemaLifecycle || !schemaDrift) await refreshSchemaCatalog();
+  };
+
   const migrateComponentEntry = async (entryId: string, componentId: string, revisionId: string) =>
     trackEntryMutation(async () => {
       if (dirtyRef.current && selected?.id === entryId) {
@@ -5052,6 +5107,7 @@ function AuthorizedStudio({
     home: { loaded: true },
     pages: { loaded: true },
     collections: { loaded: true },
+    schemas: { loaded: schemaCatalogOpen, ensureLoaded: openSchemaCatalog },
     workflows: { loaded: workflowDesignerOpen, ensureLoaded: () => toggleWorkflowDesigner() },
     releases: { loaded: releasePanelOpen, ensureLoaded: () => openReleasePanel() },
     search: { loaded: searchPanelOpen, ensureLoaded: () => toggleSearchPanel() },
@@ -9002,6 +9058,22 @@ function AuthorizedStudio({
               onMigrate={migrateComponentEntry}
               onInsertSymbol={addSymbolAtRoot}
               onInsertTemplate={addTemplateAtRoot}
+            />
+          ) : null}
+          {visibleDestination === 'schemas' && schemaCatalogOpen ? (
+            <SchemaCatalog
+              schemas={schemas}
+              lifecycle={schemaLifecycle}
+              drift={schemaDrift}
+              impact={schemaImpact}
+              taxonomies={schemaTaxonomies}
+              loading={schemaCatalogLoading}
+              error={schemaCatalogError}
+              canReadTaxonomies={can('search.read')}
+              canAssessImpact={can('schema.plan')}
+              impactLoading={schemaImpactLoading}
+              impactError={schemaImpactError}
+              onRetry={refreshSchemaCatalog}
             />
           ) : null}
           {visibleDestination === 'quality' && qualityReport ? (
