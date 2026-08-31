@@ -123,12 +123,18 @@ describe('analytics HTTP workflow', () => {
       headers: managementHeaders,
       payload: { limit: 25 },
     });
-    expect(delivered).toHaveLength(4);
+    await server.inject({
+      method: 'POST',
+      url: '/api/v1/operations/drain',
+      headers: managementHeaders,
+      payload: { limit: 25 },
+    });
+    expect(delivered).toHaveLength(10);
     expect(
       delivered.filter(
         (evidence) => evidence.kind === 'event' && evidence.event.name === 'content.created',
       ),
-    ).toHaveLength(2);
+    ).toHaveLength(4);
     expect(
       delivered
         .filter((evidence) => evidence.kind === 'event')
@@ -150,7 +156,7 @@ describe('analytics HTTP workflow', () => {
     expect(report.json()).toMatchObject({
       eventCounts: { 'component.viewed': 1 },
       components: [{ componentId: 'hero', version: 2, views: 1 }],
-      adapterDeliveries: [{ adapterId: 'test-destination', succeeded: 4, dead: 0 }],
+      adapterDeliveries: [{ adapterId: 'test-destination', succeeded: 10, dead: 0 }],
     });
     expect(report.json()).not.toHaveProperty('receipts');
 

@@ -8,6 +8,7 @@ import type {
   ContentScope,
   PortableContentRecord,
   SchemaIrDocument,
+  ValidationIssue,
 } from '@gridstory/schema';
 
 export type {
@@ -70,6 +71,27 @@ export interface AuditEvent extends ContentScope {
 }
 
 export type Awaitable<T> = T | Promise<T>;
+
+export interface ContentLifecycleReadView {
+  getById(id: string): Awaitable<ContentEntry | null>;
+  list(contentType?: string): Awaitable<ContentEntry[]>;
+}
+
+export interface ContentLifecycleValidationInput {
+  scope: ContentScope;
+  perspective: ContentPerspective;
+  contentType: string;
+  data: Record<string, unknown>;
+  view: ContentLifecycleReadView;
+  entryId?: string;
+  previousData?: Record<string, unknown>;
+  translationGroupId?: string;
+}
+
+export interface ContentLifecycleValidator {
+  contentType: string;
+  validate(input: ContentLifecycleValidationInput): Awaitable<ValidationIssue[]>;
+}
 
 export interface SchemaDeployment extends ContentScope {
   document: SchemaIrDocument;
@@ -321,6 +343,7 @@ export interface ContentServiceOptions {
   qualityGate?: ContentPublishGate;
   workflowGate?: ContentWorkflowGate;
   governanceGate?: GovernedWriteGate;
+  lifecycleValidators?: ContentLifecycleValidator[];
 }
 
 export type {

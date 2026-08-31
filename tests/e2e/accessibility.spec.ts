@@ -5,6 +5,7 @@ import { studioDestinations } from '../../apps/studio/src/navigation.js';
 const wcagTags = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 
 const studioManagementPanels = [
+  ['Menus', 'Visitor menus'],
   ['Identity providers', 'Enterprise identity administration'],
   ['Data governance', 'Data governance administration'],
   ['Migrations', 'CMS migration workbench'],
@@ -226,6 +227,7 @@ test('task groups preserve every destination, keyboard disclosure, compact acces
   await title.fill('Unsaved navigation check');
   const navigation = page.getByRole('navigation', { name: 'Studio sections' });
   const groups = [
+    ['Navigation', ['Menus']],
     [
       'Content',
       ['Pages', 'Collections', 'Schemas & taxonomies', 'Workflows', 'Releases', 'Search'],
@@ -251,11 +253,11 @@ test('task groups preserve every destination, keyboard disclosure, compact acces
       ],
     ],
   ] as const;
-  await expect(navigation.locator('.studio-navigation__item')).toHaveCount(23);
+  await expect(navigation.locator('.studio-navigation__item')).toHaveCount(24);
   await expect(
     navigation.getByRole('list', { name: 'Home' }).getByRole('button', { name: 'Home' }),
   ).toBeVisible();
-  await expect(navigation.locator('.studio-navigation__group-toggle')).toHaveCount(9);
+  await expect(navigation.locator('.studio-navigation__group-toggle')).toHaveCount(10);
   for (const [label, leaves] of groups) {
     const toggle = navigation.getByRole('button', { name: label, exact: true });
     const list = navigation.getByRole('list', { name: label, exact: true });
@@ -581,7 +583,9 @@ test('Studio critical authoring states have no detectable WCAG 2.2 A/AA violatio
 test('every Studio surface contains readable text and controls at each responsive width', async ({
   page,
 }) => {
-  test.setTimeout(300_000);
+  // The sweep covers all 24 destinations at six widths plus the complete dark-state pass.
+  // Cold WebKit is intentionally given a bounded seven-minute aggregate budget.
+  test.setTimeout(420_000);
   await page.goto('/#/pages');
   await expect(page.getByRole('heading', { name: 'Pages' })).toBeVisible();
 
@@ -950,5 +954,15 @@ test('published Vite rendering has no detectable WCAG 2.2 A/AA violations', asyn
 }, testInfo) => {
   await page.goto('http://127.0.0.1:44174');
   await expect(page.locator('main h1')).toBeVisible();
+  await expect(
+    page
+      .getByRole('navigation', { name: 'Header navigation' })
+      .getByRole('link', { name: 'Welcome' }),
+  ).toHaveAttribute('href', '/welcome');
+  await expect(
+    page
+      .getByRole('navigation', { name: 'Footer navigation' })
+      .getByRole('link', { name: 'Welcome' }),
+  ).toHaveAttribute('href', '/welcome');
   await expectNoDetectableWcagViolations(page, testInfo, 'vite-published');
 });

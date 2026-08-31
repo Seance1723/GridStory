@@ -321,7 +321,7 @@
 .section-heading h2 {
   font-size: 1.25rem;
 }
-.section-heading > span:not(.workflow-state, .release-state) {
+.section-heading > span:not(.workflow-state, .release-state, .status) {
   color: #6b7280;
   font-size: 0.72rem;
 }

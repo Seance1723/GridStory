@@ -1,4 +1,8 @@
-import type { ComponentManifest } from '@gridstory/schema';
+import {
+  NAVIGATION_MENU_CONTENT_TYPE,
+  navigationMenuLimits,
+  type ComponentManifest,
+} from '@gridstory/schema';
 import { defineContentSchema, type ContentDataOf } from '@gridstory/schema/typegen';
 
 export const pageSchema = defineContentSchema({
@@ -162,6 +166,112 @@ export const articleSchema = defineContentSchema({
       name: 'featured',
       label: 'Featured article',
       type: 'boolean',
+    },
+  ],
+});
+
+export const navigationMenuSchema = defineContentSchema({
+  id: NAVIGATION_MENU_CONTENT_TYPE,
+  version: 1,
+  name: 'Navigation menu',
+  description: 'A versioned visitor menu whose presentation remains application-owned.',
+  collection: 'navigation-menus',
+  titleField: 'name',
+  localization: { localizedFields: ['items'] },
+  objects: [
+    {
+      id: 'navigation-menu-item',
+      name: 'Navigation menu item',
+      description: 'One ordered internal or external visitor-navigation link.',
+      fields: [
+        {
+          id: 'navigation-menu-item.id',
+          name: 'id',
+          label: 'Stable item ID',
+          required: true,
+          value: {
+            type: 'text',
+            minLength: 1,
+            maxLength: navigationMenuLimits.maximumItemIdCharacters,
+          },
+        },
+        {
+          id: 'navigation-menu-item.parent-id',
+          name: 'parentId',
+          label: 'Parent item ID',
+          required: false,
+          value: {
+            type: 'text',
+            minLength: 1,
+            maxLength: navigationMenuLimits.maximumItemIdCharacters,
+          },
+        },
+        {
+          id: 'navigation-menu-item.label',
+          name: 'label',
+          label: 'Link label',
+          required: true,
+          value: {
+            type: 'text',
+            minLength: 1,
+            maxLength: navigationMenuLimits.maximumLabelCharacters,
+          },
+        },
+        {
+          id: 'navigation-menu-item.kind',
+          name: 'kind',
+          label: 'Link kind',
+          required: true,
+          value: { type: 'enum', values: ['internal', 'external'] },
+        },
+        {
+          id: 'navigation-menu-item.target',
+          name: 'target',
+          label: 'Internal content target',
+          required: false,
+          value: { type: 'relation', targets: ['page', 'article'] },
+        },
+        {
+          id: 'navigation-menu-item.external-url',
+          name: 'externalUrl',
+          label: 'External URL',
+          required: false,
+          value: {
+            type: 'text',
+            minLength: 1,
+            maxLength: navigationMenuLimits.maximumUrlCharacters,
+          },
+        },
+      ],
+    },
+  ],
+  fields: [
+    {
+      id: 'navigation-menu.key',
+      name: 'key',
+      label: 'Stable menu key',
+      type: 'slug',
+      required: true,
+      pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$',
+    },
+    {
+      id: 'navigation-menu.name',
+      name: 'name',
+      label: 'Menu name',
+      type: 'text',
+      required: true,
+      minLength: 1,
+      maxLength: navigationMenuLimits.maximumNameCharacters,
+    },
+    {
+      id: 'navigation-menu.items',
+      name: 'items',
+      label: 'Menu items',
+      type: 'array',
+      required: true,
+      minimum: 0,
+      maximum: navigationMenuLimits.maximumItems,
+      items: { type: 'object', objectType: 'navigation-menu-item' },
     },
   ],
 });
@@ -342,6 +452,7 @@ export const componentManifests = [
 
 export type PageContent = ContentDataOf<typeof pageSchema>;
 export type ArticleContent = ContentDataOf<typeof articleSchema>;
+export type NavigationMenuContent = ContentDataOf<typeof navigationMenuSchema>;
 
 export const welcomePage: PageContent = {
   title: 'Welcome to GridStory',

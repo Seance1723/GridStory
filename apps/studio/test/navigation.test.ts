@@ -30,6 +30,7 @@ describe('Studio navigation metadata', () => {
   });
   it('retains every original destination exactly once in the agreed nonempty groups', () => {
     expect(studioNavigationGroups.map(({ id, destinations }) => [id, [...destinations]])).toEqual([
+      ['navigation', ['menus']],
       ['content', ['pages', 'collections', 'schemas', 'workflows', 'releases', 'search']],
       ['media', ['assets']],
       ['design', ['components']],
@@ -57,10 +58,10 @@ describe('Studio navigation metadata', () => {
       ...studioPrimaryDestinations,
       ...studioNavigationGroups.flatMap(({ destinations }) => [...destinations]),
     ];
-    expect(destinations).toHaveLength(23);
-    expect(new Set(destinations).size).toBe(23);
+    expect(destinations).toHaveLength(24);
+    expect(new Set(destinations).size).toBe(24);
     expect([...destinations].sort()).toEqual(Object.keys(studioDestinations).sort());
-    expect(new Set(studioNavigationGroups.map(({ id }) => id)).size).toBe(9);
+    expect(new Set(studioNavigationGroups.map(({ id }) => id)).size).toBe(10);
   });
 
   it('provides stable readable leaf names and icons without placeholder destinations', () => {
@@ -73,11 +74,10 @@ describe('Studio navigation metadata', () => {
     }
     expect(studioDestinations.schemas.label).toBe('Schemas & taxonomies');
     expect(studioDestinations.settings.label).toBe('Configuration');
-    expect(new Set(Object.values(studioDestinations).map(({ label }) => label)).size).toBe(23);
+    expect(studioDestinations.menus.label).toBe('Menus');
+    expect(new Set(Object.values(studioDestinations).map(({ label }) => label)).size).toBe(24);
     expect(
-      studioNavigationGroups.some(({ label }) =>
-        ['Home', 'Commerce', 'People', 'Navigation'].includes(label),
-      ),
+      studioNavigationGroups.some(({ label }) => ['Home', 'Commerce', 'People'].includes(label)),
     ).toBe(false);
   });
 });

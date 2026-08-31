@@ -66,7 +66,7 @@ M6-002 adds a production-selectable API identity boundary and a framework-neutra
 - Preview grants SHALL be short lived, origin/route/mode/scope bound, revocable, and replay checked. Preview applications SHALL not load published delivery while an authenticated draft session is active.
 - Preview credentials SHALL be accepted only by the exact draft-read, message-acceptance and self-revocation method/route pairs in [ADR 0029](../adr/0029-production-preview-authentication-boundary.md), and SHALL NOT authorize management reads, writes, GraphQL or new grants. Public activation exceptions SHALL NOT admit private revocation methods.
 - Private asset grants SHALL be short lived, scope/asset/revision bound, and recheck immutable security verdict and storage scope when read.
-- `GS-SEC-024`: draft/private responses SHALL be private, no-store. Public cache tags/keys SHALL include complete scope and exact revision/perspective semantics; invalidation SHALL never be derived from caller-only scope.
+- `GS-SEC-024`: draft/private responses SHALL be private, no-store. Public cache tags/keys SHALL include complete scope and exact revision/perspective semantics; invalidation SHALL never be derived from caller-only scope. Published navigation SHALL validate routed dependencies in the active lifecycle view and tag both the menu and every resolved content target.
 - Published caches SHALL never contain credentials, preview data, draft content, private assets, audit data, job payloads, or administrator responses.
 
 ## Jobs, integrations, and external requests

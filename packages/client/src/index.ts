@@ -108,6 +108,7 @@ import type {
   MigrationRecipeInput,
   MigrationRun,
   MigrationSourceDescriptor,
+  NavigationMenuProjection,
   PersonalizationConfiguration,
   PersonalizationDecisionRequest,
   PersonalizationDecisionResult,
@@ -160,6 +161,7 @@ import type {
 import {
   configurationInventorySchema,
   editorialOverviewSchema,
+  navigationMenuProjectionSchema,
   studioContextSchema,
   studioScopeSelectionSchema,
 } from '@gridstory/schema';
@@ -640,6 +642,59 @@ export class GridStoryClient {
       );
     }
     return (await response.json()) as T;
+  }
+
+  async #publicScopedRequest<T>(path: string, signal?: AbortSignal): Promise<T> {
+    const response = await this.#fetch(`${this.#baseUrl}${path}`, {
+      method: 'GET',
+      credentials: 'omit',
+      cache: 'no-cache',
+      headers: {
+        accept: 'application/json',
+        'x-gridstory-organization': this.#scope.organizationId,
+        'x-gridstory-tenant': this.#tenantId,
+        'x-gridstory-workspace': this.#scope.workspaceId,
+        'x-gridstory-site': this.#scope.siteId,
+        'x-gridstory-environment': this.#scope.environmentId,
+        'x-gridstory-locale': this.#scope.locale,
+      },
+      ...(signal ? { signal } : {}),
+    });
+    if (!response.ok) {
+      let envelope: GridStoryErrorEnvelope = {};
+      try {
+        envelope = (await response.json()) as GridStoryErrorEnvelope;
+      } catch {
+        // Public delivery keeps a stable error even when an intermediary returns non-JSON.
+      }
+      throw new GridStoryApiError(
+        envelope.error?.message ?? `GridStory request failed with status ${response.status}.`,
+        {
+          status: response.status,
+          ...(envelope.error?.code ? { code: envelope.error.code } : {}),
+          ...(envelope.error?.details !== undefined ? { details: envelope.error.details } : {}),
+          ...(envelope.error?.requestId ? { requestId: envelope.error.requestId } : {}),
+        },
+      );
+    }
+    return (await response.json()) as T;
+  }
+
+  #navigationProjection(value: unknown): NavigationMenuProjection {
+    const parsed = navigationMenuProjectionSchema.safeParse(value);
+    const expected = { ...this.#scope, tenantId: this.#tenantId };
+    if (
+      !parsed.success ||
+      Object.entries(expected).some(
+        ([key, id]) => parsed.data.scope[key as keyof typeof expected] !== id,
+      )
+    ) {
+      throw new GridStoryApiError(
+        'The navigation menu response is invalid or has a different scope.',
+        { status: 502, code: 'invalid_navigation_menu_response' },
+      );
+    }
+    return parsed.data;
   }
 
   async #previewRequest<T>(path: string, token: string, init: RequestInit = {}): Promise<T> {
@@ -2468,6 +2523,36 @@ export class GridStoryClient {
     );
   }
 
+  createNavigationMenu(key: string, name: string, signal?: AbortSignal): Promise<ContentEntry> {
+    return this.#request('/api/v1/navigation-menus', {
+      method: 'POST',
+      body: JSON.stringify({ key, name }),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  async getNavigationMenuDraft(
+    id: string,
+    signal?: AbortSignal,
+  ): Promise<NavigationMenuProjection> {
+    const value = await this.#request<unknown>(
+      `/api/v1/navigation-menus/${encodeURIComponent(id)}/preview`,
+      signal ? { signal } : {},
+    );
+    return this.#navigationProjection(value);
+  }
+
+  async getPublishedNavigationMenu(
+    key: string,
+    signal?: AbortSignal,
+  ): Promise<NavigationMenuProjection> {
+    const value = await this.#publicScopedRequest<unknown>(
+      `/api/v1/delivery/navigation-menus/${encodeURIComponent(key)}`,
+      signal,
+    );
+    return this.#navigationProjection(value);
+  }
+
   createContent(
     contentType: string,
     data: Record<string, unknown>,
@@ -2829,6 +2914,7 @@ export type {
   MigrationRecipeInput,
   MigrationRun,
   MigrationSourceDescriptor,
+  NavigationMenuProjection,
   PersonalizationConfiguration,
   PersonalizationDecisionRequest,
   PersonalizationDecisionResult,

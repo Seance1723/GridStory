@@ -74,6 +74,8 @@ import {
   type MigrationRepository,
   MigrationService,
   type MigrationSourceAdapter,
+  NavigationMenuLifecycleValidator,
+  NavigationMenuService,
   OperationsService,
   type PersonalizationRepository,
   PersonalizationService,
@@ -139,6 +141,7 @@ import { exampleDesignSystem } from '@gridstory/example-kit/design-system';
 import {
   articleSchema,
   componentManifests,
+  navigationMenuSchema,
   pageSchema,
   welcomeArticle,
   welcomePage,
@@ -156,6 +159,7 @@ import {
   createAssetDeliverySchema,
   generatedTypesFingerprint,
   type LocaleConfiguration,
+  NAVIGATION_MENU_CONTENT_TYPE,
   type ParsedSearchQuery,
   type PluginCapabilityGrant,
   type PluginCapabilityName,
@@ -315,6 +319,7 @@ export function resolveIdentityCookieSecurity(
 }
 
 interface RequestBody {
+  key?: unknown;
   id?: unknown;
   contentType?: unknown;
   expectedRevisionId?: unknown;
@@ -528,7 +533,7 @@ export async function buildServer({
   databasePath = '.gridstory/gridstory.db',
   databaseUrl,
   allowedOrigins = ['http://localhost:5173', 'http://localhost:5174'],
-  contentSchemas = [pageSchema, articleSchema],
+  contentSchemas = [pageSchema, articleSchema, navigationMenuSchema],
   workflowDefinitions = defaultWorkflowDefinitions,
   seed = true,
   logger = false,
@@ -723,6 +728,10 @@ export async function buildServer({
     policies: qualityPolicies,
     ...(externalLinkChecker ? { externalLinkChecker } : {}),
   });
+  const localeRegistry = new LocaleRegistry(locales);
+  const navigationEnabled = contentSchemas.some(
+    (schema) => schema.id === NAVIGATION_MENU_CONTENT_TYPE,
+  );
   const service = new ContentService({
     repository,
     schemas: contentSchemas,
@@ -730,6 +739,9 @@ export async function buildServer({
     qualityGate: quality,
     workflowGate: workflows,
     governanceGate: governance,
+    lifecycleValidators: navigationEnabled
+      ? [new NavigationMenuLifecycleValidator({ schemas: contentSchemas })]
+      : [],
   });
   const contentFederation = new ContentFederationService({
     repository: resolvedContentFederationRepository,
@@ -873,8 +885,16 @@ export async function buildServer({
   const localization = new LocalizationService({
     repository,
     contentService: service,
-    locales: new LocaleRegistry(locales),
+    locales: localeRegistry,
   });
+  const navigation = navigationEnabled
+    ? new NavigationMenuService({
+        contentService: service,
+        repository,
+        localization,
+        locales: localeRegistry,
+      })
+    : undefined;
   const operations = new OperationsService({
     repository,
     webhookSigningSecret,
@@ -2155,6 +2175,39 @@ export async function buildServer({
     return reply.status(201).send(entry);
   });
 
+  server.post('/api/v1/navigation-menus', async (request, reply) => {
+    if (!navigation) {
+      throw new GridStoryError('Navigation menus are not registered.', 'not_found', 404);
+    }
+    const body = bodyOf(request);
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.contentCreate, {
+      kind: 'content',
+      contentType: NAVIGATION_MENU_CONTENT_TYPE,
+    });
+    const entry = await navigation.create({
+      scope: contentScope(context),
+      key: requiredString(body.key, 'key'),
+      name: requiredString(body.name, 'name'),
+      actor: { id: context.principal.id },
+    });
+    return reply.status(201).send(entry);
+  });
+
+  server.get('/api/v1/navigation-menus/:id/preview', async (request) => {
+    if (!navigation) {
+      throw new GridStoryError('Navigation menus are not registered.', 'not_found', 404);
+    }
+    const params = request.params as { id: string };
+    const context = requestContext(request, 'draft');
+    authorize(policy, context, GridStoryActions.contentRead, {
+      kind: 'content',
+      id: params.id,
+      contentType: NAVIGATION_MENU_CONTENT_TYPE,
+    });
+    return navigation.preview(contentScope(context), params.id);
+  });
+
   server.post('/api/v1/content', async (request, reply) => {
     const body = bodyOf(request);
     const contentType = requiredString(body.contentType, 'contentType');
@@ -2522,6 +2575,26 @@ export async function buildServer({
     collaboration.leave(contentScope(context), params.id, context.principal.id);
     return reply.status(204).send();
   });
+  server.get('/api/v1/delivery/navigation-menus/:key', async (request, reply) => {
+    if (!navigation) {
+      throw new GridStoryError('Navigation menus are not registered.', 'not_found', 404);
+    }
+    const params = request.params as { key: string };
+    const context = requestContext(request, 'published', true);
+    authorize(policy, context, GridStoryActions.deliveryRead, {
+      kind: 'delivery',
+      contentType: NAVIGATION_MENU_CONTENT_TYPE,
+    });
+    const scope = contentScope(context);
+    const regionalRead = await regional.openRead(scope);
+    const result = await navigation.resolvePublished(scope, params.key, regionalRead.reader);
+    setCacheTags(reply, result.dependencies);
+    if (regionalRead.managed) {
+      setRegionalConsistency(reply, regionalRead.indicator(result.dependencies));
+    }
+    return result.projection;
+  });
+
   server.get('/api/v1/delivery/:contentType/:slug', async (request, reply) => {
     const params = request.params as { contentType: string; slug: string };
     const context = requestContext(request, 'published', true);
@@ -2663,6 +2736,75 @@ export async function buildServer({
       expectedRevisionId: created.draftRevisionId,
       actor: seedReviewer,
     });
+  }
+  if (seed && navigation) {
+    const welcome = (
+      await service.list({ scope: seedScope, contentType: 'page', perspective: 'published' })
+    ).find((entry) => entry.data.slug === welcomePage.slug);
+    if (welcome) {
+      for (const menuSeed of [
+        { key: 'header', name: 'Header navigation' },
+        { key: 'footer', name: 'Footer navigation' },
+      ]) {
+        const existing = (
+          await service.list({
+            scope: seedScope,
+            contentType: NAVIGATION_MENU_CONTENT_TYPE,
+            perspective: 'draft',
+          })
+        ).some((entry) => entry.data.key === menuSeed.key);
+        if (existing) continue;
+        const created = await navigation.create({
+          scope: seedScope,
+          ...menuSeed,
+          actor: { id: 'gridstory-seed' },
+        });
+        const revised = await service.updateDraft({
+          scope: seedScope,
+          id: created.id,
+          expectedRevisionId: created.draftRevisionId,
+          data: {
+            ...menuSeed,
+            items: [
+              {
+                id: 'welcome',
+                label: 'Welcome',
+                kind: 'internal',
+                target: { id: welcome.id, contentType: 'page' },
+              },
+            ],
+          },
+          actor: { id: 'gridstory-seed' },
+        });
+        const seedRequester = { id: 'gridstory-seed', roles: ['publisher'] };
+        await workflows.requestTransition({
+          scope: seedScope,
+          entry: revised,
+          transitionId: 'submit-review',
+          actor: seedRequester,
+        });
+        const pending = await workflows.requestTransition({
+          scope: seedScope,
+          entry: revised,
+          transitionId: 'approve',
+          actor: seedRequester,
+        });
+        const seedReviewer = { id: 'gridstory-seed-reviewer', roles: ['publisher'] };
+        await workflows.decideApproval({
+          scope: seedScope,
+          entry: revised,
+          requestId: pending.pendingApproval?.id ?? '',
+          decision: 'approved',
+          actor: seedReviewer,
+        });
+        await service.publish({
+          scope: seedScope,
+          id: revised.id,
+          expectedRevisionId: revised.draftRevisionId,
+          actor: seedReviewer,
+        });
+      }
+    }
   }
   if (seed && (await service.list({ scope: seedScope, contentType: 'article' })).length === 0) {
     await service.create({

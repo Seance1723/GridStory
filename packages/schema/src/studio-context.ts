@@ -30,6 +30,7 @@ export const studioDestinations = [
   'home',
   'pages',
   'collections',
+  'menus',
   'schemas',
   'workflows',
   'releases',

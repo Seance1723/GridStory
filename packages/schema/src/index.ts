@@ -22,6 +22,7 @@ export * from './knowledge.js';
 export * from './localization.js';
 export * from './marketplace.js';
 export * from './migration.js';
+export * from './navigation.js';
 export * from './personalization.js';
 export * from './plugins.js';
 export * from './preview.js';
