@@ -942,14 +942,18 @@
       "mitigations": [
         "Force published perspective on public delivery.",
         "Use private, no-store for management, GraphQL, preview, assets, and operations.",
-        "Include full scope and exact revision in public cache tags and vary policy."
+        "Include full scope and exact revision in public cache tags and vary policy.",
+        "Validate navigation against the appropriate draft, current-published, or complete release future view and tag published menu responses with both menu and routed-target dependencies."
       ],
       "verification": [
         "apps/api/test/server.test.ts",
         "apps/api/test/content-query.test.ts",
+        "apps/api/test/navigation.test.ts",
+        "packages/core/test/navigation-service.test.ts",
         "packages/core/test/tenant-isolation.test.ts",
         "scripts/check-tenant-scope.mjs",
-        "docs/content-queries.md"
+        "docs/content-queries.md",
+        "docs/visitor-navigation.md"
       ]
     },
     {

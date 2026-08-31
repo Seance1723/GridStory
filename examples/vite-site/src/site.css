@@ -12,6 +12,49 @@ body {
   margin: 0;
   min-width: 320px;
 }
+.site-header {
+  align-items: center;
+  background: white;
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  gap: 2rem;
+  justify-content: space-between;
+  padding: 1rem clamp(1.25rem, 4vw, 4rem);
+}
+.site-brand {
+  color: #111827;
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  text-decoration: none;
+}
+.site-header ul,
+.site-footer ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.site-header li,
+.site-footer li {
+  position: relative;
+}
+.site-header li ul,
+.site-footer li ul {
+  margin-block-start: 0.5rem;
+  padding-inline-start: 1rem;
+}
+.site-header a {
+  color: #374151;
+  font-weight: 650;
+}
+.site-header nav a,
+.site-footer nav a {
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
 .site-state {
   align-items: center;
   background: #f8fafc;
@@ -28,7 +71,7 @@ body {
 .site-state p {
   color: #64748b;
 }
-footer {
+.site-footer {
   align-items: center;
   background: #111827;
   color: white;
@@ -37,9 +80,16 @@ footer {
   justify-content: space-between;
   padding: 2rem clamp(1.25rem, 4vw, 4rem);
 }
-footer span {
+.site-footer__summary {
+  display: grid;
+  gap: 0.35rem;
+}
+.site-footer__summary span {
   color: #9ca3af;
   font-size: 0.85rem;
+}
+.site-footer nav a {
+  color: white;
 }
 [data-gridstory-node] {
   cursor: pointer;
@@ -50,7 +100,8 @@ footer span {
   outline-color: #6366f1;
 }
 @media (max-width: 620px) {
-  footer {
+  .site-header,
+  .site-footer {
     align-items: flex-start;
     flex-direction: column;
   }

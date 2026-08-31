@@ -21,6 +21,7 @@ import type {
   ContentEntry,
   ContentPerspective,
   ContentRevision,
+  ContentLifecycleReadView,
   ContentScope,
   ContentServiceOptions,
 } from './types.js';
@@ -32,6 +33,10 @@ export class ContentService {
   readonly #qualityGate?: ContentServiceOptions['qualityGate'];
   readonly #workflowGate?: ContentServiceOptions['workflowGate'];
   readonly #governanceGate?: ContentServiceOptions['governanceGate'];
+  readonly #lifecycleValidators: ReadonlyMap<
+    string,
+    NonNullable<ContentServiceOptions['lifecycleValidators']>[number]
+  >;
 
   constructor({
     repository,
@@ -40,6 +45,7 @@ export class ContentService {
     qualityGate,
     workflowGate,
     governanceGate,
+    lifecycleValidators = [],
   }: ContentServiceOptions) {
     this.#repository = repository;
     this.#schemas = new Map(schemas.map((schema) => [schema.id, schema]));
@@ -47,6 +53,12 @@ export class ContentService {
     this.#qualityGate = qualityGate;
     this.#workflowGate = workflowGate;
     this.#governanceGate = governanceGate;
+    this.#lifecycleValidators = new Map(
+      lifecycleValidators.map((validator) => [validator.contentType, validator]),
+    );
+    if (this.#lifecycleValidators.size !== lifecycleValidators.length) {
+      throw new Error('Content lifecycle validators must have unique content types.');
+    }
   }
 
   getSchemas(): ContentSchemaDefinition[] {
@@ -94,6 +106,54 @@ export class ContentService {
         });
       }
     }
+    if (issues.length > 0) throw new ContentValidationError(issues);
+  }
+
+  #repositoryView(
+    scope: ContentScope,
+    perspective: ContentPerspective,
+    overrides: ContentEntry[] = [],
+  ): ContentLifecycleReadView {
+    const byId = new Map(overrides.map((entry) => [entry.id, entry]));
+    return {
+      getById: async (id) =>
+        byId.get(id) ?? (await this.#repository.getById({ scope, id, perspective })),
+      list: async (contentType) => {
+        const entries = await this.#repository.list({
+          scope,
+          perspective,
+          ...(contentType ? { contentType } : {}),
+        });
+        const merged = new Map(entries.map((entry) => [entry.id, entry]));
+        for (const entry of overrides) {
+          if (!contentType || entry.contentType === contentType) merged.set(entry.id, entry);
+        }
+        return [...merged.values()];
+      },
+    };
+  }
+
+  #fixedView(entries: ReadonlyMap<string, ContentEntry>): ContentLifecycleReadView {
+    return {
+      getById: (id) => entries.get(id) ?? null,
+      list: (contentType) =>
+        [...entries.values()].filter((entry) => !contentType || entry.contentType === contentType),
+    };
+  }
+
+  async #validateLifecycle(input: {
+    scope: ContentScope;
+    perspective: ContentPerspective;
+    contentType: string;
+    data: Record<string, unknown>;
+    view: ContentLifecycleReadView;
+    entryId?: string;
+    previousData?: Record<string, unknown>;
+    translationGroupId?: string;
+  }): Promise<void> {
+    const validator = this.#lifecycleValidators.get(input.contentType);
+    if (!validator) return;
+    const issues = await validator.validate(input);
     if (issues.length > 0) throw new ContentValidationError(issues);
   }
 
@@ -174,6 +234,15 @@ export class ContentService {
   }): Promise<ContentEntry> {
     await this.#governanceGate?.assertWrite(input.scope, 'content');
     this.#validate(input.contentType, input.data);
+    await this.#validateLifecycle({
+      scope: input.scope,
+      perspective: 'draft',
+      contentType: input.contentType,
+      data: input.data,
+      view: this.#repositoryView(input.scope, 'draft'),
+      ...(input.id ? { entryId: input.id } : {}),
+      ...(input.translationGroupId ? { translationGroupId: input.translationGroupId } : {}),
+    });
     await this.#validateReferences(input.scope, input.contentType, input.data);
     const entry = await this.#repository.create({
       scope: input.scope,
@@ -193,6 +262,13 @@ export class ContentService {
     data: unknown;
   }): Promise<void> {
     this.#validate(input.contentType, input.data);
+    await this.#validateLifecycle({
+      scope: input.scope,
+      perspective: 'draft',
+      contentType: input.contentType,
+      data: input.data,
+      view: this.#repositoryView(input.scope, 'draft'),
+    });
     await this.#validateReferences(input.scope, input.contentType, input.data);
   }
 
@@ -206,6 +282,15 @@ export class ContentService {
     await this.#governanceGate?.assertWrite(input.scope, 'content', input.id);
     const current = await this.get({ scope: input.scope, id: input.id, perspective: 'draft' });
     this.#validate(current.contentType, input.data);
+    await this.#validateLifecycle({
+      scope: input.scope,
+      perspective: 'draft',
+      contentType: current.contentType,
+      data: input.data,
+      view: this.#repositoryView(input.scope, 'draft'),
+      entryId: current.id,
+      previousData: current.data,
+    });
     await this.#validateReferences(input.scope, current.contentType, input.data);
     const entry = await this.#repository.updateDraft({
       scope: input.scope,
@@ -228,6 +313,20 @@ export class ContentService {
     await this.#governanceGate?.assertWrite(input.scope, 'content', input.id);
     const current = await this.get({ scope: input.scope, id: input.id, perspective: 'draft' });
     this.#validate(current.contentType, current.data);
+    const previousPublication = await this.#repository.getById({
+      scope: input.scope,
+      id: current.id,
+      perspective: 'published',
+    });
+    await this.#validateLifecycle({
+      scope: input.scope,
+      perspective: 'published',
+      contentType: current.contentType,
+      data: current.data,
+      view: this.#repositoryView(input.scope, 'published', [current]),
+      entryId: current.id,
+      ...(previousPublication ? { previousData: previousPublication.data } : {}),
+    });
     await this.#workflowGate?.assertCanPublish({
       scope: input.scope,
       entry: current,
@@ -361,11 +460,12 @@ export class ContentService {
       }
     }
 
-    const futureEntries = new Map<string, ContentEntry>();
-    for (const published of await this.#repository.list({
+    const publishedEntries = await this.#repository.list({
       scope: input.scope,
       perspective: 'published',
-    })) {
+    });
+    const futureEntries = new Map<string, ContentEntry>();
+    for (const published of publishedEntries) {
       futureEntries.set(published.id, published);
     }
     candidates.forEach((candidate) => {
@@ -395,6 +495,32 @@ export class ContentService {
     }
 
     for (const entry of candidates) {
+      try {
+        const previousPublication = publishedEntries.find((candidate) => candidate.id === entry.id);
+        await this.#validateLifecycle({
+          scope: input.scope,
+          perspective: 'published',
+          contentType: entry.contentType,
+          data: entry.data,
+          view: this.#fixedView(futureEntries),
+          entryId: entry.id,
+          ...(previousPublication ? { previousData: previousPublication.data } : {}),
+        });
+      } catch (error) {
+        if (error instanceof ContentValidationError) {
+          for (const issue of error.issues) {
+            issues.push({
+              code: 'content-invalid',
+              severity: 'error',
+              entryId: entry.id,
+              message: issue.message,
+              path: issue.path,
+            });
+          }
+          continue;
+        }
+        throw error;
+      }
       for (const located of collectContentReferences(this.#schema(entry.contentType), entry.data)) {
         const target = futureEntries.get(located.reference.id);
         if (!target || target.contentType !== located.reference.contentType) {

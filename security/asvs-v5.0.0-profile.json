@@ -643,18 +643,22 @@
       "evidence": [
         "apps/api/src/server.ts",
         "packages/core/src/tenant-scope.ts",
+        "packages/core/src/navigation-service.ts",
         "packages/core/src/operations-service.ts",
         "docs/content-queries.md",
+        "docs/visitor-navigation.md",
         "docs/assets.md",
         "docs/operations.md"
       ],
       "verification": [
         "apps/api/test/server.test.ts",
+        "apps/api/test/navigation.test.ts",
+        "packages/core/test/navigation-service.test.ts",
         "apps/api/test/assets.test.ts",
         "packages/core/test/tenant-isolation.test.ts",
         "scripts/check-tenant-scope.mjs"
       ],
-      "taskIds": ["M5-002"]
+      "taskIds": ["M5-002", "CMS-011"]
     },
     {
       "id": "GS-SEC-025",

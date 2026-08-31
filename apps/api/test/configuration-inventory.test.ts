@@ -85,6 +85,7 @@ describe('configuration inventory route', () => {
       availability: 'available',
       models: [
         { id: 'article', ownership: 'code', mutable: false },
+        { id: 'navigation-menu', ownership: 'code', mutable: false },
         { id: 'page', ownership: 'code', mutable: false },
       ],
     });

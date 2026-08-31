@@ -117,6 +117,7 @@ import {
 import { DesignCatalog, type DesignCatalogGovernance } from './design-catalog.js';
 import { ConfigurationInventoryView } from './configuration-inventory.js';
 import { EditorialHome } from './editorial-home.js';
+import { NavigationMenus } from './navigation-menus.js';
 import {
   permittedNavigation,
   permittedPrimaryNavigation,
@@ -167,7 +168,10 @@ const studioReadMethods = new Set<string>([
   'listContent',
   'queryContent',
   'getContent',
+  'getNavigationMenuDraft',
+  'getPublishedNavigationMenu',
   'listRevisions',
+  'getTranslationCompleteness',
   'getContentQuality',
   'getEditorialOverview',
   'getSchemas',
@@ -891,7 +895,12 @@ function AuthorizedStudio({
   );
   const navigation = permittedNavigation(capabilities);
   const primaryNavigation = permittedPrimaryNavigation(capabilities);
-  const firstDestination = primaryNavigation[0] ?? navigation[0]?.destinations[0];
+  const firstDestination =
+    primaryNavigation[0] ??
+    navigation
+      .flatMap(({ destinations }) => destinations)
+      .find((destination) => destination === 'pages') ??
+    navigation[0]?.destinations[0];
   const [entries, setEntries] = useState<ContentEntry[]>([]);
   const [relationEntries, setRelationEntries] = useState<ContentEntry[]>([]);
   const [selected, setSelected] = useState<ContentEntry | null>(null);
@@ -1675,7 +1684,7 @@ function AuthorizedStudio({
     activeSchema?.name ?? (activeContentType === 'page' ? 'Page' : 'Entry');
   const activeContentNoun = activeContentLabel.toLowerCase();
   const collectionSchemas = useMemo(
-    () => schemas.filter((schema) => schema.id !== 'page'),
+    () => schemas.filter((schema) => schema.id !== 'page' && schema.id !== 'navigation-menu'),
     [schemas],
   );
 
@@ -5146,6 +5155,7 @@ function AuthorizedStudio({
     home: { loaded: true },
     pages: { loaded: true },
     collections: { loaded: true },
+    menus: { loaded: true },
     schemas: { loaded: schemaCatalogOpen, ensureLoaded: openSchemaCatalog },
     workflows: { loaded: workflowDesignerOpen, ensureLoaded: () => toggleWorkflowDesigner() },
     releases: { loaded: releasePanelOpen, ensureLoaded: () => openReleasePanel() },
@@ -5565,7 +5575,13 @@ function AuthorizedStudio({
           tabIndex={-1}
           inert={scopeTransitioning}
           onChangeCapture={(event) => {
-            if (!visibleDestination || authoringVisible || visibleDestination === 'search') return;
+            if (
+              !visibleDestination ||
+              authoringVisible ||
+              visibleDestination === 'search' ||
+              visibleDestination === 'menus'
+            )
+              return;
             const target = event.target;
             if (
               target instanceof HTMLInputElement ||
@@ -5665,6 +5681,15 @@ function AuthorizedStudio({
               }
               onNavigate={selectNavigationItem}
               onRetry={() => void refreshEditorialOverview()}
+            />
+          ) : null}
+          {visibleDestination === 'menus' ? (
+            <NavigationMenus
+              client={client}
+              schemas={schemas}
+              can={can}
+              onDirtyChange={setFeatureDraftDirty}
+              onNotice={setNotice}
             />
           ) : null}
           {visibleDestination === 'settings' && configurationInventoryOpen ? (

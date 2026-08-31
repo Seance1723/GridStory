@@ -78,11 +78,12 @@ Production preview credentials are single-purpose: only the matched draft-read, 
 
 ### Studio navigation
 
-The Studio sidebar exposes one top-level Home plus 22 destinations grouped by task:
+The Studio sidebar exposes one top-level Home plus 23 destinations grouped by task:
 
 | Group | Destinations |
 |---|---|
 | Top-level | Home |
+| Navigation | Menus |
 | Content | Pages, Collections, Schemas & taxonomies, Workflows, Releases, Search |
 | Media | Library (the existing Asset library) |
 | Design | Components |
@@ -103,6 +104,8 @@ Studio stores no drafts, credentials, search terms or preview sessions in its lo
 
 Pages remains the routed component-content shortcut. Collections exposes registered non-page schemas one type at a time; the default example includes an Article with headline, slug, summary, rich text, page relations, taxonomy and featured state. Creation derives a minimum candidate from the selected canonical schema and registered component manifests, validates it before transport, and reports field paths when a safe valid candidate cannot be generated. Relation choices load only declared target content types. Composition and standalone application preview appear only for schemas with a component-tree field, while nonvisual entries retain field editing, immutable revisions, configured workflow and publication.
 
+Navigation > Menus manages versioned, localized visitor menus through the same immutable revisions, workflows, publication and release validation as other content. Each exact scope has a stable menu key, ordered items and bounded three-level hierarchy; links point either to routed content or an absolute credential-free HTTP(S) URL. Private preview resolves draft routes, while anonymous delivery exposes only minimized published labels and hrefs with published dependency cache tags. Consuming applications own their semantic markup, router behavior and styling; the Vite example renders published Header and Footer menus with ordinary `nav`, list and link elements. See [Visitor navigation menus](docs/visitor-navigation.md).
+
 Pages and Collections use the existing content-query contract for their primary list. Editors can combine the selected registered type with draft status, case-insensitive title/slug search, updated/title sorting and ten-row signed-cursor pagination. The result summary uses the connection's exact `totalCount`; changing the list never silently replaces an open editor. Filters that require unavailable schema metadata are not displayed.
 
 Named list views are version-1 browser-local preferences. They are isolated by the verified organization/tenant/workspace/site/environment/locale context and content type, and store only the name plus search/status/sort values. They are not shared across browsers or users and never contain entry drafts, credentials, principal data or permission claims.
@@ -115,7 +118,7 @@ Trusted API composition may provide `studioTopology`, or operators may set `GRID
 
 The universal client exposes `getStudioContext({ signal? })` and `withStudioScope({ siteId, environmentId, locale })`. A clone preserves the identity transport and organization/tenant/workspace, leaving the original unchanged. Always validate a candidate using its new context call before using it; cloning itself does not authorize anything. Unsupported/malformed or wrong-scope responses fail closed. Operation booleans represent policy preconditions, not entry existence, workflow readiness, provider availability or an authorization credential. Typed page list/create checks remain separate from untyped entry and preview checks.
 
-Studio consumes that context before mounting private screens. Navigation and existing operation controls use the server's finite capability flags, without role-name guesses or a legacy-context fallback. Read-only fields remain visible; unavailable optional history/workflow/design/asset/collaboration reads are not requested. Page-list-only grants do not imply entry/schema access. All 23 destinations remain for fully authorized users, with the same colors and shared styles. Collections requires the existing generic content-read and schema-read decisions; its generic create control uses the existing content-create decision, while Pages retains its page-specific list/create flags.
+Studio consumes that context before mounting private screens. Navigation and existing operation controls use the server's finite capability flags, without role-name guesses or a legacy-context fallback. Read-only fields remain visible; unavailable optional history/workflow/design/asset/collaboration reads are not requested. Page-list-only grants do not imply entry/schema access. All 24 destinations remain for fully authorized users, with the same colors and shared styles. Menus requires the existing content-read and schema-read decisions and reuses existing content/workflow permissions for mutations. Collections requires the existing generic content-read and schema-read decisions; its generic create control uses the existing content-create decision, while Pages retains its page-specific list/create flags.
 
 When the server returns more than one permitted complete tuple, the header stages Site, Environment and Locale as a dependent finite selection and shows the committed context separately. Apply confirms unsaved entry or feature-form work, remains disabled while any mapped management write is active, validates a fresh scoped client and commits only after the old preview session is closed and revoked. Cancellation, offline/denied validation or cleanup failure keeps the old authorized context. A successful switch clears old entries/drafts/notices, replaces entry history with the scope-free current destination and rejects callbacks, reads or late preview grants from the old lifetime. Organization, tenant and workspace never change in this control; the selected scope is not stored in the URL, history state or browser storage.
 
@@ -129,9 +132,9 @@ Authorized users can open **Settings > Configuration** to inspect one private, r
 
 `GET /api/v1/configuration/inventory` accepts no query/body, returns `Cache-Control: private, no-store`, validates complete scope and never emits raw configuration, topology, environment variables, credentials, provider identities/endpoints or adapter detail. See the [effective configuration inventory guide](docs/configuration-inventory.md) and [ADR 0033](docs/adr/0033-safe-configuration-inventory.md).
 
-Delivery status: CMS-032, CMS-033 and CMS-034 completed the authorized navigation/context group; CMS-004 through CMS-010 complete the content/configuration-foundations group as separate task commits on its shared branch. CMS-010's full repository gate passes 716 active tests with 17 existing optional skips and all builds; its final browser matrix passes 75/75 across Chromium, Firefox and WebKit. Detailed context and evidence is retained in ADRs 0030–0033, the schema/design/configuration guides and the CMS administration gap analysis. No production readiness, external provider certification or deployment is claimed.
+Delivery status: CMS-032, CMS-033 and CMS-034 completed the authorized navigation/context group; CMS-004 through CMS-010 complete the content/configuration-foundations group as separate task commits on its shared branch. CMS-011 completes the first website-management gap on its own shared branch/task commit. Its full repository gate passes 738 active tests with 17 existing optional skips and all builds; its final no-retry browser matrix passes 78/78 across Chromium, Firefox and WebKit. Detailed context and evidence is retained in ADRs 0030–0034 and the linked feature guides. No production readiness, external provider certification or deployment is claimed.
 
-Website-management work has started on the shared `codex/website-management-gaps` branch with the documentation-only CMS-011 visitor-menu proposal in [ADR 0034](docs/adr/0034-versioned-visitor-navigation-menus.md). It proposes versioned structured menus and application-owned rendering but does not yet add a menu type, endpoint, Studio screen or consumer behavior; runtime implementation remains behind the ADR's explicit T2 approval gate.
+Website-management work continues on the shared `codex/website-management-gaps` branch. CMS-011 has completed the approved versioned visitor-menu design in [ADR 0034](docs/adr/0034-versioned-visitor-navigation-menus.md): stable localized structured menus, governed publication/release validation, private preview, published delivery, Studio authoring and application-owned Vite rendering. CMS-012 through CMS-015 remain separate gated tasks; CMS-012's revisioned public-site settings plan is the next approval checkpoint.
 
 ### Studio styles and preview
 

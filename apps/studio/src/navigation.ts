@@ -8,6 +8,10 @@ export const studioDestinations = {
     label: 'Collections',
     icon: 'M4 6h16v5H4zM4 13h16v5H4zM8 8.5h8M8 15.5h8',
   },
+  menus: {
+    label: 'Menus',
+    icon: 'M4 6h16M4 12h10M4 18h13M18 10l2 2-2 2',
+  },
   schemas: {
     label: 'Schemas & taxonomies',
     icon: 'M4 5h7v6H4zM13 5h7v6h-7zM4 13h7v6H4zM13 13h7v6h-7zM11 8h2M8 11v2M16 11v2',
@@ -68,6 +72,7 @@ export type StudioDestination = keyof typeof studioDestinations;
 export const studioPrimaryDestinations = ['home'] as const satisfies readonly StudioDestination[];
 
 export const studioNavigationGroups = [
+  { id: 'navigation', label: 'Navigation', destinations: ['menus'] },
   {
     id: 'content',
     label: 'Content',

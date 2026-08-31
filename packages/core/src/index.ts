@@ -36,6 +36,7 @@ export * from './marketplace-repository.js';
 export * from './marketplace-service.js';
 export * from './migration-repository.js';
 export * from './migration-service.js';
+export * from './navigation-service.js';
 export * from './operations-service.js';
 export * from './personalization-repository.js';
 export * from './personalization-service.js';

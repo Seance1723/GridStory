@@ -3284,7 +3284,7 @@ describe('GridStory Studio', () => {
     const content = within(navigation).getByRole('button', { name: 'Content', exact: true });
     expect(content.getAttribute('aria-controls')).toBe('studio-navigation-content');
     expect(content.getAttribute('aria-current')).toBeNull();
-    expect(within(navigation).getAllByRole('list')).toHaveLength(10);
+    expect(within(navigation).getAllByRole('list')).toHaveLength(11);
     await user.click(content);
     expect(content.getAttribute('aria-expanded')).toBe('false');
     expect(within(navigation).queryByRole('button', { name: 'Pages', exact: true })).toBeNull();
@@ -3331,7 +3331,7 @@ describe('GridStory Studio', () => {
       within(navigation).queryByRole('button', { name: 'Identity providers', exact: true }),
     ).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Toggle navigation' }));
-    expect(within(navigation).getAllByRole('button')).toHaveLength(22);
+    expect(within(navigation).getAllByRole('button')).toHaveLength(23);
     expect(
       within(navigation)
         .getByRole('button', { name: 'Identity providers', exact: true })

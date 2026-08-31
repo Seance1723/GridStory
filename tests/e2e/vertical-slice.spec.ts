@@ -350,6 +350,100 @@ test('inspects safe effective configuration without mutation requests or private
   ).toEqual([]);
 });
 
+test('versions, previews, governs, publishes, and renders visitor navigation', async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(90_000);
+
+  await page.goto('/#/menus');
+  const menuPanel = page.getByRole('region', { name: 'Visitor menus' });
+  await expect(menuPanel).toBeVisible();
+  await menuPanel
+    .getByRole('complementary', { name: 'Navigation menus' })
+    .getByRole('button', { name: /Header navigation/ })
+    .click();
+
+  const menuEditor = menuPanel.locator('.navigation-menus__editor');
+  await expect(
+    menuEditor.getByRole('heading', { name: 'Header navigation', exact: true }),
+  ).toBeVisible();
+  const linkLabel = menuEditor.getByLabel('Link label');
+  await expect(linkLabel).toHaveValue('Welcome');
+  await linkLabel.fill('Explore GridStory');
+  const saveMenu = menuPanel.getByRole('button', { name: 'Save draft' });
+  await expect(saveMenu).toBeEnabled();
+  await saveMenu.click();
+  await expect(page.getByText('Navigation menu draft saved.')).toBeVisible();
+  await menuPanel.getByRole('button', { name: 'Preview resolved links' }).click();
+  const preview = menuPanel.getByRole('region', { name: 'Resolved draft navigation' });
+  await expect(preview.getByRole('link', { name: 'Explore GridStory' })).toHaveAttribute(
+    'href',
+    '/welcome',
+  );
+
+  const publishedSite = await page.context().newPage();
+  await publishedSite.goto('http://127.0.0.1:44174');
+  const publishedHeader = publishedSite.getByRole('navigation', { name: 'Header navigation' });
+  await expect(publishedHeader.getByRole('link', { name: 'Welcome' })).toHaveAttribute(
+    'href',
+    '/welcome',
+  );
+  await expect(publishedHeader.getByRole('link', { name: 'Explore GridStory' })).toHaveCount(0);
+
+  const workflow = menuPanel.getByRole('region', { name: 'Navigation workflow' });
+  await expect(workflow.getByText('Draft', { exact: true })).toBeVisible();
+  await workflow.getByRole('button', { name: 'Submit for review' }).click();
+  await expect(workflow.getByText('In review', { exact: true })).toBeVisible();
+  const approvalResponsePromise = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' &&
+      response.url().includes('/workflow/transitions/approve'),
+  );
+  await workflow.getByRole('button', { name: 'Request approval' }).click();
+  const approvalResponse = await approvalResponsePromise;
+  expect(approvalResponse.ok()).toBe(true);
+  const approvalInstance = (await approvalResponse.json()) as {
+    entryId: string;
+    pendingApproval: { id: string };
+  };
+  await expect(workflow.getByText('Approval pending')).toBeVisible();
+
+  const reviewerResponse = await request.post(
+    `http://127.0.0.1:44000/api/v1/content/${encodeURIComponent(approvalInstance.entryId)}/workflow/approvals/${encodeURIComponent(approvalInstance.pendingApproval.id)}`,
+    {
+      headers: {
+        'x-gridstory-tenant': 'default',
+        'x-gridstory-actor': 'e2e-navigation-reviewer',
+        'x-gridstory-roles': 'publisher',
+      },
+      data: { decision: 'approved', comment: 'Approved by the distinct navigation reviewer.' },
+    },
+  );
+  expect(reviewerResponse.ok()).toBe(true);
+
+  await page.reload();
+  const reloadedPanel = page.getByRole('region', { name: 'Visitor menus' });
+  await reloadedPanel
+    .getByRole('complementary', { name: 'Navigation menus' })
+    .getByRole('button', { name: /Header navigation/ })
+    .click();
+  const reloadedWorkflow = reloadedPanel.getByRole('region', { name: 'Navigation workflow' });
+  await expect(reloadedWorkflow.getByText('Approved', { exact: true })).toBeVisible();
+  const publishButton = reloadedPanel.getByRole('button', { name: 'Publish', exact: true });
+  await expect(publishButton).toBeEnabled();
+  await publishButton.click();
+  await expect(page.getByText('Published menu is available to connected sites.')).toBeVisible();
+
+  await publishedSite.reload();
+  await expect(
+    publishedSite
+      .getByRole('navigation', { name: 'Header navigation' })
+      .getByRole('link', { name: 'Explore GridStory' }),
+  ).toHaveAttribute('href', '/welcome');
+  await publishedSite.close();
+});
+
 test('edits, protects, governs, publishes, and delivers React content', async ({
   page,
   request,

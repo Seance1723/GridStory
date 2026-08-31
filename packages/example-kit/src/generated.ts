@@ -26,6 +26,21 @@ export interface ArticleContent {
   featured?: boolean;
 }
 
+export interface NavigationMenuNavigationMenuItemObject {
+  id: string;
+  parentId?: string;
+  label: string;
+  kind: 'internal' | 'external';
+  target?: ContentReference;
+  externalUrl?: string;
+}
+
+export interface NavigationMenuContent {
+  key: string;
+  name: string;
+  items: Array<NavigationMenuNavigationMenuItemObject>;
+}
+
 export interface GridstoryHeroProps {
   eyebrow?: string;
   heading: string;
@@ -62,6 +77,7 @@ export interface GridstoryStackSlots {
 export interface ContentByType {
   page: PageContent;
   article: ArticleContent;
+  'navigation-menu': NavigationMenuContent;
 }
 
 export interface ComponentPropsById {

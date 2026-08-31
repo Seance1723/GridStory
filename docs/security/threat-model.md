@@ -138,6 +138,8 @@ Every modeled threat has a response, owner, concrete mitigations, and verificati
 
 The canonical register also covers preview and asset grant replay, forged webhooks, cursor tampering, audit/log attacks, and error disclosure.
 
+CMS-011 extends the existing `THREAT-0004` delivery boundary rather than adding a new trust boundary. Navigation drafts and their route resolution remain private/no-store; anonymous delivery forces the published view, validates every internal target against the same current or complete release future state, omits workflow/history/private data, and emits dependency tags for both the menu revision and routed targets. The consuming application owns external-link interaction, CSP/referrer policy and cache deployment, so repository evidence does not certify an external site's headers, CDN purge behavior or destination ownership.
+
 ## Security assumptions and non-goals
 
 - Production TLS and least-privilege infrastructure are deployment requirements, not properties of the local HTTP development server.

@@ -1,8 +1,8 @@
 # ADR 0034: Versioned visitor navigation menus
 
-- Status: Proposed — implementation requires explicit approval after the planning commit.
+- Status: Accepted — implementation approved by the user on 2026-08-31 after planning commit `9f9c003`.
 - Created: 2026-08-31 by Codex.
-- Task: CMS-011. Delivery defects: none yet.
+- Task: CMS-011. Delivery defects: BUG-0553–BUG-0576, all resolved with permanent evidence in `BUGS.md`.
 - Baseline: `0b69c37` on `codex/website-management-gaps`.
 - Tier: T2 because a new publishable domain crosses canonical content validation, references, releases, public delivery/cache behavior, the universal client, Studio and an application consumer.
 
@@ -146,7 +146,7 @@ No Studio-sidebar configuration, automatic inclusion of pages, recursive/unbound
 
 ## Approval gate
 
-Pending. Commit this documentation-only plan separately, report its exact verification evidence and obtain an explicit go-ahead before editing runtime, tests, generated contracts or example application behavior. Approval starts CMS-011 only; every later website-management task retains its own plan and gate.
+Approved. The user replied `proceed` after the documentation-only planning commit `9f9c003`. Approval starts CMS-011 only; every later website-management task retains its own plan and gate. CMS-012 through CMS-015, merge, push and deployment remain outside this approval.
 
 ## Planning verification
 
@@ -155,3 +155,14 @@ Codex, 2026-08-31:
 - `pnpm lint` passes Biome plus package-boundary, ledger, threat/ASVS, tenant-scope and unchanged release-readiness checks across 364 files. `pnpm format:check` passes across 361 files; `git diff --check` passes.
 - A read-only audit validates 70 local Markdown links across the exact five-file planning fence: `TASKS.md`, `CHANGELOG.md`, `README.md`, `docs/cms-admin-gap-analysis.md` and this ADR. Git status confirms that no runtime, test, generated contract, package/dependency, persistence, provider or deployment file changed.
 - No defect was found during the documentation review, so `BUGS.md` correctly remains unchanged. The last full repository/browser results remain CMS-010's historical evidence; no runtime, unit, browser, database, provider or deployment result is represented as fresh verification of this proposal.
+
+## Implementation verification
+
+Codex, 2026-08-31:
+
+- Focused schema, client, core, API and Studio controls prove strict menu parsing/identity/tree/URL rules, exact-scope draft and publication views, same-release future-state publication, updated-release rollback, minimized route resolution, private no-store preview, cache dependencies, capability/navigation integration, editing/workflow/localization and human workflow-state presentation.
+- `pnpm check` passes 738 active tests with 17 existing optional skips: 97 schema, 42 client, 175 core, 5 React, 107 API and 312 Studio. Generated contracts, package boundaries, project ledgers, threat/ASVS evidence, tenant scope, release readiness, strict types, React 18.3.1 SSR and every production build pass.
+- The final Playwright matrix runs with retries disabled and passes 78/78: 26 Chromium, 26 Firefox and 26 WebKit. It includes the real Header authoring → resolved private preview → public draft isolation → review → distinct approval → publish → connected Vite rendering journey; both semantic Header/Footer delivery and `/welcome` hrefs; every Studio destination at six responsive widths; light/dark, keyboard, 200% zoom, forced colors where covered and unsuppressed WCAG 2.2 A/AA. The exhaustive WebKit sweep passes in 3.5 minutes inside its bounded 420-second aggregate ceiling.
+- BUG-0553–BUG-0576 record every defect found and its verification. BUG-0568 and BUG-0576 are non-reproducing after unchanged exact repetitions and clean no-retry engine matrices; no product/test change, retry or weakened assertion is attributed to them. Other fixes remain bounded to menu identity, lifecycle typing, fixtures, navigation readiness, accessible labels/state/contrast, official-client revalidation and async editor isolation.
+- Final audit: repeated `pnpm lint`, `pnpm format:check` and `git diff --check` pass after completion-ledger updates. A read-only audit verifies 91 resolving local links across all ten changed Markdown files and 49 implementation files within the approved CMS-011 boundary; `package.json`, `pnpm-lock.yaml` and workspace dependency metadata remain unchanged.
+- No storage schema, repository adapter, package dependency or external provider changed, so PostgreSQL, backup/recovery, provider execution and deployment certification were not proportionate reruns and are not claimed. No merge, push, deployment or production-readiness upgrade is included.

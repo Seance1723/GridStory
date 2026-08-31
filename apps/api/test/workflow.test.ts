@@ -57,9 +57,9 @@ describe('workflow API', () => {
     expect(definitions.statusCode).toBe(200);
     expect(definitions.headers['cache-control']).toBe('private, no-store');
     const defaultDefinitions = definitions.json();
-    expect(defaultDefinitions).toHaveLength(2);
+    expect(defaultDefinitions).toHaveLength(3);
     expect(defaultDefinitions.map((definition: { id: string }) => definition.id)).toEqual(
-      expect.arrayContaining(['page-editorial', 'article-editorial']),
+      expect.arrayContaining(['page-editorial', 'article-editorial', 'navigation-menu-editorial']),
     );
     const invalidDefinition = await server.inject({
       method: 'PUT',

@@ -62,7 +62,7 @@ Evidence paths point to repository code, tests, or documentation. Operational ve
 
 ## M5-002 evidence update
 
-The profile treats `GS-SEC-024` credential/cache containment as verified and extends `GS-SEC-015` evidence with tenant-bound OIDC role assignments, tenant-bound service grants, canonical scope serialization, hostile-adapter checks, and cross-scope queue/repository tests. Production identity/session and trusted-proxy requirements remain conditional or planned under M6-002 and are an explicit M5-008 beta blocker.
+The profile treats `GS-SEC-024` credential/cache containment as verified, including CMS-011's private/no-store draft menu preview, published-only minimized delivery, complete lifecycle-view reference validation and menu-plus-target dependency tags. It extends `GS-SEC-015` evidence with tenant-bound OIDC role assignments, tenant-bound service grants, canonical scope serialization, hostile-adapter checks, and cross-scope queue/repository tests. Production identity/session and trusted-proxy requirements remain conditional or planned under M6-002 and are an explicit M5-008 beta blocker.
 
 ## M5-003 evidence update
 

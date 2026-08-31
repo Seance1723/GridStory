@@ -49,7 +49,7 @@ describe('editorial overview route', () => {
       availability: 'available',
       coverage: 'all-registered',
       exact: true,
-      bounds: { totalCount: 2, displayedCount: 2, limit: 5, hasMore: false },
+      bounds: { totalCount: 4, displayedCount: 4, limit: 5, hasMore: false },
     });
     expect(overview.widgets.reviews.availability).toBe('available');
     expect(overview.widgets.releases).toMatchObject({

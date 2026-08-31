@@ -8,6 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Security
 
+- Extended existing THREAT-0004 / GS-SEC-024 evidence for CMS-011: menu drafts and preview remain private/no-store, anonymous delivery is strict published-only minimized data, internal targets validate against the active lifecycle view, and cache tags cover both menu and routed dependencies. Consuming-site headers, CDN behavior and external destination ownership remain deployment responsibilities.
+
 - Extended THREAT-0022 evidence for CMS-010's effective-configuration disclosure boundary: the browser receives only a strict private/no-store closed projection over permission-filtered choices and fixed provider modes, while raw `ApiConfig`, environment/topology, credentials, endpoints, provider identity, adapter objects and diagnostics remain excluded and covered by serialized negative tests.
 
 - Resolved BUG-0435 in CMS-034: preview DELETE now dispatches `gsp_` credentials only to preview self-revocation, while cookie and `gss_` workforce sessions retain permission- and scope-checked management revocation. Malformed/unknown bearer values, wrong-scope requests and AUTH-001 negatives deny. Focused transport tests, security checks and the full 639-test repository gate pass; no new credential format, permission or deployment claim.
@@ -21,6 +23,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Confirmed and recorded BUG-0433: the production request hook exempts any preview-token prefix from session authentication even on unrelated management routes, allowing development-admin fallback. An isolated read-only memory-backed API check reproduced HTTP 200 with that principal. AUTH-001 proposes exact credential-purpose dispatch and fail-closed production context before CMS-003; the flaw is still open and no fix, live exploitation or deployment is claimed.
 
 ### Added
+
+- Completed the approved CMS-011 versioned visitor-navigation slice: one reserved bounded/localized menu type, trusted create/update/publish/release validation, stable exact-scope identity, private resolved draft preview, anonymous published route-aware projection, dependency cache tags, strict universal-client methods, independently authorized **Navigation > Menus**, governed Header/Footer seeds and application-owned semantic Vite rendering. Full `pnpm check` passes 738 active tests with 17 existing optional skips and all builds; the final no-retry browser matrix passes 78/78 across Chromium, Firefox and WebKit. No second store, new permission, dependency, router/theme ownership, retirement behavior, merge, push or deployment was added.
 
 - Completed the approved CMS-010 safe effective-configuration inventory: a strict pure projection, authenticated private/no-store parameter-free endpoint, exact-scope client method, finite presentation-only capability and lazy **Settings > Configuration** page. Three independently authorized read-only sections expose only permitted locale/environment facts, concise canonical model/routes and safe media policy/fixed provider modes; no generic values, raw configuration/topology, credential, endpoint, adapter detail, health claim or mutation control is exposed. Full `pnpm check` passes 716 active tests with 17 existing optional skips and all builds; the final browser matrix passes 75/75 across Chromium, Firefox and WebKit.
 
@@ -88,6 +92,36 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Added consent/GPC-gated exact-published public event ingestion, private operational reports, typed universal-client methods, Studio content/component/release/adapter metrics, recovery/PostgreSQL/browser coverage, analytics guidance/ADR, and verified `THREAT-0032`/`GS-SEC-036` controls (M7-003).
 
 ### Changed
+
+- Resolved CMS-011 verification findings BUG-0568–BUG-0576: retained WebKit/Firefox guards are non-reproducing under exact repetitions plus clean no-retry matrices; the exhaustive 24-destination/six-width WebKit case keeps every assertion with a bounded 420-second aggregate ceiling; and E2E assets are rebuilt before browser evidence. No global retry, assertion suppression or unrelated deadline changed.
+
+- Logged BUG-0569 from the complete no-retry WebKit rerun: inspect why the exhaustive 24-destination/six-width sweep reached its fixed five-minute budget at final Search navigation before changing any deadline or browser action.
+
+- Logged BUG-0568 from the first CMS-011 WebKit matrix: the retained group-disclosure case lost its unsaved Title once and passed unchanged on retry; reproduce without retries before changing application or test behavior.
+
+- Logged BUG-0567 from the first CMS-011 Chromium Vite check: assert the canonical route-aware `/welcome` href for both published menus rather than the fixture's incorrect root path.
+
+- Logged BUG-0566 after the seed-fixture correction: apply Biome's canonical workflow-array layout without changing assertions or runtime behavior.
+
+- Logged BUG-0565 from the complete CMS-011 API suite: update exact default model/workflow/content/analytics expectations for the two governed Header/Footer seed menus while retaining the original security and semantic assertions.
+
+- Logged BUG-0564 from the first complete CMS-011 repository gate: correct Vite selector specificity, type-only/unused imports and policy-safe control-character validation without changing product behavior.
+
+- Logged BUG-0563 from the first CMS-011 Vite build: derive item typing from the exported strict menu projection rather than importing a non-exported alias or widening the client API.
+
+- Logged BUG-0562 from the corrected complete CMS-011 Studio suite: update the retained exact compact-navigation count for the one new menu destination without weakening named-destination or disclosure coverage.
+
+- Logged BUG-0561 from the complete CMS-011 Studio suite: the new first Navigation group must not replace Pages as the deterministic initial authoring destination when Home is unavailable.
+
+- Logged BUG-0556 from the first permitted CMS-011 core run: duplicate deterministic menu creation must return a stable GridStory conflict before persistence rather than leaking SQLite's unique-constraint error.
+
+- Logged BUG-0555 after the first CMS-011 focused Vitest command executed no tests because the managed Windows sandbox denied its forks worker with `spawn EPERM`; rerun the identical suite through the approved child-process boundary without changing test behavior.
+
+- Logged BUG-0554 from the first CMS-011 core typecheck: exact-optional lifecycle inputs must omit `previousData` when an entry has no prior publication, including ordinary publish and release future-state validation.
+
+- Recorded the user's explicit CMS-011 implementation approval after planning commit `9f9c003`; ADR 0034 is accepted for its bounded navigation-menu slice while CMS-012 through CMS-015, merge, push and deployment remain outside scope.
+
+- Logged BUG-0553 during CMS-011 focused verification: the example kit resolved the previously built schema declarations and therefore missed the new navigation exports. Rebuild the schema package before checking its dependent package; preserve the package boundary and change no test behavior.
 
 - Started and proposed CMS-011 / ADR 0034 (Codex, 2026-08-31; baseline `0b69c37`) on the shared website-management branch: one reserved versioned menu type with bounded localized flat items, a trusted lifecycle invariant across draft/publish/release future state, strict private/public route-aware projections, **Navigation > Menus**, and application-owned Vite rendering. No runtime/test/generated edit, second store, permission, dependency, host-router/style takeover, CMS-012+ work, merge, push or deployment is approved; explicit T2 approval remains pending after the separate planning commit.
 
@@ -212,6 +246,30 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Recorded the accepted M6-005 evidence-bound marketplace decision: operator-scoped publisher verification, signed compatibility/support metadata, injected non-executing artifact review, separate human approval, and approved-only handoff to the existing disabled plugin installation lifecycle.
 
 ### Fixed
+
+- Fixed CMS-011 BUG-0570–BUG-0575 across workflow journey sequencing, human workflow-state labels, browser revalidation of published named menus, async menu-selection/edit isolation and published-status contrast. Focused component/client/browser controls and the final no-retry 78/78 Chromium/Firefox/WebKit matrix pass with public draft isolation, distinct approval and semantic application rendering retained.
+
+- Fixed BUG-0567 by asserting the canonical route-aware `/welcome` href for both application-owned published menus; the corrected Chromium semantic-navigation and WCAG case passes.
+
+- Fixed BUG-0566 by applying Biome's canonical workflow-array layout; the repeated format check passes across 369 files without assertion or behavior changes.
+
+- Fixed BUG-0565 by updating exact default model/workflow/content expectations and fully settling all ten canonical seeded/browser analytics deliveries; the focused API set passes 10/10 with its privacy and semantic assertions retained.
+
+- Fixed BUG-0564 with purpose-owned Vite selectors, type-only/removed imports and policy-safe numeric control-character validation; the complete repository lint/boundary/ledger/security/tenant/readiness gate passes with zero warnings.
+
+- Fixed BUG-0563 by deriving the Vite menu-item type from the exported strict projection, preserving the client API; the corrected production build passes.
+
+- Fixed BUG-0562 in the CMS-011 compact-navigation regression by updating only the finite count for the new Menus destination; the complete App suite passes 87/87 with all reachability and disclosure coverage retained.
+
+- Fixed BUG-0561 in CMS-011 by preserving Pages as the deterministic initial authoring destination when Home is unavailable, without changing the new Navigation group or capability filtering; the complete App suite passes 87/87.
+
+- Fixed BUG-0560 in the CMS-011 Studio forms: creation controls are now labelled `New menu key` and `New menu name`, leaving the selected-menu fields unambiguous while retaining the same global input styling.
+
+- Corrected BUG-0559 in the CMS-011 cache-tag regression: assert the existing percent-encoded deterministic menu ID while retaining independent menu and routed-target dependency checks.
+
+- Corrected BUG-0558 in the CMS-011 API regression: generic reserved-menu writes use the established 422 content-validation envelope, while malformed specialized creation remains a distinct 400 assertion.
+
+- Corrected BUG-0557 in the CMS-011 duplicate-key regression: assert the existing `ConflictError` code `revision_conflict` after the service-level pre-persistence check, without changing product behavior or weakening the boundary assertion.
 
 - Resolved CMS-010 BUG-0535–BUG-0551 across Windows verification spawning, strict projection typing/current-only behavior, configured-topology expectations, GET-body rejection, finite navigation fixtures, schema test hygiene, direct-Settings lazy loading, browser locators/disclosure assertions, definition-list semantics, contrast, fixed provider modes and permission-profile reloads. BUG-0552's one retained WebKit draft assertion is explicitly non-reproducing after six exact passes and a clean 25/25 full rerun; no timeout, retry, assertion or product behavior changed for it.
 

@@ -1,6 +1,10 @@
 import { StrictMode, useEffect, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { createGridStoryClient, type ContentEntry } from '@gridstory/client';
+import {
+  createGridStoryClient,
+  type ContentEntry,
+  type NavigationMenuProjection,
+} from '@gridstory/client';
 import { createGridStoryPreviewRuntime, type PreviewPatchMessage } from '@gridstory/client/preview';
 import { exampleComponentRegistry } from '@gridstory/example-kit/react';
 import { exampleDesignSystem } from '@gridstory/example-kit/design-system';
@@ -16,8 +20,40 @@ const client = createGridStoryClient({
 });
 const isPreviewHost = window.parent !== window || window.opener !== null;
 
+function VisitorMenu({
+  label,
+  menu,
+}: {
+  label: string;
+  menu: NavigationMenuProjection;
+}): ReactNode {
+  const renderItems = (parentId?: string): ReactNode => {
+    const items = menu.items.filter((item) => item.parentId === parentId);
+    if (items.length === 0) return null;
+    return (
+      <ul>
+        {items.map((item: NavigationMenuProjection['items'][number]) => (
+          <li key={item.id}>
+            <a
+              href={item.href}
+              {...(item.kind === 'external' ? { rel: 'noopener noreferrer' } : {})}
+            >
+              {item.label}
+            </a>
+            {renderItems(item.id)}
+          </li>
+        ))}
+      </ul>
+    );
+  };
+
+  return <nav aria-label={label}>{renderItems()}</nav>;
+}
+
 function Site(): ReactNode {
   const [entry, setEntry] = useState<ContentEntry | null>(null);
+  const [headerMenu, setHeaderMenu] = useState<NavigationMenuProjection | null>(null);
+  const [footerMenu, setFooterMenu] = useState<NavigationMenuProjection | null>(null);
   const [previewPatch, setPreviewPatch] = useState<PreviewPatchMessage | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,6 +68,15 @@ function Site(): ReactNode {
           setError(reason instanceof Error ? reason.message : 'Unable to load GridStory content.');
         }
       });
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void Promise.allSettled([
+      client.getPublishedNavigationMenu('header', controller.signal).then(setHeaderMenu),
+      client.getPublishedNavigationMenu('footer', controller.signal).then(setFooterMenu),
+    ]);
     return () => controller.abort();
   }, []);
 
@@ -62,22 +107,35 @@ function Site(): ReactNode {
     );
   const page = (previewPatch?.payload.data ?? entry?.data) as PageContent;
   return (
-    <main>
-      <GridStoryRenderer
-        nodes={page.blocks}
-        registry={exampleComponentRegistry}
-        designSystem={exampleDesignSystem}
-        preview={previewPatch !== null}
-      />
-      <footer>
-        <strong>GridStory</strong>
-        <span>
-          {previewPatch
-            ? 'Secure live preview session'
-            : 'Content delivered to an ordinary Vite + React application.'}
-        </span>
+    <>
+      {headerMenu ? (
+        <header className="site-header">
+          <a className="site-brand" href="/">
+            GridStory
+          </a>
+          <VisitorMenu label="Header navigation" menu={headerMenu} />
+        </header>
+      ) : null}
+      <main>
+        <GridStoryRenderer
+          nodes={page.blocks}
+          registry={exampleComponentRegistry}
+          designSystem={exampleDesignSystem}
+          preview={previewPatch !== null}
+        />
+      </main>
+      <footer className="site-footer">
+        <div className="site-footer__summary">
+          <strong>GridStory</strong>
+          <span>
+            {previewPatch
+              ? 'Secure live preview session'
+              : 'Content delivered to an ordinary Vite + React application.'}
+          </span>
+        </div>
+        {footerMenu ? <VisitorMenu label="Footer navigation" menu={footerMenu} /> : null}
       </footer>
-    </main>
+    </>
   );
 }
 

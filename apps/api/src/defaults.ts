@@ -1,5 +1,9 @@
 import { defaultEditorialWorkflow } from '@gridstory/core';
-import type { ContentQualityPolicy, WorkflowDefinitionInput } from '@gridstory/schema';
+import {
+  NAVIGATION_MENU_CONTENT_TYPE,
+  type ContentQualityPolicy,
+  type WorkflowDefinitionInput,
+} from '@gridstory/schema';
 
 export const defaultPageQualityPolicies: ContentQualityPolicy[] = [
   {
@@ -30,6 +34,14 @@ export const defaultWorkflowDefinitions: Array<{
       ...defaultEditorialWorkflow(),
       name: 'Article editorial review',
       contentType: 'article',
+    },
+  },
+  {
+    id: 'navigation-menu-editorial',
+    definition: {
+      ...defaultEditorialWorkflow(),
+      name: 'Navigation menu editorial review',
+      contentType: NAVIGATION_MENU_CONTENT_TYPE,
     },
   },
 ];
