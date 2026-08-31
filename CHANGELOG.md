@@ -89,6 +89,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- Started and proposed CMS-011 / ADR 0034 (Codex, 2026-08-31; baseline `0b69c37`) on the shared website-management branch: one reserved versioned menu type with bounded localized flat items, a trusted lifecycle invariant across draft/publish/release future state, strict private/public route-aware projections, **Navigation > Menus**, and application-owned Vite rendering. No runtime/test/generated edit, second store, permission, dependency, host-router/style takeover, CMS-012+ work, merge, push or deployment is approved; explicit T2 approval remains pending after the separate planning commit.
+
 - Started CMS-010 planning (Codex, 2026-08-29; baseline `ec408a6`) as a documentation-only T2 review of a minimized, permission-filtered configuration inventory. Runtime, tests, permissions, providers, topology, settings mutation, merge, push and deployment remain unchanged pending an ADR, separate planning commit and explicit approval.
 
 - Logged current-status documentation BUG-0534 after the README audit found that its delivery snapshot still ends at CMS-008 despite verified CMS-009 commit `ec408a6`; correct it only inside the CMS-010 planning-document fence.
