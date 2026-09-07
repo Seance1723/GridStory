@@ -17,8 +17,8 @@
     "@gridstory/example-kit": "workspace:*",
     "@gridstory/react": "workspace:*",
     "@gridstory/schema": "workspace:*",
-    "react": "19.2.7",
-    "react-dom": "19.2.7"
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
   },
   "devDependencies": {
     "@testing-library/react": "16.3.2",
